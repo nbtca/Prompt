@@ -2,16 +2,19 @@
   "name": "@nbtca/welcome",
   "version": "2.3.1",
   "type": "module",
-  "main": "src/index.js",
+  "main": "dist/index.js",
   "bin": {
     "nbtca-welcome": "bin/nbtca-welcome.js"
   },
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "node --watch src/index.js",
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "echo \"No build step required\"",
-    "prepublishOnly": "npm run build"
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "postbuild": "cp src/logo/logo.txt dist/logo/",
+    "clean": "rm -rf dist",
+    "prebuild": "npm run clean",
+    "prepublishOnly": "npm run build",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
     "cli",
@@ -29,6 +32,12 @@
     "inquirer": "^12.6.3",
     "isomorphic-lolcat": "^0.3.1",
     "open": "^10.1.2"
+  },
+  "devDependencies": {
+    "@types/inquirer": "^9.0.7",
+    "@types/node": "^20.11.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
   },
   "engines": {
     "node": ">=16.0.0"
