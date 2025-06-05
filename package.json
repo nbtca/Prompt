@@ -1,0 +1,24 @@
+{
+  "name": "@nbtca/welcome",
+  "version": "2.0.2",
+  "type": "module",
+  "bin": {
+    "nbtca-welcome": "./index.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "boxen": "^8.0.1",
+    "chalk": "^5.4.1",
+    "fs": "^0.0.1-security",
+    "inquirer": "^12.6.3",
+    "open": "^10.1.2",
+    "path": "^0.12.7"
+  },
+  "author": "m1ngsama <contact@m1ng.space>",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
+}
