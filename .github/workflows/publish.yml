@@ -3,7 +3,12 @@ name: Publish to npm
 on:
   push:
     tags:
-      - "v*" # 例如 v1.0.0 会触发发布
+      - "v*"
+    branches:
+      - main
+    paths:
+      - package.json
+      - package-lock.json
 
 jobs:
   release:
