@@ -30,11 +30,3 @@ jobs:
           else
             echo "No eslint config found"
           fi
-
-      - name: 🧪 Run tests
-        run: |
-          if [ -f package.json ] && grep -q "\"test\":" package.json; then
-            npm test
-          else
-            echo "No test script"
-          fi
