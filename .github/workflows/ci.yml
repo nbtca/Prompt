@@ -1,0 +1,40 @@
+name: CI for @nbtca/welcome
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🛎️ Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🟢 Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: 📦 Install dependencies
+        run: npm install
+
+      - name: ✅ Run linter
+        run: |
+          if [ -f .eslintrc.* ]; then
+            npx eslint . || exit 1
+          else
+            echo "No eslint config found"
+          fi
+
+      - name: 🧪 Run tests
+        run: |
+          if [ -f package.json ] && grep -q "\"test\":" package.json; then
+            npm test
+          else
+            echo "No test script"
+          fi
