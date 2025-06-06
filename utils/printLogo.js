@@ -8,7 +8,7 @@ const __dirname = path.dirname(__filename);
 
 // 读取并打印 logo（无渐变）
 export function printLogo() {
-  const logoPath = path.resolve(__dirname, "../logo/logo.txt");
+  const logoPath = path.resolve(__dirname, "../assets/logo.txt");
 
   try {
     const data = fs.readFileSync(logoPath, "utf8");
