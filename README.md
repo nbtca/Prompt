@@ -1,12 +1,52 @@
-# Prompt ⭐️
+# nbtca-welcome
 
-A poetic and powerful CLI tool by NBTCA – where every command begins with a Prompt.
+![Demo](assets/Prompt_demo.gif)
 
-## Usage
+## Install
 
-You can quickly run the NBTCA welcome CLI tool using `npx @nbtca/welcome` without installing it globally
+```bash
+npm install
+```
 
-Then you can use the arrow keys to navigate through the options
+## Quick Start (Recommended)
 
-Press Enter to execute the selected action.
-![Demo](./assets/Prompt_demo.gif)
+```bash
+npx @nbtca/welcome
+```
+
+## Run Locally
+
+```bash
+node src/index.js
+# or
+./bin/nbtca-welcome.js
+```
+
+## Structure
+
+```
+.
+├── bin/
+│   └── nbtca-welcome.js
+├── src/
+│   ├── index.js
+│   ├── main.js
+│   ├── logo/
+│   │   ├── printLogo.js
+│   │   └── logo.txt
+│   ├── gradient/
+│   │   └── printGradientText.js
+│   ├── animation/
+│   │   └── printLolcatAnimated.js
+│   └── menu/
+│       ├── showMainMenu.js
+│       └── handleUserAction.js
+├── assets/
+│   └── Prompt_demo.gif
+```
+
+## FAQ
+
+- logo.txt not found? Ensure `src/logo/logo.txt` exists.
+- Animation not working? Run `npm install` to install all dependencies.
+- Custom menu/animation? Edit the corresponding module.

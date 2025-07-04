@@ -2,8 +2,9 @@
   "name": "@nbtca/welcome",
   "version": "2.1.0",
   "type": "module",
+  "main": "src/index.js",
   "bin": {
-    "nbtca-welcome": "./index.js"
+    "nbtca-welcome": "bin/nbtca-welcome.js"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -11,10 +12,9 @@
   "dependencies": {
     "boxen": "^8.0.1",
     "chalk": "^5.4.1",
-    "fs": "^0.0.1-security",
     "inquirer": "^12.6.3",
-    "open": "^10.1.2",
-    "path": "^0.12.7"
+    "isomorphic-lolcat": "^0.3.1",
+    "open": "^10.1.2"
   },
   "author": "m1ngsama <contact@m1ng.space>",
   "license": "MIT",

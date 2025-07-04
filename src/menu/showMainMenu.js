@@ -1,8 +1,13 @@
 // cli/mainMenu.js
 import inquirer from "inquirer";
 import chalk from "chalk";
-import open from "open";
+import { handleUserAction } from "./handleUserAction.js";
 
+// Show the interactive main menu and handle user selection.
+
+/**
+ * Display the main menu and delegate action handling.
+ */
 export async function showMainMenu() {
   const choices = [
     { name: "🌐 访问NBTCA的官网", value: "official" },
@@ -19,18 +24,5 @@ export async function showMainMenu() {
     },
   ]);
 
-  switch (action) {
-    case "official":
-      console.log(chalk.blue("正在前往NBTCA主页..."));
-      await open("https://nbtca.space/");
-      break;
-    case "repair":
-      console.log(chalk.blue("正在获取维修队主页..."));
-      await open("https://nbtca.space/repair/");
-      break;
-    case "mirror":
-      console.log(chalk.blue("正在前往NBTCA内网镜像站..."));
-      await open("https://i.nbtca.space/");
-      break;
-  }
+  await handleUserAction(action);
 }
