@@ -2,8 +2,6 @@
 
 import chalk from 'chalk';
 import boxen from 'boxen';
-import { printRainbowText, printPulsingText } from '../gradient/printGradientText.js';
-
 /**
  * Print an enhanced welcome banner.
  */
