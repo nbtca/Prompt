@@ -106,24 +106,6 @@ async function handleMirrorService() {
 }
 
 /**
- * Handle official website services.
- */
-async function handleOfficialServices() {
-  const services = {
-    homepage: "https://nbtca.space/",
-    news: "https://nbtca.space/news/",
-    events: "https://nbtca.space/events/",
-    team: "https://nbtca.space/team/",
-    contact: "https://nbtca.space/contact/"
-  };
-  
-  for (const [service, url] of Object.entries(services)) {
-    await showLoadingAnimation(`正在打开 ${service}...`, 500);
-    await open(url);
-  }
-}
-
-/**
  * Handle technical support services.
  */
 async function handleTechServices() {
