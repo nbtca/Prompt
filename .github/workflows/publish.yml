@@ -1,49 +1,31 @@
-name: Publish NBTCA packages
+name: Publish NBTCA Packages
 
 on:
   push:
-    tags:
-      - "v*" # 仅在打版本 tag 时触发
-    branches:
-      - main # 仅 main 分支
+    branches: [main]
 
 jobs:
   release:
     runs-on: ubuntu-latest
-
     steps:
-      # 1️⃣ Checkout code
-      - name: 🛎️ Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # 2️⃣ Set up Node.js
-      - name: 🟢 Set up Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
           registry-url: "https://registry.npmjs.org/"
 
-      # 3️⃣ Enable pnpm
       - name: Enable pnpm
         run: corepack enable && corepack prepare pnpm@latest --activate
 
-      # 4️⃣ Install dependencies
-      - name: 📦 Install dependencies
+      - name: Install dependencies
         run: pnpm install
 
-      # 5️⃣ Publish each package
-      - name: 🚀 Publish packages
-        run: |
-          set -e
-          # 定义发布顺序
-          for pkg in date github calendar welcome; do
-            echo "Publishing $pkg..."
-            cd packages/$pkg
+      - name: Version packages with Changesets
+        run: pnpm changeset version
 
-            # 确保使用 package.json 里 version 发布
-            npm publish --access public
-
-            cd ../../
-          done
+      - name: Publish packages
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm changeset publish

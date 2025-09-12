@@ -6,9 +6,9 @@
   },
   "type": "module",
   "dependencies": {
-    "@nbtca/date": "^1.0.0",
-    "@nbtca/github": "^1.0.0",
-    "@nbtca/calendar": "^1.0.0",
+    "@nbtca/date": "workspace:*",
+    "@nbtca/github": "workspace:*",
+    "@nbtca/calendar": "workspace:*",
     "chalk": "^5.3.0",
     "figlet": "^1.6.0",
     "inquirer": "^9.2.0"

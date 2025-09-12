@@ -15,18 +15,18 @@ jobs:
         package: [date, github, calendar, welcome]
 
     steps:
-      # 1️⃣ Checkout repository
-      - name: Checkout code
+      # 1️⃣ Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Set up Node.js
-      - name: Set up Node.js
+      # 2️⃣ Setup Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
           registry-url: "https://registry.npmjs.org/"
 
-      # 3️⃣ Enable corepack/pnpm
+      # 3️⃣ Enable pnpm
       - name: Enable pnpm
         run: corepack enable && corepack prepare pnpm@latest --activate
 
@@ -39,11 +39,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
 
-      # 5️⃣ Install dependencies
+      # 5️⃣ Install dependencies (lockfile 保持一致)
       - name: Install dependencies
         run: pnpm install
 
-      # 6️⃣ Lint / Test / Build for each package
+      # 6️⃣ Lint / Test / Build each package
       - name: Lint/Test/Build ${{ matrix.package }}
         working-directory: ./packages/${{ matrix.package }}
         run: |
