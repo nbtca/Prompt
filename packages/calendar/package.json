@@ -6,10 +6,11 @@
   },
   "type": "module",
   "dependencies": {
-    "node-ical": "^0.15.1",
     "chalk": "^5.0.0",
     "ora": "^6.1.2",
-    "undici": "^6.0.0"
+    "undici": "^6.0.0",
+    "node-ical": "^0.15.1",
+    "dayjs": "^1.11.9"
   },
   "publishConfig": {
     "access": "public"

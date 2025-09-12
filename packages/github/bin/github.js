@@ -1,40 +1,25 @@
 #!/usr/bin/env node
-import { Octokit } from "@octokit/rest";
-import chalk from "chalk";
-import ora from "ora";
+import { getOrgRepos, getOrgEvents } from "../lib/api.js";
+import {
+  renderReposTable,
+  renderEventsList,
+  renderStarsChart,
+} from "../lib/render.js";
 
-const args = process.argv.slice(2);
-const asJson = args.includes("--json");
+(async () => {
+  console.log("\n=== 🚀 nbtca GitHub 组织动态 ===\n");
 
-const GITHUB_ORG = process.env.GITHUB_ORG || "nbtca";
-const TOKEN = process.env.GITHUB_TOKEN || "";
+  // 获取数据
+  const repos = await getOrgRepos("nbtca");
+  const events = await getOrgEvents("nbtca");
 
-async function main() {
-  const spinner = ora("获取 GitHub 更新...").start();
-  try {
-    if (!TOKEN) throw new Error("请设置 GITHUB_TOKEN 环境变量");
-    const oct = new Octokit({ auth: TOKEN });
-    const { data: repos } = await oct.rest.repos.listForOrg({
-      org: GITHUB_ORG,
-      type: "public",
-      per_page: 5,
-      sort: "updated",
-    });
-    spinner.succeed("加载完成");
+  // 渲染表格
+  console.log("📦 仓库概览：");
+  renderReposTable(repos);
 
-    if (asJson) console.log(JSON.stringify({ repos }, null, 2));
-    else {
-      console.log(chalk.bold("GitHub 最新更新:"));
-      repos.forEach((r) => {
-        console.log(chalk.yellow(r.name), chalk.dim(r.pushed_at));
-        console.log(chalk.blue(r.html_url));
-      });
-    }
-  } catch (err) {
-    spinner.fail("加载失败");
-    console.error(err);
-    process.exit(1);
-  }
-}
+  console.log("\n⭐ Star 数分布：");
+  renderStarsChart(repos);
 
-main();
+  console.log("\n📰 最新事件：");
+  renderEventsList(events.slice(0, 5));
+})();

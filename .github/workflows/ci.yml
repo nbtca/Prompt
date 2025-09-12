@@ -1,4 +1,4 @@
-name: CI for @nbtca/welcome
+name: CI for NBTCA CLI
 
 on:
   push:
@@ -7,8 +7,12 @@ on:
     branches: [main]
 
 jobs:
-  build:
+  ci:
     runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        package: [date, github, calendar, welcome]
 
     steps:
       - name: 🛎️ Checkout code
@@ -21,12 +25,21 @@ jobs:
           cache: "npm"
 
       - name: 📦 Install dependencies
-        run: npm install
+        run: pnpm install
 
-      - name: ✅ Run linter
+      - name: ✅ Lint & Test ${{ matrix.package }}
+        working-directory: ./packages/${{ matrix.package }}
         run: |
-          if [ -f .eslintrc.* ]; then
-            npx eslint . || exit 1
-          else
-            echo "No eslint config found"
+          if [ -f package.json ]; then
+            # 先 lint
+            if [ -f .eslintrc.* ]; then
+              npx eslint . || exit 1
+            fi
+            # 再执行 test 或 build（根据子包配置）
+            if npm run | grep -q "test"; then
+              npm run test
+            fi
+            if npm run | grep -q "build"; then
+              npm run build
+            fi
           fi

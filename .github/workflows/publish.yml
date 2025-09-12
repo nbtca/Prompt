@@ -1,14 +1,9 @@
-name: Publish to npm
+name: Publish NBTCA packages
 
 on:
   push:
     tags:
       - "v*"
-    branches:
-      - main
-    paths:
-      - package.json
-      - package-lock.json
 
 jobs:
   release:
@@ -22,8 +17,15 @@ jobs:
           node-version: "20"
           registry-url: "https://registry.npmjs.org/"
 
-      - run: npm ci
+      - run: pnpm install
 
-      - run: npm publish --access public
+      - name: Publish all packages
+        run: |
+          for pkg in date github calendar welcome; do
+            cd packages/$pkg
+            echo "Publishing $pkg..."
+            npm publish --access public
+            cd ../../
+          done
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
