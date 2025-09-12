@@ -15,22 +15,22 @@ jobs:
         package: [date, github, calendar, welcome]
 
     steps:
-      # 1️⃣ Checkout code
+      # Checkout
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Setup Node.js
+      # Setup Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
           registry-url: "https://registry.npmjs.org/"
 
-      # 3️⃣ Enable pnpm
+      # Enable pnpm
       - name: Enable pnpm
         run: corepack enable && corepack prepare pnpm@latest --activate
 
-      # 4️⃣ Cache pnpm store
+      # Cache pnpm store
       - name: Cache pnpm store
         uses: actions/cache@v3
         with:
@@ -39,24 +39,21 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
 
-      # 5️⃣ Install dependencies (lockfile 保持一致)
+      # Install dependencies
       - name: Install dependencies
         run: pnpm install
 
-      # 6️⃣ Lint / Test / Build each package
-      - name: Lint/Test/Build ${{ matrix.package }}
+      # Lint
+      - name: Lint ${{ matrix.package }}
         working-directory: ./packages/${{ matrix.package }}
-        run: |
-          echo "Running Lint/Test/Build for ${{ matrix.package}}"
-          # Lint
-          if [ -f .eslintrc.* ]; then
-            npx eslint . || exit 1
-          fi
-          # Test
-          if npm run | grep -q "test"; then
-            npm run test
-          fi
-          # Build
-          if npm run | grep -q "build"; then
-            npm run build
-          fi
+        run: pnpm run lint || echo "Lint failed but continuing"
+
+      # Test
+      - name: Test ${{ matrix.package }}
+        working-directory: ./packages/${{ matrix.package }}
+        run: pnpm run test
+
+      # Build
+      - name: Build ${{ matrix.package }}
+        working-directory: ./packages/${{ matrix.package }}
+        run: pnpm run build

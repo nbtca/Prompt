@@ -1,9 +1,7 @@
 {
   "name": "@nbtca/welcome",
   "version": "3.0.1",
-  "bin": {
-    "nbtca-welcome": "bin/welcome.js"
-  },
+  "bin": "./bin/welcome.js",
   "type": "module",
   "dependencies": {
     "@nbtca/date": "workspace:*",
