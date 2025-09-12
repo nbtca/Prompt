@@ -1,0 +1,50 @@
+{
+  "name": "@nbtca/welcome",
+  "version": "2.3.0",
+  "type": "module",
+  "main": "src/index.js",
+  "bin": {
+    "nbtca-welcome": "bin/nbtca-welcome.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "echo \"No build step required\"",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "cli",
+    "terminal",
+    "welcome",
+    "nbtca",
+    "ningbotech",
+    "computer-association",
+    "tui",
+    "interactive"
+  ],
+  "dependencies": {
+    "boxen": "^8.0.1",
+    "chalk": "^5.4.1",
+    "inquirer": "^12.6.3",
+    "isomorphic-lolcat": "^0.3.1",
+    "open": "^10.1.2"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "author": "m1ngsama <contact@m1ng.space>",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nbtca/prompt.git"
+  },
+  "bugs": {
+    "url": "https://github.com/nbtca/prompt/issues"
+  },
+  "homepage": "https://github.com/nbtca/prompt#readme",
+  "description": "Enhanced welcome tool for NingboTech Computer Association with rich TUI experience"
+}
