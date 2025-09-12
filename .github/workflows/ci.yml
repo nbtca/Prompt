@@ -15,18 +15,18 @@ jobs:
         package: [date, github, calendar, welcome]
 
     steps:
-      # 1️⃣ Checkout code
-      - name: 🛎️ Checkout code
+      # 1️⃣ Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2️⃣ Set up Node.js (禁用 npm/yarn cache)
-      - name: 🟢 Set up Node.js
+      # 2️⃣ Set up Node.js
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "none"
+          registry-url: "https://registry.npmjs.org/"
 
-      # 3️⃣ Enable pnpm
+      # 3️⃣ Enable corepack/pnpm
       - name: Enable pnpm
         run: corepack enable && corepack prepare pnpm@latest --activate
 
@@ -40,11 +40,11 @@ jobs:
             ${{ runner.os }}-pnpm-store-
 
       # 5️⃣ Install dependencies
-      - name: 📦 Install dependencies
+      - name: Install dependencies
         run: pnpm install
 
-      # 6️⃣ Lint / Test / Build each package
-      - name: ✅ Lint/Test/Build ${{ matrix.package }}
+      # 6️⃣ Lint / Test / Build for each package
+      - name: Lint/Test/Build ${{ matrix.package }}
         working-directory: ./packages/${{ matrix.package }}
         run: |
           echo "Running Lint/Test/Build for ${{ matrix.package}}"
