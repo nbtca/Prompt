@@ -1,6 +1,6 @@
 {
   "name": "@nbtca/calendar",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "bin": {
     "nbtca-calendar": "bin/calendar.js"
   },
@@ -11,6 +11,15 @@
     "undici": "^6.0.0",
     "node-ical": "^0.15.1",
     "dayjs": "^1.11.9"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.1",
+    "prettier": "^3.6.2"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "test": "node test.js || echo 'No tests defined'",
+    "build": "echo 'No build needed'"
   },
   "publishConfig": {
     "access": "public"

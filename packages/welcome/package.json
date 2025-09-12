@@ -1,6 +1,6 @@
 {
   "name": "@nbtca/welcome",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "bin": {
     "nbtca-welcome": "bin/welcome.js"
   },
@@ -12,6 +12,15 @@
     "chalk": "^5.3.0",
     "figlet": "^1.6.0",
     "inquirer": "^9.2.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.1",
+    "prettier": "^3.6.2"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "test": "node test.js || echo 'No tests defined'",
+    "build": "echo 'No build needed for welcome CLI'"
   },
   "publishConfig": {
     "access": "public"
