@@ -1,6 +1,6 @@
 {
   "name": "@nbtca/welcome",
-  "version": "3.0.1",
+  "version": "4.0.0",
   "bin": "./bin/welcome.js",
   "type": "module",
   "dependencies": {

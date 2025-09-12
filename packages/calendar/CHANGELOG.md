@@ -1,5 +1,12 @@
 # @nbtca/calendar
 
+## 1.0.0
+
+### Major Changes
+
+- Update
+- Release the first workable version
+
 ## 0.1.1
 
 ### Patch Changes
