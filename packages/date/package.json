@@ -1,0 +1,17 @@
+{
+  "name": "@nbtca/date",
+  "version": "0.1.0",
+  "bin": {
+    "nbtca-calendar": "bin/date.js"
+  },
+  "type": "module",
+  "dependencies": {
+    "node-ical": "^0.15.1",
+    "chalk": "^5.0.0",
+    "ora": "^6.1.2",
+    "undici": "^6.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
