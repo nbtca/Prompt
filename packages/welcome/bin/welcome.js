@@ -3,6 +3,9 @@ import figlet from "figlet";
 import chalk from "chalk";
 import inquirer from "inquirer";
 import { spawn } from "child_process";
+import { createRequire } from "module";
+
+const require = createRequire(import.meta.url);
 
 // 欢迎标题
 console.log(chalk.blue(figlet.textSync("NBTCA CLI")));
