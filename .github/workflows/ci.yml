@@ -19,12 +19,12 @@ jobs:
       - name: 🛎️ Checkout code
         uses: actions/checkout@v4
 
-      # 2️⃣ Set up Node.js
+      # 2️⃣ Set up Node.js (禁用 npm/yarn cache)
       - name: 🟢 Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "false" # 禁用默认 npm/yarn 缓存
+          cache: "none"
 
       # 3️⃣ Enable pnpm
       - name: Enable pnpm
@@ -47,7 +47,7 @@ jobs:
       - name: ✅ Lint/Test/Build ${{ matrix.package }}
         working-directory: ./packages/${{ matrix.package }}
         run: |
-          echo "Running Lint/Test/Build for ${{ matrix.package }}"
+          echo "Running Lint/Test/Build for ${{ matrix.package}}"
           # Lint
           if [ -f .eslintrc.* ]; then
             npx eslint . || exit 1
