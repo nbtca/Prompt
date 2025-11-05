@@ -1,21 +1,28 @@
 {
-  "name": "nbtca-cli",
-  "version": "1.0.0",
-  "private": "true",
+  "name": "@nbtca/welcome",
+  "version": "0.1.0",
   "description": "NBTCA CLI 工具集",
   "license": "MIT",
-  "workspaces": [
-    "packages/*"
-  ],
-  "devDependencies": {
-    "@changesets/cli": "^2.29.7",
-    "eslint": "^9.35.0",
-    "prettier": "^3.6.2"
-  },
+  "type": "module",
+  "bin": "dist/index.js",
+  "main": "dist/index.js",
   "scripts": {
-    "lint": "pnpm -r run lint",
-    "test": "pnpm -r run test",
-    "build": "pnpm -r run build",
-    "changeset": "changeset"
+    "build": "tsc",
+    "start": "npm run build && node dist/index.js",
+    "test": "ava"
+  },
+  "dependencies": {
+    "chalk": "^5.6.2",
+    "ink": "^4.4.1",
+    "ink-select-input": "^5.0.0",
+    "meow": "^11.0.0",
+    "react": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.2",
+    "ava": "^6.4.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3",
+    "xo": "^1.2.3"
   }
 }
