@@ -17,42 +17,38 @@ import { APP_INFO, URLS } from '../config/data.js';
  */
 const MAIN_MENU = [
   {
-    name: chalk.cyan('› ') + chalk.white('近期活动    ') + chalk.gray('查看最近30天的社团活动'),
+    name: '近期活动' + chalk.gray('  查看最近30天的社团活动'),
     value: 'events',
     short: '近期活动'
   },
   {
-    name: chalk.cyan('› ') + chalk.white('维修服务    ') + chalk.gray('电脑维修、软件安装'),
+    name: '维修服务' + chalk.gray('  电脑维修、软件安装'),
     value: 'repair',
     short: '维修服务'
   },
   {
-    name: chalk.cyan('› ') + chalk.white('知识库      ') + chalk.gray('技术文档、教程资源'),
+    name: '知识库' + chalk.gray('    技术文档、教程资源'),
     value: 'docs',
     short: '知识库'
   },
   {
-    name: chalk.cyan('› ') + chalk.white('官方网站    ') + chalk.gray('访问NBTCA主页'),
+    name: '官方网站' + chalk.gray('  访问NBTCA主页'),
     value: 'website',
     short: '官方网站'
   },
   {
-    name: chalk.cyan('› ') + chalk.white('GitHub      ') + chalk.gray('开源项目与代码'),
+    name: 'GitHub' + chalk.gray('    开源项目与代码'),
     value: 'github',
     short: 'GitHub'
   },
   {
-    name: chalk.cyan('› ') + chalk.white('关于        ') + chalk.gray('项目信息与帮助'),
+    name: '关于' + chalk.gray('      项目信息与帮助'),
     value: 'about',
     short: '关于'
   },
+  new inquirer.Separator(' '),
   {
-    name: chalk.gray('─'.repeat(50)),
-    value: 'separator',
-    disabled: true
-  },
-  {
-    name: chalk.red('› ') + chalk.white('退出'),
+    name: chalk.dim('退出'),
     value: 'exit',
     short: '退出'
   }
@@ -64,22 +60,21 @@ const MAIN_MENU = [
 export async function showMainMenu(): Promise<void> {
   while (true) {
     try {
-      const { action } = await inquirer.prompt([
+      const { action } = await inquirer.prompt<{ action: string }>([
         {
           type: 'list',
           name: 'action',
-          message: chalk.bold('请选择功能:'),
+          message: '选择功能',
           choices: MAIN_MENU,
           pageSize: 15,
           loop: false
-        }
+        } as any
       ]);
 
       // 处理用户选择
       if (action === 'exit') {
         console.log();
-        console.log(chalk.cyan('再见！感谢使用NBTCA工具'));
-        console.log();
+        console.log(chalk.dim('再见！'));
         process.exit(0);
       }
 
@@ -93,8 +88,7 @@ export async function showMainMenu(): Promise<void> {
       // 处理Ctrl+C退出
       if (err.message?.includes('User force closed')) {
         console.log();
-        console.log(chalk.cyan('再见！'));
-        console.log();
+        console.log(chalk.dim('再见！'));
         process.exit(0);
       }
       throw err;
@@ -141,25 +135,23 @@ async function handleAction(action: string): Promise<void> {
  */
 function showAbout(): void {
   console.log();
-  console.log(chalk.cyan.bold('  关于 NBTCA'));
+  console.log(chalk.bold('关于 NBTCA'));
   console.log();
-  printDivider();
+  console.log(chalk.dim('项目') + '    ' + APP_INFO.name);
+  console.log(chalk.dim('版本') + '    ' + `v${APP_INFO.version}`);
+  console.log(chalk.dim('描述') + '    ' + APP_INFO.fullDescription);
   console.log();
-  console.log(chalk.white('  项目名称: ') + chalk.cyan(APP_INFO.name));
-  console.log(chalk.white('  版本:     ') + chalk.cyan(`v${APP_INFO.version}`));
-  console.log(chalk.white('  描述:     ') + chalk.gray(APP_INFO.fullDescription));
+  console.log(chalk.dim('GitHub') + '  ' + chalk.cyan(APP_INFO.repository));
+  console.log(chalk.dim('官网') + '    ' + chalk.cyan(URLS.homepage));
+  console.log(chalk.dim('邮箱') + '    ' + chalk.cyan(URLS.email));
   console.log();
-  console.log(chalk.white('  GitHub:   ') + chalk.cyan(APP_INFO.repository));
-  console.log(chalk.white('  官网:     ') + chalk.cyan(URLS.homepage));
-  console.log(chalk.white('  邮箱:     ') + chalk.cyan(URLS.email));
+  console.log(chalk.dim('功能'));
+  console.log('  • 查看社团近期活动');
+  console.log('  • 在线维修服务');
+  console.log('  • 技术知识库访问');
+  console.log('  • 快速访问官网和GitHub');
   console.log();
-  console.log(chalk.gray('  功能特性:'));
-  console.log(chalk.gray('  • 查看社团近期活动'));
-  console.log(chalk.gray('  • 在线维修服务'));
-  console.log(chalk.gray('  • 技术知识库访问'));
-  console.log(chalk.gray('  • 快速访问官网和GitHub'));
-  console.log();
-  console.log(chalk.white('  开源协议: ') + chalk.cyan('MIT License'));
-  console.log(chalk.white('  作者:     ') + chalk.cyan('m1ngsama <contact@m1ng.space>'));
+  console.log(chalk.dim('协议') + '    ' + 'MIT License');
+  console.log(chalk.dim('作者') + '    ' + 'm1ngsama');
   console.log();
 }
