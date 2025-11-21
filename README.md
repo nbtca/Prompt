@@ -1,185 +1,150 @@
-# NBTCA Welcome v2.3.0
+# NBTCA Prompt
 
-![Demo](assets/Prompt_demo.gif)
+<div align="center">
 
-> 为浙大宁波理工学院计算机协会打造的专业欢迎工具
+[![npm version](https://img.shields.io/npm/v/@nbtca/prompt)](https://www.npmjs.com/package/@nbtca/prompt)
+[![npm downloads](https://img.shields.io/npm/dm/@nbtca/prompt)](https://www.npmjs.com/package/@nbtca/prompt)
+[![Node.js Version](https://img.shields.io/node/v/@nbtca/prompt)](https://nodejs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.3+-blue)](https://www.typescriptlang.org/)
+[![License](https://img.shields.io/npm/l/@nbtca/prompt)](LICENSE)
 
-## ✨ 新功能特性
+**极简优雅的浙大宁波理工学院计算机协会命令行工具**
 
-### 🎨 增强的视觉效果
+[安装](#-安装) • [使用](#-使用) • [功能](#-核心功能) • [开发](#-开发)
 
-- **多种动画效果**: 彩虹、波浪、脉冲、打字机等动画
-- **渐变文字**: 支持多种颜色渐变效果
-- **加载动画**: 自定义加载动画和进度条
-- **系统信息显示**: 实时显示系统状态和性能
+</div>
 
-### 🚀 丰富的交互体验
+---
 
-- **分类菜单**: 官方网站、技术支持、学习资源、社区交流等
-- **子菜单系统**: 每个分类都有详细的子菜单
-- **确认对话框**: 重要操作前的确认提示
-- **输入提示**: 支持文本和密码输入
+## ✨ 特性
 
-### 📊 系统监控
+- 🚀 **极简设计** - 移除冗余，专注核心功能
+- ⚡ **即时启动** - 无加载动画，快速响应
+- 🎨 **智能UI** - Logo和文档查看支持优雅降级
+- 📦 **TypeScript** - 完整类型安全，严格模式
+- 🔧 **模块化** - 清晰的架构，易于维护
+- 🌐 **现代化** - ES2022、async/await、ES Modules
 
-- **实时系统信息**: CPU、内存、平台信息
-- **网络状态**: 连接状态和服务可用性
-- **性能指标**: 系统性能评估和建议
+## 🎯 核心功能
 
-### 🔧 技术支持服务
+### 📅 近期活动
+从 ICS 日历获取并展示社团未来30天的活动安排
 
-- **电脑维修**: 硬件和软件问题解决
-- **网络配置**: 网络连接和配置服务
-- **移动设备**: 手机和平板电脑支持
-- **服务预约**: 在线预约系统
+### 🔧 维修服务
+快速访问 NBTCA 电脑维修和软件安装服务
 
-## 🚀 快速开始
+### 📚 知识库
+在终端查看技术文档（Markdown 渲染），失败时自动打开浏览器
 
-### 安装
+### 🌐 官方网站
+一键访问 NBTCA 主页和 GitHub 组织
+
+### ℹ️ 关于
+查看项目信息、版本号和功能特性
+
+## 📦 安装
+
+### 全局安装（推荐）
 
 ```bash
-npm install @nbtca/welcome
+npm install -g @nbtca/prompt
 ```
 
-### 使用
+### 使用 npx（无需安装）
 
 ```bash
-# 推荐方式
-npx @nbtca/welcome
-
-# 或本地运行
-npm start
-
-# 开发模式（自动重启）
-npm run dev
+npx @nbtca/prompt
 ```
 
-## 📁 项目结构
+## 🚀 使用
 
-```
-.
-├── bin/
-│   └── nbtca-welcome.js          # CLI 入口点
-├── src/
-│   ├── index.js                  # 主入口文件
-│   ├── main.js                   # 核心应用逻辑
-│   ├── logo/                     # ASCII Logo 相关
-│   │   ├── printLogo.js
-│   │   └── logo.txt             # 终端图像数据
-│   ├── gradient/                 # 渐变文字效果
-│   │   └── printGradientText.js
-│   ├── animation/                # 动画效果
-│   │   ├── printLolcatAnimated.js
-│   │   └── loadingAnimation.js
-│   ├── ui/                       # 用户界面组件
-│   │   ├── welcomeBanner.js
-│   │   └── systemInfo.js
-│   └── menu/                     # 交互菜单
-│       ├── showMainMenu.js
-│       ├── handleUserAction.js
-│       └── subMenu.js
-├── assets/
-│   └── Prompt_demo.gif          # 演示动画
-└── package.json
+安装后，使用以下命令之一启动：
+
+```bash
+nbtca              # 简短命令
+nbtca-welcome      # 完整命令
 ```
 
-## 🎯 主要功能
+### 界面预览
 
-### 🌐 官方网站服务
+```
+███╗   ██╗██████╗ ████████╗ ██████╗ █████╗
+████╗  ██║██╔══██╗╚══██╔══╝██╔════╝██╔══██╗
+██╔██╗ ██║██████╔╝   ██║   ██║     ███████║
+██║╚██╗██║██╔══██╗   ██║   ██║     ██╔══██║
+██║ ╚████║██████╔╝   ██║   ╚██████╗██║  ██║
+╚═╝  ╚═══╝╚═════╝    ╚═╝    ╚═════╝╚═╝  ╚═╝
 
-- 🏠 官方网站主页
-- 📰 新闻资讯
-- 📅 活动日历
-- 👥 团队介绍
-- 📞 联系我们
+              浙大宁波理工学院计算机协会
 
-### 🔧 技术支持服务
+──────────────── Prompt v1.0.0 ────────────────
 
-- 💻 电脑硬件维修
-- 🔧 软件问题解决
-- 🌐 网络配置服务
-- 📱 移动设备支持
-- 🛠️ 硬件升级咨询
-- 📋 服务预约
+? 请选择功能:
+❯ › 近期活动    查看最近30天的社团活动
+  › 维修服务    电脑维修、软件安装
+  › 知识库      技术文档、教程资源
+  › 官方网站    访问NBTCA主页
+  › GitHub      开源项目与代码
+  › 关于        项目信息与帮助
+  ───────────────────────────────────────
+  › 退出
+```
 
-### 📚 学习资源中心
+## 🏗️ 项目架构
 
-- 📚 技术文档
-- 🎥 视频教程
-- 💡 编程学习
-- 🎨 设计资源
-- 🔬 学术研究
-- 📖 推荐书籍
-
-### 👥 社区交流
-
-- 💬 技术交流群
-- 📢 官方QQ群
-- 🐙 GitHub组织
-- 📱 微信公众号
-- 🎯 项目合作
-- 🏆 竞赛信息
-
-### ⚙️ 系统设置
-
-- 🎨 主题设置
-- 🌐 网络配置
-- 📊 性能监控
-- 🔔 通知设置
-- 🔄 检查更新
+```
+src/
+├── config/           # 配置文件
+│   ├── data.ts      # URL和应用信息常量
+│   └── theme.ts     # 颜色主题定义
+│
+├── core/            # 核心模块
+│   ├── logo.ts      # 智能Logo显示（iTerm2图片 → ASCII降级）
+│   ├── menu.ts      # 主菜单系统
+│   └── ui.ts        # UI组件库
+│
+├── features/        # 功能模块
+│   ├── calendar.ts  # ICS日历集成
+│   ├── docs.ts      # 知识库终端查看
+│   ├── repair.ts    # 维修服务访问
+│   └── website.ts   # 官网和GitHub访问
+│
+├── logo/
+│   ├── logo.txt           # iTerm2图片格式
+│   └── ascii-logo.txt     # ASCII艺术字
+│
+├── index.ts         # 程序入口
+├── main.ts          # 主逻辑
+└── types.ts         # TypeScript类型定义
+```
 
 ## 🛠️ 技术栈
 
-- **Node.js** (ES Modules)
-- **inquirer** - 交互式命令行界面
-- **chalk** - 终端颜色输出
-- **isomorphic-lolcat** - 彩虹色动画效果
-- **open** - 打开系统默认浏览器
-- **boxen** - 创建边框效果
+### 核心依赖
 
-## 🎨 动画效果
+| 包名 | 用途 |
+|------|------|
+| `axios` | HTTP请求（获取日历和文档） |
+| `ical.js` | ICS日历解析 |
+| `marked` + `marked-terminal` | Markdown终端渲染 |
+| `chalk` | 终端颜色输出 |
+| `inquirer` | 交互式菜单 |
+| `open` | 打开浏览器 |
 
-### 彩虹动画
+### 开发依赖
 
-```javascript
-await printLolcatAnimated("Hello World!", {
-  duration: 2000,
-  fps: 30,
-  effect: "rainbow",
-});
+- **TypeScript 5.3+** - 严格类型检查
+- **tsx** - TypeScript执行和热重载
+- **@types/\*** - 类型定义
+
+## 💻 开发
+
+### 克隆仓库
+
+```bash
+git clone https://github.com/nbtca/prompt.git
+cd prompt
 ```
-
-### 波浪动画
-
-```javascript
-await printLolcatAnimated("Hello World!", {
-  effect: "wave",
-});
-```
-
-### 脉冲动画
-
-```javascript
-await printLolcatAnimated("Hello World!", {
-  effect: "pulse",
-});
-```
-
-### 打字机效果
-
-```javascript
-await printLolcatAnimated("Hello World!", {
-  effect: "typewriter",
-});
-```
-
-## 📊 系统要求
-
-- **Node.js**: >= 16.0.0
-- **操作系统**: Windows, macOS, Linux
-- **终端**: 支持 ANSI 转义序列的终端
-
-## 🔧 开发
 
 ### 安装依赖
 
@@ -187,7 +152,7 @@ await printLolcatAnimated("Hello World!", {
 npm install
 ```
 
-### 运行开发模式
+### 开发模式（带热重载）
 
 ```bash
 npm run dev
@@ -199,37 +164,109 @@ npm run dev
 npm run build
 ```
 
+构建产物将输出到 `dist/` 目录。
+
+### 本地测试
+
+```bash
+npm start
+```
+
+## 📊 系统要求
+
+- **Node.js**: >= 16.0.0
+- **操作系统**: Windows, macOS, Linux
+- **终端**: 支持 ANSI 转义序列
+
+推荐使用现代终端：
+- macOS: iTerm2, Terminal.app
+- Windows: Windows Terminal, PowerShell
+- Linux: GNOME Terminal, Konsole
+
+## 🎨 设计理念
+
+### 极简主义
+
+- ❌ 移除所有不必要的动画和装饰
+- ✅ 保留核心功能，优化用户体验
+- 📊 代码量减少 65%（从 4,966 行到 1,760 行）
+
+### 优雅降级
+
+- **Logo显示**: iTerm2 图片 → ASCII 艺术字 → 纯文本
+- **文档查看**: 终端 Markdown 渲染 → 浏览器打开
+- **错误处理**: 友好提示，永不崩溃
+
+### 类型安全
+
+- 全项目 TypeScript 严格模式
+- 完整的接口和类型定义
+- 编译时错误捕获
+
 ## 📝 更新日志
 
-### v2.3.0
+### v1.0.0 (2025-11-21)
 
-- ✨ 新增多种动画效果
-- 🎨 增强的渐变文字功能
-- 📊 实时系统信息显示
-- 🚀 分类菜单系统
-- 🔧 丰富的技术支持服务
-- 📚 学习资源中心
-- 👥 社区交流功能
-- ⚙️ 系统设置选项
+**重大变更**:
+- 🔄 完整 TypeScript 重构
+- 🎨 极简 UI 重新设计
+- 📦 包名更改为 `@nbtca/prompt`
+- 📉 代码量减少 65%
 
-### v2.2.0
+**新功能**:
+- 📅 ICS 日历集成（从 ical.nbtca.space 获取活动）
+- 📚 终端 Markdown 渲染器（查看知识库文档）
+- 🎯 智能 Logo 显示（支持降级）
+- 🚀 即时启动（移除所有加载动画）
 
-- 🎨 基础动画效果
-- 🌐 官方网站访问
-- 🔧 维修服务
+**技术改进**:
+- TypeScript 5.3+ 严格模式
+- ES2022 模块系统
+- 模块化架构（core/, features/, config/）
+- 改进的 CI/CD（多版本测试，npm provenance）
+
+### v2.3.1 及更早版本
+
+见 [CHANGELOG](https://github.com/nbtca/prompt/releases) 了解历史版本。
 
 ## 🤝 贡献
 
-欢迎提交 Issue 和 Pull Request！
+欢迎贡献代码！请遵循以下步骤：
+
+1. Fork 本仓库
+2. 创建特性分支 (`git checkout -b feature/amazing-feature`)
+3. 提交更改 (`git commit -m 'Add amazing feature'`)
+4. 推送到分支 (`git push origin feature/amazing-feature`)
+5. 创建 Pull Request
+
+### 开发规范
+
+- 使用 TypeScript 严格模式
+- 遵循现有代码风格
+- 添加适当的注释
+- 确保构建通过 (`npm run build`)
 
 ## 📄 许可证
 
-MIT License
+[MIT License](LICENSE)
 
 ## 📞 联系我们
 
-- 🌐 官网: https://nbtca.space/
-- 📧 邮箱: contact@m1ng.space
-- 🐙 GitHub: https://github.com/nbtca
+- 🌐 **官网**: https://nbtca.space
+- 📧 **邮箱**: contact@nbtca.space
+- 🐙 **GitHub**: https://github.com/nbtca
+- 📦 **NPM**: https://www.npmjs.com/package/@nbtca/prompt
+
+## 🙏 致谢
+
+感谢所有为 NBTCA Prompt 做出贡献的开发者！
 
 ---
+
+<div align="center">
+
+**[⬆ 回到顶部](#nbtca-prompt)**
+
+Made with ❤️ by [NBTCA](https://nbtca.space)
+
+</div>
