@@ -1,9 +1,10 @@
 {
-  "name": "@nbtca/welcome",
-  "version": "2.3.1",
+  "name": "@nbtca/prompt",
+  "version": "1.0.0",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
+    "nbtca": "bin/nbtca-welcome.js",
     "nbtca-welcome": "bin/nbtca-welcome.js"
   },
   "scripts": {
@@ -59,5 +60,5 @@
     "url": "https://github.com/nbtca/prompt/issues"
   },
   "homepage": "https://github.com/nbtca/prompt#readme",
-  "description": "Enhanced welcome tool for NingboTech Computer Association with rich TUI experience"
+  "description": "NBTCA Prompt - Minimalist CLI tool for NingboTech Computer Association"
 }

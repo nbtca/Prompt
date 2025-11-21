@@ -1,8 +1,8 @@
-name: CI for @nbtca/welcome
+name: CI for @nbtca/prompt
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/*]
   pull_request:
     branches: [main]
 
@@ -10,23 +10,31 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    strategy:
+      matrix:
+        node-version: [18, 20]
+
     steps:
       - name: 🛎️ Checkout code
         uses: actions/checkout@v4
 
-      - name: 🟢 Set up Node.js
+      - name: 🟢 Set up Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: ${{ matrix.node-version }}
           cache: "npm"
 
       - name: 📦 Install dependencies
-        run: npm install
+        run: npm ci
 
-      - name: ✅ Run linter
+      - name: 🔨 Build TypeScript
+        run: npm run build
+
+      - name: ✅ Type check
+        run: npx tsc --noEmit
+
+      - name: 📋 Verify build artifacts
         run: |
-          if [ -f .eslintrc.* ]; then
-            npx eslint . || exit 1
-          else
-            echo "No eslint config found"
-          fi
+          test -d dist || (echo "dist directory not found" && exit 1)
+          test -f dist/index.js || (echo "dist/index.js not found" && exit 1)
+          echo "Build artifacts verified successfully"

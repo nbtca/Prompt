@@ -10,6 +10,7 @@ import { openRepairService } from '../features/repair.js';
 import { showDocsMenu } from '../features/docs.js';
 import { openHomepage, openGithub } from '../features/website.js';
 import { printDivider, printNewLine } from './ui.js';
+import { APP_INFO, URLS } from '../config/data.js';
 
 /**
  * 主菜单选项
@@ -144,13 +145,13 @@ function showAbout(): void {
   console.log();
   printDivider();
   console.log();
-  console.log(chalk.white('  项目名称: ') + chalk.cyan('NBTCA Welcome Tool'));
-  console.log(chalk.white('  版本:     ') + chalk.cyan('v2.3.1'));
-  console.log(chalk.white('  描述:     ') + chalk.gray('浙大宁波理工学院计算机协会命令行工具'));
+  console.log(chalk.white('  项目名称: ') + chalk.cyan(APP_INFO.name));
+  console.log(chalk.white('  版本:     ') + chalk.cyan(`v${APP_INFO.version}`));
+  console.log(chalk.white('  描述:     ') + chalk.gray(APP_INFO.fullDescription));
   console.log();
-  console.log(chalk.white('  GitHub:   ') + chalk.cyan('https://github.com/nbtca/prompt'));
-  console.log(chalk.white('  官网:     ') + chalk.cyan('https://nbtca.space'));
-  console.log(chalk.white('  邮箱:     ') + chalk.cyan('contact@nbtca.space'));
+  console.log(chalk.white('  GitHub:   ') + chalk.cyan(APP_INFO.repository));
+  console.log(chalk.white('  官网:     ') + chalk.cyan(URLS.homepage));
+  console.log(chalk.white('  邮箱:     ') + chalk.cyan(URLS.email));
   console.log();
   console.log(chalk.gray('  功能特性:'));
   console.log(chalk.gray('  • 查看社团近期活动'));
