@@ -10,7 +10,7 @@
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "postbuild": "cp src/logo/logo.txt dist/logo/",
+    "postbuild": "mkdir -p dist/logo && cp src/logo/logo.txt dist/logo/ && cp src/logo/ascii-logo.txt dist/logo/",
     "clean": "rm -rf dist",
     "prebuild": "npm run clean",
     "prepublishOnly": "npm run build",
@@ -27,14 +27,18 @@
     "interactive"
   ],
   "dependencies": {
+    "axios": "^1.6.2",
     "boxen": "^8.0.1",
     "chalk": "^5.4.1",
     "inquirer": "^12.6.3",
-    "isomorphic-lolcat": "^0.3.1",
+    "ical.js": "^2.0.1",
+    "marked": "^11.1.0",
+    "marked-terminal": "^7.0.0",
     "open": "^10.1.2"
   },
   "devDependencies": {
     "@types/inquirer": "^9.0.7",
+    "@types/marked-terminal": "^3.1.3",
     "@types/node": "^20.11.0",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3"
