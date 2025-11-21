@@ -6,21 +6,55 @@
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import chalk from 'chalk';
+import gradient from 'gradient-string';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 /**
- * 计算字符串的实际显示宽度（考虑中文字符）
+ * 创建蓝色主调的渐变效果
  */
-function getDisplayWidth(str: string): number {
-  let width = 0;
-  for (const char of str) {
-    // 中文字符、全角符号等占2个宽度
-    width += char.charCodeAt(0) > 127 ? 2 : 1;
+function createBlueGradient(text: string): string {
+  // 使用蓝色系渐变：深蓝 -> 青色 -> 天蓝
+  const blueGradient = gradient([
+    { color: '#1e3a8a', pos: 0 },    // 深蓝
+    { color: '#0ea5e9', pos: 0.5 },  // 天蓝
+    { color: '#06b6d4', pos: 1 }     // 青色
+  ]);
+  return blueGradient(text);
+}
+
+/**
+ * 显示渐变动画效果（优化版 - 更丝滑的动画）
+ */
+async function animateGradient(text: string, duration: number = 1200): Promise<void> {
+  const frames = 24; // 增加帧数使动画更流畅
+  const frameDelay = duration / frames;
+
+  // 预创建所有渐变对象
+  const gradients = [
+    gradient('#1e3a8a', '#2563eb', '#3b82f6'),
+    gradient('#2563eb', '#3b82f6', '#0ea5e9'),
+    gradient('#3b82f6', '#0ea5e9', '#06b6d4'),
+    gradient('#0ea5e9', '#06b6d4', '#14b8a6'),
+    gradient('#06b6d4', '#14b8a6', '#0ea5e9'),
+    gradient('#14b8a6', '#0ea5e9', '#3b82f6'),
+    gradient('#0ea5e9', '#3b82f6', '#2563eb'),
+    gradient('#3b82f6', '#2563eb', '#1e3a8a'),
+  ];
+
+  for (let i = 0; i < frames; i++) {
+    const gradientIndex = Math.floor((i / frames) * gradients.length);
+    const frameGradient = gradients[gradientIndex]!;
+
+    // 清除当前行并显示新帧
+    process.stdout.write('\r' + frameGradient(text));
+
+    await new Promise(resolve => setTimeout(resolve, frameDelay));
   }
-  return width;
+
+  // 最后显示静态的蓝色渐变
+  process.stdout.write('\r' + createBlueGradient(text) + '\n');
 }
 
 /**
@@ -35,7 +69,7 @@ export async function printLogo(): Promise<void> {
     // 如果成功读取且内容有效，直接显示
     if (logoContent && logoContent.length > 100) {
       console.log(logoContent);
-      printDescription();
+      await printDescription();
       return;
     }
   } catch (error) {
@@ -47,34 +81,33 @@ export async function printLogo(): Promise<void> {
     const asciiLogoPath = join(__dirname, '../logo/ascii-logo.txt');
     const asciiContent = readFileSync(asciiLogoPath, 'utf-8');
 
-    // 使用cyan颜色显示ASCII logo，不居中（ASCII艺术本身已经设计好）
+    // 使用渐变彩色显示ASCII logo
     console.log();
     const lines = asciiContent.split('\n').filter(line => line.trim());
     lines.forEach(line => {
-      console.log(chalk.cyan(line));
+      console.log(createBlueGradient(line));
     });
 
-    printDescription();
+    await printDescription();
   } catch (error) {
     // 如果ASCII logo也失败，显示简单的文本logo
-    console.log(chalk.cyan.bold('\n  NBTCA'));
-    printDescription();
+    console.log();
+    console.log(createBlueGradient('  NBTCA'));
+    await printDescription();
   }
 }
 
 /**
- * 显示描述文字
+ * 显示描述文字（带渐变动画）
  */
-function printDescription(): void {
-  const description = '浙大宁波理工学院计算机协会';
-  const terminalWidth = process.stdout.columns || 80;
-
-  // 计算实际显示宽度
-  const displayWidth = getDisplayWidth(description);
-  const padding = Math.max(0, Math.floor((terminalWidth - displayWidth) / 2));
+async function printDescription(): Promise<void> {
+  const tagline = 'To be at the intersection of technology and liberal arts.';
 
   console.log();
-  console.log(' '.repeat(padding) + chalk.gray(description));
+
+  // 显示渐变动画
+  await animateGradient(tagline, 1500);
+
   console.log();
 }
 
