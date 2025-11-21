@@ -12,6 +12,18 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 /**
+ * 计算字符串的实际显示宽度（考虑中文字符）
+ */
+function getDisplayWidth(str: string): number {
+  let width = 0;
+  for (const char of str) {
+    // 中文字符、全角符号等占2个宽度
+    width += char.charCodeAt(0) > 127 ? 2 : 1;
+  }
+  return width;
+}
+
+/**
  * 尝试读取并显示logo文件
  */
 export async function printLogo(): Promise<void> {
@@ -35,13 +47,11 @@ export async function printLogo(): Promise<void> {
     const asciiLogoPath = join(__dirname, '../logo/ascii-logo.txt');
     const asciiContent = readFileSync(asciiLogoPath, 'utf-8');
 
-    // 使用cyan颜色显示ASCII logo并居中
-    const lines = asciiContent.split('\n');
-    const terminalWidth = process.stdout.columns || 80;
-
+    // 使用cyan颜色显示ASCII logo，不居中（ASCII艺术本身已经设计好）
+    console.log();
+    const lines = asciiContent.split('\n').filter(line => line.trim());
     lines.forEach(line => {
-      const padding = Math.max(0, Math.floor((terminalWidth - line.length) / 2));
-      console.log(' '.repeat(padding) + chalk.cyan(line));
+      console.log(chalk.cyan(line));
     });
 
     printDescription();
@@ -58,9 +68,13 @@ export async function printLogo(): Promise<void> {
 function printDescription(): void {
   const description = '浙大宁波理工学院计算机协会';
   const terminalWidth = process.stdout.columns || 80;
-  const padding = Math.max(0, Math.floor((terminalWidth - description.length) / 2));
+
+  // 计算实际显示宽度
+  const displayWidth = getDisplayWidth(description);
+  const padding = Math.max(0, Math.floor((terminalWidth - displayWidth) / 2));
 
   console.log();
   console.log(' '.repeat(padding) + chalk.gray(description));
   console.log();
 }
+
