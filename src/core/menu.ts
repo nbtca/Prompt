@@ -17,40 +17,40 @@ import { APP_INFO, URLS } from '../config/data.js';
  */
 const MAIN_MENU = [
   {
-    name: '近期活动' + chalk.gray('  查看最近30天的社团活动'),
+    name: '[*] Recent Events    ' + chalk.gray('查看最近30天的社团活动'),
     value: 'events',
-    short: '近期活动'
+    short: 'Recent Events'
   },
   {
-    name: '维修服务' + chalk.gray('  电脑维修、软件安装'),
+    name: '[*] Repair Service   ' + chalk.gray('电脑维修、软件安装'),
     value: 'repair',
-    short: '维修服务'
+    short: 'Repair Service'
   },
   {
-    name: '知识库' + chalk.gray('    技术文档、教程资源'),
+    name: '[*] Knowledge Base   ' + chalk.gray('技术文档、教程资源'),
     value: 'docs',
-    short: '知识库'
+    short: 'Knowledge Base'
   },
   {
-    name: '官方网站' + chalk.gray('  访问NBTCA主页'),
+    name: '[*] Official Website ' + chalk.gray('访问NBTCA主页'),
     value: 'website',
-    short: '官方网站'
+    short: 'Official Website'
   },
   {
-    name: 'GitHub' + chalk.gray('    开源项目与代码'),
+    name: '[*] GitHub           ' + chalk.gray('开源项目与代码'),
     value: 'github',
     short: 'GitHub'
   },
   {
-    name: '关于' + chalk.gray('      项目信息与帮助'),
+    name: '[?] About            ' + chalk.gray('项目信息与帮助'),
     value: 'about',
-    short: '关于'
+    short: 'About'
   },
   new inquirer.Separator(' '),
   {
-    name: chalk.dim('退出'),
+    name: chalk.dim('[x] Exit'),
     value: 'exit',
-    short: '退出'
+    short: 'Exit'
   }
 ];
 
@@ -60,6 +60,10 @@ const MAIN_MENU = [
 export async function showMainMenu(): Promise<void> {
   while (true) {
     try {
+      // Show keybinding hints
+      console.log(chalk.dim('  Navigation: j/k or ↑/↓ | Jump: g/G | Quit: q or Ctrl+C'));
+      console.log();
+
       const { action } = await inquirer.prompt<{ action: string }>([
         {
           type: 'list',
@@ -135,23 +139,23 @@ async function handleAction(action: string): Promise<void> {
  */
 function showAbout(): void {
   console.log();
-  console.log(chalk.bold('关于 NBTCA'));
+  console.log(chalk.bold('>> About NBTCA'));
   console.log();
-  console.log(chalk.dim('项目') + '    ' + APP_INFO.name);
-  console.log(chalk.dim('版本') + '    ' + `v${APP_INFO.version}`);
-  console.log(chalk.dim('描述') + '    ' + APP_INFO.fullDescription);
+  console.log(chalk.dim('Project     ') + APP_INFO.name);
+  console.log(chalk.dim('Version     ') + `v${APP_INFO.version}`);
+  console.log(chalk.dim('Description ') + APP_INFO.fullDescription);
   console.log();
-  console.log(chalk.dim('GitHub') + '  ' + chalk.cyan(APP_INFO.repository));
-  console.log(chalk.dim('官网') + '    ' + chalk.cyan(URLS.homepage));
-  console.log(chalk.dim('邮箱') + '    ' + chalk.cyan(URLS.email));
+  console.log(chalk.dim('GitHub      ') + chalk.cyan(APP_INFO.repository));
+  console.log(chalk.dim('Website     ') + chalk.cyan(URLS.homepage));
+  console.log(chalk.dim('Email       ') + chalk.cyan(URLS.email));
   console.log();
-  console.log(chalk.dim('功能'));
-  console.log('  • 查看社团近期活动');
-  console.log('  • 在线维修服务');
-  console.log('  • 技术知识库访问');
-  console.log('  • 快速访问官网和GitHub');
+  console.log(chalk.dim('Features:'));
+  console.log('  - View recent association events');
+  console.log('  - Online repair service');
+  console.log('  - Technical knowledge base access');
+  console.log('  - Quick access to website and GitHub');
   console.log();
-  console.log(chalk.dim('协议') + '    ' + 'MIT License');
-  console.log(chalk.dim('作者') + '    ' + 'm1ngsama');
+  console.log(chalk.dim('License     ') + 'MIT License');
+  console.log(chalk.dim('Author      ') + 'm1ngsama');
   console.log();
 }
