@@ -1,164 +1,77 @@
-# NBTCA Prompt - UI 重构完成 ✨
+# CHANGELOG
 
-## 🎨 设计更新
+## [1.0.2] - 2025-11-27
 
-### 1. 新的标语
-- ✅ 更换为英文标语：**"To be at the intersection of technology and liberal arts."**
-- ✅ 移除居中显示，采用左对齐布局
+### Added
+- **Terminal Documentation Viewer**: Browse and read Markdown documentation from nbtca/documents repository directly in terminal
+  - GitHub API integration for fetching directory structure and file contents
+  - Recursive directory navigation with [DIR] and [MD] indicators
+  - VitePress syntax cleaning (frontmatter, containers, [[toc]], HTML comments)
+  - Terminal Markdown rendering using marked-terminal
+  - Browser fallback on network errors or user preference
+  - Retry mechanism for failed network requests
 
-### 2. 渐变彩色效果
-- ✅ 使用 `gradient-string` 实现蓝色主调渐变
-- ✅ 颜色方案：深蓝 (#1e3a8a) → 天蓝 (#0ea5e9) → 青色 (#06b6d4)
-- ✅ 添加动画效果，启动时标语会有流动的渐变动画（0.8秒）
-- ✅ ASCII Logo 也使用蓝色渐变渲染
+### Changed
+- **ASCII-Only Interface**: Removed all emoji icons for maximum terminal compatibility
+  - Replaced emoji with ASCII symbols: [*], [?], [x], [..], [DIR], [MD], [ <], [ ^], [ *]
+  - Works on all terminal emulators, SSH sessions, tmux, and legacy systems
+  - Follows Unix/Linux terminal conventions
+  - Professional, minimalist design
 
-### 3. 极简 UI设计
-- ✅ 参考 Claude Code CLI 的简洁风格
-- ✅ 移除冗余装饰元素
-- ✅ 统一使用 dim 样式营造层次感
-- ✅ 更清晰的信息结构
+### Improved
+- **Terminal UX Enhancements**:
+  - Added keybinding hints to main menu: "Navigation: j/k or ↑/↓ | Jump: g/G | Quit: q or Ctrl+C"
+  - Added ESC key infrastructure for future back navigation and operation cancellation
+  - Standardized navigation symbols across all menus
+  - Better vim-keys.ts documentation with clearer comments
 
-### 4. Vim 键位支持
-- ✅ 支持 `j` 向下导航
-- ✅ 支持 `k` 向上导航
-- ✅ 支持 `g` 跳到顶部
-- ✅ 支持 `G` (Shift+g) 跳到底部
-- ✅ 同时保留标准的 `↑` `↓` 箭头键
-- ✅ 通过拦截 stdin 的 keypress 事件实现，无需修改 Inquirer
+### Fixed
+- **Development Workflow**: Fixed `pnpm run dev` auto-restart issue
+  - Split dev command: `dev` (no watch, for interactive CLI) and `dev:watch` (with watch mode)
+  - Proper exit behavior for interactive CLI testing
 
-## ⚡ 性能优化
+### Documentation
+- Added DEVELOPMENT.md: Comprehensive development guide with workflows, testing methods, and common issues
+- Added TERMINAL_UX.md: Terminal UX improvements and compatibility documentation
+- Updated README.md: Professional, concise documentation without decorative elements
 
-### 启动速度优化
-- ✅ 动画时长优化：从 1.5秒 降至 0.8秒
-- ✅ 动画帧数优化：从 15帧 降至 8帧
-- ✅ 渐变预计算：避免重复创建渐变对象
-- ✅ 移除未使用的代码和文件
+### Technical Details
+- Enhanced docs.ts with GitHub repository integration
+- Improved menu.ts with ASCII symbols and keybinding hints
+- Enhanced vim-keys.ts with ESC support and better documentation
+- Better package.json scripts for development workflow
 
-### 代码精简
-- ✅ 删除 `DATA_MANAGEMENT.md` 无用文档
-- ✅ 删除测试文件
-- ✅ 删除临时文档
-- ✅ 简化 UI 组件，移除未使用的函数
+## [1.0.1] - 2025-11-21
 
-## 📦 依赖更新
+### Added
+- New English tagline with smooth blue gradient animation
+- Full Vim keybindings support (j/k/g/G/q)
+- Minimalist UI design inspired by Claude Code CLI
 
-新增依赖：
-```json
-{
-  "gradient-string": "^3.0.0",
-  "@types/gradient-string": "^1.1.6",
-  "@inquirer/prompts": "^8.0.3"
-}
-```
+### Improved
+- Smoother gradient animation (24 frames, 1.2s duration)
+- Removed keyboard instruction text for cleaner interface
+- Blue color scheme throughout (deep blue → sky blue → cyan)
 
-## 🚀 使用方法
+### Changed
+- q key now exits the application
+- Removed Chinese tagline
+- Simplified menu layout
 
-```bash
-# 安装依赖
-npm install
+### Removed
+- Unused DATA_MANAGEMENT.md documentation
 
-# 构建项目
-npm run build
+### Dependencies
+- Updated gradient-string to ^3.0.0
+- Updated @inquirer/prompts to ^8.0.3
 
-# 运行
-npm start
+## [1.0.0] - 2025-11-21
 
-# 或者直接使用 npx（未来发布后）
-npx @nbtca/prompt
-```
-
-## 🎯 界面预览
-
-```
-[ASCII Art Logo 以蓝色渐变显示]
-
-To be at the intersection of technology and liberal arts.
-[流动的蓝色渐变动画 - 0.8秒]
-
-v1.0.0
-
-  ↑↓ / jk 导航  •  ⏎ 选择  •  g 顶部  •  G 底部
-
-› 选择功能
-  近期活动  查看最近30天的社团活动
-❯ 维修服务  电脑维修、软件安装
-  知识库    技术文档、教程资源
-  官方网站  访问NBTCA主页
-  GitHub    开源项目与代码
-  关于      项目信息与帮助
-
-  退出
-```
-
-## ✨ 亮点特性
-
-1. **真正的 Vim 键位** - j/k/g/G 完整支持，对 vim 用户极其友好
-2. **视觉吸引力** - 蓝色渐变动画让启动时更有科技感
-3. **快速启动** - 优化后动画仅需0.8秒，不影响使用体验
-4. **现代简洁** - 参考行业标杆 Claude Code 的设计语言
-5. **清晰易读** - 统一的层次结构和配色方案
-
-## 📝 技术细节
-
-### Vim 键位实现
-```typescript
-// 通过拦截 stdin 的 keypress 事件来实现
-export function enableVimKeys() {
-  const stdin = process.stdin;
-  const originalEmit = stdin.emit.bind(stdin);
-
-  (stdin.emit as any) = function (event: string, ...args: any[]) {
-    if (event === 'keypress') {
-      const [, key] = args;
-
-      // j -> down, k -> up, g -> home, G -> end
-      if (key.name === 'j') return originalEmit('keypress', null, { name: 'down' });
-      if (key.name === 'k') return originalEmit('keypress', null, { name: 'up' });
-      if (key.name === 'g' && !key.shift) return originalEmit('keypress', null, { name: 'home' });
-      if (key.name === 'g' && key.shift) return originalEmit('keypress', null, { name: 'end' });
-    }
-    return originalEmit(event, ...args);
-  };
-}
-```
-
-### 渐变实现
-```typescript
-// 创建蓝色主调渐变
-const blueGradient = gradient([
-  { color: '#1e3a8a', pos: 0 },    // 深蓝
-  { color: '#0ea5e9', pos: 0.5 },  // 天蓝
-  { color: '#06b6d4', pos: 1 }     // 青色
-]);
-
-// 应用到文本
-console.log(blueGradient('To be at the intersection of technology and liberal arts.'));
-```
-
-### 动画循环
-```typescript
-// 使用3种颜色组合创造流动效果
-const gradients = [
-  gradient('#1e3a8a', '#0ea5e9', '#06b6d4'),
-  gradient('#0ea5e9', '#06b6d4', '#1e3a8a'),
-  gradient('#06b6d4', '#1e3a8a', '#0ea5e9'),
-];
-
-// 循环显示 8 帧，每帧 100ms
-for (let i = 0; i < 8; i++) {
-  const frameGradient = gradients[i % 3];
-  process.stdout.write('\r' + frameGradient(text));
-  await delay(100);
-}
-```
-
-## 🔧 后续优化建议
-
-1. ✨ 添加 `--no-animation` 参数跳过动画
-2. 🎨 支持自定义主题色
-3. ⚡ 考虑懒加载非必要模块
-4. 📦 使用 esbuild 打包减小体积
-
----
-
-**最佳实践**：现代 CLI 工具应该兼顾美观性和性能，0.8秒的动画是一个很好的平衡点，既不会让用户感到等待，又能提供愉悦的视觉体验。同时，真正的 Vim 键位支持让工具对开发者更加友好。
+### Added
+- Initial release of NBTCA Prompt CLI tool
+- Interactive terminal menu system
+- Event calendar integration
+- Repair service information
+- Knowledge base access
+- Quick links to official website and GitHub
+- About section with project information
