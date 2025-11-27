@@ -1,272 +1,231 @@
 # NBTCA Prompt
 
-<div align="center">
+Terminal-based information system for NingboTech Computer Association.
 
 [![npm version](https://img.shields.io/npm/v/@nbtca/prompt)](https://www.npmjs.com/package/@nbtca/prompt)
-[![npm downloads](https://img.shields.io/npm/dm/@nbtca/prompt)](https://www.npmjs.com/package/@nbtca/prompt)
-[![Node.js Version](https://img.shields.io/node/v/@nbtca/prompt)](https://nodejs.org)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.3+-blue)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/npm/l/@nbtca/prompt)](LICENSE)
 
-**极简优雅的浙大宁波理工学院计算机协会命令行工具**
+## Overview
 
-[安装](#-安装) • [使用](#-使用) • [功能](#-核心功能) • [开发](#-开发)
+NBTCA Prompt is a minimalist command-line interface tool designed for the Computer Association of Zhejiang University Ningbo Institute of Technology. It provides quick access to association resources, events, and documentation directly from the terminal.
 
-</div>
+## Features
 
----
+- View upcoming association events (30-day calendar)
+- Access repair service information
+- Browse technical documentation from terminal
+- Quick links to official website and GitHub
+- Minimalist design with maximum terminal compatibility
 
-## ✨ 特性
+## Installation
 
-- 🚀 **极简设计** - 移除冗余，专注核心功能
-- ⚡ **即时启动** - 无加载动画，快速响应
-- 🎨 **智能UI** - Logo和文档查看支持优雅降级
-- 📦 **TypeScript** - 完整类型安全，严格模式
-- 🔧 **模块化** - 清晰的架构，易于维护
-- 🌐 **现代化** - ES2022、async/await、ES Modules
-
-## 🎯 核心功能
-
-### 📅 近期活动
-从 ICS 日历获取并展示社团未来30天的活动安排
-
-### 🔧 维修服务
-快速访问 NBTCA 电脑维修和软件安装服务
-
-### 📚 知识库
-在终端查看技术文档（Markdown 渲染），失败时自动打开浏览器
-
-### 🌐 官方网站
-一键访问 NBTCA 主页和 GitHub 组织
-
-### ℹ️ 关于
-查看项目信息、版本号和功能特性
-
-## 📦 安装
-
-### 全局安装（推荐）
+### Global Installation
 
 ```bash
 npm install -g @nbtca/prompt
 ```
 
-### 使用 npx（无需安装）
+### Using npx (No Installation Required)
 
 ```bash
 npx @nbtca/prompt
 ```
 
-## 🚀 使用
+## Usage
 
-安装后，使用以下命令之一启动：
+Run the program with:
 
 ```bash
-nbtca              # 简短命令
-nbtca-welcome      # 完整命令
+nbtca
 ```
 
-### 界面预览
+Navigate using arrow keys or Vim bindings (j/k/g/G).
 
-```
-███╗   ██╗██████╗ ████████╗ ██████╗ █████╗
-████╗  ██║██╔══██╗╚══██╔══╝██╔════╝██╔══██╗
-██╔██╗ ██║██████╔╝   ██║   ██║     ███████║
-██║╚██╗██║██╔══██╗   ██║   ██║     ██╔══██║
-██║ ╚████║██████╔╝   ██║   ╚██████╗██║  ██║
-╚═╝  ╚═══╝╚═════╝    ╚═╝    ╚═════╝╚═╝  ╚═╝
+## Development
 
-              浙大宁波理工学院计算机协会
+### Prerequisites
 
-──────────────── Prompt v1.0.0 ────────────────
+- Node.js >= 16.0.0
 
-? 请选择功能:
-❯ › 近期活动    查看最近30天的社团活动
-  › 维修服务    电脑维修、软件安装
-  › 知识库      技术文档、教程资源
-  › 官方网站    访问NBTCA主页
-  › GitHub      开源项目与代码
-  › 关于        项目信息与帮助
-  ───────────────────────────────────────
-  › 退出
-```
-
-## 🏗️ 项目架构
-
-```
-src/
-├── config/           # 配置文件
-│   ├── data.ts      # URL和应用信息常量
-│   └── theme.ts     # 颜色主题定义
-│
-├── core/            # 核心模块
-│   ├── logo.ts      # 智能Logo显示（iTerm2图片 → ASCII降级）
-│   ├── menu.ts      # 主菜单系统
-│   └── ui.ts        # UI组件库
-│
-├── features/        # 功能模块
-│   ├── calendar.ts  # ICS日历集成
-│   ├── docs.ts      # 知识库终端查看
-│   ├── repair.ts    # 维修服务访问
-│   └── website.ts   # 官网和GitHub访问
-│
-├── logo/
-│   ├── logo.txt           # iTerm2图片格式
-│   └── ascii-logo.txt     # ASCII艺术字
-│
-├── index.ts         # 程序入口
-├── main.ts          # 主逻辑
-└── types.ts         # TypeScript类型定义
-```
-
-## 🛠️ 技术栈
-
-### 核心依赖
-
-| 包名 | 用途 |
-|------|------|
-| `axios` | HTTP请求（获取日历和文档） |
-| `ical.js` | ICS日历解析 |
-| `marked` + `marked-terminal` | Markdown终端渲染 |
-| `chalk` | 终端颜色输出 |
-| `inquirer` | 交互式菜单 |
-| `open` | 打开浏览器 |
-
-### 开发依赖
-
-- **TypeScript 5.3+** - 严格类型检查
-- **tsx** - TypeScript执行和热重载
-- **@types/\*** - 类型定义
-
-## 💻 开发
-
-### 克隆仓库
+### Setup
 
 ```bash
 git clone https://github.com/nbtca/prompt.git
 cd prompt
+pnpm install
 ```
 
-### 安装依赖
+### Development Workflow
+
+#### Quick Testing (Recommended)
 
 ```bash
-npm install
+pnpm run dev
 ```
 
-### 开发模式（带热重载）
+Runs TypeScript source directly without auto-restart. Exit with menu option or Ctrl+C.
+
+#### Watch Mode (File Changes)
 
 ```bash
-npm run dev
+pnpm run dev:watch
 ```
 
-### 构建
+Auto-restarts on file changes. Not recommended for interactive testing.
+
+#### Production Build
 
 ```bash
-npm run build
+pnpm run build
+pnpm start
 ```
 
-构建产物将输出到 `dist/` 目录。
-
-### 本地测试
+### Available Commands
 
 ```bash
-npm start
+pnpm run dev         # Run TypeScript source directly
+pnpm run dev:watch   # Run with file watching
+pnpm run build       # Compile TypeScript to JavaScript
+pnpm start           # Run compiled code
+pnpm run clean       # Remove dist directory
 ```
 
-## 📊 系统要求
+## Project Structure
 
-- **Node.js**: >= 16.0.0
-- **操作系统**: Windows, macOS, Linux
-- **终端**: 支持 ANSI 转义序列
+```
+src/
+├── config/          # Configuration constants
+│   ├── data.ts     # URLs and app info
+│   └── theme.ts    # Color themes
+├── core/           # Core functionality
+│   ├── logo.ts     # Logo display logic
+│   ├── menu.ts     # Main menu system
+│   ├── ui.ts       # UI components
+│   └── vim-keys.ts # Vim key bindings
+├── features/       # Feature modules
+│   ├── calendar.ts # Event calendar
+│   ├── docs.ts     # Documentation viewer
+│   ├── repair.ts   # Repair service
+│   └── website.ts  # Website links
+└── main.ts         # Application entry point
+```
 
-推荐使用现代终端：
-- macOS: iTerm2, Terminal.app
-- Windows: Windows Terminal, PowerShell
-- Linux: GNOME Terminal, Konsole
+## Technology Stack
 
-## 🎨 设计理念
+### Core Dependencies
 
-### 极简主义
+- axios - HTTP requests
+- ical.js - ICS calendar parsing
+- marked + marked-terminal - Markdown rendering
+- chalk - Terminal colors
+- inquirer - Interactive prompts
+- open - Browser integration
 
-- ❌ 移除所有不必要的动画和装饰
-- ✅ 保留核心功能，优化用户体验
-- 📊 代码量减少 65%（从 4,966 行到 1,760 行）
+### Development Dependencies
 
-### 优雅降级
+- TypeScript 5.3+
+- tsx - TypeScript execution
+- @types/* - Type definitions
 
-- **Logo显示**: iTerm2 图片 → ASCII 艺术字 → 纯文本
-- **文档查看**: 终端 Markdown 渲染 → 浏览器打开
-- **错误处理**: 友好提示，永不崩溃
+## Documentation Viewer
 
-### 类型安全
+The knowledge base viewer features:
 
-- 全项目 TypeScript 严格模式
-- 完整的接口和类型定义
-- 编译时错误捕获
+- Direct GitHub repository access
+- VitePress syntax cleaning
+- Terminal Markdown rendering
+- Browser fallback option
+- Directory tree navigation
 
-## 📝 更新日志
+### Supported Formats
+
+- Standard Markdown
+- VitePress frontmatter (auto-removed)
+- VitePress containers (auto-converted)
+- Table of contents (placeholder in terminal)
+
+## Terminal Compatibility
+
+Designed for maximum compatibility with:
+
+- Modern terminals (iTerm2, Windows Terminal, GNOME Terminal)
+- Legacy terminals (xterm, Terminal.app)
+- SSH sessions
+- Screen/tmux multiplexers
+
+ASCII-based UI elements ensure rendering on any terminal emulator.
+
+## System Requirements
+
+- Node.js: >= 16.0.0
+- OS: Windows, macOS, Linux
+- Terminal: ANSI escape sequence support
+
+## Common Issues
+
+### Q: Auto-restart when using `pnpm run dev:watch`?
+
+A: This is expected behavior. Use `pnpm run dev` for interactive testing.
+
+### Q: How to exit the program?
+
+A: Select the Exit option from menu, or press Ctrl+C.
+
+### Q: Changes not reflected?
+
+A: If using `pnpm start`, rebuild with `pnpm run build` first.
+
+## Contributing
+
+Contributions are welcome. Please follow these guidelines:
+
+1. Fork the repository
+2. Create a feature branch
+3. Follow existing code style
+4. Add appropriate comments
+5. Ensure build passes
+6. Submit pull request
+
+### Code Standards
+
+- Use TypeScript strict mode
+- Add JSDoc comments for functions
+- Use .js extension in imports (even for .ts files)
+- Keep code simple and readable
+
+## License
+
+MIT License - See LICENSE file for details
+
+## Contact
+
+- Website: https://nbtca.space
+- Email: contact@nbtca.space
+- GitHub: https://github.com/nbtca
+- NPM: https://www.npmjs.com/package/@nbtca/prompt
+
+## Changelog
+
+### v1.0.1 (2025-11-27)
+
+- Added terminal documentation viewer
+- Removed emoji icons for better compatibility
+- Improved Markdown rendering
+- Added VitePress syntax cleaning
+- Enhanced directory navigation
 
 ### v1.0.0 (2025-11-21)
 
-**重大变更**:
-- 🔄 完整 TypeScript 重构
-- 🎨 极简 UI 重新设计
-- 📦 包名更改为 `@nbtca/prompt`
-- 📉 代码量减少 65%
+- Complete TypeScript rewrite
+- Minimalist UI redesign
+- ICS calendar integration
+- Terminal Markdown renderer
+- Smart logo display with fallback
 
-**新功能**:
-- 📅 ICS 日历集成（从 ical.nbtca.space 获取活动）
-- 📚 终端 Markdown 渲染器（查看知识库文档）
-- 🎯 智能 Logo 显示（支持降级）
-- 🚀 即时启动（移除所有加载动画）
+## Acknowledgments
 
-**技术改进**:
-- TypeScript 5.3+ 严格模式
-- ES2022 模块系统
-- 模块化架构（core/, features/, config/）
-- 改进的 CI/CD（多版本测试，npm provenance）
-
-### v2.3.1 及更早版本
-
-见 [CHANGELOG](https://github.com/nbtca/prompt/releases) 了解历史版本。
-
-## 🤝 贡献
-
-欢迎贡献代码！请遵循以下步骤：
-
-1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/amazing-feature`)
-3. 提交更改 (`git commit -m 'Add amazing feature'`)
-4. 推送到分支 (`git push origin feature/amazing-feature`)
-5. 创建 Pull Request
-
-### 开发规范
-
-- 使用 TypeScript 严格模式
-- 遵循现有代码风格
-- 添加适当的注释
-- 确保构建通过 (`npm run build`)
-
-## 📄 许可证
-
-[MIT License](LICENSE)
-
-## 📞 联系我们
-
-- 🌐 **官网**: https://nbtca.space
-- 📧 **邮箱**: contact@nbtca.space
-- 🐙 **GitHub**: https://github.com/nbtca
-- 📦 **NPM**: https://www.npmjs.com/package/@nbtca/prompt
-
-## 🙏 致谢
-
-感谢所有为 NBTCA Prompt 做出贡献的开发者！
+Built with focus on simplicity and terminal compatibility.
 
 ---
 
-<div align="center">
-
-**[⬆ 回到顶部](#nbtca-prompt)**
-
-Made with ❤️ by [NBTCA](https://nbtca.space)
-
-</div>
+Made by [NBTCA](https://nbtca.space)
