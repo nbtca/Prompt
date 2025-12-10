@@ -257,6 +257,11 @@ MIT License - See LICENSE file for details
 
 ## Changelog
 
+### v1.0.9 (2025-12-10)
+
+- **Fixed**: Version display in application UI now correctly shows 1.0.9
+- **Note**: v1.0.8 was published but displayed incorrect version number in UI
+
 ### v1.0.8 (2025-12-10)
 
 - **Added**: Adaptive terminal rendering with automatic capability detection
