@@ -13,9 +13,10 @@ NBTCA Prompt is a minimalist command-line interface tool designed for the Comput
 
 - View upcoming association events (30-day calendar)
 - Access repair service information
-- Browse technical documentation from terminal
+- Browse technical documentation from terminal with pager support (vim/journalctl style)
 - Quick links to official website and GitHub
 - Minimalist design with maximum terminal compatibility
+- Smooth gradient animations for enhanced visual experience
 
 ## Installation
 
@@ -131,11 +132,25 @@ src/
 
 The knowledge base viewer features:
 
-- Direct GitHub repository access
+- Direct GitHub repository access with authentication support
+- Pager-style document reading (similar to vim/journalctl/less)
 - VitePress syntax cleaning
-- Terminal Markdown rendering
+- Terminal Markdown rendering with color support
 - Browser fallback option
 - Directory tree navigation
+- Improved error handling with rate limit detection
+
+### GitHub Token Configuration (Optional)
+
+To avoid GitHub API rate limits when browsing documentation, you can set a GitHub token:
+
+```bash
+export GITHUB_TOKEN="your_github_token_here"
+# or
+export GH_TOKEN="your_github_token_here"
+```
+
+Without a token, you have 60 requests per hour. With a token, you get 5000 requests per hour.
 
 ### Supported Formats
 
@@ -163,6 +178,10 @@ ASCII-based UI elements ensure rendering on any terminal emulator.
 
 ## Common Issues
 
+### Q: Getting 403 error when browsing documentation?
+
+A: This is due to GitHub API rate limiting. Set a `GITHUB_TOKEN` environment variable to increase your rate limit from 60 to 5000 requests per hour. See the [GitHub Token Configuration](#github-token-configuration-optional) section above.
+
 ### Q: Auto-restart when using `pnpm run dev:watch`?
 
 A: This is expected behavior. Use `pnpm run dev` for interactive testing.
@@ -170,6 +189,10 @@ A: This is expected behavior. Use `pnpm run dev` for interactive testing.
 ### Q: How to exit the program?
 
 A: Select the Exit option from menu, or press Ctrl+C.
+
+### Q: How to navigate documents in the pager?
+
+A: Use arrow keys, Space (page down), 'j/k' (vim-style), or 'q' to quit the pager.
 
 ### Q: Changes not reflected?
 
@@ -205,6 +228,25 @@ MIT License - See LICENSE file for details
 - NPM: https://www.npmjs.com/package/@nbtca/prompt
 
 ## Changelog
+
+### v1.0.5 (2025-12-10)
+
+- **Fixed**: Knowledge Base 403 error due to GitHub API rate limiting
+- **Added**: GitHub token authentication support (GITHUB_TOKEN/GH_TOKEN)
+- **Added**: Pager-style document viewer (vim/journalctl/less style)
+- **Added**: "Re-read document" option after viewing
+- **Improved**: Better error messages with rate limit information
+- **Improved**: Document reading experience with scroll navigation
+
+### v1.0.4 (2025-12-10)
+
+- **Enhanced**: Smooth slogan animation with true color interpolation
+- **Improved**: 60 FPS animation with sine easing for natural transitions
+- **Technical**: Added hexToRgb, rgbToHex, and interpolateColor functions
+
+### v1.0.3 (2025-11-27)
+
+- Version alignment and bug fixes
 
 ### v1.0.1 (2025-11-27)
 

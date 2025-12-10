@@ -10,6 +10,7 @@ import chalk from 'chalk';
 import open from 'open';
 import inquirer from 'inquirer';
 import { error, info, success, warning } from '../core/ui.js';
+import { spawn } from 'child_process';
 
 // 配置marked使用终端渲染器
 marked.setOptions({
@@ -25,6 +26,12 @@ const GITHUB_REPO = {
   repo: 'documents',
   branch: 'main'
 };
+
+/**
+ * GitHub Token (可选 - 用于避免 API 速率限制)
+ * 从环境变量读取，如果没有则使用未认证请求
+ */
+const GITHUB_TOKEN = process.env['GITHUB_TOKEN'] || process.env['GH_TOKEN'];
 
 /**
  * 文档结构类型
@@ -56,12 +63,19 @@ async function fetchGitHubDirectory(path: string = ''): Promise<DocItem[]> {
   const url = `https://api.github.com/repos/${GITHUB_REPO.owner}/${GITHUB_REPO.repo}/contents/${path}?ref=${GITHUB_REPO.branch}`;
 
   try {
+    const headers: any = {
+      'Accept': 'application/vnd.github.v3+json',
+      'User-Agent': 'NBTCA-CLI'
+    };
+
+    // 如果有 GitHub Token，添加认证头以避免速率限制
+    if (GITHUB_TOKEN) {
+      headers['Authorization'] = `Bearer ${GITHUB_TOKEN}`;
+    }
+
     const response = await axios.get(url, {
       timeout: 10000,
-      headers: {
-        'Accept': 'application/vnd.github.v3+json',
-        'User-Agent': 'NBTCA-CLI'
-      }
+      headers
     });
 
     return response.data
@@ -90,6 +104,17 @@ async function fetchGitHubDirectory(path: string = ''): Promise<DocItem[]> {
         return a.name.localeCompare(b.name);
       });
   } catch (err: any) {
+    // 提供更详细的错误信息
+    if (err.response?.status === 403) {
+      const rateLimitRemaining = err.response.headers['x-ratelimit-remaining'];
+      const rateLimitReset = err.response.headers['x-ratelimit-reset'];
+
+      if (rateLimitRemaining === '0') {
+        const resetDate = new Date(parseInt(rateLimitReset) * 1000);
+        throw new Error(`GitHub API 速率限制已达上限，将在 ${resetDate.toLocaleTimeString()} 重置。\n提示: 设置 GITHUB_TOKEN 环境变量可获得更高的速率限制。`);
+      }
+      throw new Error(`GitHub API 拒绝访问 (403)。\n提示: 尝试设置 GITHUB_TOKEN 环境变量。`);
+    }
     throw new Error(`无法获取目录内容: ${err.message}`);
   }
 }
@@ -232,6 +257,50 @@ async function browseDirectory(dirPath: string = ''): Promise<void> {
 }
 
 /**
+ * 使用系统pager (less/more) 显示内容
+ * 提供类似vim/journalctl的阅读体验
+ */
+async function displayInPager(content: string, title: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    // 检测可用的pager程序
+    const pager = process.env['PAGER'] || 'less';
+
+    // 为内容添加标题
+    const fullContent = `${chalk.cyan.bold(`>> ${title}`)}\n${chalk.gray('='.repeat(80))}\n\n${content}\n\n${chalk.gray('='.repeat(80))}\n${chalk.dim('End of document - Press q to quit')}\n`;
+
+    // less的参数: -R (支持颜色), -F (如果内容少于一屏则直接显示), -X (退出时不清屏)
+    const lessArgs = ['-R', '-F', '-X'];
+
+    try {
+      const child = spawn(pager, lessArgs, {
+        stdio: ['pipe', 'inherit', 'inherit'],
+        shell: true
+      });
+
+      // 将内容写入pager的stdin
+      child.stdin.write(fullContent);
+      child.stdin.end();
+
+      child.on('exit', (code) => {
+        resolve(code === 0);
+      });
+
+      child.on('error', () => {
+        // 如果pager失败，回退到直接输出
+        console.error(chalk.yellow('⚠ Pager不可用，使用标准输出'));
+        console.log(fullContent);
+        resolve(false);
+      });
+
+    } catch {
+      // 回退方案: 直接输出
+      console.log(fullContent);
+      resolve(false);
+    }
+  });
+}
+
+/**
  * 查看Markdown文件
  */
 async function viewMarkdownFile(path: string): Promise<void> {
@@ -247,23 +316,15 @@ async function viewMarkdownFile(path: string): Promise<void> {
     // 提取标题
     const title = extractDocTitle(cleanedContent) || path.split('/').pop() || path;
 
-    console.clear();
-    console.log();
-    console.log(chalk.cyan.bold(`>> ${title}`));
-    console.log(chalk.gray(`   ${path}`));
-    console.log();
-    console.log(chalk.gray('='.repeat(80)));
-    console.log();
-
     // 渲染Markdown到终端
-    const rendered = marked(cleanedContent);
-    console.log(rendered);
-    console.log();
-    console.log(chalk.gray('='.repeat(80)));
-    console.log();
-    console.log(chalk.dim('  Note: Some features are only available in browser'));
-    console.log();
+    const rendered = await marked(cleanedContent);
 
+    console.log('\r' + ' '.repeat(60) + '\r'); // 清除加载提示
+
+    // 使用pager显示文档 (类似vim/journalctl的阅读体验)
+    await displayInPager(rendered, `${title}\n${chalk.gray(`   ${path}`)}`);
+
+    console.log(); // 添加空行
     success('文档加载完成');
     console.log();
 
@@ -275,6 +336,7 @@ async function viewMarkdownFile(path: string): Promise<void> {
         message: '选择操作:',
         choices: [
           { name: '[ <] Back to docs list', value: 'back' },
+          { name: '[ ↻] Re-read document', value: 'reread' },
           { name: '[ *] Open in browser', value: 'browser' }
         ]
       }
@@ -282,6 +344,9 @@ async function viewMarkdownFile(path: string): Promise<void> {
 
     if (action === 'browser') {
       await openDocsInBrowser(path);
+    } else if (action === 'reread') {
+      // 重新阅读文档
+      await viewMarkdownFile(path);
     }
 
   } catch (err: any) {

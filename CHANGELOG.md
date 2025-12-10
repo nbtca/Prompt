@@ -1,5 +1,53 @@
 # CHANGELOG
 
+## [1.0.5] - 2025-12-10
+
+### Fixed
+- **Knowledge Base 403 Error**: Resolved GitHub API rate limiting issue that caused 403 errors when browsing documentation
+  - Added GitHub token authentication support via `GITHUB_TOKEN` or `GH_TOKEN` environment variables
+  - Improved error messages with rate limit information and reset time
+  - Increased rate limit from 60 to 5000 requests per hour when using a token
+
+### Added
+- **Pager-Style Document Viewer**: Documents now open in a pager (similar to vim/journalctl/less)
+  - Natural scrolling navigation with arrow keys, Space, j/k (vim-style), and q to quit
+  - Content doesn't flood the terminal anymore
+  - Better reading experience for long documents
+  - Automatic fallback to direct output if pager is unavailable
+- **Re-read Document Option**: Added ability to re-read a document after viewing without going back to the list
+- **Environment Variable Support**:
+  - `GITHUB_TOKEN` or `GH_TOKEN` for GitHub API authentication
+  - `PAGER` for custom pager selection (defaults to `less`)
+
+### Improved
+- Enhanced error handling with detailed rate limit diagnostics
+- Better user feedback when rate limits are reached
+- Clearer instructions for resolving authentication issues
+
+### Technical Details
+- Added `displayInPager()` function for spawning system pager processes
+- Enhanced `fetchGitHubDirectory()` with conditional token authentication
+- Updated documentation viewer workflow for better UX
+
+## [1.0.4] - 2025-12-10
+
+### Enhanced
+- **Smooth Slogan Animation**: Implemented true color interpolation for buttery smooth gradient animation
+  - Increased frame rate from 24 to 60 FPS for ultra-smooth motion
+  - Changed easing from cubic to sine wave for more natural transitions
+  - Dynamically generate gradients per frame instead of using pre-defined set
+  - Eliminates staggered/jumping effect in the slogan text animation
+
+### Technical Details
+- Added `hexToRgb()`, `rgbToHex()`, and `interpolateColor()` functions for mathematical color blending
+- Implemented `easeInOutSine()` easing function for smooth acceleration/deceleration
+- Each frame now uses unique, mathematically interpolated colors
+
+## [1.0.3] - 2025-11-27
+
+### Changed
+- Version alignment and bug fixes
+
 ## [1.0.2] - 2025-11-27
 
 ### Added
