@@ -13,10 +13,115 @@ import { error, info, success, warning } from '../core/ui.js';
 import { spawn } from 'child_process';
 import { t } from '../i18n/index.js';
 
-// 配置marked使用终端渲染器
+/**
+ * Terminal capability detection
+ * Detects if the terminal supports advanced features like images, colors, etc.
+ */
+interface TerminalCapabilities {
+  supportsColor: boolean;
+  supportsImages: boolean;
+  supportsUnicode: boolean;
+  terminalType: 'basic' | 'enhanced' | 'advanced';
+}
+
+/**
+ * Detect terminal capabilities
+ */
+function detectTerminalCapabilities(): TerminalCapabilities {
+  const term = (process.env['TERM'] || '').toLowerCase();
+  const termProgram = (process.env['TERM_PROGRAM'] || '').toLowerCase();
+  const colorTerm = process.env['COLORTERM'];
+
+  // Detect image support (iTerm2, Kitty, WezTerm, etc.)
+  const supportsImages =
+    termProgram.includes('iterm') ||
+    term.includes('kitty') ||
+    termProgram.includes('wezterm') ||
+    term.includes('sixel');
+
+  // Detect color support
+  const supportsColor =
+    colorTerm !== undefined ||
+    term.includes('color') ||
+    term.includes('256') ||
+    term.includes('ansi') ||
+    termProgram !== '';
+
+  // Detect Unicode support
+  const supportsUnicode =
+    (process.env['LANG'] || '').includes('UTF-8') ||
+    (process.env['LC_ALL'] || '').includes('UTF-8');
+
+  // Determine terminal type
+  let terminalType: 'basic' | 'enhanced' | 'advanced' = 'basic';
+  if (supportsImages && supportsColor && supportsUnicode) {
+    terminalType = 'advanced';
+  } else if (supportsColor && supportsUnicode) {
+    terminalType = 'enhanced';
+  }
+
+  return {
+    supportsColor,
+    supportsImages,
+    supportsUnicode,
+    terminalType
+  };
+}
+
+/**
+ * Get marked-terminal renderer options based on terminal capabilities
+ */
+function getRendererOptions(capabilities: TerminalCapabilities): any {
+  // Text width for better readability
+  const width = Math.min(process.stdout.columns || 80, 100);
+
+  // For basic terminals, use simpler ASCII characters
+  if (capabilities.terminalType === 'basic') {
+    return {
+      width,
+      tableOptions: {
+        chars: {
+          top: '-', 'top-mid': '+', 'top-left': '+', 'top-right': '+',
+          bottom: '-', 'bottom-mid': '+', 'bottom-left': '+', 'bottom-right': '+',
+          left: '|', 'left-mid': '+', mid: '-', 'mid-mid': '+',
+          right: '|', 'right-mid': '+', middle: '|'
+        }
+      }
+    };
+  }
+
+  // For enhanced and advanced terminals, use Unicode box-drawing characters
+  return {
+    width,
+    tableOptions: {
+      chars: {
+        top: '─',
+        'top-mid': '┬',
+        'top-left': '┌',
+        'top-right': '┐',
+        bottom: '─',
+        'bottom-mid': '┴',
+        'bottom-left': '└',
+        'bottom-right': '┘',
+        left: '│',
+        'left-mid': '├',
+        mid: '─',
+        'mid-mid': '┼',
+        right: '│',
+        'right-mid': '┤',
+        middle: '│'
+      }
+    }
+  };
+}
+
+// Detect terminal capabilities once at startup
+const terminalCapabilities = detectTerminalCapabilities();
+
+// Configure marked with terminal-optimized renderer
 marked.setOptions({
   // @ts-ignore - markedTerminal类型定义问题
-  renderer: new TerminalRenderer()
+  renderer: new TerminalRenderer(getRendererOptions(terminalCapabilities))
 });
 
 /**
@@ -144,7 +249,7 @@ async function fetchGitHubRawContent(path: string): Promise<string> {
  * 清理和格式化Markdown内容
  * 移除VitePress frontmatter和特殊语法，优化终端显示
  */
-function cleanMarkdownContent(content: string): string {
+function cleanMarkdownContent(content: string, capabilities: TerminalCapabilities): string {
   let cleaned = content;
 
   // 1. 移除 YAML frontmatter (---开头结尾的部分)
@@ -158,13 +263,41 @@ function cleanMarkdownContent(content: string): string {
   // 3. 处理 VitePress 的 [[toc]] 语法
   cleaned = cleaned.replace(/\[\[toc\]\]/gi, '**目录**\n\n_(请在浏览器中查看完整目录)_\n');
 
-  // 4. 清理多余的空行（超过2个连续空行压缩为2个）
+  // 4. 优化图片显示 - 根据终端能力调整
+  if (capabilities.terminalType === 'basic') {
+    // Basic terminals: Replace images with simple text references
+    // This prevents clutter from image syntax that can't be displayed
+    cleaned = cleaned.replace(
+      /!\[([^\]]*)\]\(([^)]+)\)/g,
+      (_match, alt, _url) => {
+        const description = alt || '图片';
+        return `📎 [${description}]`;
+      }
+    );
+  } else if (capabilities.terminalType === 'enhanced') {
+    // Enhanced terminals: Keep alt text and show it's an image
+    cleaned = cleaned.replace(
+      /!\[([^\]]*)\]\(([^)]+)\)/g,
+      (_match, alt, url) => {
+        const description = alt || '图片';
+        const filename = url.split('/').pop() || url;
+        return `🖼️  **[图片: ${description}]**\n   _${filename}_`;
+      }
+    );
+  }
+  // For advanced terminals (supportsImages), keep original markdown
+  // marked-terminal will handle the image syntax appropriately
+
+  // 5. 清理多余的空行（超过2个连续空行压缩为2个）
   cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
 
-  // 5. 移除 HTML 注释
+  // 6. 移除 HTML 注释
   cleaned = cleaned.replace(/<!--[\s\S]*?-->/g, '');
 
-  // 6. 清理开头和结尾的空白
+  // 7. 移除 HTML 标签但保留内容 (for better terminal display)
+  cleaned = cleaned.replace(/<([a-z][a-z0-9]*)[^>]*>(.*?)<\/\1>/gi, '$2');
+
+  // 8. 清理开头和结尾的空白
   cleaned = cleaned.trim();
 
   return cleaned;
@@ -314,8 +447,8 @@ async function viewMarkdownFile(path: string): Promise<void> {
     // 从GitHub获取原始Markdown内容
     const rawContent = await fetchGitHubRawContent(path);
 
-    // 清理VitePress特殊语法
-    const cleanedContent = cleanMarkdownContent(rawContent);
+    // 清理VitePress特殊语法 - 使用终端能力优化显示
+    const cleanedContent = cleanMarkdownContent(rawContent, terminalCapabilities);
 
     // 提取标题
     const title = extractDocTitle(cleanedContent) || path.split('/').pop() || path;
@@ -402,6 +535,21 @@ export async function showDocsMenu(): Promise<void> {
   console.log();
   console.log(chalk.cyan.bold(`  >> ${trans.docs.title}`));
   console.log(chalk.dim(`     ${trans.docs.subtitle}`));
+
+  // 显示终端能力信息 - 帮助用户了解文档渲染能力
+  const terminalTypeDisplay = {
+    'basic': chalk.yellow('基础'),
+    'enhanced': chalk.cyan('增强'),
+    'advanced': chalk.green('高级')
+  }[terminalCapabilities.terminalType];
+
+  console.log(chalk.dim(`     终端类型: ${terminalTypeDisplay} | 支持: ${
+    [
+      terminalCapabilities.supportsColor && '彩色',
+      terminalCapabilities.supportsUnicode && 'Unicode',
+      terminalCapabilities.supportsImages && '图片'
+    ].filter(Boolean).join(', ') || '纯文本'
+  }`));
   console.log();
 
   const choices = [
