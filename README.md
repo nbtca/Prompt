@@ -13,8 +13,11 @@ NBTCA Prompt is a minimalist command-line interface tool designed for the Comput
 
 - View upcoming association events (30-day calendar)
 - Access repair service information
-- Browse technical documentation from terminal with pager support (vim/journalctl style)
+- Browse technical documentation from terminal with adaptive rendering
+- Smart terminal capability detection (basic/enhanced/advanced)
+- Optimized markdown display for different terminal types
 - Quick links to official website and GitHub
+- Multi-language support (English/中文)
 - Minimalist design with maximum terminal compatibility
 - Smooth gradient animations for enhanced visual experience
 
@@ -134,8 +137,13 @@ The knowledge base viewer features:
 
 - Direct GitHub repository access with authentication support
 - Pager-style document reading (similar to vim/journalctl/less)
+- **Adaptive terminal rendering** - detects and optimizes for your terminal type
+- **Smart image handling** - displays images based on terminal capabilities
+- **Terminal type detection** - automatically detects basic/enhanced/advanced terminals
 - VitePress syntax cleaning
 - Terminal Markdown rendering with color support
+- Optimized text width for better readability (max 100 columns)
+- Beautiful Unicode table borders (or ASCII for basic terminals)
 - Browser fallback option
 - Directory tree navigation
 - Improved error handling with rate limit detection
@@ -161,14 +169,34 @@ Without a token, you have 60 requests per hour. With a token, you get 5000 reque
 
 ## Terminal Compatibility
 
-Designed for maximum compatibility with:
+Designed for maximum compatibility with adaptive rendering:
 
-- Modern terminals (iTerm2, Windows Terminal, GNOME Terminal)
-- Legacy terminals (xterm, Terminal.app)
-- SSH sessions
+### Advanced Terminals (Full Features)
+- iTerm2 (macOS) - Image support + Unicode + Colors
+- Kitty - Image support + Unicode + Colors
+- WezTerm - Image support + Unicode + Colors
+- Terminals with Sixel support
+
+### Enhanced Terminals (Unicode + Colors)
+- GNOME Terminal
+- Windows Terminal
+- Alacritty
+- Hyper
+- Konsole
+- Terminator
+
+### Basic Terminals (Universal Compatibility)
+- xterm
+- Terminal.app (legacy)
+- Basic SSH sessions
 - Screen/tmux multiplexers
 
-ASCII-based UI elements ensure rendering on any terminal emulator.
+The application automatically detects your terminal capabilities and adapts:
+- **Basic**: Simple ASCII characters, text-only images
+- **Enhanced**: Unicode box-drawing, formatted image references
+- **Advanced**: Full Unicode + image support (when available)
+
+ASCII-based fallbacks ensure rendering on any terminal emulator.
 
 ## System Requirements
 
@@ -228,6 +256,23 @@ MIT License - See LICENSE file for details
 - NPM: https://www.npmjs.com/package/@nbtca/prompt
 
 ## Changelog
+
+### v1.0.8 (2025-12-10)
+
+- **Added**: Adaptive terminal rendering with automatic capability detection
+- **Added**: Smart terminal type detection (basic/enhanced/advanced)
+- **Added**: Intelligent image handling based on terminal capabilities
+- **Added**: Terminal info display in knowledge base menu
+- **Improved**: Markdown table rendering with Unicode box-drawing characters
+- **Improved**: Optimized text width for better readability (max 100 columns)
+- **Enhanced**: HTML tag stripping for cleaner terminal display
+- **Technical**: Supports iTerm2, Kitty, WezTerm, and other image-capable terminals
+
+### v1.0.7 (2025-12-10)
+
+- **Added**: Multi-language support (i18n) - English and Chinese
+- **Fixed**: Locale file inclusion in build process
+- **Improved**: Internationalized UI messages and prompts
 
 ### v1.0.5 (2025-12-10)
 
