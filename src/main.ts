@@ -1,6 +1,6 @@
 /**
  * NBTCA Welcome Tool
- * 极简启动流程
+ * Minimalist startup flow
  */
 
 import chalk from 'chalk';
@@ -11,33 +11,33 @@ import { APP_INFO } from './config/data.js';
 import { enableVimKeys } from './core/vim-keys.js';
 
 /**
- * 主程序入口
+ * Main program entry point
  */
 export async function main(): Promise<void> {
   try {
-    // 0. 启用 Vim 键位支持
+    // Enable Vim key bindings
     enableVimKeys();
 
-    // 1. 清屏
+    // Clear screen
     clearScreen();
 
-    // 2. 显示Logo（智能降级）
+    // Display logo (smart fallback)
     await printLogo();
 
-    // 3. 显示版本信息
+    // Display version info
     printHeader(`v${APP_INFO.version}`);
 
-    // 4. 显示主菜单（循环）
+    // Show main menu (loop)
     await showMainMenu();
 
   } catch (err: any) {
-    // 处理Ctrl+C退出
+    // Handle Ctrl+C exit
     if (err.message?.includes('SIGINT') || err.message?.includes('User force closed')) {
       console.log();
-      console.log(chalk.dim('再见！'));
+      console.log(chalk.dim('Goodbye!'));
       process.exit(0);
     } else {
-      console.error('发生错误:', err);
+      console.error('Error occurred:', err);
       process.exit(1);
     }
   }

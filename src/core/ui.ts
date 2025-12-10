@@ -1,12 +1,12 @@
 /**
- * 极简UI组件库
- * 提供基础的终端UI组件
+ * Minimalist UI component library
+ * Provides basic terminal UI components
  */
 
 import chalk from 'chalk';
 
 /**
- * 显示顶部边框标题
+ * Display header title
  */
 export function printHeader(title: string): void {
   console.log(chalk.dim(title));
@@ -14,7 +14,7 @@ export function printHeader(title: string): void {
 }
 
 /**
- * 显示分隔线
+ * Display divider line
  */
 export function printDivider(): void {
   const terminalWidth = process.stdout.columns || 80;
@@ -22,7 +22,7 @@ export function printDivider(): void {
 }
 
 /**
- * 显示加载spinner
+ * Display loading spinner
  */
 export async function showSpinner(text: string, duration: number): Promise<void> {
   const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
@@ -44,42 +44,42 @@ export async function showSpinner(text: string, duration: number): Promise<void>
 }
 
 /**
- * 显示成功消息
+ * Display success message
  */
 export function success(msg: string): void {
-  console.log(chalk.green('✓') + ' ' + msg);
+  console.log(chalk.green('[✓]') + ' ' + msg);
 }
 
 /**
- * 显示错误消息
+ * Display error message
  */
 export function error(msg: string): void {
-  console.log(chalk.red('✗') + ' ' + msg);
+  console.log(chalk.red('[✗]') + ' ' + msg);
 }
 
 /**
- * 显示信息消息
+ * Display info message
  */
 export function info(msg: string): void {
-  console.log(chalk.blue('ℹ') + ' ' + msg);
+  console.log(chalk.blue('[ℹ]') + ' ' + msg);
 }
 
 /**
- * 显示警告消息
+ * Display warning message
  */
 export function warning(msg: string): void {
-  console.log(chalk.yellow('⚠') + ' ' + msg);
+  console.log(chalk.yellow('[⚠]') + ' ' + msg);
 }
 
 /**
- * 清屏
+ * Clear screen
  */
 export function clearScreen(): void {
   console.clear();
 }
 
 /**
- * 打印空行
+ * Print empty lines
  */
 export function printNewLine(count: number = 1): void {
   for (let i = 0; i < count; i++) {

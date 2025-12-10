@@ -1,6 +1,6 @@
 /**
- * 极简菜单系统
- * 6大核心功能菜单
+ * Minimalist menu system
+ * Six core feature menus
  */
 
 import inquirer from 'inquirer';
@@ -13,36 +13,36 @@ import { printDivider, printNewLine } from './ui.js';
 import { APP_INFO, URLS } from '../config/data.js';
 
 /**
- * 主菜单选项
+ * Main menu options
  */
 const MAIN_MENU = [
   {
-    name: '[*] Recent Events    ' + chalk.gray('查看最近30天的社团活动'),
+    name: '[*] Recent Events    ' + chalk.gray('View upcoming events in next 30 days'),
     value: 'events',
     short: 'Recent Events'
   },
   {
-    name: '[*] Repair Service   ' + chalk.gray('电脑维修、软件安装'),
+    name: '[*] Repair Service   ' + chalk.gray('Computer repair and software installation'),
     value: 'repair',
     short: 'Repair Service'
   },
   {
-    name: '[*] Knowledge Base   ' + chalk.gray('技术文档、教程资源'),
+    name: '[*] Knowledge Base   ' + chalk.gray('Technical docs and tutorials'),
     value: 'docs',
     short: 'Knowledge Base'
   },
   {
-    name: '[*] Official Website ' + chalk.gray('访问NBTCA主页'),
+    name: '[*] Official Website ' + chalk.gray('Visit NBTCA homepage'),
     value: 'website',
     short: 'Official Website'
   },
   {
-    name: '[*] GitHub           ' + chalk.gray('开源项目与代码'),
+    name: '[*] GitHub           ' + chalk.gray('Open source projects and code'),
     value: 'github',
     short: 'GitHub'
   },
   {
-    name: '[?] About            ' + chalk.gray('项目信息与帮助'),
+    name: '[?] About            ' + chalk.gray('Project info and help'),
     value: 'about',
     short: 'About'
   },
@@ -55,7 +55,7 @@ const MAIN_MENU = [
 ];
 
 /**
- * 显示主菜单
+ * Display main menu
  */
 export async function showMainMenu(): Promise<void> {
   while (true) {
@@ -68,31 +68,31 @@ export async function showMainMenu(): Promise<void> {
         {
           type: 'list',
           name: 'action',
-          message: '选择功能',
+          message: 'Choose an action',
           choices: MAIN_MENU,
           pageSize: 15,
           loop: false
         } as any
       ]);
 
-      // 处理用户选择
+      // Handle user selection
       if (action === 'exit') {
         console.log();
-        console.log(chalk.dim('再见！'));
+        console.log(chalk.dim('Goodbye!'));
         process.exit(0);
       }
 
       await handleAction(action);
 
-      // 操作完成后显示分隔线
+      // Show divider after operation
       printNewLine();
       printDivider();
       printNewLine();
     } catch (err: any) {
-      // 处理Ctrl+C退出
+      // Handle Ctrl+C exit
       if (err.message?.includes('User force closed')) {
         console.log();
-        console.log(chalk.dim('再见！'));
+        console.log(chalk.dim('Goodbye!'));
         process.exit(0);
       }
       throw err;
@@ -101,7 +101,7 @@ export async function showMainMenu(): Promise<void> {
 }
 
 /**
- * 处理用户操作
+ * Handle user action
  */
 async function handleAction(action: string): Promise<void> {
   switch (action) {
@@ -130,12 +130,12 @@ async function handleAction(action: string): Promise<void> {
       break;
 
     default:
-      console.log(chalk.gray('未知操作'));
+      console.log(chalk.gray('Unknown action'));
   }
 }
 
 /**
- * 显示关于信息
+ * Display about information
  */
 function showAbout(): void {
   console.log();
