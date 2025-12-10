@@ -11,6 +11,7 @@ import open from 'open';
 import inquirer from 'inquirer';
 import { error, info, success, warning } from '../core/ui.js';
 import { spawn } from 'child_process';
+import { t } from '../i18n/index.js';
 
 // 配置marked使用终端渲染器
 marked.setOptions({
@@ -181,22 +182,23 @@ function extractDocTitle(content: string): string | null {
  * 浏览目录并选择文档
  */
 async function browseDirectory(dirPath: string = ''): Promise<void> {
+  const trans = t();
   try {
-    info(dirPath ? `正在加载目录: ${dirPath}` : '正在加载文档列表...');
+    info(dirPath ? `${trans.docs.loadingDir}: ${dirPath}` : trans.docs.loading);
 
     const items = await fetchGitHubDirectory(dirPath);
 
     console.log('\r' + ' '.repeat(60) + '\r'); // 清除加载提示
 
     if (items.length === 0) {
-      warning('该目录为空');
+      warning(trans.docs.emptyDir);
       return;
     }
 
     // 构建选择列表
     const choices = [
       ...(dirPath ? [
-        { name: chalk.gray('[..] Up to parent directory'), value: { type: 'back' } },
+        { name: chalk.gray(trans.docs.upToParent), value: { type: 'back' } },
         new inquirer.Separator()
       ] : []),
       ...items.map(item => ({
@@ -206,14 +208,14 @@ async function browseDirectory(dirPath: string = ''): Promise<void> {
         value: item
       })),
       new inquirer.Separator(),
-      { name: chalk.gray('[ ^] Return to main menu'), value: { type: 'exit' } }
+      { name: chalk.gray(trans.docs.returnToMenu), value: { type: 'exit' } }
     ];
 
     const { selected } = await inquirer.prompt([
       {
         type: 'list',
         name: 'selected',
-        message: dirPath ? `当前目录: ${dirPath}` : '选择文档或目录:',
+        message: dirPath ? `${trans.docs.currentDir}: ${dirPath}` : trans.docs.chooseDoc,
         choices,
         pageSize: 15,
         loop: false
@@ -238,14 +240,14 @@ async function browseDirectory(dirPath: string = ''): Promise<void> {
     }
 
   } catch (err: any) {
-    error('无法加载目录');
-    console.log(chalk.gray(`  错误: ${err.message}`));
+    error(trans.docs.loadError);
+    console.log(chalk.gray(`  ${trans.docs.errorHint}: ${err.message}`));
 
     const { retry } = await inquirer.prompt([
       {
         type: 'confirm',
         name: 'retry',
-        message: '是否重试？',
+        message: trans.docs.retry,
         default: true
       }
     ]);
@@ -261,12 +263,13 @@ async function browseDirectory(dirPath: string = ''): Promise<void> {
  * 提供类似vim/journalctl的阅读体验
  */
 async function displayInPager(content: string, title: string): Promise<boolean> {
+  const trans = t();
   return new Promise((resolve) => {
     // 检测可用的pager程序
     const pager = process.env['PAGER'] || 'less';
 
     // 为内容添加标题
-    const fullContent = `${chalk.cyan.bold(`>> ${title}`)}\n${chalk.gray('='.repeat(80))}\n\n${content}\n\n${chalk.gray('='.repeat(80))}\n${chalk.dim('End of document - Press q to quit')}\n`;
+    const fullContent = `${chalk.cyan.bold(`>> ${title}`)}\n${chalk.gray('='.repeat(80))}\n\n${content}\n\n${chalk.gray('='.repeat(80))}\n${chalk.dim(trans.docs.endOfDocument)}\n`;
 
     // less的参数: -R (支持颜色), -F (如果内容少于一屏则直接显示), -X (退出时不清屏)
     const lessArgs = ['-R', '-F', '-X'];
@@ -287,7 +290,7 @@ async function displayInPager(content: string, title: string): Promise<boolean> 
 
       child.on('error', () => {
         // 如果pager失败，回退到直接输出
-        console.error(chalk.yellow('⚠ Pager不可用，使用标准输出'));
+        console.error(chalk.yellow(trans.docs.pagerNotAvailable));
         console.log(fullContent);
         resolve(false);
       });
@@ -304,8 +307,9 @@ async function displayInPager(content: string, title: string): Promise<boolean> 
  * 查看Markdown文件
  */
 async function viewMarkdownFile(path: string): Promise<void> {
+  const trans = t();
   try {
-    info(`正在加载: ${path}`);
+    info(`${trans.docs.loading.replace('...', '')}: ${path}`);
 
     // 从GitHub获取原始Markdown内容
     const rawContent = await fetchGitHubRawContent(path);
@@ -325,7 +329,7 @@ async function viewMarkdownFile(path: string): Promise<void> {
     await displayInPager(rendered, `${title}\n${chalk.gray(`   ${path}`)}`);
 
     console.log(); // 添加空行
-    success('文档加载完成');
+    success(trans.docs.docCompleted);
     console.log();
 
     // 提供后续操作选项
@@ -333,11 +337,11 @@ async function viewMarkdownFile(path: string): Promise<void> {
       {
         type: 'list',
         name: 'action',
-        message: '选择操作:',
+        message: trans.docs.chooseAction,
         choices: [
-          { name: '[ <] Back to docs list', value: 'back' },
-          { name: '[ ↻] Re-read document', value: 'reread' },
-          { name: '[ *] Open in browser', value: 'browser' }
+          { name: trans.docs.backToList, value: 'back' },
+          { name: trans.docs.reread, value: 'reread' },
+          { name: trans.docs.openBrowser, value: 'browser' }
         ]
       }
     ]);
@@ -351,16 +355,16 @@ async function viewMarkdownFile(path: string): Promise<void> {
 
   } catch (err: any) {
     console.log('\r' + ' '.repeat(60) + '\r');
-    error('无法加载文档');
-    console.log(chalk.gray(`  错误: ${err.message}`));
-    warning('建议在浏览器中查看');
+    error(trans.docs.loadError);
+    console.log(chalk.gray(`  ${trans.docs.errorHint}: ${err.message}`));
+    warning(trans.docs.openBrowserPrompt.replace('是否', '建议'));
     console.log();
 
     const { openBrowser } = await inquirer.prompt([
       {
         type: 'confirm',
         name: 'openBrowser',
-        message: '是否在浏览器中打开？',
+        message: trans.docs.openBrowserPrompt,
         default: true
       }
     ]);
@@ -375,16 +379,17 @@ async function viewMarkdownFile(path: string): Promise<void> {
  * 在浏览器中打开知识库
  */
 export async function openDocsInBrowser(path?: string): Promise<void> {
+  const trans = t();
   try {
-    info('正在打开浏览器...');
+    info(trans.docs.opening);
     const url = path
       ? `https://docs.nbtca.space/${path.replace(/\.md$/, '')}`
       : 'https://docs.nbtca.space';
     await open(url);
-    success('已在浏览器中打开知识库');
+    success(trans.docs.browserOpened);
   } catch (err) {
-    error('无法打开浏览器');
-    console.log(chalk.gray('  请手动访问: https://docs.nbtca.space'));
+    error(trans.docs.browserError);
+    console.log(chalk.gray(`  ${trans.docs.browserErrorHint}`));
   }
   console.log();
 }
@@ -393,9 +398,10 @@ export async function openDocsInBrowser(path?: string): Promise<void> {
  * 显示知识库菜单
  */
 export async function showDocsMenu(): Promise<void> {
+  const trans = t();
   console.log();
-  console.log(chalk.cyan.bold('  >> Knowledge Base'));
-  console.log(chalk.dim('     Browse documentation from terminal or open in browser'));
+  console.log(chalk.cyan.bold(`  >> ${trans.docs.title}`));
+  console.log(chalk.dim(`     ${trans.docs.subtitle}`));
   console.log();
 
   const choices = [
@@ -404,15 +410,15 @@ export async function showDocsMenu(): Promise<void> {
       value: cat.path
     })),
     new inquirer.Separator(),
-    { name: chalk.gray('[ *] Open in browser'), value: 'browser' },
-    { name: chalk.gray('[ ^] Back to main menu'), value: 'back' }
+    { name: chalk.gray(trans.docs.openBrowser), value: 'browser' },
+    { name: chalk.gray(trans.docs.returnToMenu), value: 'back' }
   ];
 
   const { action } = await inquirer.prompt([
     {
       type: 'list',
       name: 'action',
-      message: '选择文档分类:',
+      message: trans.docs.chooseCategory,
       choices,
       pageSize: 15,
       loop: false

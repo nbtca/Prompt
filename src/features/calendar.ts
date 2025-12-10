@@ -7,6 +7,7 @@ import axios from 'axios';
 import ICAL from 'ical.js';
 import chalk from 'chalk';
 import { error, info, printDivider } from '../core/ui.js';
+import { t } from '../i18n/index.js';
 
 /**
  * 活动接口
@@ -43,13 +44,17 @@ export async function fetchEvents(): Promise<Event[]> {
       const event = new ICAL.Event(vevent);
       const startDate = event.startDate.toJSDate();
 
-      // 只显示未来30天内的活动
+      // Only show events within next 30 days
       if (startDate >= now && startDate <= thirtyDaysLater) {
+        const trans = t();
+        const untitledEvent = trans.calendar.eventName === 'Event Name' ? 'Untitled Event' : '未命名活动';
+        const tbdLocation = trans.calendar.location === 'Location' ? 'TBD' : '待定';
+
         events.push({
           date: formatDate(startDate),
           time: formatTime(startDate),
-          title: event.summary || '未命名活动',
-          location: event.location || '待定',
+          title: event.summary || untitledEvent,
+          location: event.location || tbdLocation,
           startDate: startDate
         });
       }
@@ -60,7 +65,7 @@ export async function fetchEvents(): Promise<Event[]> {
 
     return events;
   } catch (err) {
-    throw new Error('获取活动日历失败');
+    throw new Error(t().calendar.error);
   }
 }
 
@@ -68,30 +73,32 @@ export async function fetchEvents(): Promise<Event[]> {
  * 以表格形式显示活动
  */
 export function displayEvents(events: Event[]): void {
+  const trans = t();
+
   if (events.length === 0) {
-    info('近期暂无活动安排');
+    info(trans.calendar.noEvents);
     return;
   }
 
   console.log();
-  console.log(chalk.cyan.bold('  近期活动') + chalk.gray(` (最近30天)`));
+  console.log(chalk.cyan.bold('  ' + trans.calendar.title) + chalk.gray(` ${trans.calendar.subtitle}`));
   console.log();
 
-  // 表头
+  // Table header
   const dateWidth = 14;
   const titleWidth = 25;
   const locationWidth = 15;
 
   console.log(
     '  ' +
-    chalk.bold('日期时间'.padEnd(dateWidth)) +
-    chalk.bold('活动名称'.padEnd(titleWidth)) +
-    chalk.bold('地点')
+    chalk.bold(trans.calendar.dateTime.padEnd(dateWidth)) +
+    chalk.bold(trans.calendar.eventName.padEnd(titleWidth)) +
+    chalk.bold(trans.calendar.location)
   );
 
   printDivider();
 
-  // 活动列表
+  // Event list
   events.forEach(event => {
     const dateTime = `${event.date} ${event.time}`.padEnd(dateWidth);
     const title = truncate(event.title, titleWidth - 2).padEnd(titleWidth);
@@ -140,14 +147,15 @@ function truncate(str: string, maxLength: number): string {
  * 主函数：获取并显示活动
  */
 export async function showCalendar(): Promise<void> {
+  const trans = t();
   try {
-    info('正在获取活动日历...');
+    info(trans.calendar.loading);
     const events = await fetchEvents();
-    console.log('\r' + ' '.repeat(50) + '\r'); // 清除加载提示
+    console.log('\r' + ' '.repeat(50) + '\r'); // Clear loading message
     displayEvents(events);
   } catch (err) {
-    error('无法获取活动日历');
-    console.log(chalk.gray('  请稍后重试或访问 https://nbtca.space'));
+    error(trans.calendar.error);
+    console.log(chalk.gray('  ' + trans.calendar.errorHint));
     console.log();
   }
 }

@@ -9,6 +9,7 @@ import { printHeader, clearScreen } from './core/ui.js';
 import { showMainMenu } from './core/menu.js';
 import { APP_INFO } from './config/data.js';
 import { enableVimKeys } from './core/vim-keys.js';
+import { t } from './i18n/index.js';
 
 /**
  * Main program entry point
@@ -34,7 +35,7 @@ export async function main(): Promise<void> {
     // Handle Ctrl+C exit
     if (err.message?.includes('SIGINT') || err.message?.includes('User force closed')) {
       console.log();
-      console.log(chalk.dim('Goodbye!'));
+      console.log(chalk.dim(t().common.goodbye));
       process.exit(0);
     } else {
       console.error('Error occurred:', err);
