@@ -11,48 +11,57 @@ import { showDocsMenu } from '../features/docs.js';
 import { openHomepage, openGithub } from '../features/website.js';
 import { printDivider, printNewLine } from './ui.js';
 import { APP_INFO, URLS } from '../config/data.js';
+import { t, getCurrentLanguage, setLanguage, clearTranslationCache, type Language } from '../i18n/index.js';
 
 /**
- * Main menu options
+ * Get main menu options
  */
-const MAIN_MENU = [
-  {
-    name: '[*] Recent Events    ' + chalk.gray('View upcoming events in next 30 days'),
-    value: 'events',
-    short: 'Recent Events'
-  },
-  {
-    name: '[*] Repair Service   ' + chalk.gray('Computer repair and software installation'),
-    value: 'repair',
-    short: 'Repair Service'
-  },
-  {
-    name: '[*] Knowledge Base   ' + chalk.gray('Technical docs and tutorials'),
-    value: 'docs',
-    short: 'Knowledge Base'
-  },
-  {
-    name: '[*] Official Website ' + chalk.gray('Visit NBTCA homepage'),
-    value: 'website',
-    short: 'Official Website'
-  },
-  {
-    name: '[*] GitHub           ' + chalk.gray('Open source projects and code'),
-    value: 'github',
-    short: 'GitHub'
-  },
-  {
-    name: '[?] About            ' + chalk.gray('Project info and help'),
-    value: 'about',
-    short: 'About'
-  },
-  new inquirer.Separator(' '),
-  {
-    name: chalk.dim('[x] Exit'),
-    value: 'exit',
-    short: 'Exit'
-  }
-];
+function getMainMenuOptions() {
+  const trans = t();
+  return [
+    {
+      name: '[*] ' + trans.menu.events.padEnd(16) + ' ' + chalk.gray(trans.menu.eventsDesc),
+      value: 'events',
+      short: trans.menu.events
+    },
+    {
+      name: '[*] ' + trans.menu.repair.padEnd(16) + ' ' + chalk.gray(trans.menu.repairDesc),
+      value: 'repair',
+      short: trans.menu.repair
+    },
+    {
+      name: '[*] ' + trans.menu.docs.padEnd(16) + ' ' + chalk.gray(trans.menu.docsDesc),
+      value: 'docs',
+      short: trans.menu.docs
+    },
+    {
+      name: '[*] ' + trans.menu.website.padEnd(16) + ' ' + chalk.gray(trans.menu.websiteDesc),
+      value: 'website',
+      short: trans.menu.website
+    },
+    {
+      name: '[*] ' + trans.menu.github.padEnd(16) + ' ' + chalk.gray(trans.menu.githubDesc),
+      value: 'github',
+      short: trans.menu.github
+    },
+    {
+      name: '[?] ' + trans.menu.about.padEnd(16) + ' ' + chalk.gray(trans.menu.aboutDesc),
+      value: 'about',
+      short: trans.menu.about
+    },
+    {
+      name: '[⚙] ' + trans.menu.language.padEnd(16) + ' ' + chalk.gray(trans.menu.languageDesc),
+      value: 'language',
+      short: trans.menu.language
+    },
+    new inquirer.Separator(' '),
+    {
+      name: chalk.dim('[x] ' + trans.common.exit),
+      value: 'exit',
+      short: trans.common.exit
+    }
+  ];
+}
 
 /**
  * Display main menu
@@ -60,16 +69,18 @@ const MAIN_MENU = [
 export async function showMainMenu(): Promise<void> {
   while (true) {
     try {
+      const trans = t();
+
       // Show keybinding hints
-      console.log(chalk.dim('  Navigation: j/k or ↑/↓ | Jump: g/G | Quit: q or Ctrl+C'));
+      console.log(chalk.dim('  ' + trans.menu.navigationHint));
       console.log();
 
       const { action } = await inquirer.prompt<{ action: string }>([
         {
           type: 'list',
           name: 'action',
-          message: 'Choose an action',
-          choices: MAIN_MENU,
+          message: trans.menu.chooseAction,
+          choices: getMainMenuOptions(),
           pageSize: 15,
           loop: false
         } as any
@@ -78,7 +89,7 @@ export async function showMainMenu(): Promise<void> {
       // Handle user selection
       if (action === 'exit') {
         console.log();
-        console.log(chalk.dim('Goodbye!'));
+        console.log(chalk.dim(trans.common.goodbye));
         process.exit(0);
       }
 
@@ -92,7 +103,7 @@ export async function showMainMenu(): Promise<void> {
       // Handle Ctrl+C exit
       if (err.message?.includes('User force closed')) {
         console.log();
-        console.log(chalk.dim('Goodbye!'));
+        console.log(chalk.dim(t().common.goodbye));
         process.exit(0);
       }
       throw err;
@@ -129,6 +140,10 @@ async function handleAction(action: string): Promise<void> {
       showAbout();
       break;
 
+    case 'language':
+      await showLanguageMenu();
+      break;
+
     default:
       console.log(chalk.gray('Unknown action'));
   }
@@ -138,24 +153,61 @@ async function handleAction(action: string): Promise<void> {
  * Display about information
  */
 function showAbout(): void {
+  const trans = t();
   console.log();
-  console.log(chalk.bold('>> About NBTCA'));
+  console.log(chalk.bold('>> ' + trans.about.title));
   console.log();
-  console.log(chalk.dim('Project     ') + APP_INFO.name);
-  console.log(chalk.dim('Version     ') + `v${APP_INFO.version}`);
-  console.log(chalk.dim('Description ') + APP_INFO.fullDescription);
+  console.log(chalk.dim(trans.about.project.padEnd(12)) + APP_INFO.name);
+  console.log(chalk.dim(trans.about.version.padEnd(12)) + `v${APP_INFO.version}`);
+  console.log(chalk.dim(trans.about.description.padEnd(12)) + APP_INFO.fullDescription);
   console.log();
-  console.log(chalk.dim('GitHub      ') + chalk.cyan(APP_INFO.repository));
-  console.log(chalk.dim('Website     ') + chalk.cyan(URLS.homepage));
-  console.log(chalk.dim('Email       ') + chalk.cyan(URLS.email));
+  console.log(chalk.dim(trans.about.github.padEnd(12)) + chalk.cyan(APP_INFO.repository));
+  console.log(chalk.dim(trans.about.website.padEnd(12)) + chalk.cyan(URLS.homepage));
+  console.log(chalk.dim(trans.about.email.padEnd(12)) + chalk.cyan(URLS.email));
   console.log();
-  console.log(chalk.dim('Features:'));
-  console.log('  - View recent association events');
-  console.log('  - Online repair service');
-  console.log('  - Technical knowledge base access');
-  console.log('  - Quick access to website and GitHub');
+  console.log(chalk.dim(trans.about.features));
+  console.log('  ' + trans.about.feature1);
+  console.log('  ' + trans.about.feature2);
+  console.log('  ' + trans.about.feature3);
+  console.log('  ' + trans.about.feature4);
   console.log();
-  console.log(chalk.dim('License     ') + 'MIT License');
-  console.log(chalk.dim('Author      ') + 'm1ngsama');
+  console.log(chalk.dim(trans.about.license.padEnd(12)) + 'MIT License');
+  console.log(chalk.dim(trans.about.author.padEnd(12)) + 'm1ngsama');
   console.log();
 }
+
+/**
+ * Display language selection menu
+ */
+async function showLanguageMenu(): Promise<void> {
+  const trans = t();
+  const currentLang = getCurrentLanguage();
+
+  console.log();
+  console.log(chalk.bold('>> ' + trans.language.title));
+  console.log();
+  console.log(chalk.dim(trans.language.currentLanguage + ': ') + chalk.cyan(trans.language[currentLang]));
+  console.log();
+
+  const { language } = await inquirer.prompt<{ language: Language }>([
+    {
+      type: 'list',
+      name: 'language',
+      message: trans.language.selectLanguage,
+      choices: [
+        { name: trans.language.zh, value: 'zh' as Language },
+        { name: trans.language.en, value: 'en' as Language }
+      ],
+      default: currentLang
+    }
+  ]);
+
+  if (language !== currentLang) {
+    setLanguage(language);
+    clearTranslationCache();
+    console.log();
+    console.log(chalk.green('✓ ' + t().language.changed));
+    console.log();
+  }
+}
+
