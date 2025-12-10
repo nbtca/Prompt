@@ -1,6 +1,6 @@
 {
   "name": "@nbtca/prompt",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -12,7 +12,7 @@
     "dev": "tsx src/index.ts",
     "dev:watch": "tsx watch src/index.ts",
     "build": "tsc",
-    "postbuild": "mkdir -p dist/logo && cp src/logo/logo.txt dist/logo/ && cp src/logo/ascii-logo.txt dist/logo/",
+    "postbuild": "mkdir -p dist/logo dist/i18n/locales && cp src/logo/logo.txt dist/logo/ && cp src/logo/ascii-logo.txt dist/logo/ && cp src/i18n/locales/*.json dist/i18n/locales/",
     "clean": "rm -rf dist",
     "prebuild": "npm run clean",
     "prepublishOnly": "npm run build",
