@@ -49,11 +49,21 @@ jobs:
           echo "version=$PKG_VERSION" >> $GITHUB_OUTPUT
 
       - name: 🚀 Publish to npm
-        run: npm publish --access public --provenance
+        run: |
+          set +e
+          PUBLISH_OUTPUT=$(npm publish --access public --provenance 2>&1)
+          PUBLISH_EXIT=$?
+          set -e
+          echo "$PUBLISH_OUTPUT"
+          if [ "$PUBLISH_EXIT" -ne 0 ]; then
+            if echo "$PUBLISH_OUTPUT" | grep -q "EOTP"; then
+              echo "::error::npm publish failed with EOTP. Use an npm automation token for NPM_TOKEN or disable OTP requirement for token-based publish."
+            fi
+            exit "$PUBLISH_EXIT"
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: ✅ Success notification
         run: |
           echo "🎉 Successfully published @nbtca/prompt@${{ steps.version.outputs.version }} to npm"
-

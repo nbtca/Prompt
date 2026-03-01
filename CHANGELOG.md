@@ -6,6 +6,12 @@ Release notes are maintained in Wiki:
 
 ## [Unreleased]
 
+## [1.0.11] - 2026-03-01
+
+### Changed
+- Improved npm publish workflow diagnostics for OTP-related failures (`EOTP`).
+- Reduced npm package payload via `files` whitelist in `package.json`.
+
 ## [1.0.10] - 2026-03-01
 
 ### Added
