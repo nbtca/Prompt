@@ -78,9 +78,45 @@ export function serializeEvents(events: Event[]): EventOutputItem[] {
   }));
 }
 
-function truncate(str: string, maxLength: number): string {
-  if (str.length <= maxLength) return str;
-  return str.substring(0, maxLength - 3) + '...';
+/** Visual column width: CJK characters count as 2, everything else as 1. */
+function visualWidth(str: string): number {
+  let w = 0;
+  for (const ch of str) {
+    const cp = ch.codePointAt(0) ?? 0;
+    w += (
+      (cp >= 0x1100 && cp <= 0x115F) ||  // Hangul Jamo
+      (cp >= 0x2E80 && cp <= 0x303F) ||  // CJK Radicals / Kangxi
+      (cp >= 0x3040 && cp <= 0x33FF) ||  // Japanese kana + CJK symbols
+      (cp >= 0x3400 && cp <= 0x4DBF) ||  // CJK Extension A
+      (cp >= 0x4E00 && cp <= 0x9FFF) ||  // CJK Unified Ideographs
+      (cp >= 0xAC00 && cp <= 0xD7AF) ||  // Hangul Syllables
+      (cp >= 0xF900 && cp <= 0xFAFF) ||  // CJK Compatibility Ideographs
+      (cp >= 0xFE30 && cp <= 0xFE4F) ||  // CJK Compatibility Forms
+      (cp >= 0xFF00 && cp <= 0xFF60) ||  // Fullwidth Forms
+      (cp >= 0xFFE0 && cp <= 0xFFE6)     // Fullwidth Signs
+    ) ? 2 : 1;
+  }
+  return w;
+}
+
+/** Pad string to visual width (CJK-aware). */
+function padEndV(str: string, width: number): string {
+  const pad = width - visualWidth(str);
+  return pad > 0 ? str + ' '.repeat(pad) : str;
+}
+
+/** Truncate string to visual width limit (CJK-aware). */
+function truncate(str: string, maxWidth: number): string {
+  if (visualWidth(str) <= maxWidth) return str;
+  let w = 0;
+  let i = 0;
+  for (const ch of str) {
+    const cw = (visualWidth(ch) === 2) ? 2 : 1;
+    if (w + cw > maxWidth - 3) break;
+    w += cw;
+    i += ch.length;
+  }
+  return str.slice(0, i) + '...';
 }
 
 function formatDate(date: Date): string {
@@ -115,7 +151,7 @@ export function renderEventsTable(events: Event[], options?: { color?: boolean }
   const bottom  = `└${'─'.repeat(dateWidth + 2)}┴${'─'.repeat(titleWidth + 2)}┴${'─'.repeat(locationWidth + 2)}┘`;
 
   const headerRow =
-    `│ ${trans.calendar.dateTime.padEnd(dateWidth)} │ ${trans.calendar.eventName.padEnd(titleWidth)} │ ${trans.calendar.location.padEnd(locationWidth)} │`;
+    `│ ${padEndV(trans.calendar.dateTime, dateWidth)} │ ${padEndV(trans.calendar.eventName, titleWidth)} │ ${padEndV(trans.calendar.location, locationWidth)} │`;
 
   const lines: string[] = [];
 
@@ -129,7 +165,7 @@ export function renderEventsTable(events: Event[], options?: { color?: boolean }
       const title    = truncate(event.title, titleWidth);
       const location = truncate(event.location, locationWidth);
       lines.push(
-        `│ ${chalk.cyan(dateTime.padEnd(dateWidth))} │ ${chalk.white(title.padEnd(titleWidth))} │ ${chalk.gray(location.padEnd(locationWidth))} │`
+        `│ ${chalk.cyan(padEndV(dateTime, dateWidth))} │ ${chalk.white(padEndV(title, titleWidth))} │ ${chalk.gray(padEndV(location, locationWidth))} │`
       );
     }
 
@@ -142,7 +178,7 @@ export function renderEventsTable(events: Event[], options?: { color?: boolean }
     for (const event of events) {
       const dateTime = `${event.date} ${event.time}`;
       lines.push(
-        `│ ${dateTime.padEnd(dateWidth)} │ ${truncate(event.title, titleWidth).padEnd(titleWidth)} │ ${truncate(event.location, locationWidth).padEnd(locationWidth)} │`
+        `│ ${padEndV(dateTime, dateWidth)} │ ${padEndV(truncate(event.title, titleWidth), titleWidth)} │ ${padEndV(truncate(event.location, locationWidth), locationWidth)} │`
       );
     }
 
