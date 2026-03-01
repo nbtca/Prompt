@@ -3,6 +3,23 @@
  * 集中管理所有外部链接
  */
 
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+function readPackageVersion(): string {
+  try {
+    const pkgPath = join(__dirname, '..', '..', 'package.json');
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+    return pkg.version ?? '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+}
+
 export const URLS = {
   // 主要链接
   homepage: 'https://nbtca.space',
@@ -19,7 +36,7 @@ export const URLS = {
 
 export const APP_INFO = {
   name: 'Prompt',
-  version: '1.0.13',
+  version: readPackageVersion(),
   description: '浙大宁波理工学院计算机协会',
   fullDescription: 'NBTCA Prompt - 极简命令行工具',
   author: 'm1ngsama <contact@m1ng.space>',
