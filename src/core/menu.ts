@@ -13,6 +13,8 @@ import { printDivider, printNewLine } from './ui.js';
 import { APP_INFO, URLS } from '../config/data.js';
 import { t, getCurrentLanguage, setLanguage, clearTranslationCache, type Language } from '../i18n/index.js';
 
+export type MenuAction = 'events' | 'repair' | 'docs' | 'website' | 'github' | 'about' | 'language';
+
 /**
  * Get main menu options
  */
@@ -93,7 +95,7 @@ export async function showMainMenu(): Promise<void> {
         process.exit(0);
       }
 
-      await handleAction(action);
+      await runMenuAction(action as MenuAction);
 
       // Show divider after operation
       printNewLine();
@@ -114,7 +116,7 @@ export async function showMainMenu(): Promise<void> {
 /**
  * Handle user action
  */
-async function handleAction(action: string): Promise<void> {
+export async function runMenuAction(action: MenuAction): Promise<void> {
   switch (action) {
     case 'events':
       await showCalendar();
@@ -144,8 +146,6 @@ async function handleAction(action: string): Promise<void> {
       await showLanguageMenu();
       break;
 
-    default:
-      console.log(chalk.gray('Unknown action'));
   }
 }
 
@@ -210,4 +210,3 @@ async function showLanguageMenu(): Promise<void> {
     console.log();
   }
 }
-

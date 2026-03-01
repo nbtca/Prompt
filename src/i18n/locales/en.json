@@ -80,7 +80,13 @@
     "browserErrorHint": "Please visit manually: https://docs.nbtca.space",
     "retry": "Retry?",
     "pagerNotAvailable": "⚠ Pager not available, using standard output",
-    "endOfDocument": "End of document - Press q to quit"
+    "endOfDocument": "End of document - Press q to quit",
+    "terminalProfile": "Terminal profile",
+    "terminalSupport": "Support",
+    "terminalBasic": "Basic",
+    "terminalEnhanced": "Enhanced",
+    "terminalAdvanced": "Advanced",
+    "navigationHint": "Navigation: j/k or ↑/↓ | Enter: open | q/Ctrl+C: quit"
   },
   "repair": {
     "title": "Repair Service",

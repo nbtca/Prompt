@@ -80,7 +80,13 @@
     "browserErrorHint": "请手动访问: https://docs.nbtca.space",
     "retry": "是否重试？",
     "pagerNotAvailable": "⚠ Pager不可用，使用标准输出",
-    "endOfDocument": "文档结束 - 按 q 退出"
+    "endOfDocument": "文档结束 - 按 q 退出",
+    "terminalProfile": "终端类型",
+    "terminalSupport": "支持",
+    "terminalBasic": "基础",
+    "terminalEnhanced": "增强",
+    "terminalAdvanced": "高级",
+    "navigationHint": "导航: j/k 或 ↑/↓ | Enter: 打开 | q/Ctrl+C: 退出"
   },
   "repair": {
     "title": "维修服务",

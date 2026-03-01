@@ -99,6 +99,12 @@ export interface Translations {
     retry: string;
     pagerNotAvailable: string;
     endOfDocument: string;
+    terminalProfile: string;
+    terminalSupport: string;
+    terminalBasic: string;
+    terminalEnhanced: string;
+    terminalAdvanced: string;
+    navigationHint: string;
   };
   repair: {
     title: string;

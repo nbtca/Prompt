@@ -25,6 +25,18 @@ nbtca
 
 Navigate with arrow keys or vim bindings (j/k/g/G).
 
+Run a single feature directly:
+
+```bash
+nbtca events
+nbtca docs
+nbtca repair
+nbtca website
+nbtca github
+nbtca about
+nbtca lang en
+```
+
 ## Documentation
 
 See the [Wiki](https://github.com/nbtca/Prompt/wiki) for:

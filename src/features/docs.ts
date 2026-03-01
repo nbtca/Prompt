@@ -490,7 +490,7 @@ async function viewMarkdownFile(path: string): Promise<void> {
     console.log('\r' + ' '.repeat(60) + '\r');
     error(trans.docs.loadError);
     console.log(chalk.gray(`  ${trans.docs.errorHint}: ${err.message}`));
-    warning(trans.docs.openBrowserPrompt.replace('是否', '建议'));
+    warning(trans.docs.openBrowserPrompt);
     console.log();
 
     const { openBrowser } = await inquirer.prompt([
@@ -532,57 +532,59 @@ export async function openDocsInBrowser(path?: string): Promise<void> {
  */
 export async function showDocsMenu(): Promise<void> {
   const trans = t();
-  console.log();
-  console.log(chalk.cyan.bold(`  >> ${trans.docs.title}`));
-  console.log(chalk.dim(`     ${trans.docs.subtitle}`));
+  while (true) {
+    console.log();
+    console.log(chalk.cyan.bold(`  >> ${trans.docs.title}`));
+    console.log(chalk.dim(`     ${trans.docs.subtitle}`));
+    console.log(chalk.dim(`     ${trans.docs.navigationHint}`));
 
-  // 显示终端能力信息 - 帮助用户了解文档渲染能力
-  const terminalTypeDisplay = {
-    'basic': chalk.yellow('基础'),
-    'enhanced': chalk.cyan('增强'),
-    'advanced': chalk.green('高级')
-  }[terminalCapabilities.terminalType];
+    // 显示终端能力信息 - 帮助用户了解文档渲染能力
+    const terminalTypeDisplay = {
+      'basic': chalk.yellow(trans.docs.terminalBasic),
+      'enhanced': chalk.cyan(trans.docs.terminalEnhanced),
+      'advanced': chalk.green(trans.docs.terminalAdvanced)
+    }[terminalCapabilities.terminalType];
 
-  console.log(chalk.dim(`     终端类型: ${terminalTypeDisplay} | 支持: ${
-    [
-      terminalCapabilities.supportsColor && '彩色',
-      terminalCapabilities.supportsUnicode && 'Unicode',
-      terminalCapabilities.supportsImages && '图片'
-    ].filter(Boolean).join(', ') || '纯文本'
-  }`));
-  console.log();
+    console.log(chalk.dim(`     ${trans.docs.terminalProfile}: ${terminalTypeDisplay} | ${trans.docs.terminalSupport}: ${
+      [
+        terminalCapabilities.supportsColor && 'Color',
+        terminalCapabilities.supportsUnicode && 'Unicode',
+        terminalCapabilities.supportsImages && 'Image'
+      ].filter(Boolean).join(', ') || 'Text'
+    }`));
+    console.log();
 
-  const choices = [
-    ...DOC_CATEGORIES.map(cat => ({
-      name: cat.name,
-      value: cat.path
-    })),
-    new inquirer.Separator(),
-    { name: chalk.gray(trans.docs.openBrowser), value: 'browser' },
-    { name: chalk.gray(trans.docs.returnToMenu), value: 'back' }
-  ];
+    const choices = [
+      ...DOC_CATEGORIES.map(cat => ({
+        name: cat.name,
+        value: cat.path
+      })),
+      new inquirer.Separator(),
+      { name: chalk.gray(trans.docs.openBrowser), value: 'browser' },
+      { name: chalk.gray(trans.docs.returnToMenu), value: 'back' }
+    ];
 
-  const { action } = await inquirer.prompt([
-    {
-      type: 'list',
-      name: 'action',
-      message: trans.docs.chooseCategory,
-      choices,
-      pageSize: 15,
-      loop: false
+    const { action } = await inquirer.prompt([
+      {
+        type: 'list',
+        name: 'action',
+        message: trans.docs.chooseCategory,
+        choices,
+        pageSize: 15,
+        loop: false
+      }
+    ]);
+
+    if (action === 'back') {
+      return;
+    } else if (action === 'browser') {
+      await openDocsInBrowser();
+    } else if (action === 'README.md') {
+      // 直接查看 README
+      await viewMarkdownFile('README.md');
+    } else {
+      // 浏览指定目录
+      await browseDirectory(action);
     }
-  ]);
-
-  if (action === 'back') {
-    return;
-  } else if (action === 'browser') {
-    await openDocsInBrowser();
-  } else if (action === 'README.md') {
-    // 直接查看 README
-    await viewMarkdownFile('README.md');
-  } else {
-    // 浏览指定目录
-    await browseDirectory(action);
   }
 }
-
