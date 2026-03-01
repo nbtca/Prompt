@@ -49,7 +49,7 @@
     "typescript": "^5.3.3"
   },
   "engines": {
-    "node": ">=16.0.0"
+    "node": ">=20.12.0"
   },
   "author": "m1ngsama <contact@m1ng.space>",
   "license": "MIT",

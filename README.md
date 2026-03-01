@@ -37,7 +37,7 @@ See the [Wiki](https://github.com/nbtca/Prompt/wiki) for:
 
 ## Requirements
 
-- Node.js >= 16.0.0
+- Node.js >= 20.12.0
 
 ## License
 
