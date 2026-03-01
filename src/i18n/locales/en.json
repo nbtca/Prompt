@@ -54,6 +54,7 @@
     "noEvents": "No upcoming events",
     "error": "Failed to load event calendar",
     "errorHint": "Please try again later or visit https://nbtca.space",
+    "eventsFound": "events found",
     "dateTime": "Date & Time",
     "eventName": "Event Name",
     "location": "Location"

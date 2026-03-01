@@ -72,6 +72,7 @@ export interface Translations {
     noEvents: string;
     error: string;
     errorHint: string;
+    eventsFound: string;
     dateTime: string;
     eventName: string;
     location: string;

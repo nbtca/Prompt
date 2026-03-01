@@ -5,7 +5,7 @@
 
 import open from 'open';
 import chalk from 'chalk';
-import { error, info, success } from '../core/ui.js';
+import { createSpinner } from '../core/ui.js';
 import { t } from '../i18n/index.js';
 
 export const WEBSITE_URLS = {
@@ -20,18 +20,14 @@ export const WEBSITE_URLS = {
  */
 export async function openWebsite(url: string): Promise<void> {
   const trans = t();
+  const s = createSpinner(trans.website.opening);
   try {
-    console.log();
-    info(trans.website.opening);
-
     await open(url);
-
-    success(trans.website.opened);
+    s.stop(trans.website.opened);
     console.log(chalk.gray(`  ${url}`));
     console.log();
-  } catch (err) {
-    error(trans.website.error);
-    console.log();
+  } catch {
+    s.error(trans.website.error);
     console.log(chalk.yellow('  ' + trans.website.errorHint + ': ') + chalk.cyan(url));
     console.log();
   }

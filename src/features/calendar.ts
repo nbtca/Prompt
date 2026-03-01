@@ -1,12 +1,12 @@
 /**
  * ICS calendar module
- * Fetches and renders upcoming events.
+ * Fetches and renders upcoming events with Unicode box table.
  */
 
 import axios from 'axios';
 import ICAL from 'ical.js';
 import chalk from 'chalk';
-import { error, info, printDivider } from '../core/ui.js';
+import { info, printDivider, createSpinner } from '../core/ui.js';
 import { t } from '../i18n/index.js';
 
 export interface Event {
@@ -95,6 +95,9 @@ function formatTime(date: Date): string {
   return `${hours}:${minutes}`;
 }
 
+/**
+ * Render events as a Unicode box-drawing table
+ */
 export function renderEventsTable(events: Event[], options?: { color?: boolean }): string {
   const trans = t();
   const color = options?.color !== false;
@@ -103,32 +106,47 @@ export function renderEventsTable(events: Event[], options?: { color?: boolean }
     return trans.calendar.noEvents;
   }
 
-  const dateWidth = 14;
-  const titleWidth = 32;
-  const locationWidth = 20;
+  const dateWidth = 13;
+  const titleWidth = 30;
+  const locationWidth = 16;
+
+  const top     = `┌${'─'.repeat(dateWidth + 2)}┬${'─'.repeat(titleWidth + 2)}┬${'─'.repeat(locationWidth + 2)}┐`;
+  const divider = `├${'─'.repeat(dateWidth + 2)}┼${'─'.repeat(titleWidth + 2)}┼${'─'.repeat(locationWidth + 2)}┤`;
+  const bottom  = `└${'─'.repeat(dateWidth + 2)}┴${'─'.repeat(titleWidth + 2)}┴${'─'.repeat(locationWidth + 2)}┘`;
+
+  const headerRow =
+    `│ ${trans.calendar.dateTime.padEnd(dateWidth)} │ ${trans.calendar.eventName.padEnd(titleWidth)} │ ${trans.calendar.location.padEnd(locationWidth)} │`;
 
   const lines: string[] = [];
-  lines.push(`${trans.calendar.title} ${trans.calendar.subtitle}`);
-  lines.push(
-    `${trans.calendar.dateTime.padEnd(dateWidth)}${trans.calendar.eventName.padEnd(titleWidth)}${trans.calendar.location}`
-  );
-  lines.push('-'.repeat(Math.min((process.stdout.columns || 80), 80)));
-
-  for (const event of events) {
-    const dateTime = `${event.date} ${event.time}`.padEnd(dateWidth);
-    const title = truncate(event.title, titleWidth - 1).padEnd(titleWidth);
-    const location = truncate(event.location, locationWidth);
-
-    if (color) {
-      lines.push(chalk.cyan(dateTime) + chalk.white(title) + chalk.gray(location));
-    } else {
-      lines.push(dateTime + title + location);
-    }
-  }
 
   if (color) {
-    lines[0] = chalk.cyan.bold(lines[0]!);
-    lines[1] = chalk.bold(lines[1]!);
+    lines.push(chalk.dim(top));
+    lines.push(chalk.bold(headerRow));
+    lines.push(chalk.dim(divider));
+
+    for (const event of events) {
+      const dateTime = `${event.date} ${event.time}`;
+      const title    = truncate(event.title, titleWidth);
+      const location = truncate(event.location, locationWidth);
+      lines.push(
+        `│ ${chalk.cyan(dateTime.padEnd(dateWidth))} │ ${chalk.white(title.padEnd(titleWidth))} │ ${chalk.gray(location.padEnd(locationWidth))} │`
+      );
+    }
+
+    lines.push(chalk.dim(bottom));
+  } else {
+    lines.push(top);
+    lines.push(headerRow);
+    lines.push(divider);
+
+    for (const event of events) {
+      const dateTime = `${event.date} ${event.time}`;
+      lines.push(
+        `│ ${dateTime.padEnd(dateWidth)} │ ${truncate(event.title, titleWidth).padEnd(titleWidth)} │ ${truncate(event.location, locationWidth).padEnd(locationWidth)} │`
+      );
+    }
+
+    lines.push(bottom);
   }
 
   return lines.join('\n');
@@ -148,13 +166,13 @@ export function displayEvents(events: Event[]): void {
 
 export async function showCalendar(): Promise<void> {
   const trans = t();
+  const s = createSpinner(trans.calendar.loading);
   try {
-    info(trans.calendar.loading);
     const events = await fetchEvents();
-    console.log('\r' + ' '.repeat(60) + '\r');
+    s.stop(`${events.length} ${trans.calendar.eventsFound}`);
     displayEvents(events);
   } catch {
-    error(trans.calendar.error);
+    s.error(trans.calendar.error);
     console.log(chalk.gray('  ' + trans.calendar.errorHint));
     console.log();
   }

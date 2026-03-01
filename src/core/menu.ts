@@ -1,121 +1,59 @@
 /**
  * Minimalist menu system
- * Six core feature menus
+ * Modern @clack/prompts select() with emoji icons and hint text
  */
 
-import inquirer from 'inquirer';
+import { select, isCancel, outro, note } from '@clack/prompts';
 import chalk from 'chalk';
 import { showCalendar } from '../features/calendar.js';
 import { openRepairService } from '../features/repair.js';
 import { showDocsMenu } from '../features/docs.js';
 import { openHomepage, openGithub, openRoadmap } from '../features/website.js';
-import { printDivider, printNewLine } from './ui.js';
+import { printDivider, printNewLine, success } from './ui.js';
 import { APP_INFO, URLS } from '../config/data.js';
 import { t, getCurrentLanguage, setLanguage, clearTranslationCache, type Language } from '../i18n/index.js';
 
 export type MenuAction = 'events' | 'repair' | 'docs' | 'website' | 'github' | 'roadmap' | 'about' | 'language';
 
 /**
- * Get main menu options
+ * Get main menu options with emoji icons and hint text
  */
 function getMainMenuOptions() {
   const trans = t();
   return [
-    {
-      name: '[*] ' + trans.menu.events.padEnd(16) + ' ' + chalk.gray(trans.menu.eventsDesc),
-      value: 'events',
-      short: trans.menu.events
-    },
-    {
-      name: '[*] ' + trans.menu.repair.padEnd(16) + ' ' + chalk.gray(trans.menu.repairDesc),
-      value: 'repair',
-      short: trans.menu.repair
-    },
-    {
-      name: '[*] ' + trans.menu.docs.padEnd(16) + ' ' + chalk.gray(trans.menu.docsDesc),
-      value: 'docs',
-      short: trans.menu.docs
-    },
-    {
-      name: '[*] ' + trans.menu.website.padEnd(16) + ' ' + chalk.gray(trans.menu.websiteDesc),
-      value: 'website',
-      short: trans.menu.website
-    },
-    {
-      name: '[*] ' + trans.menu.github.padEnd(16) + ' ' + chalk.gray(trans.menu.githubDesc),
-      value: 'github',
-      short: trans.menu.github
-    },
-    {
-      name: '[*] ' + trans.menu.roadmap.padEnd(16) + ' ' + chalk.gray(trans.menu.roadmapDesc),
-      value: 'roadmap',
-      short: trans.menu.roadmap
-    },
-    {
-      name: '[?] ' + trans.menu.about.padEnd(16) + ' ' + chalk.gray(trans.menu.aboutDesc),
-      value: 'about',
-      short: trans.menu.about
-    },
-    {
-      name: '[⚙] ' + trans.menu.language.padEnd(16) + ' ' + chalk.gray(trans.menu.languageDesc),
-      value: 'language',
-      short: trans.menu.language
-    },
-    new inquirer.Separator(' '),
-    {
-      name: chalk.dim('[x] ' + trans.common.exit),
-      value: 'exit',
-      short: trans.common.exit
-    }
+    { value: 'events',   label: '🗓   ' + trans.menu.events,   hint: trans.menu.eventsDesc },
+    { value: 'repair',   label: '🔧   ' + trans.menu.repair,   hint: trans.menu.repairDesc },
+    { value: 'docs',     label: '📚   ' + trans.menu.docs,     hint: trans.menu.docsDesc },
+    { value: 'website',  label: '🌐   ' + trans.menu.website,  hint: trans.menu.websiteDesc },
+    { value: 'github',   label: '🐙   ' + trans.menu.github,   hint: trans.menu.githubDesc },
+    { value: 'roadmap',  label: '🗺   ' + trans.menu.roadmap,  hint: trans.menu.roadmapDesc },
+    { value: 'about',    label: 'ℹ️    ' + trans.menu.about,    hint: trans.menu.aboutDesc },
+    { value: 'language', label: '🌍   ' + trans.menu.language, hint: trans.menu.languageDesc },
   ];
 }
 
 /**
- * Display main menu
+ * Display main menu — loops until user exits via Ctrl+C
  */
 export async function showMainMenu(): Promise<void> {
   while (true) {
-    try {
-      const trans = t();
+    const trans = t();
 
-      // Show keybinding hints
-      console.log(chalk.dim('  ' + trans.menu.navigationHint));
-      console.log(chalk.dim('  ' + trans.menu.quickCommandHint));
-      console.log();
+    const action = await select({
+      message: trans.menu.chooseAction,
+      options: getMainMenuOptions(),
+    });
 
-      const { action } = await inquirer.prompt<{ action: string }>([
-        {
-          type: 'list',
-          name: 'action',
-          message: trans.menu.chooseAction,
-          choices: getMainMenuOptions(),
-          pageSize: 15,
-          loop: false
-        } as any
-      ]);
-
-      // Handle user selection
-      if (action === 'exit') {
-        console.log();
-        console.log(chalk.dim(trans.common.goodbye));
-        process.exit(0);
-      }
-
-      await runMenuAction(action as MenuAction);
-
-      // Show divider after operation
-      printNewLine();
-      printDivider();
-      printNewLine();
-    } catch (err: any) {
-      // Handle Ctrl+C exit
-      if (err.message?.includes('User force closed')) {
-        console.log();
-        console.log(chalk.dim(t().common.goodbye));
-        process.exit(0);
-      }
-      throw err;
+    if (isCancel(action)) {
+      outro(chalk.dim(t().common.goodbye));
+      process.exit(0);
     }
+
+    await runMenuAction(action as MenuAction);
+
+    printNewLine();
+    printDivider();
+    printNewLine();
   }
 }
 
@@ -124,66 +62,42 @@ export async function showMainMenu(): Promise<void> {
  */
 export async function runMenuAction(action: MenuAction): Promise<void> {
   switch (action) {
-    case 'events':
-      await showCalendar();
-      break;
-
-    case 'repair':
-      await openRepairService();
-      break;
-
-    case 'docs':
-      await showDocsMenu();
-      break;
-
-    case 'website':
-      await openHomepage();
-      break;
-
-    case 'github':
-      await openGithub();
-      break;
-
-    case 'roadmap':
-      await openRoadmap();
-      break;
-
-    case 'about':
-      showAbout();
-      break;
-
-    case 'language':
-      await showLanguageMenu();
-      break;
-
+    case 'events':   await showCalendar();       break;
+    case 'repair':   await openRepairService();  break;
+    case 'docs':     await showDocsMenu();       break;
+    case 'website':  await openHomepage();       break;
+    case 'github':   await openGithub();         break;
+    case 'roadmap':  await openRoadmap();        break;
+    case 'about':    showAbout();                break;
+    case 'language': await showLanguageMenu();   break;
   }
 }
 
 /**
- * Display about information
+ * Display about information using clack note() box
  */
 function showAbout(): void {
   const trans = t();
-  console.log();
-  console.log(chalk.bold('>> ' + trans.about.title));
-  console.log();
-  console.log(chalk.dim(trans.about.project.padEnd(12)) + APP_INFO.name);
-  console.log(chalk.dim(trans.about.version.padEnd(12)) + `v${APP_INFO.version}`);
-  console.log(chalk.dim(trans.about.description.padEnd(12)) + APP_INFO.fullDescription);
-  console.log();
-  console.log(chalk.dim(trans.about.github.padEnd(12)) + chalk.cyan(APP_INFO.repository));
-  console.log(chalk.dim(trans.about.website.padEnd(12)) + chalk.cyan(URLS.homepage));
-  console.log(chalk.dim(trans.about.email.padEnd(12)) + chalk.cyan(URLS.email));
-  console.log();
-  console.log(chalk.dim(trans.about.features));
-  console.log('  ' + trans.about.feature1);
-  console.log('  ' + trans.about.feature2);
-  console.log('  ' + trans.about.feature3);
-  console.log('  ' + trans.about.feature4);
-  console.log();
-  console.log(chalk.dim(trans.about.license.padEnd(12)) + 'MIT License');
-  console.log(chalk.dim(trans.about.author.padEnd(12)) + 'm1ngsama');
-  console.log();
+  const content = [
+    `${chalk.dim(trans.about.project.padEnd(12))}${APP_INFO.name}`,
+    `${chalk.dim(trans.about.version.padEnd(12))}v${APP_INFO.version}`,
+    `${chalk.dim(trans.about.description.padEnd(12))}${APP_INFO.fullDescription}`,
+    '',
+    `${chalk.dim(trans.about.github.padEnd(12))}${chalk.cyan(APP_INFO.repository)}`,
+    `${chalk.dim(trans.about.website.padEnd(12))}${chalk.cyan(URLS.homepage)}`,
+    `${chalk.dim(trans.about.email.padEnd(12))}${chalk.cyan(URLS.email)}`,
+    '',
+    chalk.dim(trans.about.features),
+    '  ' + trans.about.feature1,
+    '  ' + trans.about.feature2,
+    '  ' + trans.about.feature3,
+    '  ' + trans.about.feature4,
+    '',
+    `${chalk.dim(trans.about.license.padEnd(12))}MIT License`,
+    `${chalk.dim(trans.about.author.padEnd(12))}m1ngsama`,
+  ].join('\n');
+
+  note(content, trans.about.title);
 }
 
 /**
@@ -193,30 +107,20 @@ async function showLanguageMenu(): Promise<void> {
   const trans = t();
   const currentLang = getCurrentLanguage();
 
-  console.log();
-  console.log(chalk.bold('>> ' + trans.language.title));
-  console.log();
-  console.log(chalk.dim(trans.language.currentLanguage + ': ') + chalk.cyan(trans.language[currentLang]));
-  console.log();
+  const language = await select<Language>({
+    message: trans.language.selectLanguage,
+    options: [
+      { value: 'zh' as Language, label: trans.language.zh, hint: currentLang === 'zh' ? '✓ 当前' : undefined },
+      { value: 'en' as Language, label: trans.language.en, hint: currentLang === 'en' ? '✓ current' : undefined },
+    ],
+    initialValue: currentLang,
+  });
 
-  const { language } = await inquirer.prompt<{ language: Language }>([
-    {
-      type: 'list',
-      name: 'language',
-      message: trans.language.selectLanguage,
-      choices: [
-        { name: trans.language.zh, value: 'zh' as Language },
-        { name: trans.language.en, value: 'en' as Language }
-      ],
-      default: currentLang
-    }
-  ]);
+  if (isCancel(language)) return;
 
   if (language !== currentLang) {
     setLanguage(language);
     clearTranslationCache();
-    console.log();
-    console.log(chalk.green('✓ ' + t().language.changed));
-    console.log();
+    success(t().language.changed);
   }
 }

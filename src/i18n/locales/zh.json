@@ -54,6 +54,7 @@
     "noEvents": "近期暂无活动安排",
     "error": "无法获取活动日历",
     "errorHint": "请稍后重试或访问 https://nbtca.space",
+    "eventsFound": "个活动",
     "dateTime": "日期时间",
     "eventName": "活动名称",
     "location": "地点"

@@ -4,8 +4,9 @@
  */
 
 import chalk from 'chalk';
+import { intro } from '@clack/prompts';
 import { printLogo } from './core/logo.js';
-import { printHeader, clearScreen } from './core/ui.js';
+import { clearScreen } from './core/ui.js';
 import { showMainMenu } from './core/menu.js';
 import { APP_INFO } from './config/data.js';
 import { enableVimKeys } from './core/vim-keys.js';
@@ -33,8 +34,8 @@ export async function main(options: MainOptions = {}): Promise<void> {
       await printLogo();
     }
 
-    // Display version info
-    printHeader(`v${APP_INFO.version}`);
+    // Open session frame
+    intro(chalk.cyan('NBTCA Prompt') + chalk.dim(` v${APP_INFO.version}`));
 
     // Show main menu (loop)
     await showMainMenu();

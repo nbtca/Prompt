@@ -1,16 +1,44 @@
 /**
  * Minimalist UI component library
- * Provides basic terminal UI components
+ * Delegates to @clack/prompts for modern terminal output
  */
 
+import { log, spinner as clackSpinner } from '@clack/prompts';
 import chalk from 'chalk';
 
 /**
- * Display header title
+ * Display success message
  */
-export function printHeader(title: string): void {
-  console.log(chalk.dim(title));
-  console.log();
+export function success(msg: string): void {
+  log.success(msg);
+}
+
+/**
+ * Display error message
+ */
+export function error(msg: string): void {
+  log.error(msg);
+}
+
+/**
+ * Display info message
+ */
+export function info(msg: string): void {
+  log.info(msg);
+}
+
+/**
+ * Display warning message
+ */
+export function warning(msg: string): void {
+  log.warn(msg);
+}
+
+/**
+ * No-op: session framing moved to main.ts intro()
+ */
+export function printHeader(_title: string): void {
+  // intentional noop — intro() in main.ts owns the header
 }
 
 /**
@@ -19,56 +47,6 @@ export function printHeader(title: string): void {
 export function printDivider(): void {
   const terminalWidth = process.stdout.columns || 80;
   console.log(chalk.dim('─'.repeat(Math.min(terminalWidth, 80))));
-}
-
-/**
- * Display loading spinner
- */
-export async function showSpinner(text: string, duration: number): Promise<void> {
-  const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-  let i = 0;
-  const startTime = Date.now();
-
-  return new Promise((resolve) => {
-    const interval = setInterval(() => {
-      process.stdout.write(`\r${chalk.cyan(frames[i])} ${text}`);
-      i = (i + 1) % frames.length;
-
-      if (Date.now() - startTime >= duration) {
-        clearInterval(interval);
-        process.stdout.write('\r' + ' '.repeat(text.length + 5) + '\r');
-        resolve();
-      }
-    }, 80);
-  });
-}
-
-/**
- * Display success message
- */
-export function success(msg: string): void {
-  console.log(chalk.green('[✓]') + ' ' + msg);
-}
-
-/**
- * Display error message
- */
-export function error(msg: string): void {
-  console.error(chalk.red('[✗]') + ' ' + msg);
-}
-
-/**
- * Display info message
- */
-export function info(msg: string): void {
-  console.log(chalk.blue('[ℹ]') + ' ' + msg);
-}
-
-/**
- * Display warning message
- */
-export function warning(msg: string): void {
-  console.error(chalk.yellow('[⚠]') + ' ' + msg);
 }
 
 /**
@@ -87,4 +65,14 @@ export function printNewLine(count: number = 1): void {
   for (let i = 0; i < count; i++) {
     console.log();
   }
+}
+
+/**
+ * Create and start a real async spinner.
+ * Caller is responsible for calling .stop(msg) or .stop(msg, 1) on error.
+ */
+export function createSpinner(msg: string) {
+  const s = clackSpinner();
+  s.start(msg);
+  return s;
 }
