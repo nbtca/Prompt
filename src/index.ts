@@ -17,6 +17,8 @@ const ACTION_ALIASES: Record<string, MenuAction> = {
   web: 'website',
   github: 'github',
   gh: 'github',
+  roadmap: 'roadmap',
+  board: 'roadmap',
   about: 'about'
 };
 
@@ -29,7 +31,7 @@ function printHelp(): void {
   console.log('  nbtca lang <zh|en>         Set language preference');
   console.log('  nbtca --help               Show this help');
   console.log();
-  console.log('Commands: events, repair, docs, website, github, about');
+  console.log('Commands: events, repair, docs, website, github, roadmap, about');
 }
 
 async function runCommandMode(argv: string[]): Promise<void> {

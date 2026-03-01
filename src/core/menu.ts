@@ -8,12 +8,12 @@ import chalk from 'chalk';
 import { showCalendar } from '../features/calendar.js';
 import { openRepairService } from '../features/repair.js';
 import { showDocsMenu } from '../features/docs.js';
-import { openHomepage, openGithub } from '../features/website.js';
+import { openHomepage, openGithub, openRoadmap } from '../features/website.js';
 import { printDivider, printNewLine } from './ui.js';
 import { APP_INFO, URLS } from '../config/data.js';
 import { t, getCurrentLanguage, setLanguage, clearTranslationCache, type Language } from '../i18n/index.js';
 
-export type MenuAction = 'events' | 'repair' | 'docs' | 'website' | 'github' | 'about' | 'language';
+export type MenuAction = 'events' | 'repair' | 'docs' | 'website' | 'github' | 'roadmap' | 'about' | 'language';
 
 /**
  * Get main menu options
@@ -45,6 +45,11 @@ function getMainMenuOptions() {
       name: '[*] ' + trans.menu.github.padEnd(16) + ' ' + chalk.gray(trans.menu.githubDesc),
       value: 'github',
       short: trans.menu.github
+    },
+    {
+      name: '[*] ' + trans.menu.roadmap.padEnd(16) + ' ' + chalk.gray(trans.menu.roadmapDesc),
+      value: 'roadmap',
+      short: trans.menu.roadmap
     },
     {
       name: '[?] ' + trans.menu.about.padEnd(16) + ' ' + chalk.gray(trans.menu.aboutDesc),
@@ -136,6 +141,10 @@ export async function runMenuAction(action: MenuAction): Promise<void> {
 
     case 'github':
       await openGithub();
+      break;
+
+    case 'roadmap':
+      await openRoadmap();
       break;
 
     case 'about':

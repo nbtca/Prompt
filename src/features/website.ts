@@ -43,3 +43,10 @@ export async function openHomepage(): Promise<void> {
 export async function openGithub(): Promise<void> {
   await openWebsite('https://github.com/nbtca');
 }
+
+/**
+ * Open NBTCA Roadmap project
+ */
+export async function openRoadmap(): Promise<void> {
+  await openWebsite('https://github.com/orgs/nbtca/projects/5');
+}

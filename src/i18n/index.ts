@@ -39,6 +39,8 @@ export interface Translations {
     websiteDesc: string;
     github: string;
     githubDesc: string;
+    roadmap: string;
+    roadmapDesc: string;
     about: string;
     aboutDesc: string;
     language: string;

@@ -33,6 +33,7 @@ nbtca docs
 nbtca repair
 nbtca website
 nbtca github
+nbtca roadmap
 nbtca about
 nbtca lang en
 ```
