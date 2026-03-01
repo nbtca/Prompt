@@ -10,12 +10,11 @@ import chalk from 'chalk';
 import open from 'open';
 import { select, isCancel, confirm } from '@clack/prompts';
 import { error, warning, success, createSpinner } from '../core/ui.js';
-import { spawn } from 'child_process';
+import { spawn, execFileSync } from 'child_process';
 import { t } from '../i18n/index.js';
 
-/**
- * Terminal capability detection
- */
+// ─── Terminal capability detection ───────────────────────────────────────────
+
 interface TerminalCapabilities {
   supportsColor: boolean;
   supportsImages: boolean;
@@ -55,40 +54,77 @@ function detectTerminalCapabilities(): TerminalCapabilities {
   return { supportsColor, supportsImages, supportsUnicode, terminalType };
 }
 
-function getRendererOptions(capabilities: TerminalCapabilities): any {
-  const width = Math.min(process.stdout.columns || 80, 100);
-
-  if (capabilities.terminalType === 'basic') {
-    return {
-      width,
-      tableOptions: {
-        chars: {
-          top: '-', 'top-mid': '+', 'top-left': '+', 'top-right': '+',
-          bottom: '-', 'bottom-mid': '+', 'bottom-left': '+', 'bottom-right': '+',
-          left: '|', 'left-mid': '+', mid: '-', 'mid-mid': '+',
-          right: '|', 'right-mid': '+', middle: '|'
-        }
-      }
-    };
+/** Check whether an external command exists on PATH (once at startup). */
+function commandExists(cmd: string): boolean {
+  try {
+    execFileSync('which', [cmd], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
   }
+}
+
+const terminalCapabilities = detectTerminalCapabilities();
+const HAS_GLOW = commandExists('glow');
+
+// ─── marked-terminal renderer ─────────────────────────────────────────────────
+
+function getRendererOptions(capabilities: TerminalCapabilities): any {
+  // Cap at 80 columns — optimal prose reading width regardless of terminal size
+  const width = Math.min(process.stdout.columns || 80, 80);
+
+  const unicodeTableChars = {
+    top: '─', 'top-mid': '┬', 'top-left': '┌', 'top-right': '┐',
+    bottom: '─', 'bottom-mid': '┴', 'bottom-left': '└', 'bottom-right': '┘',
+    left: '│', 'left-mid': '├', mid: '─', 'mid-mid': '┼',
+    right: '│', 'right-mid': '┤', middle: '│'
+  };
+
+  const asciiTableChars = {
+    top: '-', 'top-mid': '+', 'top-left': '+', 'top-right': '+',
+    bottom: '-', 'bottom-mid': '+', 'bottom-left': '+', 'bottom-right': '+',
+    left: '|', 'left-mid': '+', mid: '-', 'mid-mid': '+',
+    right: '|', 'right-mid': '+', middle: '|'
+  };
 
   return {
     width,
+    emoji: true,
+    unescape: true,
+
+    // Heading hierarchy: h1 cyan, h2+ white bold
+    firstHeading: chalk.bold.cyan,
+    heading: chalk.bold.white,
+
+    // Inline code: bright yellow, distinct from prose
+    codespan: chalk.yellowBright,
+
+    // Block code: yellow (marked-terminal applies per-line)
+    code: chalk.yellow,
+
+    // Blockquotes: italic gray, visually recessed
+    blockquote: chalk.italic.gray,
+
+    // Prose emphasis
+    strong: chalk.bold,
+    em: chalk.italic,
+    del: chalk.dim.strikethrough,
+
+    // Links: cyan underline
+    link: chalk.cyan,
+    href: chalk.cyan.underline,
+
+    // Tables with Unicode borders (fallback to ASCII on basic terminals)
     tableOptions: {
-      chars: {
-        top: '─', 'top-mid': '┬', 'top-left': '┌', 'top-right': '┐',
-        bottom: '─', 'bottom-mid': '┴', 'bottom-left': '└', 'bottom-right': '┘',
-        left: '│', 'left-mid': '├', mid: '─', 'mid-mid': '┼',
-        right: '│', 'right-mid': '┤', middle: '│'
-      }
+      chars: capabilities.terminalType === 'basic' ? asciiTableChars : unicodeTableChars
     }
   };
 }
 
-const terminalCapabilities = detectTerminalCapabilities();
-
 // @ts-ignore
 marked.setOptions({ renderer: new TerminalRenderer(getRendererOptions(terminalCapabilities)) });
+
+// ─── GitHub data layer ────────────────────────────────────────────────────────
 
 const GITHUB_REPO = { owner: 'nbtca', repo: 'documents', branch: 'main' };
 const GITHUB_TOKEN = process.env['GITHUB_TOKEN'] || process.env['GH_TOKEN'];
@@ -166,27 +202,65 @@ async function fetchGitHubRawContent(path: string): Promise<string> {
   }
 }
 
-function cleanMarkdownContent(content: string, capabilities: TerminalCapabilities): string {
-  let cleaned = content;
-  cleaned = cleaned.replace(/^---\n[\s\S]*?\n---\n/m, '');
-  cleaned = cleaned.replace(/^:::(info|tip|warning|danger|details).*$/gm, '');
-  cleaned = cleaned.replace(/^:::$/gm, '');
-  cleaned = cleaned.replace(/\[\[toc\]\]/gi, '**目录**\n\n_(请在浏览器中查看完整目录)_\n');
+// ─── Content cleaning ─────────────────────────────────────────────────────────
 
+const CONTAINER_ICONS: Record<string, string> = {
+  info: 'ℹ️', tip: '💡', warning: '⚠️', danger: '🚨', details: '▶️'
+};
+
+function cleanMarkdownContent(content: string, capabilities: TerminalCapabilities): string {
+  let c = content;
+
+  // 1. YAML frontmatter
+  c = c.replace(/^---\n[\s\S]*?\n---\n?/m, '');
+
+  // 2. VitePress script / style blocks
+  c = c.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
+  c = c.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
+
+  // 3. VitePress containers → blockquote with icon
+  //    ::: warning Title\ncontent\n:::
+  c = c.replace(
+    /^:::\s*(info|tip|warning|danger|details)\s*(.*?)\n([\s\S]*?)^:::\s*$/gm,
+    (_m, type: string, title: string, body: string) => {
+      const label = (title.trim() || type.charAt(0).toUpperCase() + type.slice(1));
+      const icon = CONTAINER_ICONS[type] ?? '';
+      const quoted = body.trimEnd().split('\n').map(l => `> ${l}`).join('\n');
+      return `> ${icon} **${label}**\n>\n${quoted}\n`;
+    }
+  );
+  // Remaining bare ::: markers
+  c = c.replace(/^:::\s*\w*.*$/gm, '');
+
+  // 4. GitHub / GitLab callout alerts  (> [!NOTE])
+  c = c.replace(/^>\s*\[!(NOTE|TIP|WARNING|CAUTION|IMPORTANT)\]\s*$/gim,
+    (_, type: string) => `> **${type.charAt(0) + type.slice(1).toLowerCase()}:**`
+  );
+
+  // 5. [[toc]] — no value in terminal
+  c = c.replace(/\[\[toc\]\]/gi, '');
+
+  // 6. Images — adapt to terminal capability
   if (capabilities.terminalType === 'basic') {
-    cleaned = cleaned.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_match, alt) => `📎 [${alt || '图片'}]`);
+    c = c.replace(/!\[([^\]]*)\]\([^)]+\)/g, (_, alt) => `📎 [${alt || 'image'}]`);
   } else if (capabilities.terminalType === 'enhanced') {
-    cleaned = cleaned.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_match, alt, url) => {
-      const filename = url.split('/').pop() || url;
-      return `🖼️  **[图片: ${alt || '图片'}]**\n   _${filename}_`;
+    c = c.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) => {
+      const filename = (url as string).split('/').pop() || url;
+      return `🖼️  **[${alt || 'image'}]** _(${filename})_`;
     });
   }
 
-  cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
-  cleaned = cleaned.replace(/<!--[\s\S]*?-->/g, '');
-  cleaned = cleaned.replace(/<([a-z][a-z0-9]*)[^>]*>(.*?)<\/\1>/gi, '$2');
-  cleaned = cleaned.trim();
-  return cleaned;
+  // 7. HTML comments
+  c = c.replace(/<!--[\s\S]*?-->/g, '');
+
+  // 8. Strip HTML tags, keep inner text
+  c = c.replace(/<([a-z][a-z0-9]*)\b[^>]*>([\s\S]*?)<\/\1>/gi, '$2');
+  c = c.replace(/<[a-z][a-z0-9]*\b[^>]*\/>/gi, '');
+
+  // 9. Collapse runs of 3+ blank lines
+  c = c.replace(/\n{3,}/g, '\n\n');
+
+  return c.trim();
 }
 
 function extractDocTitle(content: string): string | null {
@@ -194,33 +268,89 @@ function extractDocTitle(content: string): string | null {
   return match?.[1]?.trim() ?? null;
 }
 
-async function displayInPager(content: string, title: string): Promise<boolean> {
-  const trans = t();
-  return new Promise((resolve) => {
-    const pager = process.env['PAGER'] || 'less';
-    const fullContent = `${chalk.cyan.bold(`>> ${title}`)}\n${chalk.gray('='.repeat(80))}\n\n${content}\n\n${chalk.gray('='.repeat(80))}\n${chalk.dim(trans.docs.endOfDocument)}\n`;
-    const lessArgs = ['-R', '-F', '-X'];
+/** Approximate reading time: ~200 words/min for technical Chinese/English prose. */
+function estimateReadTime(text: string): string {
+  const words = text.trim().split(/\s+/).filter(Boolean).length;
+  const mins = Math.max(1, Math.ceil(words / 200));
+  return mins === 1 ? '~1 min' : `~${mins} min`;
+}
 
-    try {
-      const child = spawn(pager, lessArgs, { stdio: ['pipe', 'inherit', 'inherit'], shell: true });
-      child.stdin.write(fullContent);
-      child.stdin.end();
-      child.on('exit', (code) => resolve(code === 0));
-      child.on('error', () => {
-        console.error(chalk.yellow(trans.docs.pagerNotAvailable));
-        console.log(fullContent);
-        resolve(false);
-      });
-    } catch {
-      console.log(fullContent);
-      resolve(false);
-    }
+// ─── Pager layer ──────────────────────────────────────────────────────────────
+
+/**
+ * Display markdown via `glow` (Charmbracelet) if available — best-in-class
+ * terminal markdown rendering with built-in pager and mouse support.
+ */
+async function displayWithGlow(cleanedMarkdown: string): Promise<void> {
+  const cols = String(Math.min(process.stdout.columns || 80, 80));
+  return new Promise(resolve => {
+    const child = spawn('glow', ['--pager', '--width', cols, '-'], {
+      stdio: ['pipe', 'inherit', 'inherit']
+    });
+    child.stdin.write(cleanedMarkdown, 'utf-8');
+    child.stdin.end();
+    child.on('close', resolve);
+    child.on('error', resolve); // glow vanished mid-run — caller handles fallback
   });
 }
 
 /**
- * Browse a GitHub directory with @clack/prompts select()
+ * Display rendered markdown via `less` with a structured document frame.
+ * Flags:
+ *   -R  pass raw ANSI codes through
+ *   -F  exit immediately if content fits on one screen
+ *   -X  don't clear the screen on exit
+ *   -i  case-insensitive search (/ to search)
+ *   -j4 place search hits 4 lines from the top (less jarring)
  */
+async function displayWithLess(
+  rendered: string,
+  title: string,
+  filePath: string,
+  readTime: string
+): Promise<void> {
+  const trans = t();
+  const cols = Math.min(process.stdout.columns || 80, 80);
+  const rule = chalk.dim('─'.repeat(cols));
+
+  const header = [
+    '',
+    chalk.bold.cyan(`  ${title}`),
+    chalk.dim(`  ${filePath}`) + chalk.dim(`  ·  ${readTime}`),
+    rule,
+    '',
+  ].join('\n');
+
+  const footer = [
+    '',
+    rule,
+    chalk.dim(`  ${trans.docs.endOfDocument}  ·  / to search`),
+    '',
+  ].join('\n');
+
+  const fullContent = header + rendered + footer;
+  const pager = process.env['PAGER'] || 'less';
+  const args = ['-R', '-F', '-X', '-i', '-j4'];
+
+  return new Promise(resolve => {
+    try {
+      const child = spawn(pager, args, {
+        stdio: ['pipe', 'inherit', 'inherit'],
+        shell: true
+      });
+      child.stdin.write(fullContent, 'utf-8');
+      child.stdin.end();
+      child.on('close', resolve);
+      child.on('error', () => { console.log(fullContent); resolve(); });
+    } catch {
+      console.log(fullContent);
+      resolve();
+    }
+  });
+}
+
+// ─── Directory browser ────────────────────────────────────────────────────────
+
 async function browseDirectory(dirPath: string = ''): Promise<void> {
   const trans = t();
   try {
@@ -275,20 +405,26 @@ async function browseDirectory(dirPath: string = ''): Promise<void> {
   }
 }
 
-/**
- * View a markdown file using pager, then offer next-action select()
- */
-async function viewMarkdownFile(path: string): Promise<void> {
+// ─── Document viewer ──────────────────────────────────────────────────────────
+
+async function viewMarkdownFile(filePath: string): Promise<void> {
   const trans = t();
   try {
-    const s = createSpinner(`${trans.docs.loading.replace('...', '')}: ${path}`);
-    const rawContent = await fetchGitHubRawContent(path);
-    const cleanedContent = cleanMarkdownContent(rawContent, terminalCapabilities);
-    const title = extractDocTitle(cleanedContent) || path.split('/').pop() || path;
-    const rendered = await marked(cleanedContent);
-    s.stop('');
+    const s = createSpinner(`${trans.docs.loading.replace('...', '')}: ${filePath}`);
 
-    await displayInPager(rendered, `${title}\n${chalk.gray(`   ${path}`)}`);
+    const rawContent  = await fetchGitHubRawContent(filePath);
+    const cleaned     = cleanMarkdownContent(rawContent, terminalCapabilities);
+    const title       = extractDocTitle(cleaned) || filePath.split('/').pop() || filePath;
+    const readTime    = estimateReadTime(cleaned);
+    const rendered    = await marked(cleaned) as string;
+
+    s.stop(`${chalk.bold(title)}  ${chalk.dim(readTime)}`);
+
+    if (HAS_GLOW) {
+      await displayWithGlow(cleaned);
+    } else {
+      await displayWithLess(rendered, title, filePath, readTime);
+    }
 
     console.log();
     success(trans.docs.docCompleted);
@@ -304,8 +440,8 @@ async function viewMarkdownFile(path: string): Promise<void> {
     });
 
     if (isCancel(action)) return;
-    if (action === 'browser') await openDocsInBrowser(path);
-    if (action === 'reread') await viewMarkdownFile(path);
+    if (action === 'browser') await openDocsInBrowser(filePath);
+    if (action === 'reread')  await viewMarkdownFile(filePath);
 
   } catch (err: any) {
     error(trans.docs.loadError);
@@ -313,14 +449,13 @@ async function viewMarkdownFile(path: string): Promise<void> {
 
     const openBrowser = await confirm({ message: trans.docs.openBrowserPrompt });
     if (!isCancel(openBrowser) && openBrowser) {
-      await openDocsInBrowser(path);
+      await openDocsInBrowser(filePath);
     }
   }
 }
 
-/**
- * Open docs in browser with real spinner
- */
+// ─── Browser fallback ─────────────────────────────────────────────────────────
+
 export async function openDocsInBrowser(path?: string): Promise<void> {
   const trans = t();
   const s = createSpinner(trans.docs.opening);
@@ -337,9 +472,8 @@ export async function openDocsInBrowser(path?: string): Promise<void> {
   console.log();
 }
 
-/**
- * Show docs category menu
- */
+// ─── Menu ─────────────────────────────────────────────────────────────────────
+
 export async function showDocsMenu(): Promise<void> {
   const trans = t();
   while (true) {
