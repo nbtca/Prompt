@@ -69,6 +69,11 @@ function easeInOutSine(t: number): number {
  * Display gradient animation effect (optimized - truly smooth animation)
  */
 async function animateGradient(text: string, duration: number = 1200): Promise<void> {
+  if (!process.stdout.isTTY || process.env['NO_COLOR']) {
+    console.log(text);
+    return;
+  }
+
   const frames = 60; // 60 frames for truly smooth animation
   const frameDelay = duration / frames;
 
@@ -137,6 +142,10 @@ async function animateGradient(text: string, duration: number = 1200): Promise<v
  * Attempt to read and display logo file
  */
 export async function printLogo(): Promise<void> {
+  if (!process.stdout.isTTY) {
+    return;
+  }
+
   try {
     // Try to read iTerm2 image format logo
     const logoPath = join(__dirname, '../logo/logo.txt');
@@ -181,9 +190,11 @@ async function printDescription(): Promise<void> {
 
   console.log();
 
-  // Display gradient animation
-  await animateGradient(tagline, 1500);
+  if (process.env['NO_COLOR']) {
+    console.log(tagline);
+  } else {
+    await animateGradient(tagline, 1500);
+  }
 
   console.log();
 }
-

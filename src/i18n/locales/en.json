@@ -28,6 +28,7 @@
     "language": "Language",
     "languageDesc": "Change display language",
     "navigationHint": "Navigation: j/k or ↑/↓ | Jump: g/G | Quit: q or Ctrl+C",
+    "quickCommandHint": "Tip: use `nbtca <command> --help` for script-friendly mode",
     "chooseAction": "Choose an action"
   },
   "about": {

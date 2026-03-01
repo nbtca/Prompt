@@ -46,6 +46,7 @@ export interface Translations {
     language: string;
     languageDesc: string;
     navigationHint: string;
+    quickCommandHint: string;
     chooseAction: string;
   };
   about: {

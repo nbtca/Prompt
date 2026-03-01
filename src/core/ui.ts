@@ -54,7 +54,7 @@ export function success(msg: string): void {
  * Display error message
  */
 export function error(msg: string): void {
-  console.log(chalk.red('[✗]') + ' ' + msg);
+  console.error(chalk.red('[✗]') + ' ' + msg);
 }
 
 /**
@@ -68,14 +68,16 @@ export function info(msg: string): void {
  * Display warning message
  */
 export function warning(msg: string): void {
-  console.log(chalk.yellow('[⚠]') + ' ' + msg);
+  console.error(chalk.yellow('[⚠]') + ' ' + msg);
 }
 
 /**
  * Clear screen
  */
 export function clearScreen(): void {
-  console.clear();
+  if (process.stdout.isTTY) {
+    console.clear();
+  }
 }
 
 /**
@@ -86,4 +88,3 @@ export function printNewLine(count: number = 1): void {
     console.log();
   }
 }
-

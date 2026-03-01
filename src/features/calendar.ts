@@ -1,6 +1,6 @@
 /**
- * ICS日历功能模块
- * 从远程获取并显示近期活动
+ * ICS calendar module
+ * Fetches and renders upcoming events.
  */
 
 import axios from 'axios';
@@ -9,9 +9,6 @@ import chalk from 'chalk';
 import { error, info, printDivider } from '../core/ui.js';
 import { t } from '../i18n/index.js';
 
-/**
- * 活动接口
- */
 export interface Event {
   date: string;
   time: string;
@@ -20,9 +17,14 @@ export interface Event {
   startDate: Date;
 }
 
-/**
- * 从远程获取ICS文件并解析活动
- */
+export interface EventOutputItem {
+  date: string;
+  time: string;
+  title: string;
+  location: string;
+  startDateISO: string;
+}
+
 export async function fetchEvents(): Promise<Event[]> {
   try {
     const response = await axios.get('https://ical.nbtca.space', {
@@ -44,7 +46,6 @@ export async function fetchEvents(): Promise<Event[]> {
       const event = new ICAL.Event(vevent);
       const startDate = event.startDate.toJSDate();
 
-      // Only show events within next 30 days
       if (startDate >= now && startDate <= thirtyDaysLater) {
         const trans = t();
         const untitledEvent = trans.calendar.eventName === 'Event Name' ? 'Untitled Event' : '未命名活动';
@@ -55,105 +56,104 @@ export async function fetchEvents(): Promise<Event[]> {
           time: formatTime(startDate),
           title: event.summary || untitledEvent,
           location: event.location || tbdLocation,
-          startDate: startDate
+          startDate
         });
       }
     }
 
-    // 按日期排序
     events.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
-
     return events;
-  } catch (err) {
+  } catch {
     throw new Error(t().calendar.error);
   }
 }
 
-/**
- * 以表格形式显示活动
- */
-export function displayEvents(events: Event[]): void {
-  const trans = t();
-
-  if (events.length === 0) {
-    info(trans.calendar.noEvents);
-    return;
-  }
-
-  console.log();
-  console.log(chalk.cyan.bold('  ' + trans.calendar.title) + chalk.gray(` ${trans.calendar.subtitle}`));
-  console.log();
-
-  // Table header
-  const dateWidth = 14;
-  const titleWidth = 25;
-  const locationWidth = 15;
-
-  console.log(
-    '  ' +
-    chalk.bold(trans.calendar.dateTime.padEnd(dateWidth)) +
-    chalk.bold(trans.calendar.eventName.padEnd(titleWidth)) +
-    chalk.bold(trans.calendar.location)
-  );
-
-  printDivider();
-
-  // Event list
-  events.forEach(event => {
-    const dateTime = `${event.date} ${event.time}`.padEnd(dateWidth);
-    const title = truncate(event.title, titleWidth - 2).padEnd(titleWidth);
-    const location = truncate(event.location, locationWidth);
-
-    console.log(
-      '  ' +
-      chalk.cyan(dateTime) +
-      chalk.white(title) +
-      chalk.gray(location)
-    );
-  });
-
-  console.log();
+export function serializeEvents(events: Event[]): EventOutputItem[] {
+  return events.map((event) => ({
+    date: event.date,
+    time: event.time,
+    title: event.title,
+    location: event.location,
+    startDateISO: event.startDate.toISOString()
+  }));
 }
 
-/**
- * 格式化日期
- */
+function truncate(str: string, maxLength: number): string {
+  if (str.length <= maxLength) return str;
+  return str.substring(0, maxLength - 3) + '...';
+}
+
 function formatDate(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${month}-${day}`;
 }
 
-/**
- * 格式化时间
- */
 function formatTime(date: Date): string {
   const hours = String(date.getHours()).padStart(2, '0');
   const minutes = String(date.getMinutes()).padStart(2, '0');
   return `${hours}:${minutes}`;
 }
 
-/**
- * 截断字符串
- */
-function truncate(str: string, maxLength: number): string {
-  if (str.length <= maxLength) {
-    return str;
+export function renderEventsTable(events: Event[], options?: { color?: boolean }): string {
+  const trans = t();
+  const color = options?.color !== false;
+
+  if (events.length === 0) {
+    return trans.calendar.noEvents;
   }
-  return str.substring(0, maxLength - 3) + '...';
+
+  const dateWidth = 14;
+  const titleWidth = 32;
+  const locationWidth = 20;
+
+  const lines: string[] = [];
+  lines.push(`${trans.calendar.title} ${trans.calendar.subtitle}`);
+  lines.push(
+    `${trans.calendar.dateTime.padEnd(dateWidth)}${trans.calendar.eventName.padEnd(titleWidth)}${trans.calendar.location}`
+  );
+  lines.push('-'.repeat(Math.min((process.stdout.columns || 80), 80)));
+
+  for (const event of events) {
+    const dateTime = `${event.date} ${event.time}`.padEnd(dateWidth);
+    const title = truncate(event.title, titleWidth - 1).padEnd(titleWidth);
+    const location = truncate(event.location, locationWidth);
+
+    if (color) {
+      lines.push(chalk.cyan(dateTime) + chalk.white(title) + chalk.gray(location));
+    } else {
+      lines.push(dateTime + title + location);
+    }
+  }
+
+  if (color) {
+    lines[0] = chalk.cyan.bold(lines[0]!);
+    lines[1] = chalk.bold(lines[1]!);
+  }
+
+  return lines.join('\n');
 }
 
-/**
- * 主函数：获取并显示活动
- */
+export function displayEvents(events: Event[]): void {
+  if (events.length === 0) {
+    info(t().calendar.noEvents);
+    return;
+  }
+
+  console.log();
+  console.log(renderEventsTable(events, { color: true }));
+  printDivider();
+  console.log();
+}
+
 export async function showCalendar(): Promise<void> {
   const trans = t();
   try {
     info(trans.calendar.loading);
     const events = await fetchEvents();
-    console.log('\r' + ' '.repeat(50) + '\r'); // Clear loading message
+    console.log('\r' + ' '.repeat(60) + '\r');
     displayEvents(events);
-  } catch (err) {
+  } catch {
     error(trans.calendar.error);
     console.log(chalk.gray('  ' + trans.calendar.errorHint));
     console.log();

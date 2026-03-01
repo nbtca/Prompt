@@ -23,20 +23,27 @@ npx @nbtca/prompt
 nbtca
 ```
 
-Navigate with arrow keys or vim bindings (j/k/g/G).
+Interactive mode:
+- Arrow keys and Vim keys (`j/k/g/G/q`) are supported.
+- Best for exploration and one-off usage.
 
-Run a single feature directly:
+Command mode (script-friendly):
 
 ```bash
 nbtca events
-nbtca docs
-nbtca repair
+nbtca events --json
+nbtca events --plain
 nbtca website
-nbtca github
+nbtca website --open
 nbtca roadmap
-nbtca about
 nbtca lang en
+nbtca --help
 ```
+
+Behavior:
+- URL commands (`repair`, `website`, `github`, `roadmap`) print URL by default.
+- Add `--open` to open browser explicitly.
+- `events --json` prints machine-readable JSON to stdout.
 
 ## Documentation
 

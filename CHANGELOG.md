@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## [Unreleased]
+
+### Added
+- Command mode flags:
+  - `--open` for explicit browser side effects on URL commands
+  - `--json` for machine-readable event output
+  - `--plain` for non-colored terminal output
+  - `--no-logo` to skip startup logo in interactive mode
+- Roadmap shortcut support in both menu and command mode
+
+### Changed
+- URL commands (`repair`, `website`, `github`, `roadmap`) now print URL by default in command mode
+- Main menu now includes quick command-mode hint
+- Docs menu keeps user in docs flow for repeated operations
+
+### Improved
+- Better non-TTY behavior: startup logo animation is skipped outside interactive terminals
+- Error/warning messages consistently go to `stderr`
+- Terminal UX documentation rewritten with explicit output contract
+
 ## [1.0.5] - 2025-12-10
 
 ### Fixed

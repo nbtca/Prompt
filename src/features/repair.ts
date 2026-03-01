@@ -11,7 +11,7 @@ import { t } from '../i18n/index.js';
 /**
  * 维修服务URL
  */
-const REPAIR_URL = 'https://nbtca.space/repair';
+export const REPAIR_URL = 'https://nbtca.space/repair';
 
 /**
  * 打开维修服务页面

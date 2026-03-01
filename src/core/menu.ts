@@ -80,6 +80,7 @@ export async function showMainMenu(): Promise<void> {
 
       // Show keybinding hints
       console.log(chalk.dim('  ' + trans.menu.navigationHint));
+      console.log(chalk.dim('  ' + trans.menu.quickCommandHint));
       console.log();
 
       const { action } = await inquirer.prompt<{ action: string }>([

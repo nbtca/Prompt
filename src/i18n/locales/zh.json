@@ -28,6 +28,7 @@
     "language": "切换语言",
     "languageDesc": "更改显示语言",
     "navigationHint": "导航: j/k 或 ↑/↓ | 跳转: g/G | 退出: q 或 Ctrl+C",
+    "quickCommandHint": "提示: 使用 `nbtca <command> --help` 获取可脚本化模式",
     "chooseAction": "选择一个操作"
   },
   "about": {
