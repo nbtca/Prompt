@@ -1,6 +1,12 @@
 # CHANGELOG
 
+Release notes are maintained in Wiki:
+
+- https://github.com/nbtca/Prompt/wiki/Release-Notes
+
 ## [Unreleased]
+
+## [1.0.10] - 2026-03-01
 
 ### Added
 - Command mode flags:

@@ -17,43 +17,18 @@ Or run directly:
 npx @nbtca/prompt
 ```
 
-## Usage
-
-```bash
-nbtca
-```
-
-Interactive mode:
-- Arrow keys and Vim keys (`j/k/g/G/q`) are supported.
-- Best for exploration and one-off usage.
-
-Command mode (script-friendly):
-
-```bash
-nbtca events
-nbtca events --json
-nbtca events --plain
-nbtca website
-nbtca website --open
-nbtca roadmap
-nbtca lang en
-nbtca --help
-```
-
-Behavior:
-- URL commands (`repair`, `website`, `github`, `roadmap`) print URL by default.
-- Add `--open` to open browser explicitly.
-- `events --json` prints machine-readable JSON to stdout.
-
 ## Documentation
 
-See the [Wiki](https://github.com/nbtca/Prompt/wiki) for:
+Project documentation has been moved to the GitHub Wiki.
 
-- [Development Guide](https://github.com/nbtca/Prompt/wiki/Development)
+- [Home](https://github.com/nbtca/Prompt/wiki)
+- [Getting Started](https://github.com/nbtca/Prompt/wiki/Getting-Started)
+- [Development Guide](https://github.com/nbtca/Prompt/wiki/Development-Guide)
+- [Terminal UX](https://github.com/nbtca/Prompt/wiki/Terminal-UX)
+- [Release Notes](https://github.com/nbtca/Prompt/wiki/Release-Notes)
 - [Features](https://github.com/nbtca/Prompt/wiki/Features)
 - [Terminal Compatibility](https://github.com/nbtca/Prompt/wiki/Terminal-Compatibility)
 - [FAQ](https://github.com/nbtca/Prompt/wiki/FAQ)
-- [Changelog](https://github.com/nbtca/Prompt/wiki/Changelog)
 
 ## Requirements
 
