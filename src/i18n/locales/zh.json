@@ -21,11 +21,14 @@
     "websiteDesc": "访问 NBTCA 主页",
     "github": "GitHub",
     "githubDesc": "开源项目和代码",
+    "roadmap": "Roadmap 看板",
+    "roadmapDesc": "打开 NBTCA 路线图项目看板",
     "about": "关于",
     "aboutDesc": "项目信息和帮助",
     "language": "切换语言",
     "languageDesc": "更改显示语言",
     "navigationHint": "导航: j/k 或 ↑/↓ | 跳转: g/G | 退出: q 或 Ctrl+C",
+    "quickCommandHint": "提示: 使用 `nbtca <command> --help` 获取可脚本化模式",
     "chooseAction": "选择一个操作"
   },
   "about": {
@@ -51,6 +54,7 @@
     "noEvents": "近期暂无活动安排",
     "error": "无法获取活动日历",
     "errorHint": "请稍后重试或访问 https://nbtca.space",
+    "eventsFound": "个活动",
     "dateTime": "日期时间",
     "eventName": "活动名称",
     "location": "地点"
@@ -80,7 +84,13 @@
     "browserErrorHint": "请手动访问: https://docs.nbtca.space",
     "retry": "是否重试？",
     "pagerNotAvailable": "⚠ Pager不可用，使用标准输出",
-    "endOfDocument": "文档结束 - 按 q 退出"
+    "endOfDocument": "文档结束 - 按 q 退出",
+    "terminalProfile": "终端类型",
+    "terminalSupport": "支持",
+    "terminalBasic": "基础",
+    "terminalEnhanced": "增强",
+    "terminalAdvanced": "高级",
+    "navigationHint": "导航: j/k 或 ↑/↓ | Enter: 打开 | q/Ctrl+C: 退出"
   },
   "repair": {
     "title": "维修服务",

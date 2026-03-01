@@ -17,27 +17,22 @@ Or run directly:
 npx @nbtca/prompt
 ```
 
-## Usage
-
-```bash
-nbtca
-```
-
-Navigate with arrow keys or vim bindings (j/k/g/G).
-
 ## Documentation
 
-See the [Wiki](https://github.com/nbtca/Prompt/wiki) for:
+Project documentation has been moved to the GitHub Wiki.
 
-- [Development Guide](https://github.com/nbtca/Prompt/wiki/Development)
+- [Home](https://github.com/nbtca/Prompt/wiki)
+- [Getting Started](https://github.com/nbtca/Prompt/wiki/Getting-Started)
+- [Development Guide](https://github.com/nbtca/Prompt/wiki/Development-Guide)
+- [Terminal UX](https://github.com/nbtca/Prompt/wiki/Terminal-UX)
+- [Release Notes](https://github.com/nbtca/Prompt/wiki/Release-Notes)
 - [Features](https://github.com/nbtca/Prompt/wiki/Features)
 - [Terminal Compatibility](https://github.com/nbtca/Prompt/wiki/Terminal-Compatibility)
 - [FAQ](https://github.com/nbtca/Prompt/wiki/FAQ)
-- [Changelog](https://github.com/nbtca/Prompt/wiki/Changelog)
 
 ## Requirements
 
-- Node.js >= 16.0.0
+- Node.js >= 20.12.0
 
 ## License
 

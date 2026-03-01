@@ -1,5 +1,47 @@
 # CHANGELOG
 
+Release notes are maintained in Wiki:
+
+- https://github.com/nbtca/Prompt/wiki/Release-Notes
+
+## [Unreleased]
+
+## [1.0.13] - 2026-03-01
+
+### Changed
+- Re-triggered release after rotating to npm classic automation token.
+
+## [1.0.12] - 2026-03-01
+
+### Changed
+- Triggered re-release after rotating npm automation token.
+
+## [1.0.11] - 2026-03-01
+
+### Changed
+- Improved npm publish workflow diagnostics for OTP-related failures (`EOTP`).
+- Reduced npm package payload via `files` whitelist in `package.json`.
+
+## [1.0.10] - 2026-03-01
+
+### Added
+- Command mode flags:
+  - `--open` for explicit browser side effects on URL commands
+  - `--json` for machine-readable event output
+  - `--plain` for non-colored terminal output
+  - `--no-logo` to skip startup logo in interactive mode
+- Roadmap shortcut support in both menu and command mode
+
+### Changed
+- URL commands (`repair`, `website`, `github`, `roadmap`) now print URL by default in command mode
+- Main menu now includes quick command-mode hint
+- Docs menu keeps user in docs flow for repeated operations
+
+### Improved
+- Better non-TTY behavior: startup logo animation is skipped outside interactive terminals
+- Error/warning messages consistently go to `stderr`
+- Terminal UX documentation rewritten with explicit output contract
+
 ## [1.0.5] - 2025-12-10
 
 ### Fixed

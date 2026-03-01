@@ -4,29 +4,38 @@
  */
 
 import chalk from 'chalk';
+import { intro } from '@clack/prompts';
 import { printLogo } from './core/logo.js';
-import { printHeader, clearScreen } from './core/ui.js';
+import { clearScreen } from './core/ui.js';
 import { showMainMenu } from './core/menu.js';
 import { APP_INFO } from './config/data.js';
 import { enableVimKeys } from './core/vim-keys.js';
 import { t } from './i18n/index.js';
 
+export interface MainOptions {
+  skipLogo?: boolean;
+}
+
 /**
  * Main program entry point
  */
-export async function main(): Promise<void> {
+export async function main(options: MainOptions = {}): Promise<void> {
   try {
     // Enable Vim key bindings
     enableVimKeys();
 
     // Clear screen
-    clearScreen();
+    if (process.stdout.isTTY) {
+      clearScreen();
+    }
 
     // Display logo (smart fallback)
-    await printLogo();
+    if (!options.skipLogo) {
+      await printLogo();
+    }
 
-    // Display version info
-    printHeader(`v${APP_INFO.version}`);
+    // Open session frame
+    intro(chalk.cyan('NBTCA Prompt') + chalk.dim(` v${APP_INFO.version}`));
 
     // Show main menu (loop)
     await showMainMenu();

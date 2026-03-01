@@ -39,11 +39,14 @@ export interface Translations {
     websiteDesc: string;
     github: string;
     githubDesc: string;
+    roadmap: string;
+    roadmapDesc: string;
     about: string;
     aboutDesc: string;
     language: string;
     languageDesc: string;
     navigationHint: string;
+    quickCommandHint: string;
     chooseAction: string;
   };
   about: {
@@ -69,6 +72,7 @@ export interface Translations {
     noEvents: string;
     error: string;
     errorHint: string;
+    eventsFound: string;
     dateTime: string;
     eventName: string;
     location: string;
@@ -99,6 +103,12 @@ export interface Translations {
     retry: string;
     pagerNotAvailable: string;
     endOfDocument: string;
+    terminalProfile: string;
+    terminalSupport: string;
+    terminalBasic: string;
+    terminalEnhanced: string;
+    terminalAdvanced: string;
+    navigationHint: string;
   };
   repair: {
     title: string;

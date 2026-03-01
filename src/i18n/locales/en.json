@@ -21,11 +21,14 @@
     "websiteDesc": "Visit NBTCA homepage",
     "github": "GitHub",
     "githubDesc": "Open source projects and code",
+    "roadmap": "Roadmap",
+    "roadmapDesc": "Open NBTCA roadmap project board",
     "about": "About",
     "aboutDesc": "Project info and help",
     "language": "Language",
     "languageDesc": "Change display language",
     "navigationHint": "Navigation: j/k or ↑/↓ | Jump: g/G | Quit: q or Ctrl+C",
+    "quickCommandHint": "Tip: use `nbtca <command> --help` for script-friendly mode",
     "chooseAction": "Choose an action"
   },
   "about": {
@@ -51,6 +54,7 @@
     "noEvents": "No upcoming events",
     "error": "Failed to load event calendar",
     "errorHint": "Please try again later or visit https://nbtca.space",
+    "eventsFound": "events found",
     "dateTime": "Date & Time",
     "eventName": "Event Name",
     "location": "Location"
@@ -80,7 +84,13 @@
     "browserErrorHint": "Please visit manually: https://docs.nbtca.space",
     "retry": "Retry?",
     "pagerNotAvailable": "⚠ Pager not available, using standard output",
-    "endOfDocument": "End of document - Press q to quit"
+    "endOfDocument": "End of document - Press q to quit",
+    "terminalProfile": "Terminal profile",
+    "terminalSupport": "Support",
+    "terminalBasic": "Basic",
+    "terminalEnhanced": "Enhanced",
+    "terminalAdvanced": "Advanced",
+    "navigationHint": "Navigation: j/k or ↑/↓ | Enter: open | q/Ctrl+C: quit"
   },
   "repair": {
     "title": "Repair Service",
