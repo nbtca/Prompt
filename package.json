@@ -7,6 +7,12 @@
     "nbtca": "bin/nbtca-welcome.js",
     "nbtca-welcome": "bin/nbtca-welcome.js"
   },
+  "files": [
+    "dist",
+    "bin/nbtca-welcome.js",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
