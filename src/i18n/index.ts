@@ -41,6 +41,9 @@ export interface Translations {
     githubDesc: string;
     roadmap: string;
     roadmapDesc: string;
+    links: string;
+    linksDesc: string;
+    chooseLink: string;
     about: string;
     aboutDesc: string;
     language: string;
@@ -57,11 +60,6 @@ export interface Translations {
     github: string;
     website: string;
     email: string;
-    features: string;
-    feature1: string;
-    feature2: string;
-    feature3: string;
-    feature4: string;
     license: string;
     author: string;
   };

@@ -11,47 +11,27 @@ import open from 'open';
 import { select, isCancel, confirm } from '@clack/prompts';
 import { error, warning, success, createSpinner } from '../core/ui.js';
 import { spawn, execFileSync } from 'child_process';
+import { URLS } from '../config/data.js';
 import { t } from '../i18n/index.js';
 
 // ─── Terminal capability detection ───────────────────────────────────────────
 
-interface TerminalCapabilities {
-  supportsColor: boolean;
-  supportsImages: boolean;
-  supportsUnicode: boolean;
-  terminalType: 'basic' | 'enhanced' | 'advanced';
-}
+type TerminalType = 'basic' | 'enhanced' | 'advanced';
 
-function detectTerminalCapabilities(): TerminalCapabilities {
-  const term = (process.env['TERM'] || '').toLowerCase();
+function detectTerminalType(): TerminalType {
+  const term        = (process.env['TERM']         || '').toLowerCase();
   const termProgram = (process.env['TERM_PROGRAM'] || '').toLowerCase();
-  const colorTerm = process.env['COLORTERM'];
 
-  const supportsImages =
-    termProgram.includes('iterm') ||
-    term.includes('kitty') ||
-    termProgram.includes('wezterm') ||
-    term.includes('sixel');
+  const hasImages  = termProgram.includes('iterm') || term.includes('kitty') ||
+                     termProgram.includes('wezterm') || term.includes('sixel');
+  const hasColor   = process.env['COLORTERM'] !== undefined || term.includes('color') ||
+                     term.includes('256') || term.includes('ansi') || termProgram !== '';
+  const hasUnicode = (process.env['LANG']   || '').includes('UTF-8') ||
+                     (process.env['LC_ALL'] || '').includes('UTF-8');
 
-  const supportsColor =
-    colorTerm !== undefined ||
-    term.includes('color') ||
-    term.includes('256') ||
-    term.includes('ansi') ||
-    termProgram !== '';
-
-  const supportsUnicode =
-    (process.env['LANG'] || '').includes('UTF-8') ||
-    (process.env['LC_ALL'] || '').includes('UTF-8');
-
-  let terminalType: 'basic' | 'enhanced' | 'advanced' = 'basic';
-  if (supportsImages && supportsColor && supportsUnicode) {
-    terminalType = 'advanced';
-  } else if (supportsColor && supportsUnicode) {
-    terminalType = 'enhanced';
-  }
-
-  return { supportsColor, supportsImages, supportsUnicode, terminalType };
+  if (hasImages && hasColor && hasUnicode) return 'advanced';
+  if (hasColor  && hasUnicode)             return 'enhanced';
+  return 'basic';
 }
 
 /** Check whether an external command exists on PATH (once at startup). */
@@ -64,12 +44,12 @@ function commandExists(cmd: string): boolean {
   }
 }
 
-const terminalCapabilities = detectTerminalCapabilities();
+const TERMINAL_TYPE = detectTerminalType();
 const HAS_GLOW = commandExists('glow');
 
 // ─── marked-terminal renderer ─────────────────────────────────────────────────
 
-function getRendererOptions(capabilities: TerminalCapabilities): any {
+function getRendererOptions(type: TerminalType): any {
   // Cap at 80 columns — optimal prose reading width regardless of terminal size
   const width = Math.min(process.stdout.columns || 80, 80);
 
@@ -116,13 +96,13 @@ function getRendererOptions(capabilities: TerminalCapabilities): any {
 
     // Tables with Unicode borders (fallback to ASCII on basic terminals)
     tableOptions: {
-      chars: capabilities.terminalType === 'basic' ? asciiTableChars : unicodeTableChars
+      chars: type === 'basic' ? asciiTableChars : unicodeTableChars
     }
   };
 }
 
 // @ts-ignore
-marked.setOptions({ renderer: new TerminalRenderer(getRendererOptions(terminalCapabilities)) });
+marked.setOptions({ renderer: new TerminalRenderer(getRendererOptions(TERMINAL_TYPE)) });
 
 // ─── GitHub data layer ────────────────────────────────────────────────────────
 
@@ -135,6 +115,8 @@ interface DocItem {
   type: 'file' | 'dir';
   sha?: string;
 }
+
+const SKIP_NAMES = new Set(['node_modules', 'package.json', 'pnpm-lock.yaml']);
 
 const DOC_CATEGORIES = [
   { name: '📖  教程',             path: 'tutorial' },
@@ -159,14 +141,11 @@ async function fetchGitHubDirectory(path: string = ''): Promise<DocItem[]> {
     const response = await axios.get(url, { timeout: 10000, headers });
 
     return response.data
-      .filter((item: any) => {
-        if (item.name.startsWith('.')) return false;
-        if (item.name === 'node_modules') return false;
-        if (item.name === 'package.json') return false;
-        if (item.name === 'pnpm-lock.yaml') return false;
-        if (item.type === 'file' && !item.name.endsWith('.md')) return false;
-        return true;
-      })
+      .filter((item: any) =>
+        !item.name.startsWith('.') &&
+        !SKIP_NAMES.has(item.name) &&
+        !(item.type === 'file' && !item.name.endsWith('.md'))
+      )
       .map((item: any) => ({
         name: item.name,
         path: item.path,
@@ -208,7 +187,7 @@ const CONTAINER_ICONS: Record<string, string> = {
   info: 'ℹ️', tip: '💡', warning: '⚠️', danger: '🚨', details: '▶️'
 };
 
-function cleanMarkdownContent(content: string, capabilities: TerminalCapabilities): string {
+function cleanMarkdownContent(content: string, type: TerminalType): string {
   let c = content;
 
   // 1. YAML frontmatter
@@ -241,9 +220,9 @@ function cleanMarkdownContent(content: string, capabilities: TerminalCapabilitie
   c = c.replace(/\[\[toc\]\]/gi, '');
 
   // 6. Images — adapt to terminal capability
-  if (capabilities.terminalType === 'basic') {
+  if (type === 'basic') {
     c = c.replace(/!\[([^\]]*)\]\([^)]+\)/g, (_, alt) => `📎 [${alt || 'image'}]`);
-  } else if (capabilities.terminalType === 'enhanced') {
+  } else if (type === 'enhanced') {
     c = c.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) => {
       const filename = (url as string).split('/').pop() || url;
       return `🖼️  **[${alt || 'image'}]** _(${filename})_`;
@@ -413,7 +392,7 @@ async function viewMarkdownFile(filePath: string): Promise<void> {
     const s = createSpinner(`${trans.docs.loading.replace('...', '')}: ${filePath}`);
 
     const rawContent  = await fetchGitHubRawContent(filePath);
-    const cleaned     = cleanMarkdownContent(rawContent, terminalCapabilities);
+    const cleaned     = cleanMarkdownContent(rawContent, TERMINAL_TYPE);
     const title       = extractDocTitle(cleaned) || filePath.split('/').pop() || filePath;
     const readTime    = estimateReadTime(cleaned);
     const rendered    = await marked(cleaned) as string;
@@ -461,8 +440,8 @@ export async function openDocsInBrowser(path?: string): Promise<void> {
   const s = createSpinner(trans.docs.opening);
   try {
     const url = path
-      ? `https://docs.nbtca.space/${path.replace(/\.md$/, '')}`
-      : 'https://docs.nbtca.space';
+      ? `${URLS.docs}/${path.replace(/\.md$/, '')}`
+      : URLS.docs;
     await open(url);
     s.stop(trans.docs.browserOpened);
   } catch {

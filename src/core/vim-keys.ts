@@ -1,70 +1,32 @@
 /**
  * Vim keybindings support
- * Intercepts and translates keyboard input for j/k/g/G/q/ESC keys
+ * Maps j/k/g/G/q to arrow keys and actions in clack menus.
  */
 
-/**
- * Enable Vim key mappings for stdin
- * Maps: j/k (down/up), g/G (home/end), q (quit), ESC (back)
- */
-export function enableVimKeys() {
+type KeyEvent = { name: string; shift?: boolean; ctrl?: boolean; meta?: boolean; [k: string]: unknown };
+
+const KEY_MAP: Array<{ match: (k: KeyEvent) => boolean; mapped: Partial<KeyEvent> }> = [
+  { match: k => k.name === 'j' && !k.ctrl && !k.meta,            mapped: { name: 'down' } },
+  { match: k => k.name === 'k' && !k.ctrl && !k.meta,            mapped: { name: 'up' } },
+  { match: k => k.name === 'g' && !k.shift && !k.ctrl && !k.meta, mapped: { name: 'home' } },
+  { match: k => k.name === 'g' && !!k.shift && !k.ctrl && !k.meta, mapped: { name: 'end' } },
+  { match: k => k.name === 'q' && !k.ctrl && !k.meta,            mapped: { name: 'c', ctrl: true } },
+];
+
+export function enableVimKeys(): void {
   const stdin = process.stdin;
+  if (!stdin.isTTY) return;
 
-  // Only enable for TTY sessions
-  if (!stdin.isTTY) {
-    return;
-  }
-
-  // Save original input handler
   const originalEmit = stdin.emit.bind(stdin);
 
-  // Override emit method to intercept keyboard events
   (stdin.emit as any) = function (event: string, ...args: any[]) {
     if (event === 'keypress') {
-      const [, key] = args;
-
-      if (key && key.name) {
-        // j = down (mapped to down arrow)
-        if (key.name === 'j' && !key.ctrl && !key.meta) {
-          return originalEmit('keypress', null, { name: 'down' });
-        }
-
-        // k = up (mapped to up arrow)
-        if (key.name === 'k' && !key.ctrl && !key.meta) {
-          return originalEmit('keypress', null, { name: 'up' });
-        }
-
-        // g = jump to top (mapped to home)
-        if (key.name === 'g' && !key.shift && !key.ctrl && !key.meta) {
-          return originalEmit('keypress', null, { name: 'home' });
-        }
-
-        // G (Shift+g) = jump to bottom (mapped to end)
-        if (key.name === 'g' && key.shift) {
-          return originalEmit('keypress', null, { name: 'end' });
-        }
-
-        // ESC = back/cancel (pass through for menu handling)
-        // Note: Applications should implement back navigation for ESC
-        if (key.name === 'escape') {
-          return originalEmit('keypress', null, { name: 'escape', sequence: '\x1b' });
-        }
-
-        // q = quit (mapped to Ctrl+C for application exit)
-        if (key.name === 'q' && !key.ctrl && !key.meta) {
-          return originalEmit('keypress', null, { name: 'c', ctrl: true });
-        }
+      const key: KeyEvent = args[1];
+      if (key?.name) {
+        const mapping = KEY_MAP.find(m => m.match(key));
+        if (mapping) return originalEmit('keypress', null, mapping.mapped);
       }
     }
-
     return originalEmit(event, ...args);
   };
-}
-
-/**
- * Disable Vim key mappings
- * Currently not implemented as we use Vim keys throughout the application
- */
-export function disableVimKeys() {
-  // Not needed for current implementation
 }

@@ -35,13 +35,6 @@ export function warning(msg: string): void {
 }
 
 /**
- * No-op: session framing moved to main.ts intro()
- */
-export function printHeader(_title: string): void {
-  // intentional noop — intro() in main.ts owns the header
-}
-
-/**
  * Display divider line
  */
 export function printDivider(): void {

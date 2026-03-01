@@ -6,12 +6,11 @@
 import open from 'open';
 import chalk from 'chalk';
 import { createSpinner } from '../core/ui.js';
+import { URLS } from '../config/data.js';
 import { t } from '../i18n/index.js';
 
-/**
- * 维修服务URL
- */
-export const REPAIR_URL = 'https://nbtca.space/repair';
+// Derived from the single URL source — index.ts depends on this name
+export const REPAIR_URL = URLS.repair;
 
 /**
  * 打开维修服务页面

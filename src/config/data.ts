@@ -21,17 +21,13 @@ function readPackageVersion(): string {
 }
 
 export const URLS = {
-  // 主要链接
   homepage: 'https://nbtca.space',
-  github: 'https://github.com/nbtca',
-  docs: 'https://docs.nbtca.space',
-  repair: 'https://nbtca.space/repair',
-
-  // API链接
+  github:   'https://github.com/nbtca',
+  roadmap:  'https://github.com/orgs/nbtca/projects/5',
+  docs:     'https://docs.nbtca.space',
+  repair:   'https://nbtca.space/repair',
   calendar: 'https://ical.nbtca.space',
-
-  // 联系方式
-  email: 'contact@nbtca.space'
+  email:    'contact@nbtca.space',
 } as const;
 
 export const APP_INFO = {

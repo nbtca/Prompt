@@ -10,40 +10,14 @@ import { openRepairService } from '../features/repair.js';
 import { showDocsMenu } from '../features/docs.js';
 import { openHomepage, openGithub, openRoadmap } from '../features/website.js';
 import { printDivider, printNewLine, success } from './ui.js';
+import { padEndV } from './text.js';
 import { APP_INFO, URLS } from '../config/data.js';
 import { t, getCurrentLanguage, setLanguage, clearTranslationCache, type Language } from '../i18n/index.js';
 
-export type MenuAction = 'events' | 'repair' | 'docs' | 'website' | 'github' | 'roadmap' | 'about' | 'language';
-
-/** Visual column width: CJK characters count as 2. */
-function visualWidth(str: string): number {
-  let w = 0;
-  for (const ch of str) {
-    const cp = ch.codePointAt(0) ?? 0;
-    w += (
-      (cp >= 0x1100 && cp <= 0x115F) ||
-      (cp >= 0x2E80 && cp <= 0x303F) ||
-      (cp >= 0x3040 && cp <= 0x33FF) ||
-      (cp >= 0x3400 && cp <= 0x4DBF) ||
-      (cp >= 0x4E00 && cp <= 0x9FFF) ||
-      (cp >= 0xAC00 && cp <= 0xD7AF) ||
-      (cp >= 0xF900 && cp <= 0xFAFF) ||
-      (cp >= 0xFE30 && cp <= 0xFE4F) ||
-      (cp >= 0xFF00 && cp <= 0xFF60) ||
-      (cp >= 0xFFE0 && cp <= 0xFFE6)
-    ) ? 2 : 1;
-  }
-  return w;
-}
-
-/** Pad string to visual width. */
-function padEndV(str: string, width: number): string {
-  const pad = width - visualWidth(str);
-  return pad > 0 ? str + ' '.repeat(pad) : str;
-}
+export type MenuAction = 'events' | 'repair' | 'docs' | 'links' | 'website' | 'github' | 'roadmap' | 'about' | 'language';
 
 /**
- * Get main menu options — no emoji in labels to guarantee alignment
+ * Get main menu options — 6 items
  */
 function getMainMenuOptions() {
   const trans = t();
@@ -51,9 +25,7 @@ function getMainMenuOptions() {
     { value: 'events',   label: trans.menu.events,   hint: trans.menu.eventsDesc },
     { value: 'repair',   label: trans.menu.repair,   hint: trans.menu.repairDesc },
     { value: 'docs',     label: trans.menu.docs,     hint: trans.menu.docsDesc },
-    { value: 'website',  label: trans.menu.website,  hint: trans.menu.websiteDesc },
-    { value: 'github',   label: trans.menu.github,   hint: trans.menu.githubDesc },
-    { value: 'roadmap',  label: trans.menu.roadmap,  hint: trans.menu.roadmapDesc },
+    { value: 'links',    label: trans.menu.links,    hint: trans.menu.linksDesc },
     { value: 'about',    label: trans.menu.about,    hint: trans.menu.aboutDesc },
     { value: 'language', label: trans.menu.language, hint: trans.menu.languageDesc },
   ];
@@ -92,6 +64,7 @@ export async function runMenuAction(action: MenuAction): Promise<void> {
     case 'events':   await showCalendar();       break;
     case 'repair':   await openRepairService();  break;
     case 'docs':     await showDocsMenu();       break;
+    case 'links':    await showLinksMenu();      break;
     case 'website':  await openHomepage();       break;
     case 'github':   await openGithub();         break;
     case 'roadmap':  await openRoadmap();        break;
@@ -101,28 +74,48 @@ export async function runMenuAction(action: MenuAction): Promise<void> {
 }
 
 /**
+ * Links submenu — website, GitHub, roadmap
+ */
+async function showLinksMenu(): Promise<void> {
+  const trans = t();
+
+  const link = await select({
+    message: trans.menu.chooseLink,
+    options: [
+      { value: 'website', label: trans.menu.website, hint: 'nbtca.space' },
+      { value: 'github',  label: 'GitHub',           hint: 'github.com/nbtca' },
+      { value: 'roadmap', label: trans.menu.roadmap, hint: trans.menu.roadmapDesc },
+    ],
+  });
+
+  if (isCancel(link)) return;
+
+  switch (link) {
+    case 'website': await openHomepage(); break;
+    case 'github':  await openGithub();  break;
+    case 'roadmap': await openRoadmap(); break;
+  }
+}
+
+/**
  * Display about information using clack note() box
  */
 function showAbout(): void {
   const trans = t();
-  const pad = 12;
+  const pad  = 12;
+  const row  = (label: string, value: string) => `${chalk.dim(padEndV(label, pad))}${value}`;
+  const link = (label: string, url: string)   => row(label, chalk.cyan(url));
+
   const content = [
-    `${chalk.dim(padEndV(trans.about.project, pad))}${APP_INFO.name}`,
-    `${chalk.dim(padEndV(trans.about.version, pad))}v${APP_INFO.version}`,
-    `${chalk.dim(padEndV(trans.about.description, pad))}${APP_INFO.fullDescription}`,
+    row(trans.about.project,     APP_INFO.name),
+    row(trans.about.version,     `v${APP_INFO.version}`),
+    row(trans.about.description, APP_INFO.fullDescription),
     '',
-    `${chalk.dim(padEndV(trans.about.github, pad))}${chalk.cyan(APP_INFO.repository)}`,
-    `${chalk.dim(padEndV(trans.about.website, pad))}${chalk.cyan(URLS.homepage)}`,
-    `${chalk.dim(padEndV(trans.about.email, pad))}${chalk.cyan(URLS.email)}`,
+    link(trans.about.github,     APP_INFO.repository),
+    link(trans.about.website,    URLS.homepage),
+    link(trans.about.email,      URLS.email),
     '',
-    chalk.dim(trans.about.features),
-    '  ' + trans.about.feature1,
-    '  ' + trans.about.feature2,
-    '  ' + trans.about.feature3,
-    '  ' + trans.about.feature4,
-    '',
-    `${chalk.dim(padEndV(trans.about.license, pad))}MIT License`,
-    `${chalk.dim(padEndV(trans.about.author, pad))}m1ngsama`,
+    row(trans.about.license,     'MIT  ·  Author: m1ngsama'),
   ].join('\n');
 
   note(content, trans.about.title);

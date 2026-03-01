@@ -6,14 +6,11 @@
 import open from 'open';
 import chalk from 'chalk';
 import { createSpinner } from '../core/ui.js';
+import { URLS } from '../config/data.js';
 import { t } from '../i18n/index.js';
 
-export const WEBSITE_URLS = {
-  homepage: 'https://nbtca.space',
-  github: 'https://github.com/nbtca',
-  roadmap: 'https://github.com/orgs/nbtca/projects/5',
-  docs: 'https://docs.nbtca.space'
-} as const;
+// Re-export from the single URL source — index.ts depends on this name
+export const WEBSITE_URLS = URLS;
 
 /**
  * 打开指定URL
