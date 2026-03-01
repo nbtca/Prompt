@@ -6,6 +6,11 @@ Release notes are maintained in Wiki:
 
 ## [Unreleased]
 
+## [1.0.12] - 2026-03-01
+
+### Changed
+- Triggered re-release after rotating npm automation token.
+
 ## [1.0.11] - 2026-03-01
 
 ### Changed
