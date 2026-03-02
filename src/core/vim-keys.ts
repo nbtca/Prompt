@@ -1,17 +1,18 @@
 /**
  * Vim keybindings support
- * Maps j/k/g/G/q to arrow keys and actions in clack menus.
+ * Intercepts raw data events and replaces vim keys with terminal escape sequences
+ * before readline processes them. This avoids patching the keypress layer which
+ * breaks in Node.js v25+ (emitKeys generator crash).
  */
 
-type KeyEvent = { name: string; shift?: boolean; ctrl?: boolean; meta?: boolean; [k: string]: unknown };
-
-const KEY_MAP: Array<{ match: (k: KeyEvent) => boolean; mapped: Partial<KeyEvent> }> = [
-  { match: k => k.name === 'j' && !k.ctrl && !k.meta,            mapped: { name: 'down' } },
-  { match: k => k.name === 'k' && !k.ctrl && !k.meta,            mapped: { name: 'up' } },
-  { match: k => k.name === 'g' && !k.shift && !k.ctrl && !k.meta, mapped: { name: 'home' } },
-  { match: k => k.name === 'g' && !!k.shift && !k.ctrl && !k.meta, mapped: { name: 'end' } },
-  { match: k => k.name === 'q' && !k.ctrl && !k.meta,            mapped: { name: 'c', ctrl: true } },
-];
+// Maps single-byte vim keys to terminal escape sequences
+const VIM_TO_SEQ: Record<string, Buffer> = {
+  j: Buffer.from('\u001b[B'), // down arrow
+  k: Buffer.from('\u001b[A'), // up arrow
+  g: Buffer.from('\u001b[H'), // home
+  G: Buffer.from('\u001b[F'), // end
+  q: Buffer.from('\u0003'),   // ctrl+c (cancel)
+};
 
 export function enableVimKeys(): void {
   const stdin = process.stdin;
@@ -20,11 +21,11 @@ export function enableVimKeys(): void {
   const originalEmit = stdin.emit.bind(stdin);
 
   (stdin.emit as any) = function (event: string, ...args: any[]) {
-    if (event === 'keypress') {
-      const key: KeyEvent = args[1];
-      if (key?.name) {
-        const mapping = KEY_MAP.find(m => m.match(key));
-        if (mapping) return originalEmit('keypress', null, mapping.mapped);
+    if (event === 'data') {
+      const chunk = args[0];
+      if (Buffer.isBuffer(chunk) && chunk.length === 1) {
+        const seq = VIM_TO_SEQ[String.fromCharCode(chunk[0] as number)];
+        if (seq) return originalEmit('data', seq);
       }
     }
     return originalEmit(event, ...args);
