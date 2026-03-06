@@ -46,8 +46,12 @@ export interface Translations {
     chooseLink: string;
     about: string;
     aboutDesc: string;
+    status: string;
+    statusDesc: string;
     language: string;
     languageDesc: string;
+    theme: string;
+    themeDesc: string;
     navigationHint: string;
     quickCommandHint: string;
     chooseAction: string;
@@ -80,7 +84,17 @@ export interface Translations {
     subtitle: string;
     loading: string;
     loadingDir: string;
+    categoryTutorial: string;
+    categoryRepairLogs: string;
+    categoryEvents: string;
+    categoryProcess: string;
+    categoryRepair: string;
+    categoryArchived: string;
+    categoryReadme: string;
     chooseCategory: string;
+    refreshCache: string;
+    cacheCleared: string;
+    usingCachedData: string;
     currentDir: string;
     chooseDoc: string;
     emptyDir: string;
@@ -107,6 +121,11 @@ export interface Translations {
     terminalEnhanced: string;
     terminalAdvanced: string;
     navigationHint: string;
+    githubRateLimited: string;
+    githubForbidden: string;
+    githubTokenHint: string;
+    fetchDirFailed: string;
+    fetchFileFailed: string;
   };
   repair: {
     title: string;
@@ -122,6 +141,47 @@ export interface Translations {
     error: string;
     errorHint: string;
   };
+  status: {
+    checking: string;
+    summaryOk: string;
+    summaryFail: string;
+    service: string;
+    health: string;
+    code: string;
+    latency: string;
+    url: string;
+    up: string;
+    down: string;
+    watchStarted: string;
+    watchUpdated: string;
+    watchHint: string;
+    invalidInterval: string;
+    invalidTimeout: string;
+    invalidRetries: string;
+    watchRequiresTty: string;
+    watchJsonConflict: string;
+    intervalNeedsWatch: string;
+  };
+  theme: {
+    current: string;
+    chooseAction: string;
+    chooseIconMode: string;
+    chooseColorMode: string;
+    modeAuto: string;
+    modeAscii: string;
+    modeUnicode: string;
+    modeOn: string;
+    modeOff: string;
+    backToMenu: string;
+    iconMode: string;
+    colorMode: string;
+    updated: string;
+    updatedSessionOnly: string;
+    reset: string;
+    resetSessionOnly: string;
+    usage: string;
+    invalidValue: string;
+  };
   language: {
     title: string;
     currentLanguage: string;
@@ -129,6 +189,7 @@ export interface Translations {
     zh: string;
     en: string;
     changed: string;
+    changedSessionOnly: string;
   };
 }
 
@@ -173,7 +234,7 @@ export function loadLanguagePreference(): Language {
 /**
  * Save language preference to config file
  */
-export function saveLanguagePreference(language: Language): void {
+export function saveLanguagePreference(language: Language): boolean {
   try {
     const configDir = getConfigDir();
     if (!fs.existsSync(configDir)) {
@@ -182,8 +243,9 @@ export function saveLanguagePreference(language: Language): void {
     const configPath = getLanguageConfigPath();
     fs.writeFileSync(configPath, JSON.stringify({ language }, null, 2));
     currentLanguage = language;
+    return true;
   } catch (err) {
-    // Silently fail if we can't save preference
+    return false;
   }
 }
 
@@ -197,9 +259,9 @@ export function getCurrentLanguage(): Language {
 /**
  * Set current language
  */
-export function setLanguage(language: Language): void {
+export function setLanguage(language: Language): boolean {
   currentLanguage = language;
-  saveLanguagePreference(language);
+  return saveLanguagePreference(language);
 }
 
 /**

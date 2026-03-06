@@ -22,7 +22,7 @@
     "clean": "rm -rf dist",
     "prebuild": "npm run clean",
     "prepublishOnly": "npm run build",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "npm run build && bash scripts/test-cli.sh"
   },
   "keywords": [
     "cli",

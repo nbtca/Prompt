@@ -8,13 +8,16 @@ import chalk from 'chalk';
 import { showCalendar } from '../features/calendar.js';
 import { openRepairService } from '../features/repair.js';
 import { showDocsMenu } from '../features/docs.js';
+import { showServiceStatus } from '../features/status.js';
+import { showThemeMenu } from '../features/theme.js';
 import { openHomepage, openGithub, openRoadmap } from '../features/website.js';
-import { printDivider, printNewLine, success } from './ui.js';
+import { printDivider, printNewLine, success, warning } from './ui.js';
+import { pickIcon } from './icons.js';
 import { padEndV } from './text.js';
 import { APP_INFO, URLS } from '../config/data.js';
 import { t, getCurrentLanguage, setLanguage, clearTranslationCache, type Language } from '../i18n/index.js';
 
-export type MenuAction = 'events' | 'repair' | 'docs' | 'links' | 'website' | 'github' | 'roadmap' | 'about' | 'language';
+export type MenuAction = 'events' | 'repair' | 'docs' | 'status' | 'links' | 'website' | 'github' | 'roadmap' | 'about' | 'language' | 'theme';
 
 /**
  * Get main menu options — 6 items
@@ -25,8 +28,10 @@ function getMainMenuOptions() {
     { value: 'events',   label: trans.menu.events,   hint: trans.menu.eventsDesc },
     { value: 'repair',   label: trans.menu.repair,   hint: trans.menu.repairDesc },
     { value: 'docs',     label: trans.menu.docs,     hint: trans.menu.docsDesc },
+    { value: 'status',   label: trans.menu.status,   hint: trans.menu.statusDesc },
     { value: 'links',    label: trans.menu.links,    hint: trans.menu.linksDesc },
     { value: 'about',    label: trans.menu.about,    hint: trans.menu.aboutDesc },
+    { value: 'theme',    label: trans.menu.theme,    hint: trans.menu.themeDesc },
     { value: 'language', label: trans.menu.language, hint: trans.menu.languageDesc },
   ];
 }
@@ -64,11 +69,13 @@ export async function runMenuAction(action: MenuAction): Promise<void> {
     case 'events':   await showCalendar();       break;
     case 'repair':   await openRepairService();  break;
     case 'docs':     await showDocsMenu();       break;
+    case 'status':   await showServiceStatus();  break;
     case 'links':    await showLinksMenu();      break;
     case 'website':  await openHomepage();       break;
     case 'github':   await openGithub();         break;
     case 'roadmap':  await openRoadmap();        break;
     case 'about':    showAbout();                break;
+    case 'theme':    await showThemeMenu();      break;
     case 'language': await showLanguageMenu();   break;
   }
 }
@@ -115,7 +122,7 @@ function showAbout(): void {
     link(trans.about.website,    URLS.homepage),
     link(trans.about.email,      URLS.email),
     '',
-    row(trans.about.license,     'MIT  ·  Author: m1ngsama'),
+    row(trans.about.license,     `MIT  ${pickIcon('·', '|')}  Author: m1ngsama`),
   ].join('\n');
 
   note(content, trans.about.title);
@@ -131,8 +138,8 @@ async function showLanguageMenu(): Promise<void> {
   const language = await select<Language>({
     message: trans.language.selectLanguage,
     options: [
-      { value: 'zh' as Language, label: trans.language.zh, hint: currentLang === 'zh' ? '✓ 当前' : undefined },
-      { value: 'en' as Language, label: trans.language.en, hint: currentLang === 'en' ? '✓ current' : undefined },
+      { value: 'zh' as Language, label: trans.language.zh, hint: currentLang === 'zh' ? `${pickIcon('✓', '*')} current` : undefined },
+      { value: 'en' as Language, label: trans.language.en, hint: currentLang === 'en' ? `${pickIcon('✓', '*')} current` : undefined },
     ],
     initialValue: currentLang,
   });
@@ -140,8 +147,12 @@ async function showLanguageMenu(): Promise<void> {
   if (isCancel(language)) return;
 
   if (language !== currentLang) {
-    setLanguage(language);
+    const persisted = setLanguage(language);
     clearTranslationCache();
-    success(t().language.changed);
+    if (persisted) {
+      success(t().language.changed);
+    } else {
+      warning(t().language.changedSessionOnly);
+    }
   }
 }

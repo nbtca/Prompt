@@ -7,6 +7,7 @@ import axios from 'axios';
 import ICAL from 'ical.js';
 import chalk from 'chalk';
 import { info, printDivider, createSpinner } from '../core/ui.js';
+import { pickIcon } from '../core/icons.js';
 import { padEndV, truncate } from '../core/text.js';
 import { t } from '../i18n/index.js';
 
@@ -105,11 +106,23 @@ export function renderEventsTable(events: Event[], options?: { color?: boolean }
   const titleWidth    = 30;
   const locationWidth = 16;
 
-  const top     = `┌${'─'.repeat(dateWidth + 2)}┬${'─'.repeat(titleWidth + 2)}┬${'─'.repeat(locationWidth + 2)}┐`;
-  const divider = `├${'─'.repeat(dateWidth + 2)}┼${'─'.repeat(titleWidth + 2)}┼${'─'.repeat(locationWidth + 2)}┤`;
-  const bottom  = `└${'─'.repeat(dateWidth + 2)}┴${'─'.repeat(titleWidth + 2)}┴${'─'.repeat(locationWidth + 2)}┘`;
+  const h = pickIcon('─', '-');
+  const v = pickIcon('│', '|');
+  const topLeft = pickIcon('┌', '+');
+  const topMid = pickIcon('┬', '+');
+  const topRight = pickIcon('┐', '+');
+  const midLeft = pickIcon('├', '+');
+  const midMid = pickIcon('┼', '+');
+  const midRight = pickIcon('┤', '+');
+  const bottomLeft = pickIcon('└', '+');
+  const bottomMid = pickIcon('┴', '+');
+  const bottomRight = pickIcon('┘', '+');
+
+  const top = `${topLeft}${h.repeat(dateWidth + 2)}${topMid}${h.repeat(titleWidth + 2)}${topMid}${h.repeat(locationWidth + 2)}${topRight}`;
+  const divider = `${midLeft}${h.repeat(dateWidth + 2)}${midMid}${h.repeat(titleWidth + 2)}${midMid}${h.repeat(locationWidth + 2)}${midRight}`;
+  const bottom = `${bottomLeft}${h.repeat(dateWidth + 2)}${bottomMid}${h.repeat(titleWidth + 2)}${bottomMid}${h.repeat(locationWidth + 2)}${bottomRight}`;
   const headerRow =
-    `│ ${padEndV(trans.calendar.dateTime, dateWidth)} │ ${padEndV(trans.calendar.eventName, titleWidth)} │ ${padEndV(trans.calendar.location, locationWidth)} │`;
+    `${v} ${padEndV(trans.calendar.dateTime, dateWidth)} ${v} ${padEndV(trans.calendar.eventName, titleWidth)} ${v} ${padEndV(trans.calendar.location, locationWidth)} ${v}`;
 
   // Formatters are identity functions when color is off — one loop, no duplication
   const id   = (s: string) => s;
@@ -126,7 +139,7 @@ export function renderEventsTable(events: Event[], options?: { color?: boolean }
     const title    = truncate(event.title, titleWidth);
     const location = truncate(event.location, locationWidth);
     lines.push(
-      `│ ${fmtDate(padEndV(dateTime, dateWidth))} │ ${fmtTitle(padEndV(title, titleWidth))} │ ${fmtLoc(padEndV(location, locationWidth))} │`
+      `${v} ${fmtDate(padEndV(dateTime, dateWidth))} ${v} ${fmtTitle(padEndV(title, titleWidth))} ${v} ${fmtLoc(padEndV(location, locationWidth))} ${v}`
     );
   }
 

@@ -5,6 +5,7 @@
 
 import { log, spinner as clackSpinner } from '@clack/prompts';
 import chalk from 'chalk';
+import { pickIcon } from './icons.js';
 
 /**
  * Display success message
@@ -39,7 +40,8 @@ export function warning(msg: string): void {
  */
 export function printDivider(): void {
   const terminalWidth = process.stdout.columns || 80;
-  console.log(chalk.dim('─'.repeat(Math.min(terminalWidth, 80))));
+  const dividerChar = pickIcon('─', '-');
+  console.log(chalk.dim(dividerChar.repeat(Math.min(terminalWidth, 80))));
 }
 
 /**

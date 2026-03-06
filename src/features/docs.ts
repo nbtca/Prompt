@@ -10,6 +10,7 @@ import chalk from 'chalk';
 import open from 'open';
 import { select, isCancel, confirm } from '@clack/prompts';
 import { error, warning, success, createSpinner } from '../core/ui.js';
+import { pickIcon } from '../core/icons.js';
 import { spawn, execFileSync } from 'child_process';
 import { URLS } from '../config/data.js';
 import { t } from '../i18n/index.js';
@@ -116,19 +117,88 @@ interface DocItem {
   sha?: string;
 }
 
+interface CachedFetchResult<T> {
+  data: T;
+  fromCache: boolean;
+  staleFallback: boolean;
+}
+
+interface CacheEntry<T> {
+  value: T;
+  expiresAt: number;
+}
+
+interface RenderedDoc {
+  fingerprint: string;
+  cleaned: string;
+  rendered: string;
+  title: string;
+  readTime: string;
+}
+
 const SKIP_NAMES = new Set(['node_modules', 'package.json', 'pnpm-lock.yaml']);
+const DIR_CACHE_TTL_MS = 5 * 60 * 1000;
+const FILE_CACHE_TTL_MS = 10 * 60 * 1000;
+const RENDER_CACHE_TTL_MS = 10 * 60 * 1000;
+const dirCache = new Map<string, CacheEntry<DocItem[]>>();
+const fileCache = new Map<string, CacheEntry<string>>();
+const renderCache = new Map<string, CacheEntry<RenderedDoc>>();
 
-const DOC_CATEGORIES = [
-  { name: '📖  教程',             path: 'tutorial' },
-  { name: '🔧  维修日记',         path: '维修日' },
-  { name: '🎉  活动文档',         path: '相关活动举办' },
-  { name: '📋  流程文档',         path: 'process' },
-  { name: '🛠  维修相关',         path: 'repair' },
-  { name: '📦  归档文档',         path: 'archived' },
-  { name: '📄  项目说明 (README)', path: 'README.md' },
-];
+function getDocCategories() {
+  const trans = t();
+  const withIcon = (unicodeIcon: string, asciiIcon: string, label: string) =>
+    `${pickIcon(unicodeIcon, asciiIcon)} ${label}`;
+  return [
+    { name: withIcon('📖', '[DOC]', trans.docs.categoryTutorial),   path: 'tutorial' },
+    { name: withIcon('🔧', '[LOG]', trans.docs.categoryRepairLogs), path: '维修日' },
+    { name: withIcon('🎉', '[EVT]', trans.docs.categoryEvents),     path: '相关活动举办' },
+    { name: withIcon('📋', '[PROC]', trans.docs.categoryProcess),   path: 'process' },
+    { name: withIcon('🛠', '[FIX]', trans.docs.categoryRepair),     path: 'repair' },
+    { name: withIcon('📦', '[ARC]', trans.docs.categoryArchived),   path: 'archived' },
+    { name: withIcon('📄', '[README]', trans.docs.categoryReadme),  path: 'README.md' },
+  ];
+}
 
-async function fetchGitHubDirectory(path: string = ''): Promise<DocItem[]> {
+function getFreshCacheValue<T>(cache: Map<string, CacheEntry<T>>, key: string): T | null {
+  const entry = cache.get(key);
+  if (!entry) return null;
+  if (entry.expiresAt > Date.now()) return entry.value;
+  return null;
+}
+
+function getAnyCacheValue<T>(cache: Map<string, CacheEntry<T>>, key: string): T | null {
+  const entry = cache.get(key);
+  return entry?.value ?? null;
+}
+
+function setCacheValue<T>(cache: Map<string, CacheEntry<T>>, key: string, value: T, ttlMs: number): void {
+  cache.set(key, { value, expiresAt: Date.now() + ttlMs });
+}
+
+function contentFingerprint(content: string): string {
+  const head = content.slice(0, 80);
+  const tail = content.slice(-80);
+  return `${content.length}:${head}:${tail}`;
+}
+
+export function clearDocsCache(): void {
+  dirCache.clear();
+  fileCache.clear();
+  renderCache.clear();
+}
+
+async function fetchGitHubDirectory(
+  path: string = '',
+  options: { forceRefresh?: boolean } = {}
+): Promise<CachedFetchResult<DocItem[]>> {
+  const cacheKey = path || '__root__';
+  if (!options.forceRefresh) {
+    const cached = getFreshCacheValue(dirCache, cacheKey);
+    if (cached) {
+      return { data: cached, fromCache: true, staleFallback: false };
+    }
+  }
+
   const url = `https://api.github.com/repos/${GITHUB_REPO.owner}/${GITHUB_REPO.repo}/contents/${path}?ref=${GITHUB_REPO.branch}`;
 
   try {
@@ -140,7 +210,7 @@ async function fetchGitHubDirectory(path: string = ''): Promise<DocItem[]> {
 
     const response = await axios.get(url, { timeout: 10000, headers });
 
-    return response.data
+    const items = response.data
       .filter((item: any) =>
         !item.name.startsWith('.') &&
         !SKIP_NAMES.has(item.name) &&
@@ -157,33 +227,67 @@ async function fetchGitHubDirectory(path: string = ''): Promise<DocItem[]> {
         if (a.type === 'file' && b.type === 'dir') return 1;
         return a.name.localeCompare(b.name);
       });
+
+    setCacheValue(dirCache, cacheKey, items, DIR_CACHE_TTL_MS);
+    return { data: items, fromCache: false, staleFallback: false };
   } catch (err: any) {
+    const staleCached = getAnyCacheValue(dirCache, cacheKey);
+    if (staleCached) {
+      return { data: staleCached, fromCache: true, staleFallback: true };
+    }
+
+    const trans = t();
+    const errorMessage = err instanceof Error ? err.message : String(err);
     if (err.response?.status === 403) {
       const rateLimitRemaining = err.response.headers['x-ratelimit-remaining'];
       const rateLimitReset = err.response.headers['x-ratelimit-reset'];
       if (rateLimitRemaining === '0') {
         const resetDate = new Date(parseInt(rateLimitReset) * 1000);
-        throw new Error(`GitHub API 速率限制已达上限，将在 ${resetDate.toLocaleTimeString()} 重置。\n提示: 设置 GITHUB_TOKEN 环境变量可获得更高的速率限制。`);
+        throw new Error(
+          `${trans.docs.githubRateLimited.replace('{time}', resetDate.toLocaleTimeString())}\n${trans.docs.githubTokenHint}`
+        );
       }
-      throw new Error(`GitHub API 拒绝访问 (403)。\n提示: 尝试设置 GITHUB_TOKEN 环境变量。`);
+      throw new Error(`${trans.docs.githubForbidden}\n${trans.docs.githubTokenHint}`);
     }
-    throw new Error(`无法获取目录内容: ${err.message}`);
+    throw new Error(trans.docs.fetchDirFailed.replace('{error}', errorMessage));
   }
 }
 
-async function fetchGitHubRawContent(path: string): Promise<string> {
+async function fetchGitHubRawContent(
+  path: string,
+  options: { forceRefresh?: boolean } = {}
+): Promise<CachedFetchResult<string>> {
+  if (!options.forceRefresh) {
+    const cached = getFreshCacheValue(fileCache, path);
+    if (cached) {
+      return { data: cached, fromCache: true, staleFallback: false };
+    }
+  }
+
   const url = `https://raw.githubusercontent.com/${GITHUB_REPO.owner}/${GITHUB_REPO.repo}/${GITHUB_REPO.branch}/${path}`;
   try {
     const response = await axios.get(url, { timeout: 15000, headers: { 'User-Agent': 'NBTCA-CLI' } });
-    return response.data;
+    const content = String(response.data);
+    setCacheValue(fileCache, path, content, FILE_CACHE_TTL_MS);
+    return { data: content, fromCache: false, staleFallback: false };
   } catch (err: any) {
-    throw new Error(`无法获取文件内容: ${err.message}`);
+    const staleCached = getAnyCacheValue(fileCache, path);
+    if (staleCached) {
+      return { data: staleCached, fromCache: true, staleFallback: true };
+    }
+
+    const trans = t();
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    throw new Error(trans.docs.fetchFileFailed.replace('{error}', errorMessage));
   }
 }
 
 // ─── Content cleaning ─────────────────────────────────────────────────────────
 
-const CONTAINER_ICONS: Record<string, string> = {
+const CONTAINER_ICONS_ASCII: Record<string, string> = {
+  info: '[INFO]', tip: '[TIP]', warning: '[WARN]', danger: '[DANGER]', details: '[DETAIL]'
+};
+const CONTAINER_ICONS_UNICODE: Record<string, string> = {
   info: 'ℹ️', tip: '💡', warning: '⚠️', danger: '🚨', details: '▶️'
 };
 
@@ -203,7 +307,7 @@ function cleanMarkdownContent(content: string, type: TerminalType): string {
     /^:::\s*(info|tip|warning|danger|details)\s*(.*?)\n([\s\S]*?)^:::\s*$/gm,
     (_m, type: string, title: string, body: string) => {
       const label = (title.trim() || type.charAt(0).toUpperCase() + type.slice(1));
-      const icon = CONTAINER_ICONS[type] ?? '';
+      const icon = pickIcon(CONTAINER_ICONS_UNICODE[type] ?? '', CONTAINER_ICONS_ASCII[type] ?? '');
       const quoted = body.trimEnd().split('\n').map(l => `> ${l}`).join('\n');
       return `> ${icon} **${label}**\n>\n${quoted}\n`;
     }
@@ -221,11 +325,14 @@ function cleanMarkdownContent(content: string, type: TerminalType): string {
 
   // 6. Images — adapt to terminal capability
   if (type === 'basic') {
-    c = c.replace(/!\[([^\]]*)\]\([^)]+\)/g, (_, alt) => `📎 [${alt || 'image'}]`);
+    c = c.replace(
+      /!\[([^\]]*)\]\([^)]+\)/g,
+      (_, alt) => `${pickIcon('📎', '[image]')} ${alt || 'image'}`
+    );
   } else if (type === 'enhanced') {
     c = c.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) => {
       const filename = (url as string).split('/').pop() || url;
-      return `🖼️  **[${alt || 'image'}]** _(${filename})_`;
+      return `${pickIcon('🖼️', '[image]')} **${alt || 'image'}** _(${filename})_`;
     });
   }
 
@@ -249,8 +356,12 @@ function extractDocTitle(content: string): string | null {
 
 /** Approximate reading time: ~200 words/min for technical Chinese/English prose. */
 function estimateReadTime(text: string): string {
-  const words = text.trim().split(/\s+/).filter(Boolean).length;
-  const mins = Math.max(1, Math.ceil(words / 200));
+  const cjkChars = (text.match(/[\u3400-\u9fff]/g) || []).length;
+  const nonCjk = text.replace(/[\u3400-\u9fff]/g, ' ');
+  const words = nonCjk.trim().split(/\s+/).filter(Boolean).length;
+  // Rough equivalence: 2 CJK chars ~= 1 "word" unit
+  const units = words + cjkChars / 2;
+  const mins = Math.max(1, Math.ceil(units / 220));
   return mins === 1 ? '~1 min' : `~${mins} min`;
 }
 
@@ -290,12 +401,12 @@ async function displayWithLess(
 ): Promise<void> {
   const trans = t();
   const cols = Math.min(process.stdout.columns || 80, 80);
-  const rule = chalk.dim('─'.repeat(cols));
+  const rule = chalk.dim('-'.repeat(cols));
 
   const header = [
     '',
     chalk.bold.cyan(`  ${title}`),
-    chalk.dim(`  ${filePath}`) + chalk.dim(`  ·  ${readTime}`),
+    chalk.dim(`  ${filePath}`) + chalk.dim(`  |  ${readTime}`),
     rule,
     '',
   ].join('\n');
@@ -303,20 +414,23 @@ async function displayWithLess(
   const footer = [
     '',
     rule,
-    chalk.dim(`  ${trans.docs.endOfDocument}  ·  / to search`),
+    chalk.dim(`  ${trans.docs.endOfDocument}  |  / to search`),
     '',
   ].join('\n');
 
   const fullContent = header + rendered + footer;
-  const pager = process.env['PAGER'] || 'less';
-  const args = ['-R', '-F', '-X', '-i', '-j4'];
+  const pagerSetting = (process.env['PAGER'] || 'less').trim();
+  const [pagerCommand = 'less', ...pagerArgs] = pagerSetting.split(/\s+/).filter(Boolean);
+  const args = [...pagerArgs, '-R', '-F', '-X', '-i', '-j4'];
+
+  if (!commandExists(pagerCommand)) {
+    console.log(fullContent);
+    return;
+  }
 
   return new Promise(resolve => {
     try {
-      const child = spawn(pager, args, {
-        stdio: ['pipe', 'inherit', 'inherit'],
-        shell: true
-      });
+      const child = spawn(pagerCommand, args, { stdio: ['pipe', 'inherit', 'inherit'] });
       child.stdin.write(fullContent, 'utf-8');
       child.stdin.end();
       child.on('close', resolve);
@@ -334,8 +448,13 @@ async function browseDirectory(dirPath: string = ''): Promise<void> {
   const trans = t();
   try {
     const s = createSpinner(dirPath ? `${trans.docs.loadingDir}: ${dirPath}` : trans.docs.loading);
-    const items = await fetchGitHubDirectory(dirPath);
+    const result = await fetchGitHubDirectory(dirPath);
+    const items = result.data;
     s.stop('');
+
+    if (result.staleFallback) {
+      warning(trans.docs.usingCachedData);
+    }
 
     if (items.length === 0) {
       warning(trans.docs.emptyDir);
@@ -343,15 +462,15 @@ async function browseDirectory(dirPath: string = ''): Promise<void> {
     }
 
     const options = [
-      ...(dirPath ? [{ value: '__back__', label: chalk.gray('↑  ' + trans.docs.upToParent) }] : []),
+      ...(dirPath ? [{ value: '__back__', label: chalk.gray(`${pickIcon('↑', '[..]')} ${trans.docs.upToParent}`) }] : []),
       ...items.map(item => ({
         value: item.path,
         label: item.type === 'dir'
-          ? chalk.cyan('📁  ' + item.name + '/')
-          : chalk.white('📄  ' + item.name),
+          ? chalk.cyan(`${pickIcon('📁', '[DIR]')} ${item.name}/`)
+          : chalk.white(`${pickIcon('📄', '[MD]')} ${item.name}`),
         hint: item.type === 'dir' ? 'dir' : '.md',
       })),
-      { value: '__exit__', label: chalk.gray('✕  ' + trans.docs.returnToMenu) },
+      { value: '__exit__', label: chalk.gray(`${pickIcon('✕', '[x]')} ${trans.docs.returnToMenu}`) },
     ];
 
     const selected = await select({
@@ -391,18 +510,33 @@ async function viewMarkdownFile(filePath: string): Promise<void> {
   try {
     const s = createSpinner(`${trans.docs.loading.replace('...', '')}: ${filePath}`);
 
-    const rawContent  = await fetchGitHubRawContent(filePath);
-    const cleaned     = cleanMarkdownContent(rawContent, TERMINAL_TYPE);
-    const title       = extractDocTitle(cleaned) || filePath.split('/').pop() || filePath;
-    const readTime    = estimateReadTime(cleaned);
-    const rendered    = await marked(cleaned) as string;
+    const rawResult = await fetchGitHubRawContent(filePath);
+    if (rawResult.staleFallback) {
+      warning(trans.docs.usingCachedData);
+    }
 
-    s.stop(`${chalk.bold(title)}  ${chalk.dim(readTime)}`);
+    const rawContent = rawResult.data;
+    const fingerprint = contentFingerprint(rawContent);
+    const cachedRendered = getFreshCacheValue(renderCache, filePath);
+
+    let renderedDoc: RenderedDoc;
+    if (cachedRendered && cachedRendered.fingerprint === fingerprint) {
+      renderedDoc = cachedRendered;
+    } else {
+      const cleaned = cleanMarkdownContent(rawContent, TERMINAL_TYPE);
+      const title = extractDocTitle(cleaned) || filePath.split('/').pop() || filePath;
+      const readTime = estimateReadTime(cleaned);
+      const rendered = await marked(cleaned) as string;
+      renderedDoc = { fingerprint, cleaned, rendered, title, readTime };
+      setCacheValue(renderCache, filePath, renderedDoc, RENDER_CACHE_TTL_MS);
+    }
+
+    s.stop(`${chalk.bold(renderedDoc.title)}  ${chalk.dim(renderedDoc.readTime)}`);
 
     if (HAS_GLOW) {
-      await displayWithGlow(cleaned);
+      await displayWithGlow(renderedDoc.cleaned);
     } else {
-      await displayWithLess(rendered, title, filePath, readTime);
+      await displayWithLess(renderedDoc.rendered, renderedDoc.title, filePath, renderedDoc.readTime);
     }
 
     console.log();
@@ -412,9 +546,9 @@ async function viewMarkdownFile(filePath: string): Promise<void> {
     const action = await select({
       message: trans.docs.chooseAction,
       options: [
-        { value: 'back',    label: trans.docs.backToList },
-        { value: 'reread',  label: trans.docs.reread },
-        { value: 'browser', label: trans.docs.openBrowser },
+        { value: 'back',    label: `${pickIcon('←', '[<]')} ${trans.docs.backToList}` },
+        { value: 'reread',  label: `${pickIcon('↻', '[r]')} ${trans.docs.reread}` },
+        { value: 'browser', label: `${pickIcon('🌐', '[*]')} ${trans.docs.openBrowser}` },
       ],
     });
 
@@ -454,12 +588,14 @@ export async function openDocsInBrowser(path?: string): Promise<void> {
 // ─── Menu ─────────────────────────────────────────────────────────────────────
 
 export async function showDocsMenu(): Promise<void> {
-  const trans = t();
   while (true) {
+    const trans = t();
+    const categories = getDocCategories();
     const options = [
-      ...DOC_CATEGORIES.map(cat => ({ value: cat.path, label: cat.name })),
-      { value: 'browser', label: chalk.gray('🌐  ' + trans.docs.openBrowser) },
-      { value: 'back',    label: chalk.gray('←   ' + trans.docs.returnToMenu) },
+      ...categories.map(cat => ({ value: cat.path, label: cat.name })),
+      { value: 'refresh-cache', label: chalk.gray(`${pickIcon('♻️', '[r]')} ${trans.docs.refreshCache}`) },
+      { value: 'browser', label: chalk.gray(`${pickIcon('🌐', '[*]')} ${trans.docs.openBrowser}`) },
+      { value: 'back',    label: chalk.gray(`${pickIcon('←', '[^]')} ${trans.docs.returnToMenu}`) },
     ];
 
     const action = await select({
@@ -469,7 +605,10 @@ export async function showDocsMenu(): Promise<void> {
 
     if (isCancel(action) || action === 'back') return;
 
-    if (action === 'browser') {
+    if (action === 'refresh-cache') {
+      clearDocsCache();
+      success(trans.docs.cacheCleared);
+    } else if (action === 'browser') {
       await openDocsInBrowser();
     } else if (action === 'README.md') {
       await viewMarkdownFile('README.md');
