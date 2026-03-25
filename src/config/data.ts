@@ -30,6 +30,12 @@ export const URLS = {
   email:    'contact@nbtca.space',
 } as const;
 
+export const GITHUB_REPO = {
+  owner: 'nbtca',
+  repo: 'documents',
+  branch: 'main',
+} as const;
+
 export const APP_INFO = {
   name: 'Prompt',
   version: readPackageVersion(),

@@ -5,13 +5,15 @@
  * breaks in Node.js v25+ (emitKeys generator crash).
  */
 
-// Maps single-byte vim keys to terminal escape sequences
+// Maps single-byte vim keys to terminal escape sequences (ranger-style hjkl)
 const VIM_TO_SEQ: Record<string, Buffer> = {
+  h: Buffer.from('\u0003'),   // back/cancel (ranger: go to parent)
   j: Buffer.from('\u001b[B'), // down arrow
   k: Buffer.from('\u001b[A'), // up arrow
-  g: Buffer.from('\u001b[H'), // home
-  G: Buffer.from('\u001b[F'), // end
-  q: Buffer.from('\u0003'),   // ctrl+c (cancel)
+  l: Buffer.from('\r'),       // enter/confirm (ranger: open/enter)
+  g: Buffer.from('\u001b[H'), // home (first item)
+  G: Buffer.from('\u001b[F'), // end (last item)
+  q: Buffer.from('\u0003'),   // quit
 };
 
 export function enableVimKeys(): void {

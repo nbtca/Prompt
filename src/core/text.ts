@@ -15,10 +15,18 @@ function charWidth(ch: string): 1 | 2 {
   ) ? 2 : 1;
 }
 
-/** Total visual width of a string (CJK characters count as 2). */
+/** Strip ANSI escape sequences from a string. */
+// eslint-disable-next-line no-control-regex
+const ANSI_RE = /\x1b\[[0-9;]*m/g;
+export function stripAnsi(str: string): string {
+  return str.replace(ANSI_RE, '');
+}
+
+/** Total visual width of a string (CJK characters count as 2, ANSI codes ignored). */
 export function visualWidth(str: string): number {
+  const plain = stripAnsi(str);
   let w = 0;
-  for (const ch of str) w += charWidth(ch);
+  for (const ch of plain) w += charWidth(ch);
   return w;
 }
 

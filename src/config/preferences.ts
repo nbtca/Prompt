@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { getConfigDir } from './paths.js';
 
 export type IconMode = 'auto' | 'ascii' | 'unicode';
 export type ColorMode = 'auto' | 'on' | 'off';
@@ -13,11 +14,6 @@ const DEFAULT_PREFERENCES: Preferences = {
   iconMode: 'auto',
   colorMode: 'auto',
 };
-
-function getConfigDir(): string {
-  const homeDir = process.env['HOME'] || process.env['USERPROFILE'] || '';
-  return path.join(homeDir, '.nbtca');
-}
 
 function getPreferencesPath(): string {
   return path.join(getConfigDir(), 'preferences.json');
@@ -33,9 +29,6 @@ function ensureConfigDir(): void {
 export function loadPreferences(): Preferences {
   try {
     const prefPath = getPreferencesPath();
-    if (!fs.existsSync(prefPath)) {
-      return { ...DEFAULT_PREFERENCES };
-    }
     const raw = JSON.parse(fs.readFileSync(prefPath, 'utf-8')) as Partial<Preferences>;
     const iconMode: IconMode =
       raw.iconMode === 'ascii' || raw.iconMode === 'unicode' || raw.iconMode === 'auto'

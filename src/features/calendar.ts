@@ -6,16 +6,19 @@
 import axios from 'axios';
 import ICAL from 'ical.js';
 import chalk from 'chalk';
-import { info, printDivider, createSpinner } from '../core/ui.js';
+import { select, isCancel } from '@clack/prompts';
+import { info, createSpinner } from '../core/ui.js';
 import { pickIcon } from '../core/icons.js';
 import { padEndV, truncate } from '../core/text.js';
 import { t } from '../i18n/index.js';
+import { APP_INFO, URLS } from '../config/data.js';
 
 export interface Event {
   date: string;
   time: string;
   title: string;
   location: string;
+  description: string;
   startDate: Date;
 }
 
@@ -24,6 +27,7 @@ export interface EventOutputItem {
   time: string;
   title: string;
   location: string;
+  description: string;
   startDateISO: string;
 }
 
@@ -32,7 +36,7 @@ export async function fetchEvents(): Promise<Event[]> {
     const response = await axios.get('https://ical.nbtca.space', {
       timeout: 5000,
       headers: {
-        'User-Agent': 'NBTCA-CLI/2.3.1'
+        'User-Agent': `NBTCA-CLI/${APP_INFO.version}`
       }
     });
 
@@ -50,14 +54,15 @@ export async function fetchEvents(): Promise<Event[]> {
 
       if (startDate >= now && startDate <= thirtyDaysLater) {
         const trans = t();
-        const untitledEvent = trans.calendar.eventName === 'Event Name' ? 'Untitled Event' : '未命名活动';
-        const tbdLocation = trans.calendar.location === 'Location' ? 'TBD' : '待定';
+        const untitledEvent = trans.calendar.untitledEvent;
+        const tbdLocation = trans.calendar.tbdLocation;
 
         events.push({
           date: formatDate(startDate),
           time: formatTime(startDate),
           title: event.summary || untitledEvent,
           location: event.location || tbdLocation,
+          description: event.description || '',
           startDate
         });
       }
@@ -65,8 +70,9 @@ export async function fetchEvents(): Promise<Event[]> {
 
     events.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
     return events;
-  } catch {
-    throw new Error(t().calendar.error);
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new Error(`${t().calendar.error}: ${detail}`);
   }
 }
 
@@ -76,6 +82,7 @@ export function serializeEvents(events: Event[]): EventOutputItem[] {
     time: event.time,
     title: event.title,
     location: event.location,
+    description: event.description,
     startDateISO: event.startDate.toISOString()
   }));
 }
@@ -147,7 +154,7 @@ export function renderEventsTable(events: Event[], options?: { color?: boolean }
   return lines.join('\n');
 }
 
-export function displayEvents(events: Event[]): void {
+function displayEvents(events: Event[]): void {
   if (events.length === 0) {
     info(t().calendar.noEvents);
     return;
@@ -155,7 +162,24 @@ export function displayEvents(events: Event[]): void {
 
   console.log();
   console.log(renderEventsTable(events, { color: true }));
-  printDivider();
+  console.log(chalk.dim(`  ${pickIcon('📅', '[ical]')} ${t().calendar.subscribeHint}: ${URLS.calendar}`));
+  console.log();
+}
+
+async function showEventDetail(event: Event): Promise<void> {
+  const trans = t();
+  console.log();
+  console.log(chalk.bold.cyan(`  ${event.title}`));
+  console.log(chalk.dim(`  ${event.date} ${event.time}  ${pickIcon('·', '|')}  ${event.location}`));
+  if (event.description) {
+    console.log();
+    const lines = event.description.trim().split('\n');
+    for (const line of lines) {
+      console.log(chalk.white(`  ${line}`));
+    }
+  } else {
+    console.log(chalk.dim(`  ${trans.calendar.noDescription}`));
+  }
   console.log();
 }
 
@@ -166,6 +190,28 @@ export async function showCalendar(): Promise<void> {
     const events = await fetchEvents();
     s.stop(`${events.length} ${trans.calendar.eventsFound}`);
     displayEvents(events);
+
+    if (events.length > 0) {
+      const options = [
+        ...events.map((e, i) => ({
+          value: String(i),
+          label: `${e.date} ${e.time}  ${e.title}`,
+          hint: e.location,
+        })),
+        { value: '__back__', label: chalk.dim(trans.common.back) },
+      ];
+
+      const selected = await select({
+        message: trans.calendar.viewDetail,
+        options,
+      });
+
+      if (!isCancel(selected) && selected !== '__back__') {
+        const idx = Number.parseInt(selected, 10);
+        const event = events[idx];
+        if (event) await showEventDetail(event);
+      }
+    }
   } catch {
     s.error(trans.calendar.error);
     console.log(chalk.gray('  ' + trans.calendar.errorHint));

@@ -3,20 +3,22 @@
  */
 
 import chalk from 'chalk';
+import open from 'open';
 import { main } from './main.js';
-import { runMenuAction, type MenuAction } from './core/menu.js';
 import { fetchEvents, renderEventsTable, serializeEvents } from './features/calendar.js';
 import { checkServices, countServiceHealth, hasServiceFailures, renderServiceStatusTable, serializeServiceStatus } from './features/status.js';
 import { pickIcon } from './core/icons.js';
 import { applyColorModePreference } from './config/preferences.js';
 import { openDocsInBrowser } from './features/docs.js';
 import { runThemeCommand } from './features/theme.js';
-import { REPAIR_URL } from './features/repair.js';
-import { WEBSITE_URLS } from './features/website.js';
 import { setLanguage, t, type Language } from './i18n/index.js';
 import { clearScreen } from './core/ui.js';
+import { APP_INFO, URLS } from './config/data.js';
+import { runUpdateCheck } from './features/update.js';
 
-const ACTION_ALIASES: Record<string, MenuAction> = {
+type CliAction = 'events' | 'status' | 'docs' | 'repair' | 'website' | 'github' | 'roadmap' | 'about';
+
+const ACTION_ALIASES: Record<string, CliAction> = {
   events: 'events',
   event: 'events',
   repair: 'repair',
@@ -32,11 +34,11 @@ const ACTION_ALIASES: Record<string, MenuAction> = {
   status: 'status',
 };
 
-const URL_ACTIONS: Partial<Record<MenuAction, string>> = {
-  repair: REPAIR_URL,
-  website: WEBSITE_URLS.homepage,
-  github: WEBSITE_URLS.github,
-  roadmap: WEBSITE_URLS.roadmap
+const URL_ACTIONS: Partial<Record<CliAction, string>> = {
+  repair: URLS.repair,
+  website: URLS.homepage,
+  github: URLS.github,
+  roadmap: URLS.roadmap
 };
 
 interface ParsedArgs {
@@ -45,8 +47,8 @@ interface ParsedArgs {
   flags: Set<string>;
 }
 
-const KNOWN_FLAGS = new Set(['--help', '--open', '--json', '--plain', '--no-logo', '--watch']);
-const KNOWN_FLAG_PREFIXES = ['--interval=', '--timeout=', '--retries='];
+const KNOWN_FLAGS = new Set(['--help', '--version', '--open', '--json', '--plain', '--no-logo', '--watch', '--today']);
+const KNOWN_FLAG_PREFIXES = ['--interval=', '--timeout=', '--retries=', '--next='];
 const STATUS_WATCH_INTERVAL_MIN = 3;
 const STATUS_WATCH_INTERVAL_MAX = 300;
 const STATUS_TIMEOUT_MIN = 1000;
@@ -82,24 +84,20 @@ function getAllowedFlagsFor(command?: string): Set<string> {
 
   if (!command) {
     allowed.add('--no-logo');
+    allowed.add('--version');
     return allowed;
   }
 
-  if (command === 'lang' || command === 'language') {
-    return allowed;
-  }
-  if (command === 'theme') {
-    return allowed;
-  }
+  if (command === 'lang' || command === 'language') return allowed;
+  if (command === 'theme') return allowed;
 
   const action = ACTION_ALIASES[command];
-  if (!action) {
-    return allowed;
-  }
+  if (!action) return allowed;
 
   switch (action) {
     case 'events':
       allowed.add('--json');
+      allowed.add('--today');
       return allowed;
     case 'status':
       allowed.add('--json');
@@ -121,9 +119,8 @@ function getAllowedFlagsFor(command?: string): Set<string> {
 function getAllowedFlagPrefixesFor(command?: string): string[] {
   if (!command) return [];
   const action = ACTION_ALIASES[command];
-  if (action === 'status') {
-    return ['--interval=', '--timeout=', '--retries='];
-  }
+  if (action === 'events') return ['--next='];
+  if (action === 'status') return ['--interval=', '--timeout=', '--retries='];
   return [];
 }
 
@@ -155,37 +152,54 @@ function printHelp(): void {
   console.log(chalk.bold('NBTCA Prompt'));
   console.log();
   console.log('Usage:');
-  console.log('  nbtca                          Start interactive menu');
-  console.log('  nbtca <command> [flags]        Run one command directly');
-  console.log('  nbtca lang <zh|en>             Set language preference');
-  console.log('  nbtca theme ...                Configure icon and color mode');
+  console.log('  nbtca                          Interactive menu');
+  console.log('  nbtca <command> [flags]         Run a command');
   console.log();
   console.log('Commands:');
-  console.log('  events | status | repair | docs | website | github | roadmap | about | theme');
+  console.log('  events         Upcoming activities');
+  console.log('  docs           Knowledge base');
+  console.log('  status         Service health');
+  console.log('  website        Official website URL');
+  console.log('  github         GitHub organization URL');
+  console.log('  roadmap        Project roadmap URL');
+  console.log('  repair         Repair service URL');
+  console.log('  theme          View or set theme');
+  console.log('  lang <zh|en>   Set language');
+  console.log('  update         Check for updates');
   console.log();
   console.log('Flags:');
-  console.log('  --help                         Show help');
-  console.log('  --open                         Open browser for URL commands');
-  console.log('  --json                         JSON output (supported by `events`, `status`)');
-  console.log('  --watch                        Continuously refresh status output (`status` only)');
-  console.log('  --interval=<seconds>           Refresh interval for `status --watch` (3-300)');
-  console.log('  --timeout=<ms>                HTTP timeout for status checks (1000-20000)');
-  console.log('  --retries=<n>                 Retry count for transient status failures (0-5)');
-  console.log('  --plain                        Disable color output');
-  console.log('  --no-logo                      Skip startup logo in menu mode');
-  console.log();
-  console.log('Examples:');
-  console.log('  nbtca events --json');
-  console.log('  nbtca status --json');
-  console.log('  nbtca status --watch --interval=10');
-  console.log('  nbtca status --timeout=8000 --retries=2');
-  console.log('  nbtca theme icon ascii');
-  console.log('  nbtca roadmap');
-  console.log('  nbtca roadmap --open');
+  console.log('  --version          Show version');
+  console.log('  --help             Show help');
+  console.log('  --open             Open in browser (URL commands)');
+  console.log('  --json             JSON output (events, status)');
+  console.log('  --today            Today only (events)');
+  console.log('  --next=<n>         Limit to next N (events)');
+  console.log('  --watch            Live refresh (status)');
+  console.log('  --interval=<s>     Refresh interval (status --watch)');
+  console.log('  --timeout=<ms>     HTTP timeout (status)');
+  console.log('  --retries=<n>      Retry count (status)');
+  console.log('  --plain            No color');
+  console.log('  --no-logo          Skip logo');
 }
 
 async function runEventsCommand(flags: Set<string>): Promise<void> {
-  const events = await fetchEvents();
+  let events = await fetchEvents();
+
+  if (flags.has('--today')) {
+    const now = new Date();
+    const todayStr = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    events = events.filter(e => e.date === todayStr);
+  }
+
+  const nextFlag = Array.from(flags).find(f => f.startsWith('--next='));
+  if (nextFlag) {
+    const n = Number.parseInt(nextFlag.split('=')[1] || '', 10);
+    if (!Number.isInteger(n) || n < 1) {
+      console.error(chalk.red('Invalid --next value. Use --next=<number> (>= 1).'));
+      process.exit(1);
+    }
+    events = events.slice(0, n);
+  }
 
   if (flags.has('--json')) {
     process.stdout.write(JSON.stringify(serializeEvents(events), null, 2) + '\n');
@@ -211,40 +225,25 @@ async function runStatusCommand(flags: Set<string>): Promise<boolean> {
     process.exit(1);
   }
   if (!Number.isInteger(timeoutMs) || timeoutMs < STATUS_TIMEOUT_MIN || timeoutMs > STATUS_TIMEOUT_MAX) {
-    console.error(
-      chalk.red(
-        trans.status.invalidTimeout
-          .replace('{min}', String(STATUS_TIMEOUT_MIN))
-          .replace('{max}', String(STATUS_TIMEOUT_MAX))
-      )
-    );
+    console.error(chalk.red(
+      trans.status.invalidTimeout.replace('{min}', String(STATUS_TIMEOUT_MIN)).replace('{max}', String(STATUS_TIMEOUT_MAX))
+    ));
     process.exit(1);
   }
   if (!Number.isInteger(retries) || retries < STATUS_RETRIES_MIN || retries > STATUS_RETRIES_MAX) {
-    console.error(
-      chalk.red(
-        trans.status.invalidRetries
-          .replace('{min}', String(STATUS_RETRIES_MIN))
-          .replace('{max}', String(STATUS_RETRIES_MAX))
-      )
-    );
+    console.error(chalk.red(
+      trans.status.invalidRetries.replace('{min}', String(STATUS_RETRIES_MIN)).replace('{max}', String(STATUS_RETRIES_MAX))
+    ));
     process.exit(1);
   }
   if (watch && flags.has('--json')) {
     console.error(chalk.red(trans.status.watchJsonConflict));
     process.exit(1);
   }
-  if (
-    watch &&
-    (!Number.isInteger(intervalSeconds) || intervalSeconds < STATUS_WATCH_INTERVAL_MIN || intervalSeconds > STATUS_WATCH_INTERVAL_MAX)
-  ) {
-    console.error(
-      chalk.red(
-        trans.status.invalidInterval
-          .replace('{min}', String(STATUS_WATCH_INTERVAL_MIN))
-          .replace('{max}', String(STATUS_WATCH_INTERVAL_MAX))
-      )
-    );
+  if (watch && (!Number.isInteger(intervalSeconds) || intervalSeconds < STATUS_WATCH_INTERVAL_MIN || intervalSeconds > STATUS_WATCH_INTERVAL_MAX)) {
+    console.error(chalk.red(
+      trans.status.invalidInterval.replace('{min}', String(STATUS_WATCH_INTERVAL_MIN)).replace('{max}', String(STATUS_WATCH_INTERVAL_MAX))
+    ));
     process.exit(1);
   }
   if (watch && !hasInteractiveTerminal()) {
@@ -254,16 +253,12 @@ async function runStatusCommand(flags: Set<string>): Promise<boolean> {
 
   if (watch) {
     let stopped = false;
-    const onSigint = () => {
-      stopped = true;
-    };
+    const onSigint = () => { stopped = true; };
     process.once('SIGINT', onSigint);
 
-    console.log(
-      chalk.dim(
-        `${trans.status.watchStarted.replace('{seconds}', String(intervalSeconds))} | ${trans.status.watchHint}`
-      )
-    );
+    console.log(chalk.dim(
+      `${trans.status.watchStarted.replace('{seconds}', String(intervalSeconds))} | ${trans.status.watchHint}`
+    ));
 
     try {
       while (!stopped) {
@@ -271,14 +266,8 @@ async function runStatusCommand(flags: Set<string>): Promise<boolean> {
         const hasFailures = hasServiceFailures(services);
         const health = countServiceHealth(services);
         clearScreen();
-        console.log(
-          chalk.bold(
-            `${pickIcon('📡', '[status]')} ${trans.status.watchUpdated}: ${new Date().toLocaleString()}`
-          )
-        );
-        console.log(
-          chalk.dim(`${trans.status.up}: ${health.up} | ${trans.status.down}: ${health.down} | ${trans.status.watchHint}`)
-        );
+        console.log(chalk.bold(`${trans.status.watchUpdated}: ${new Date().toLocaleString()}`));
+        console.log(chalk.dim(`${trans.status.up}: ${health.up} | ${trans.status.down}: ${health.down} | ${trans.status.watchHint}`));
         console.log();
         const useColor = !flags.has('--plain') && !!process.stdout.isTTY;
         console.log(renderServiceStatusTable(services, { color: useColor }));
@@ -331,12 +320,18 @@ function maybeDisableColor(flags: Set<string>): void {
 async function runCommandMode(argv: string[]): Promise<void> {
   const { command, args, flags } = parseArgs(argv);
   maybeDisableColor(flags);
-  validateFlags(command, flags);
+
+  if (flags.has('--version') || command === '--version' || command === '-v' || command === 'version') {
+    console.log(APP_INFO.version);
+    return;
+  }
 
   if (flags.has('--help') || command === '--help' || command === '-h' || command === 'help') {
     printHelp();
     return;
   }
+
+  validateFlags(command, flags);
 
   if (!command) {
     if (!hasInteractiveTerminal()) {
@@ -375,6 +370,11 @@ async function runCommandMode(argv: string[]): Promise<void> {
     return;
   }
 
+  if (command === 'update') {
+    await runUpdateCheck();
+    return;
+  }
+
   const action = ACTION_ALIASES[command];
   if (!action) {
     console.error(chalk.red(`Unknown command: ${command}`));
@@ -389,28 +389,52 @@ async function runCommandMode(argv: string[]): Promise<void> {
 
   if (action === 'status') {
     const ok = await runStatusCommand(flags);
-    if (!ok) {
-      process.exit(1);
-    }
+    if (!ok) process.exit(1);
     return;
   }
 
-  if (action === 'docs' && !hasInteractiveTerminal()) {
-    if (flags.has('--open')) {
-      await openDocsInBrowser();
+  if (action === 'docs') {
+    if (!hasInteractiveTerminal()) {
+      if (flags.has('--open')) {
+        await openDocsInBrowser();
+      } else {
+        process.stdout.write(URLS.docs + '\n');
+      }
     } else {
-      process.stdout.write(WEBSITE_URLS.docs + '\n');
+      const { showDocsMenu } = await import('./features/docs.js');
+      await showDocsMenu();
     }
     return;
   }
 
-  const mappedUrl = URL_ACTIONS[action];
-  if (mappedUrl && !flags.has('--open')) {
-    process.stdout.write(mappedUrl + '\n');
+  if (action === 'about') {
+    const { note } = await import('@clack/prompts');
+    const { padEndV } = await import('./core/text.js');
+    const pad = 12;
+    const row  = (label: string, value: string) => `${chalk.dim(padEndV(label, pad))}${value}`;
+    const link = (label: string, url: string)   => row(label, chalk.cyan(url));
+    const trans = t();
+    const content = [
+      row(trans.about.project, APP_INFO.name),
+      row(trans.about.version, `v${APP_INFO.version}`),
+      '',
+      link(trans.about.github, APP_INFO.repository),
+      link(trans.about.website, URLS.homepage),
+    ].join('\n');
+    note(content, trans.about.title);
     return;
   }
 
-  await runMenuAction(action);
+  // URL actions: repair, website, github, roadmap
+  const mappedUrl = URL_ACTIONS[action];
+  if (mappedUrl) {
+    if (flags.has('--open')) {
+      await open(mappedUrl);
+    } else {
+      process.stdout.write(mappedUrl + '\n');
+    }
+    return;
+  }
 }
 
 runCommandMode(process.argv.slice(2)).catch((err: any) => {

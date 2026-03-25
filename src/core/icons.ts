@@ -5,14 +5,24 @@ function localeSupportsUnicode(): boolean {
   return locale.includes('utf-8') || locale.includes('utf8');
 }
 
+let cachedUseUnicode: boolean | null = null;
+
 export function useUnicodeIcons(): boolean {
+  if (cachedUseUnicode !== null) return cachedUseUnicode;
+
   const configured = resolveIconMode();
-  if (configured === 'ascii') return false;
-  if (configured === 'unicode') return true;
+  if (configured === 'ascii') { cachedUseUnicode = false; return false; }
+  if (configured === 'unicode') { cachedUseUnicode = true; return true; }
 
   const term = (process.env['TERM'] || '').toLowerCase();
-  if (!process.stdout.isTTY || term === 'dumb') return false;
-  return localeSupportsUnicode();
+  if (!process.stdout.isTTY || term === 'dumb') { cachedUseUnicode = false; return false; }
+  cachedUseUnicode = localeSupportsUnicode();
+  return cachedUseUnicode;
+}
+
+/** Invalidate the cached icon mode (call after theme changes). */
+export function resetIconCache(): void {
+  cachedUseUnicode = null;
 }
 
 export function pickIcon(unicodeIcon: string, asciiIcon: string): string {

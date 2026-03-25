@@ -11,6 +11,7 @@ import { showMainMenu } from './core/menu.js';
 import { APP_INFO } from './config/data.js';
 import { enableVimKeys } from './core/vim-keys.js';
 import { t } from './i18n/index.js';
+import { checkForUpdate } from './features/update.js';
 
 export interface MainOptions {
   skipLogo?: boolean;
@@ -31,23 +32,33 @@ export async function main(options: MainOptions = {}): Promise<void> {
 
     // Display logo (smart fallback)
     if (!options.skipLogo) {
-      await printLogo();
+      printLogo();
     }
+
+    // Non-blocking update check (fire and forget, print before menu if resolved in time)
+    const updatePromise = checkForUpdate();
 
     // Open session frame
     intro(chalk.cyan('NBTCA Prompt') + chalk.dim(` v${APP_INFO.version}`));
 
+    // Show update notification if ready
+    const updateMsg = await Promise.race([
+      updatePromise,
+      new Promise<null>(r => setTimeout(r, 500, null)),
+    ]);
+    if (updateMsg) console.log(chalk.yellow(updateMsg));
+
     // Show main menu (loop)
     await showMainMenu();
 
-  } catch (err: any) {
-    // Handle Ctrl+C exit
-    if (err.message?.includes('SIGINT') || err.message?.includes('User force closed')) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err ?? '');
+    if (message.includes('SIGINT') || message.includes('User force closed')) {
       console.log();
       console.log(chalk.dim(t().common.goodbye));
       process.exit(0);
     } else {
-      console.error('Error occurred:', err);
+      console.error('Error occurred:', message || err);
       process.exit(1);
     }
   }
