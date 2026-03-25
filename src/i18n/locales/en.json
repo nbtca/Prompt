@@ -7,35 +7,20 @@
     "loading": "Loading...",
     "error": "Error",
     "success": "Success",
-    "goodbye": "Goodbye!"
+    "goodbye": "Goodbye!",
+    "current": "current"
   },
   "menu": {
-    "title": "Choose an action",
-    "events": "Recent Events",
-    "eventsDesc": "View upcoming events in next 30 days",
-    "repair": "Repair Service",
-    "repairDesc": "Computer repair and software installation",
-    "docs": "Knowledge Base",
-    "docsDesc": "Technical docs and tutorials",
-    "website": "Official Website",
-    "websiteDesc": "Visit NBTCA homepage",
-    "github": "GitHub",
-    "githubDesc": "Open source projects and code",
-    "roadmap": "Roadmap",
-    "roadmapDesc": "Open NBTCA roadmap project board",
+    "events": "Events",
+    "eventsDesc": "Upcoming activities",
+    "docs": "Docs",
+    "docsDesc": "Knowledge base",
+    "status": "Status",
+    "statusDesc": "Service health",
     "links": "Links",
-    "linksDesc": "Website | GitHub | Roadmap",
-    "chooseLink": "Choose a link:",
-    "about": "About",
-    "aboutDesc": "Project info and help",
-    "status": "Service Status",
-    "statusDesc": "Check service health in terminal",
-    "language": "Language",
-    "languageDesc": "Change display language",
-    "theme": "Theme",
-    "themeDesc": "Configure icons and color mode",
-    "navigationHint": "Navigation: j/k or up/down | Jump: g/G | Quit: q or Ctrl+C",
-    "quickCommandHint": "Tip: use `nbtca <command> --help` for script-friendly mode",
+    "linksDesc": "Website, GitHub, Roadmap",
+    "settings": "Settings",
+    "settingsDesc": "Language, theme, about",
     "chooseAction": "Choose an action"
   },
   "about": {
@@ -50,8 +35,6 @@
     "author": "Author"
   },
   "calendar": {
-    "title": "Recent Events",
-    "subtitle": "(Next 30 days)",
     "loading": "Loading event calendar...",
     "noEvents": "No upcoming events",
     "error": "Failed to load event calendar",
@@ -59,11 +42,14 @@
     "eventsFound": "events found",
     "dateTime": "Date & Time",
     "eventName": "Event Name",
-    "location": "Location"
+    "location": "Location",
+    "untitledEvent": "Untitled Event",
+    "tbdLocation": "TBD",
+    "subscribeHint": "Subscribe to calendar",
+    "viewDetail": "Select an event for details:",
+    "noDescription": "No additional details"
   },
   "docs": {
-    "title": "Knowledge Base",
-    "subtitle": "Browse documentation from terminal or open in browser",
     "loading": "Loading documentation list...",
     "loadingDir": "Loading directory",
     "categoryTutorial": "Tutorials",
@@ -95,33 +81,27 @@
     "browserError": "Failed to open browser",
     "browserErrorHint": "Please visit manually: https://docs.nbtca.space",
     "retry": "Retry?",
-    "pagerNotAvailable": "Pager not available, using standard output",
     "endOfDocument": "End of document - Press q to quit",
-    "terminalProfile": "Terminal profile",
-    "terminalSupport": "Support",
-    "terminalBasic": "Basic",
-    "terminalEnhanced": "Enhanced",
-    "terminalAdvanced": "Advanced",
-    "navigationHint": "Navigation: j/k or up/down | Enter: open | q/Ctrl+C: quit",
     "githubRateLimited": "GitHub API rate limit reached. Resets at {time}.",
     "githubForbidden": "GitHub API access denied (403).",
     "githubTokenHint": "Tip: set GITHUB_TOKEN for a higher rate limit.",
     "fetchDirFailed": "Failed to fetch directory: {error}",
-    "fetchFileFailed": "Failed to fetch file: {error}"
+    "fetchFileFailed": "Failed to fetch file: {error}",
+    "searchPrompt": "Search documents by title:",
+    "searchPlaceholder": "Enter keyword...",
+    "searching": "Searching documents...",
+    "searchResults": "results found",
+    "searchNoResults": "No documents match your search"
   },
-  "repair": {
-    "title": "Repair Service",
-    "subtitle": "Computer repair and software installation support",
-    "opening": "Opening repair service page...",
-    "opened": "Repair service page opened in browser",
-    "error": "Failed to open browser",
-    "errorHint": "Please visit manually: https://nbtca.space/repair"
-  },
-  "website": {
-    "opening": "Opening website...",
+  "links": {
+    "choose": "Open a link:",
+    "website": "Official Website",
+    "github": "GitHub",
+    "roadmap": "Roadmap",
+    "repair": "Repair Service",
+    "opening": "Opening...",
     "opened": "Opened in browser",
-    "error": "Failed to open browser",
-    "errorHint": "Please visit manually"
+    "error": "Failed to open browser"
   },
   "status": {
     "checking": "Checking service status...",
@@ -134,6 +114,11 @@
     "url": "URL",
     "up": "UP",
     "down": "DOWN",
+    "serviceWebsite": "Website",
+    "serviceDocs": "Docs",
+    "serviceCalendar": "Calendar",
+    "serviceGithub": "GitHub",
+    "serviceRoadmap": "Roadmap",
     "watchStarted": "Starting status watch (every {seconds}s)",
     "watchUpdated": "Last updated",
     "watchHint": "Press Ctrl+C to stop",
@@ -146,7 +131,7 @@
   },
   "theme": {
     "current": "Current theme settings",
-    "chooseAction": "Theme settings",
+    "chooseAction": "Settings",
     "chooseIconMode": "Choose icon mode:",
     "chooseColorMode": "Choose color mode:",
     "modeAuto": "Auto",
@@ -165,12 +150,16 @@
     "invalidValue": "Invalid value. Use one of:"
   },
   "language": {
-    "title": "Language Settings",
-    "currentLanguage": "Current Language",
     "selectLanguage": "Select a language:",
     "zh": "简体中文 (Simplified Chinese)",
     "en": "English",
     "changed": "Language changed successfully",
     "changedSessionOnly": "Language changed for this session only (failed to save config)"
+  },
+  "update": {
+    "available": "Update available: {current} → {latest}",
+    "upToDate": "You are on the latest version ({version})",
+    "checkFailed": "Could not check for updates",
+    "command": "Run: npm i -g @nbtca/prompt"
   }
 }

@@ -40,7 +40,7 @@ function printDescription(): void {
 /**
  * Attempt to read and display logo file
  */
-export async function printLogo(): Promise<void> {
+export function printLogo(): void {
   if (!process.stdout.isTTY) {
     return;
   }

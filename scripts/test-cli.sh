@@ -1,6 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+version_output="$(node dist/index.js --version)"
+if [[ ! "$version_output" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "version output not semver: $version_output" >&2
+  exit 1
+fi
+
+version_v_output="$(node dist/index.js -v)"
+if [[ "$version_v_output" != "$version_output" ]]; then
+  echo "-v output mismatch: $version_v_output vs $version_output" >&2
+  exit 1
+fi
+
 help_output="$(node dist/index.js --help)"
 if [[ "$help_output" != *"Usage:"* ]]; then
   echo "help output missing Usage section" >&2
@@ -20,6 +32,7 @@ if [[ "$docs_output" != "https://docs.nbtca.space" ]]; then
 fi
 
 tmp_home="$(mktemp -d)"
+trap 'rm -rf "$tmp_home"' EXIT
 HOME="$tmp_home" node dist/index.js theme icon ascii >/dev/null
 if ! grep -q '"iconMode": "ascii"' "$tmp_home/.nbtca/preferences.json"; then
   echo "theme preference was not persisted" >&2

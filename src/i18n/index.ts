@@ -7,6 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { getConfigDir } from '../config/paths.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -26,34 +27,19 @@ export interface Translations {
     error: string;
     success: string;
     goodbye: string;
+    current: string;
   };
   menu: {
-    title: string;
     events: string;
     eventsDesc: string;
-    repair: string;
-    repairDesc: string;
     docs: string;
     docsDesc: string;
-    website: string;
-    websiteDesc: string;
-    github: string;
-    githubDesc: string;
-    roadmap: string;
-    roadmapDesc: string;
-    links: string;
-    linksDesc: string;
-    chooseLink: string;
-    about: string;
-    aboutDesc: string;
     status: string;
     statusDesc: string;
-    language: string;
-    languageDesc: string;
-    theme: string;
-    themeDesc: string;
-    navigationHint: string;
-    quickCommandHint: string;
+    links: string;
+    linksDesc: string;
+    settings: string;
+    settingsDesc: string;
     chooseAction: string;
   };
   about: {
@@ -68,8 +54,6 @@ export interface Translations {
     author: string;
   };
   calendar: {
-    title: string;
-    subtitle: string;
     loading: string;
     noEvents: string;
     error: string;
@@ -78,10 +62,13 @@ export interface Translations {
     dateTime: string;
     eventName: string;
     location: string;
+    untitledEvent: string;
+    tbdLocation: string;
+    subscribeHint: string;
+    viewDetail: string;
+    noDescription: string;
   };
   docs: {
-    title: string;
-    subtitle: string;
     loading: string;
     loadingDir: string;
     categoryTutorial: string;
@@ -113,33 +100,27 @@ export interface Translations {
     browserError: string;
     browserErrorHint: string;
     retry: string;
-    pagerNotAvailable: string;
     endOfDocument: string;
-    terminalProfile: string;
-    terminalSupport: string;
-    terminalBasic: string;
-    terminalEnhanced: string;
-    terminalAdvanced: string;
-    navigationHint: string;
     githubRateLimited: string;
     githubForbidden: string;
     githubTokenHint: string;
     fetchDirFailed: string;
     fetchFileFailed: string;
+    searchPrompt: string;
+    searchPlaceholder: string;
+    searching: string;
+    searchResults: string;
+    searchNoResults: string;
   };
-  repair: {
-    title: string;
-    subtitle: string;
+  links: {
+    choose: string;
+    website: string;
+    github: string;
+    roadmap: string;
+    repair: string;
     opening: string;
     opened: string;
     error: string;
-    errorHint: string;
-  };
-  website: {
-    opening: string;
-    opened: string;
-    error: string;
-    errorHint: string;
   };
   status: {
     checking: string;
@@ -152,6 +133,11 @@ export interface Translations {
     url: string;
     up: string;
     down: string;
+    serviceWebsite: string;
+    serviceDocs: string;
+    serviceCalendar: string;
+    serviceGithub: string;
+    serviceRoadmap: string;
     watchStarted: string;
     watchUpdated: string;
     watchHint: string;
@@ -183,13 +169,17 @@ export interface Translations {
     invalidValue: string;
   };
   language: {
-    title: string;
-    currentLanguage: string;
     selectLanguage: string;
     zh: string;
     en: string;
     changed: string;
     changedSessionOnly: string;
+  };
+  update: {
+    available: string;
+    upToDate: string;
+    checkFailed: string;
+    command: string;
   };
 }
 
@@ -197,14 +187,6 @@ export interface Translations {
  * Language configuration
  */
 let currentLanguage: Language = 'zh'; // Default to Chinese
-
-/**
- * Get configuration directory path
- */
-function getConfigDir(): string {
-  const homeDir = process.env['HOME'] || process.env['USERPROFILE'] || '';
-  return path.join(homeDir, '.nbtca');
-}
 
 /**
  * Get language configuration file path
@@ -219,14 +201,12 @@ function getLanguageConfigPath(): string {
 export function loadLanguagePreference(): Language {
   try {
     const configPath = getLanguageConfigPath();
-    if (fs.existsSync(configPath)) {
-      const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-      if (config.language === 'zh' || config.language === 'en') {
-        currentLanguage = config.language;
-      }
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    if (config.language === 'zh' || config.language === 'en') {
+      currentLanguage = config.language;
     }
-  } catch (err) {
-    // If loading fails, use default (Chinese)
+  } catch {
+    // If loading fails (file missing or invalid), use default (Chinese)
   }
   return currentLanguage;
 }
@@ -244,7 +224,7 @@ export function saveLanguagePreference(language: Language): boolean {
     fs.writeFileSync(configPath, JSON.stringify({ language }, null, 2));
     currentLanguage = language;
     return true;
-  } catch (err) {
+  } catch {
     return false;
   }
 }

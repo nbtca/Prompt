@@ -8,11 +8,11 @@ import { marked } from 'marked';
 import TerminalRenderer from 'marked-terminal';
 import chalk from 'chalk';
 import open from 'open';
-import { select, isCancel, confirm } from '@clack/prompts';
+import { select, isCancel, confirm, text } from '@clack/prompts';
 import { error, warning, success, createSpinner } from '../core/ui.js';
 import { pickIcon } from '../core/icons.js';
 import { spawn, execFileSync } from 'child_process';
-import { URLS } from '../config/data.js';
+import { APP_INFO, GITHUB_REPO, URLS } from '../config/data.js';
 import { t } from '../i18n/index.js';
 
 // ─── Terminal capability detection ───────────────────────────────────────────
@@ -45,12 +45,29 @@ function commandExists(cmd: string): boolean {
   }
 }
 
-const TERMINAL_TYPE = detectTerminalType();
-const HAS_GLOW = commandExists('glow');
+let _terminalType: TerminalType | null = null;
+function getTerminalType(): TerminalType {
+  if (_terminalType === null) _terminalType = detectTerminalType();
+  return _terminalType;
+}
+
+let _hasGlow: boolean | null = null;
+function hasGlow(): boolean {
+  if (_hasGlow === null) _hasGlow = commandExists('glow');
+  return _hasGlow;
+}
+
+let _markedConfigured = false;
+function ensureMarkedConfigured(): void {
+  if (_markedConfigured) return;
+  _markedConfigured = true;
+  // @ts-ignore - marked v11 / marked-terminal v7 type incompatibility
+  marked.setOptions({ renderer: new TerminalRenderer(getRendererOptions(getTerminalType())) });
+}
 
 // ─── marked-terminal renderer ─────────────────────────────────────────────────
 
-function getRendererOptions(type: TerminalType): any {
+function getRendererOptions(type: TerminalType): Record<string, unknown> {
   // Cap at 80 columns — optimal prose reading width regardless of terminal size
   const width = Math.min(process.stdout.columns || 80, 80);
 
@@ -102,12 +119,10 @@ function getRendererOptions(type: TerminalType): any {
   };
 }
 
-// @ts-ignore
-marked.setOptions({ renderer: new TerminalRenderer(getRendererOptions(TERMINAL_TYPE)) });
 
 // ─── GitHub data layer ────────────────────────────────────────────────────────
 
-const GITHUB_REPO = { owner: 'nbtca', repo: 'documents', branch: 'main' };
+
 const GITHUB_TOKEN = process.env['GITHUB_TOKEN'] || process.env['GH_TOKEN'];
 
 interface DocItem {
@@ -146,16 +161,13 @@ const renderCache = new Map<string, CacheEntry<RenderedDoc>>();
 
 function getDocCategories() {
   const trans = t();
-  const withIcon = (unicodeIcon: string, asciiIcon: string, label: string) =>
-    `${pickIcon(unicodeIcon, asciiIcon)} ${label}`;
   return [
-    { name: withIcon('📖', '[DOC]', trans.docs.categoryTutorial),   path: 'tutorial' },
-    { name: withIcon('🔧', '[LOG]', trans.docs.categoryRepairLogs), path: '维修日' },
-    { name: withIcon('🎉', '[EVT]', trans.docs.categoryEvents),     path: '相关活动举办' },
-    { name: withIcon('📋', '[PROC]', trans.docs.categoryProcess),   path: 'process' },
-    { name: withIcon('🛠', '[FIX]', trans.docs.categoryRepair),     path: 'repair' },
-    { name: withIcon('📦', '[ARC]', trans.docs.categoryArchived),   path: 'archived' },
-    { name: withIcon('📄', '[README]', trans.docs.categoryReadme),  path: 'README.md' },
+    { name: trans.docs.categoryTutorial,    path: 'tutorial' },
+    { name: trans.docs.categoryRepairLogs,  path: '维修日' },
+    { name: trans.docs.categoryEvents,      path: '相关活动举办' },
+    { name: trans.docs.categoryProcess,     path: 'process' },
+    { name: trans.docs.categoryRepair,      path: 'repair' },
+    { name: trans.docs.categoryArchived,    path: 'archived' },
   ];
 }
 
@@ -202,24 +214,25 @@ async function fetchGitHubDirectory(
   const url = `https://api.github.com/repos/${GITHUB_REPO.owner}/${GITHUB_REPO.repo}/contents/${path}?ref=${GITHUB_REPO.branch}`;
 
   try {
-    const headers: any = {
+    const headers: Record<string, string> = {
       'Accept': 'application/vnd.github.v3+json',
-      'User-Agent': 'NBTCA-CLI'
+      'User-Agent': `NBTCA-CLI/${APP_INFO.version}`
     };
     if (GITHUB_TOKEN) headers['Authorization'] = `Bearer ${GITHUB_TOKEN}`;
 
     const response = await axios.get(url, { timeout: 10000, headers });
 
-    const items = response.data
-      .filter((item: any) =>
+    interface GitHubContentItem { name: string; path: string; type: string; sha: string }
+    const items = (response.data as GitHubContentItem[])
+      .filter((item) =>
         !item.name.startsWith('.') &&
         !SKIP_NAMES.has(item.name) &&
         !(item.type === 'file' && !item.name.endsWith('.md'))
       )
-      .map((item: any) => ({
+      .map((item) => ({
         name: item.name,
         path: item.path,
-        type: item.type === 'dir' ? 'dir' : 'file',
+        type: (item.type === 'dir' ? 'dir' : 'file') as 'dir' | 'file',
         sha: item.sha
       }))
       .sort((a: DocItem, b: DocItem) => {
@@ -230,7 +243,7 @@ async function fetchGitHubDirectory(
 
     setCacheValue(dirCache, cacheKey, items, DIR_CACHE_TTL_MS);
     return { data: items, fromCache: false, staleFallback: false };
-  } catch (err: any) {
+  } catch (err: unknown) {
     const staleCached = getAnyCacheValue(dirCache, cacheKey);
     if (staleCached) {
       return { data: staleCached, fromCache: true, staleFallback: true };
@@ -238,11 +251,12 @@ async function fetchGitHubDirectory(
 
     const trans = t();
     const errorMessage = err instanceof Error ? err.message : String(err);
-    if (err.response?.status === 403) {
-      const rateLimitRemaining = err.response.headers['x-ratelimit-remaining'];
-      const rateLimitReset = err.response.headers['x-ratelimit-reset'];
-      if (rateLimitRemaining === '0') {
-        const resetDate = new Date(parseInt(rateLimitReset) * 1000);
+    const axiosErr = err as { response?: { status?: number; headers?: Record<string, string> } };
+    if (axiosErr.response?.status === 403) {
+      const rateLimitRemaining = axiosErr.response.headers?.['x-ratelimit-remaining'];
+      const rateLimitReset = axiosErr.response.headers?.['x-ratelimit-reset'];
+      if (rateLimitRemaining === '0' && rateLimitReset) {
+        const resetDate = new Date(Number.parseInt(rateLimitReset, 10) * 1000);
         throw new Error(
           `${trans.docs.githubRateLimited.replace('{time}', resetDate.toLocaleTimeString())}\n${trans.docs.githubTokenHint}`
         );
@@ -266,11 +280,11 @@ async function fetchGitHubRawContent(
 
   const url = `https://raw.githubusercontent.com/${GITHUB_REPO.owner}/${GITHUB_REPO.repo}/${GITHUB_REPO.branch}/${path}`;
   try {
-    const response = await axios.get(url, { timeout: 15000, headers: { 'User-Agent': 'NBTCA-CLI' } });
+    const response = await axios.get(url, { timeout: 15000, headers: { 'User-Agent': `NBTCA-CLI/${APP_INFO.version}` } });
     const content = String(response.data);
     setCacheValue(fileCache, path, content, FILE_CACHE_TTL_MS);
     return { data: content, fromCache: false, staleFallback: false };
-  } catch (err: any) {
+  } catch (err: unknown) {
     const staleCached = getAnyCacheValue(fileCache, path);
     if (staleCached) {
       return { data: staleCached, fromCache: true, staleFallback: true };
@@ -291,7 +305,7 @@ const CONTAINER_ICONS_UNICODE: Record<string, string> = {
   info: 'ℹ️', tip: '💡', warning: '⚠️', danger: '🚨', details: '▶️'
 };
 
-function cleanMarkdownContent(content: string, type: TerminalType): string {
+function cleanMarkdownContent(content: string, type: TerminalType = getTerminalType()): string {
   let c = content;
 
   // 1. YAML frontmatter
@@ -349,9 +363,16 @@ function cleanMarkdownContent(content: string, type: TerminalType): string {
   return c.trim();
 }
 
-function extractDocTitle(content: string): string | null {
-  const match = content.match(/^#\s+(.+)$/m);
-  return match?.[1]?.trim() ?? null;
+function extractDocTitle(rawContent: string, cleanedContent: string): string | null {
+  // 1. Try YAML frontmatter title: field (before it was stripped)
+  const fmMatch = rawContent.match(/^---\n[\s\S]*?\n---/m);
+  if (fmMatch) {
+    const titleMatch = fmMatch[0].match(/^title:\s*['"]?(.+?)['"]?\s*$/m);
+    if (titleMatch?.[1]) return titleMatch[1].trim();
+  }
+  // 2. Fallback to first # H1 heading in cleaned content
+  const h1Match = cleanedContent.match(/^#\s+(.+)$/m);
+  return h1Match?.[1]?.trim() ?? null;
 }
 
 /** Approximate reading time: ~200 words/min for technical Chinese/English prose. */
@@ -450,7 +471,7 @@ async function browseDirectory(dirPath: string = ''): Promise<void> {
     const s = createSpinner(dirPath ? `${trans.docs.loadingDir}: ${dirPath}` : trans.docs.loading);
     const result = await fetchGitHubDirectory(dirPath);
     const items = result.data;
-    s.stop('');
+    s.stop(dirPath || trans.docs.chooseDoc);
 
     if (result.staleFallback) {
       warning(trans.docs.usingCachedData);
@@ -462,15 +483,15 @@ async function browseDirectory(dirPath: string = ''): Promise<void> {
     }
 
     const options = [
-      ...(dirPath ? [{ value: '__back__', label: chalk.gray(`${pickIcon('↑', '[..]')} ${trans.docs.upToParent}`) }] : []),
+      ...(dirPath ? [{ value: '__back__', label: chalk.dim(trans.docs.upToParent) }] : []),
       ...items.map(item => ({
         value: item.path,
         label: item.type === 'dir'
-          ? chalk.cyan(`${pickIcon('📁', '[DIR]')} ${item.name}/`)
-          : chalk.white(`${pickIcon('📄', '[MD]')} ${item.name}`),
-        hint: item.type === 'dir' ? 'dir' : '.md',
+          ? chalk.cyan(`${item.name}/`)
+          : item.name,
+        hint: item.type === 'dir' ? 'dir' : undefined,
       })),
-      { value: '__exit__', label: chalk.gray(`${pickIcon('✕', '[x]')} ${trans.docs.returnToMenu}`) },
+      { value: '__exit__', label: chalk.dim(trans.docs.returnToMenu) },
     ];
 
     const selected = await select({
@@ -492,9 +513,10 @@ async function browseDirectory(dirPath: string = ''): Promise<void> {
         await browseDirectory(dirPath);
       }
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     error(trans.docs.loadError);
-    console.log(chalk.gray(`  ${trans.docs.errorHint}: ${err.message}`));
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.log(chalk.gray(`  ${trans.docs.errorHint}: ${errMsg}`));
 
     const retry = await confirm({ message: trans.docs.retry });
     if (!isCancel(retry) && retry) {
@@ -508,6 +530,7 @@ async function browseDirectory(dirPath: string = ''): Promise<void> {
 async function viewMarkdownFile(filePath: string): Promise<void> {
   const trans = t();
   try {
+    ensureMarkedConfigured();
     const s = createSpinner(`${trans.docs.loading.replace('...', '')}: ${filePath}`);
 
     const rawResult = await fetchGitHubRawContent(filePath);
@@ -523,8 +546,8 @@ async function viewMarkdownFile(filePath: string): Promise<void> {
     if (cachedRendered && cachedRendered.fingerprint === fingerprint) {
       renderedDoc = cachedRendered;
     } else {
-      const cleaned = cleanMarkdownContent(rawContent, TERMINAL_TYPE);
-      const title = extractDocTitle(cleaned) || filePath.split('/').pop() || filePath;
+      const cleaned = cleanMarkdownContent(rawContent, getTerminalType());
+      const title = extractDocTitle(rawContent, cleaned) || filePath.split('/').pop() || filePath;
       const readTime = estimateReadTime(cleaned);
       const rendered = await marked(cleaned) as string;
       renderedDoc = { fingerprint, cleaned, rendered, title, readTime };
@@ -533,7 +556,7 @@ async function viewMarkdownFile(filePath: string): Promise<void> {
 
     s.stop(`${chalk.bold(renderedDoc.title)}  ${chalk.dim(renderedDoc.readTime)}`);
 
-    if (HAS_GLOW) {
+    if (hasGlow()) {
       await displayWithGlow(renderedDoc.cleaned);
     } else {
       await displayWithLess(renderedDoc.rendered, renderedDoc.title, filePath, renderedDoc.readTime);
@@ -546,9 +569,9 @@ async function viewMarkdownFile(filePath: string): Promise<void> {
     const action = await select({
       message: trans.docs.chooseAction,
       options: [
-        { value: 'back',    label: `${pickIcon('←', '[<]')} ${trans.docs.backToList}` },
-        { value: 'reread',  label: `${pickIcon('↻', '[r]')} ${trans.docs.reread}` },
-        { value: 'browser', label: `${pickIcon('🌐', '[*]')} ${trans.docs.openBrowser}` },
+        { value: 'back',    label: trans.docs.backToList },
+        { value: 'reread',  label: trans.docs.reread },
+        { value: 'browser', label: trans.docs.openBrowser },
       ],
     });
 
@@ -556,9 +579,10 @@ async function viewMarkdownFile(filePath: string): Promise<void> {
     if (action === 'browser') await openDocsInBrowser(filePath);
     if (action === 'reread')  await viewMarkdownFile(filePath);
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     error(trans.docs.loadError);
-    console.log(chalk.gray(`  ${trans.docs.errorHint}: ${err.message}`));
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.log(chalk.gray(`  ${trans.docs.errorHint}: ${errMsg}`));
 
     const openBrowser = await confirm({ message: trans.docs.openBrowserPrompt });
     if (!isCancel(openBrowser) && openBrowser) {
@@ -585,6 +609,70 @@ export async function openDocsInBrowser(path?: string): Promise<void> {
   console.log();
 }
 
+// ─── Search ────────────────────────────────────────────────────────────────────
+
+async function searchDocs(): Promise<void> {
+  const trans = t();
+  const query = await text({
+    message: trans.docs.searchPrompt,
+    placeholder: trans.docs.searchPlaceholder,
+  });
+
+  if (isCancel(query) || !query.trim()) return;
+
+  const keyword = query.trim().toLowerCase();
+  const s = createSpinner(trans.docs.searching);
+
+  // Fetch all category directories in parallel
+  const categories = getDocCategories().filter(c => c.path !== 'README.md');
+  const results: { name: string; path: string; category: string }[] = [];
+
+  try {
+    const fetches = await Promise.allSettled(
+      categories.map(async cat => {
+        const res = await fetchGitHubDirectory(cat.path);
+        return { items: res.data, category: cat.name };
+      })
+    );
+
+    for (const result of fetches) {
+      if (result.status !== 'fulfilled') continue;
+      for (const item of result.value.items) {
+        const nameLC = item.name.toLowerCase();
+        if (nameLC.includes(keyword)) {
+          results.push({ name: item.name, path: item.path, category: result.value.category });
+        }
+      }
+    }
+
+    s.stop(`${results.length} ${trans.docs.searchResults}`);
+  } catch {
+    s.error(trans.docs.loadError);
+    return;
+  }
+
+  if (results.length === 0) {
+    warning(trans.docs.searchNoResults);
+    return;
+  }
+
+  const selected = await select({
+    message: trans.docs.chooseDoc,
+    options: [
+      ...results.map(r => ({
+        value: r.path,
+        label: r.name,
+        hint: r.category,
+      })),
+      { value: '__back__', label: chalk.dim(trans.docs.returnToMenu) },
+    ],
+  });
+
+  if (isCancel(selected) || selected === '__back__') return;
+
+  await viewMarkdownFile(selected);
+}
+
 // ─── Menu ─────────────────────────────────────────────────────────────────────
 
 export async function showDocsMenu(): Promise<void> {
@@ -593,9 +681,10 @@ export async function showDocsMenu(): Promise<void> {
     const categories = getDocCategories();
     const options = [
       ...categories.map(cat => ({ value: cat.path, label: cat.name })),
-      { value: 'refresh-cache', label: chalk.gray(`${pickIcon('♻️', '[r]')} ${trans.docs.refreshCache}`) },
-      { value: 'browser', label: chalk.gray(`${pickIcon('🌐', '[*]')} ${trans.docs.openBrowser}`) },
-      { value: 'back',    label: chalk.gray(`${pickIcon('←', '[^]')} ${trans.docs.returnToMenu}`) },
+      { value: 'search', label: chalk.dim(trans.docs.searchPrompt.replace(':', '')) },
+      { value: 'refresh-cache', label: chalk.dim(trans.docs.refreshCache) },
+      { value: 'browser', label: chalk.dim(trans.docs.openBrowser) },
+      { value: 'back',    label: chalk.dim(trans.docs.returnToMenu) },
     ];
 
     const action = await select({
@@ -605,13 +694,13 @@ export async function showDocsMenu(): Promise<void> {
 
     if (isCancel(action) || action === 'back') return;
 
-    if (action === 'refresh-cache') {
+    if (action === 'search') {
+      await searchDocs();
+    } else if (action === 'refresh-cache') {
       clearDocsCache();
       success(trans.docs.cacheCleared);
     } else if (action === 'browser') {
       await openDocsInBrowser();
-    } else if (action === 'README.md') {
-      await viewMarkdownFile('README.md');
     } else {
       await browseDirectory(action);
     }
