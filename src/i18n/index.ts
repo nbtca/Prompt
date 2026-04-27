@@ -47,6 +47,7 @@ export interface Translations {
     project: string;
     version: string;
     description: string;
+    descriptionText: string;
     github: string;
     website: string;
     email: string;
@@ -111,6 +112,7 @@ export interface Translations {
     searching: string;
     searchResults: string;
     searchNoResults: string;
+    loadingFile: string;
   };
   links: {
     choose: string;
@@ -180,6 +182,42 @@ export interface Translations {
     upToDate: string;
     checkFailed: string;
     command: string;
+  };
+  cli: {
+    usage: string;
+    interactive: string;
+    runCommand: string;
+    commands: string;
+    flags: string;
+    cmdWebsite: string;
+    cmdGithub: string;
+    cmdRoadmap: string;
+    cmdRepair: string;
+    cmdTheme: string;
+    cmdLang: string;
+    cmdUpdate: string;
+    flagVersion: string;
+    flagHelp: string;
+    flagOpen: string;
+    flagJson: string;
+    flagToday: string;
+    flagNext: string;
+    flagWatch: string;
+    flagInterval: string;
+    flagTimeout: string;
+    flagRetries: string;
+    flagPlain: string;
+    flagNoLogo: string;
+    unknownCommand: string;
+    unknownCommandHint: string;
+    unknownFlag: string;
+    unknownFlagHint: string;
+    invalidFlag: string;
+    invalidFlagHint: string;
+    invalidLang: string;
+    invalidNext: string;
+    requiresTty: string;
+    requiresTtyHint: string;
   };
 }
 

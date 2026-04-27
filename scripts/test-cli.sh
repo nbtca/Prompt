@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Ensure tests run in English locale
+node dist/index.js lang en >/dev/null 2>&1 || true
+
 version_output="$(node dist/index.js --version)"
 if [[ ! "$version_output" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   echo "version output not semver: $version_output" >&2

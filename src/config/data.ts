@@ -40,7 +40,6 @@ export const APP_INFO = {
   name: 'Prompt',
   version: readPackageVersion(),
   description: '浙大宁波理工学院计算机协会',
-  fullDescription: 'NBTCA Prompt - 极简命令行工具',
   author: 'm1ngsama <contact@m1ng.space>',
   license: 'MIT',
   repository: 'https://github.com/nbtca/prompt'

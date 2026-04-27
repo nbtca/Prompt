@@ -38,7 +38,8 @@ function detectTerminalType(): TerminalType {
 /** Check whether an external command exists on PATH (once at startup). */
 function commandExists(cmd: string): boolean {
   try {
-    execFileSync('which', [cmd], { stdio: 'ignore' });
+    const check = process.platform === 'win32' ? 'where' : 'which';
+    execFileSync(check, [cmd], { stdio: 'ignore' });
     return true;
   } catch {
     return false;
@@ -578,7 +579,7 @@ async function viewMarkdownFile(filePath: string): Promise<void> {
   while (true) {
     try {
       ensureMarkedConfigured();
-      const s = createSpinner(`${trans.docs.loading.replace('...', '')}: ${filePath}`);
+      const s = createSpinner(`${trans.docs.loadingFile}: ${filePath}`);
 
       const rawResult = await fetchGitHubRawContent(filePath);
       if (rawResult.staleFallback) {
@@ -706,7 +707,9 @@ async function searchDocs(): Promise<void> {
       if (results.some(r => r.path === cachedPath)) continue;
       if (entry.value.toLowerCase().includes(keyword)) {
         const name = cachedPath.split('/').pop() || cachedPath;
-        results.push({ name, path: cachedPath, category: trans.docs.searchResults });
+        const parentDir = cachedPath.split('/').slice(0, -1).join('/');
+        const matchedCat = categories.find(c => parentDir.startsWith(c.path));
+        results.push({ name, path: cachedPath, category: matchedCat?.name ?? parentDir });
       }
     }
 
