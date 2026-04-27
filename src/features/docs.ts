@@ -466,25 +466,44 @@ async function displayWithLess(
 
 // ─── Directory browser ────────────────────────────────────────────────────────
 
-async function browseDirectory(dirPath: string = ''): Promise<void> {
-  const trans = t();
-  try {
-    const s = createSpinner(dirPath ? `${trans.docs.loadingDir}: ${dirPath}` : trans.docs.loading);
-    const result = await fetchGitHubDirectory(dirPath);
-    const items = result.data;
-    s.stop(dirPath || trans.docs.chooseDoc);
+async function browseDirectory(initialPath: string = ''): Promise<void> {
+  let currentPath = initialPath;
 
-    if (result.staleFallback) {
-      warning(trans.docs.usingCachedData);
+  while (true) {
+    const trans = t();
+    let items: DocItem[];
+    try {
+      const s = createSpinner(currentPath ? `${trans.docs.loadingDir}: ${currentPath}` : trans.docs.loading);
+      const result = await fetchGitHubDirectory(currentPath);
+      items = result.data;
+      s.stop(currentPath || trans.docs.chooseDoc);
+
+      if (result.staleFallback) {
+        warning(trans.docs.usingCachedData);
+      }
+    } catch (err: unknown) {
+      error(trans.docs.loadError);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.log(chalk.gray(`  ${trans.docs.errorHint}: ${errMsg}`));
+
+      setVimKeysActive(false);
+      const retry = await confirm({ message: trans.docs.retry });
+      setVimKeysActive(true);
+      if (!isCancel(retry) && retry) continue;
+      return;
     }
 
     if (items.length === 0) {
       warning(trans.docs.emptyDir);
+      if (currentPath) {
+        currentPath = currentPath.split('/').slice(0, -1).join('/');
+        continue;
+      }
       return;
     }
 
     const options = [
-      ...(dirPath ? [{ value: '__back__', label: chalk.dim(trans.docs.upToParent) }] : []),
+      ...(currentPath ? [{ value: '__back__', label: chalk.dim(trans.docs.upToParent) }] : []),
       ...items.map(item => ({
         value: item.path,
         label: item.type === 'dir'
@@ -496,34 +515,24 @@ async function browseDirectory(dirPath: string = ''): Promise<void> {
     ];
 
     const selected = await select({
-      message: dirPath ? `${trans.docs.currentDir}: ${dirPath}` : trans.docs.chooseDoc,
+      message: currentPath ? `${trans.docs.currentDir}: ${currentPath}` : trans.docs.chooseDoc,
       options,
     });
 
     if (isCancel(selected) || selected === '__exit__') return;
 
     if (selected === '__back__') {
-      const parentPath = dirPath.split('/').slice(0, -1).join('/');
-      await browseDirectory(parentPath);
-    } else {
-      const item = items.find(i => i.path === selected);
-      if (item?.type === 'dir') {
-        await browseDirectory(selected);
-      } else if (item?.type === 'file') {
-        await viewMarkdownFile(selected);
-        await browseDirectory(dirPath);
-      }
+      currentPath = currentPath.split('/').slice(0, -1).join('/');
+      continue;
     }
-  } catch (err: unknown) {
-    error(trans.docs.loadError);
-    const errMsg = err instanceof Error ? err.message : String(err);
-    console.log(chalk.gray(`  ${trans.docs.errorHint}: ${errMsg}`));
 
-    setVimKeysActive(false);
-    const retry = await confirm({ message: trans.docs.retry });
-    setVimKeysActive(true);
-    if (!isCancel(retry) && retry) {
-      await browseDirectory(dirPath);
+    const item = items.find(i => i.path === selected);
+    if (item?.type === 'dir') {
+      currentPath = selected;
+      continue;
+    }
+    if (item?.type === 'file') {
+      await viewMarkdownFile(selected);
     }
   }
 }
@@ -532,66 +541,72 @@ async function browseDirectory(dirPath: string = ''): Promise<void> {
 
 async function viewMarkdownFile(filePath: string): Promise<void> {
   const trans = t();
-  try {
-    ensureMarkedConfigured();
-    const s = createSpinner(`${trans.docs.loading.replace('...', '')}: ${filePath}`);
 
-    const rawResult = await fetchGitHubRawContent(filePath);
-    if (rawResult.staleFallback) {
-      warning(trans.docs.usingCachedData);
-    }
+  while (true) {
+    try {
+      ensureMarkedConfigured();
+      const s = createSpinner(`${trans.docs.loading.replace('...', '')}: ${filePath}`);
 
-    const rawContent = rawResult.data;
-    const fingerprint = contentFingerprint(rawContent);
-    const cachedRendered = getFreshCacheValue(renderCache, filePath);
+      const rawResult = await fetchGitHubRawContent(filePath);
+      if (rawResult.staleFallback) {
+        warning(trans.docs.usingCachedData);
+      }
 
-    let renderedDoc: RenderedDoc;
-    if (cachedRendered && cachedRendered.fingerprint === fingerprint) {
-      renderedDoc = cachedRendered;
-    } else {
-      const cleaned = cleanMarkdownContent(rawContent, getTerminalType());
-      const title = extractDocTitle(rawContent, cleaned) || filePath.split('/').pop() || filePath;
-      const readTime = estimateReadTime(cleaned);
-      const rendered = await marked(cleaned) as string;
-      renderedDoc = { fingerprint, cleaned, rendered, title, readTime };
-      setCacheValue(renderCache, filePath, renderedDoc, RENDER_CACHE_TTL_MS);
-    }
+      const rawContent = rawResult.data;
+      const fingerprint = contentFingerprint(rawContent);
+      const cachedRendered = getFreshCacheValue(renderCache, filePath);
 
-    s.stop(`${chalk.bold(renderedDoc.title)}  ${chalk.dim(renderedDoc.readTime)}`);
+      let renderedDoc: RenderedDoc;
+      if (cachedRendered && cachedRendered.fingerprint === fingerprint) {
+        renderedDoc = cachedRendered;
+      } else {
+        const cleaned = cleanMarkdownContent(rawContent, getTerminalType());
+        const title = extractDocTitle(rawContent, cleaned) || filePath.split('/').pop() || filePath;
+        const readTime = estimateReadTime(cleaned);
+        const rendered = await marked(cleaned) as string;
+        renderedDoc = { fingerprint, cleaned, rendered, title, readTime };
+        setCacheValue(renderCache, filePath, renderedDoc, RENDER_CACHE_TTL_MS);
+      }
 
-    if (hasGlow()) {
-      await displayWithGlow(renderedDoc.cleaned);
-    } else {
-      await displayWithLess(renderedDoc.rendered, renderedDoc.title, filePath, renderedDoc.readTime);
-    }
+      s.stop(`${chalk.bold(renderedDoc.title)}  ${chalk.dim(renderedDoc.readTime)}`);
 
-    console.log();
-    success(trans.docs.docCompleted);
-    console.log();
+      if (hasGlow()) {
+        await displayWithGlow(renderedDoc.cleaned);
+      } else {
+        await displayWithLess(renderedDoc.rendered, renderedDoc.title, filePath, renderedDoc.readTime);
+      }
 
-    const action = await select({
-      message: trans.docs.chooseAction,
-      options: [
-        { value: 'back',    label: trans.docs.backToList },
-        { value: 'reread',  label: trans.docs.reread },
-        { value: 'browser', label: trans.docs.openBrowser },
-      ],
-    });
+      console.log();
+      success(trans.docs.docCompleted);
+      console.log();
 
-    if (isCancel(action)) return;
-    if (action === 'browser') await openDocsInBrowser(filePath);
-    if (action === 'reread')  await viewMarkdownFile(filePath);
+      const action = await select({
+        message: trans.docs.chooseAction,
+        options: [
+          { value: 'back',    label: trans.docs.backToList },
+          { value: 'reread',  label: trans.docs.reread },
+          { value: 'browser', label: trans.docs.openBrowser },
+        ],
+      });
 
-  } catch (err: unknown) {
-    error(trans.docs.loadError);
-    const errMsg = err instanceof Error ? err.message : String(err);
-    console.log(chalk.gray(`  ${trans.docs.errorHint}: ${errMsg}`));
+      if (isCancel(action) || action === 'back') return;
+      if (action === 'browser') {
+        await openDocsInBrowser(filePath);
+        return;
+      }
+      // action === 'reread' → continue loop
+    } catch (err: unknown) {
+      error(trans.docs.loadError);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.log(chalk.gray(`  ${trans.docs.errorHint}: ${errMsg}`));
 
-    setVimKeysActive(false);
-    const openBrowser = await confirm({ message: trans.docs.openBrowserPrompt });
-    setVimKeysActive(true);
-    if (!isCancel(openBrowser) && openBrowser) {
-      await openDocsInBrowser(filePath);
+      setVimKeysActive(false);
+      const openBrowser = await confirm({ message: trans.docs.openBrowserPrompt });
+      setVimKeysActive(true);
+      if (!isCancel(openBrowser) && openBrowser) {
+        await openDocsInBrowser(filePath);
+      }
+      return;
     }
   }
 }
