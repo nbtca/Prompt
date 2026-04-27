@@ -188,6 +188,18 @@ function setCacheValue<T>(cache: Map<string, CacheEntry<T>>, key: string, value:
   cache.set(key, { value, expiresAt: Date.now() + ttlMs });
 }
 
+const DIR_CACHE_MAX = 30;
+const FILE_CACHE_MAX = 50;
+const RENDER_CACHE_MAX = 50;
+
+function evictOldest<T>(cache: Map<string, CacheEntry<T>>, maxSize: number): void {
+  if (cache.size <= maxSize) return;
+  const oldest = [...cache.entries()]
+    .sort((a, b) => a[1].expiresAt - b[1].expiresAt)
+    .slice(0, cache.size - maxSize);
+  for (const [key] of oldest) cache.delete(key);
+}
+
 function contentFingerprint(content: string): string {
   const head = content.slice(0, 80);
   const tail = content.slice(-80);
@@ -243,6 +255,7 @@ async function fetchGitHubDirectory(
       });
 
     setCacheValue(dirCache, cacheKey, items, DIR_CACHE_TTL_MS);
+    evictOldest(dirCache, DIR_CACHE_MAX);
     return { data: items, fromCache: false, staleFallback: false };
   } catch (err: unknown) {
     const staleCached = getAnyCacheValue(dirCache, cacheKey);
@@ -284,6 +297,7 @@ async function fetchGitHubRawContent(
     const response = await axios.get(url, { timeout: 15000, headers: { 'User-Agent': `NBTCA-CLI/${APP_INFO.version}` } });
     const content = String(response.data);
     setCacheValue(fileCache, path, content, FILE_CACHE_TTL_MS);
+    evictOldest(fileCache, FILE_CACHE_MAX);
     return { data: content, fromCache: false, staleFallback: false };
   } catch (err: unknown) {
     const staleCached = getAnyCacheValue(fileCache, path);
@@ -566,6 +580,7 @@ async function viewMarkdownFile(filePath: string): Promise<void> {
         const rendered = await marked(cleaned) as string;
         renderedDoc = { fingerprint, cleaned, rendered, title, readTime };
         setCacheValue(renderCache, filePath, renderedDoc, RENDER_CACHE_TTL_MS);
+        evictOldest(renderCache, RENDER_CACHE_MAX);
       }
 
       s.stop(`${chalk.bold(renderedDoc.title)}  ${chalk.dim(renderedDoc.readTime)}`);
@@ -664,6 +679,15 @@ async function searchDocs(): Promise<void> {
         if (nameLC.includes(keyword)) {
           results.push({ name: item.name, path: item.path, category: result.value.category });
         }
+      }
+    }
+
+    // Also search already-cached file content
+    for (const [cachedPath, entry] of fileCache) {
+      if (results.some(r => r.path === cachedPath)) continue;
+      if (entry.value.toLowerCase().includes(keyword)) {
+        const name = cachedPath.split('/').pop() || cachedPath;
+        results.push({ name, path: cachedPath, category: trans.docs.searchResults });
       }
     }
 
