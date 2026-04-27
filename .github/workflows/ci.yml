@@ -30,11 +30,11 @@ jobs:
       - name: 🔨 Build TypeScript
         run: npm run build
 
-      - name: ✅ Type check
-        run: npx tsc --noEmit
-
       - name: 📋 Verify build artifacts
         run: |
           test -d dist || (echo "dist directory not found" && exit 1)
           test -f dist/index.js || (echo "dist/index.js not found" && exit 1)
           echo "Build artifacts verified successfully"
+
+      - name: ✅ Run tests
+        run: npm test

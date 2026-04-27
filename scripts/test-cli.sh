@@ -33,8 +33,8 @@ fi
 
 tmp_home="$(mktemp -d)"
 trap 'rm -rf "$tmp_home"' EXIT
-HOME="$tmp_home" node dist/index.js theme icon ascii >/dev/null
-if ! grep -q '"iconMode": "ascii"' "$tmp_home/.nbtca/preferences.json"; then
+HOME="$tmp_home" XDG_CONFIG_HOME="$tmp_home/.config" node dist/index.js theme icon ascii >/dev/null
+if ! grep -q '"iconMode": "ascii"' "$tmp_home/.config/nbtca/preferences.json"; then
   echo "theme preference was not persisted" >&2
   rm -rf "$tmp_home"
   exit 1

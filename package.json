@@ -21,11 +21,11 @@
     "dev": "tsx src/index.ts",
     "dev:watch": "tsx watch src/index.ts",
     "build": "tsc",
-    "postbuild": "mkdir -p dist/logo dist/i18n/locales && cp src/logo/logo.txt dist/logo/ && cp src/logo/ascii-logo.txt dist/logo/ && cp src/i18n/locales/*.json dist/i18n/locales/",
+    "postbuild": "node scripts/copy-assets.js",
     "clean": "rm -rf dist",
     "prebuild": "npm run clean",
     "prepublishOnly": "npm run build",
-    "test": "npm run build && bash scripts/test-cli.sh"
+    "test": "bash scripts/test-cli.sh"
   },
   "keywords": [
     "cli",
