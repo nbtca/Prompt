@@ -43,7 +43,7 @@ async function checkService(name: string, url: string, timeoutMs: number): Promi
     const latencyMs = Date.now() - start;
     const ok = response.status >= 200 && response.status < 400;
     return { name, url, ok, statusCode: response.status, latencyMs };
-  } catch (err: any) {
+  } catch (err: unknown) {
     const latencyMs = Date.now() - start;
     const error = err instanceof Error ? err.message : String(err);
     return { name, url, ok: false, latencyMs, error };
