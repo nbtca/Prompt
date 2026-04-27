@@ -89,8 +89,12 @@ export function serializeEvents(events: Event[]): EventOutputItem[] {
 
 
 function formatDate(date: Date): string {
+  const now = new Date();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
+  if (date.getFullYear() !== now.getFullYear()) {
+    return `${date.getFullYear()}-${month}-${day}`;
+  }
   return `${month}-${day}`;
 }
 
@@ -109,7 +113,7 @@ export function renderEventsTable(events: Event[], options?: { color?: boolean }
 
   if (events.length === 0) return trans.calendar.noEvents;
 
-  const dateWidth     = 13;
+  const dateWidth     = 16;
   const titleWidth    = 30;
   const locationWidth = 16;
 
