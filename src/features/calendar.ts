@@ -73,7 +73,9 @@ export async function fetchEvents(): Promise<Event[]> {
     events.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
     return events;
   } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err);
+    const detail = err instanceof Error
+      ? (err.name === 'AbortError' ? 'Request timed out' : err.message)
+      : String(err);
     throw new Error(`${t().calendar.error}: ${detail}`);
   }
 }

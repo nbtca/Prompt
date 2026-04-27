@@ -187,8 +187,12 @@ async function runEventsCommand(flags: Set<string>): Promise<void> {
 
   if (flags.has('--today')) {
     const now = new Date();
-    const todayStr = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    events = events.filter(e => e.date === todayStr);
+    events = events.filter(e => {
+      const d = e.startDate;
+      return d.getFullYear() === now.getFullYear() &&
+             d.getMonth() === now.getMonth() &&
+             d.getDate() === now.getDate();
+    });
   }
 
   const nextFlag = Array.from(flags).find(f => f.startsWith('--next='));

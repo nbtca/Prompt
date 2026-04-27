@@ -12,7 +12,7 @@ import { error, warning, success, createSpinner } from '../core/ui.js';
 import { pickIcon } from '../core/icons.js';
 import { spawn, execFileSync } from 'child_process';
 import { APP_INFO, GITHUB_REPO, URLS } from '../config/data.js';
-import { t } from '../i18n/index.js';
+import { t, fmt } from '../i18n/index.js';
 import { setVimKeysActive } from '../core/vim-keys.js';
 
 // ─── Terminal capability detection ───────────────────────────────────────────
@@ -192,7 +192,7 @@ const DIR_CACHE_MAX = 30;
 const FILE_CACHE_MAX = 50;
 const RENDER_CACHE_MAX = 50;
 
-function evictOldest<T>(cache: Map<string, CacheEntry<T>>, maxSize: number): void {
+function evictStalest<T>(cache: Map<string, CacheEntry<T>>, maxSize: number): void {
   if (cache.size <= maxSize) return;
   const oldest = [...cache.entries()]
     .sort((a, b) => a[1].expiresAt - b[1].expiresAt)
@@ -246,7 +246,7 @@ async function fetchGitHubDirectory(
         if (rateLimitRemaining === '0' && rateLimitReset) {
           const resetDate = new Date(Number.parseInt(rateLimitReset, 10) * 1000);
           throw new Error(
-            `${trans.docs.githubRateLimited.replace('{time}', resetDate.toLocaleTimeString())}\n${trans.docs.githubTokenHint}`
+            `${fmt(trans.docs.githubRateLimited, { time: resetDate.toLocaleTimeString() })}\n${trans.docs.githubTokenHint}`
           );
         }
         throw new Error(`${trans.docs.githubForbidden}\n${trans.docs.githubTokenHint}`);
@@ -275,7 +275,7 @@ async function fetchGitHubDirectory(
       });
 
     setCacheValue(dirCache, cacheKey, items, DIR_CACHE_TTL_MS);
-    evictOldest(dirCache, DIR_CACHE_MAX);
+    evictStalest(dirCache, DIR_CACHE_MAX);
     return { data: items, fromCache: false, staleFallback: false };
   } catch (err: unknown) {
     const staleCached = getAnyCacheValue(dirCache, cacheKey);
@@ -284,8 +284,10 @@ async function fetchGitHubDirectory(
     }
 
     const trans = t();
-    const errorMessage = err instanceof Error ? err.message : String(err);
-    throw new Error(trans.docs.fetchDirFailed.replace('{error}', errorMessage));
+    const errorMessage = err instanceof Error
+      ? (err.name === 'AbortError' ? 'Request timed out' : err.message)
+      : String(err);
+    throw new Error(fmt(trans.docs.fetchDirFailed, { error: errorMessage }));
   }
 }
 
@@ -312,7 +314,7 @@ async function fetchGitHubRawContent(
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const content = await response.text();
     setCacheValue(fileCache, path, content, FILE_CACHE_TTL_MS);
-    evictOldest(fileCache, FILE_CACHE_MAX);
+    evictStalest(fileCache, FILE_CACHE_MAX);
     return { data: content, fromCache: false, staleFallback: false };
   } catch (err: unknown) {
     const staleCached = getAnyCacheValue(fileCache, path);
@@ -321,8 +323,10 @@ async function fetchGitHubRawContent(
     }
 
     const trans = t();
-    const errorMessage = err instanceof Error ? err.message : String(err);
-    throw new Error(trans.docs.fetchFileFailed.replace('{error}', errorMessage));
+    const errorMessage = err instanceof Error
+      ? (err.name === 'AbortError' ? 'Request timed out' : err.message)
+      : String(err);
+    throw new Error(fmt(trans.docs.fetchFileFailed, { error: errorMessage }));
   }
 }
 
@@ -595,7 +599,7 @@ async function viewMarkdownFile(filePath: string): Promise<void> {
         const rendered = await marked(cleaned) as string;
         renderedDoc = { fingerprint, cleaned, rendered, title, readTime };
         setCacheValue(renderCache, filePath, renderedDoc, RENDER_CACHE_TTL_MS);
-        evictOldest(renderCache, RENDER_CACHE_MAX);
+        evictStalest(renderCache, RENDER_CACHE_MAX);
       }
 
       s.stop(`${chalk.bold(renderedDoc.title)}  ${chalk.dim(renderedDoc.readTime)}`);

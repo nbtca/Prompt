@@ -46,7 +46,9 @@ async function checkService(name: string, url: string, timeoutMs: number): Promi
     return { name, url, ok, statusCode: response.status, latencyMs };
   } catch (err: unknown) {
     const latencyMs = Date.now() - start;
-    const error = err instanceof Error ? err.message : String(err);
+    const error = err instanceof Error
+      ? (err.name === 'AbortError' ? 'Request timed out' : err.message)
+      : String(err);
     return { name, url, ok: false, latencyMs, error };
   }
 }
