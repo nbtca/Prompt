@@ -37,7 +37,7 @@ function showAbout(): void {
   const content = [
     row(trans.about.project,     APP_INFO.name),
     row(trans.about.version,     `v${APP_INFO.version}`),
-    row(trans.about.description, APP_INFO.fullDescription),
+    row(trans.about.description, trans.about.descriptionText),
     '',
     link(trans.about.github,     APP_INFO.repository),
     link(trans.about.website,    URLS.homepage),

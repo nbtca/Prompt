@@ -7,7 +7,6 @@
 
 // Maps single-byte vim keys to terminal escape sequences (ranger-style hjkl)
 const VIM_TO_SEQ: Record<string, Buffer> = {
-  h: Buffer.from('\u0003'),   // back/cancel (ranger: go to parent)
   j: Buffer.from('\u001b[B'), // down arrow
   k: Buffer.from('\u001b[A'), // up arrow
   l: Buffer.from('\r'),       // enter/confirm (ranger: open/enter)

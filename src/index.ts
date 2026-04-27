@@ -130,8 +130,9 @@ function validateFlags(command: string | undefined, flags: Set<string>): void {
     return !KNOWN_FLAG_PREFIXES.some((prefix) => flag.startsWith(prefix));
   });
   if (unknown.length > 0) {
-    console.error(chalk.red(`Unknown flag: ${unknown[0]}`));
-    console.error(chalk.dim('Run `nbtca --help` to see available flags.'));
+    const trans0 = t();
+    console.error(chalk.red(fmt(trans0.cli.unknownFlag, { flag: unknown[0]! })));
+    console.error(chalk.dim(trans0.cli.unknownFlagHint));
     process.exit(1);
   }
 
@@ -142,44 +143,47 @@ function validateFlags(command: string | undefined, flags: Set<string>): void {
     return !allowedPrefixes.some((prefix) => flag.startsWith(prefix));
   });
   if (disallowed.length > 0) {
-    console.error(chalk.red(`Flag ${disallowed[0]} is not valid for this command.`));
-    console.error(chalk.dim('Run `nbtca --help` to see command usage.'));
+    const trans1 = t();
+    console.error(chalk.red(fmt(trans1.cli.invalidFlag, { flag: disallowed[0]! })));
+    console.error(chalk.dim(trans1.cli.invalidFlagHint));
     process.exit(1);
   }
 }
 
 function printHelp(): void {
+  const trans = t();
+  const c = trans.cli;
   console.log(chalk.bold('NBTCA Prompt'));
   console.log();
-  console.log('Usage:');
-  console.log('  nbtca                          Interactive menu');
-  console.log('  nbtca <command> [flags]         Run a command');
+  console.log(c.usage);
+  console.log(`  nbtca                          ${c.interactive}`);
+  console.log(`  nbtca <command> [flags]         ${c.runCommand}`);
   console.log();
-  console.log('Commands:');
-  console.log('  events         Upcoming activities');
-  console.log('  docs           Knowledge base');
-  console.log('  status         Service health');
-  console.log('  website        Official website URL');
-  console.log('  github         GitHub organization URL');
-  console.log('  roadmap        Project roadmap URL');
-  console.log('  repair         Repair service URL');
-  console.log('  theme          View or set theme');
-  console.log('  lang <zh|en>   Set language');
-  console.log('  update         Check for updates');
+  console.log(c.commands);
+  console.log(`  events         ${trans.menu.eventsDesc}`);
+  console.log(`  docs           ${trans.menu.docsDesc}`);
+  console.log(`  status         ${trans.menu.statusDesc}`);
+  console.log(`  website        ${c.cmdWebsite}`);
+  console.log(`  github         ${c.cmdGithub}`);
+  console.log(`  roadmap        ${c.cmdRoadmap}`);
+  console.log(`  repair         ${c.cmdRepair}`);
+  console.log(`  theme          ${c.cmdTheme}`);
+  console.log(`  lang <zh|en>   ${c.cmdLang}`);
+  console.log(`  update         ${c.cmdUpdate}`);
   console.log();
-  console.log('Flags:');
-  console.log('  --version          Show version');
-  console.log('  --help             Show help');
-  console.log('  --open             Open in browser (URL commands)');
-  console.log('  --json             JSON output (events, status)');
-  console.log('  --today            Today only (events)');
-  console.log('  --next=<n>         Limit to next N (events)');
-  console.log('  --watch            Live refresh (status)');
-  console.log('  --interval=<s>     Refresh interval (status --watch)');
-  console.log('  --timeout=<ms>     HTTP timeout (status)');
-  console.log('  --retries=<n>      Retry count (status)');
-  console.log('  --plain            No color');
-  console.log('  --no-logo          Skip logo');
+  console.log(c.flags);
+  console.log(`  --version          ${c.flagVersion}`);
+  console.log(`  --help             ${c.flagHelp}`);
+  console.log(`  --open             ${c.flagOpen}`);
+  console.log(`  --json             ${c.flagJson}`);
+  console.log(`  --today            ${c.flagToday}`);
+  console.log(`  --next=<n>         ${c.flagNext}`);
+  console.log(`  --watch            ${c.flagWatch}`);
+  console.log(`  --interval=<s>     ${c.flagInterval}`);
+  console.log(`  --timeout=<ms>     ${c.flagTimeout}`);
+  console.log(`  --retries=<n>      ${c.flagRetries}`);
+  console.log(`  --plain            ${c.flagPlain}`);
+  console.log(`  --no-logo          ${c.flagNoLogo}`);
 }
 
 async function runEventsCommand(flags: Set<string>): Promise<void> {
@@ -199,7 +203,7 @@ async function runEventsCommand(flags: Set<string>): Promise<void> {
   if (nextFlag) {
     const n = Number.parseInt(nextFlag.split('=')[1] || '', 10);
     if (!Number.isInteger(n) || n < 1) {
-      console.error(chalk.red('Invalid --next value. Use --next=<number> (>= 1).'));
+      console.error(chalk.red(t().cli.invalidNext));
       process.exit(1);
     }
     events = events.slice(0, n);
@@ -339,8 +343,9 @@ async function runCommandMode(argv: string[]): Promise<void> {
 
   if (!command) {
     if (!hasInteractiveTerminal()) {
-      console.error(chalk.red('Interactive mode requires a TTY terminal.'));
-      console.error(chalk.dim('Use `nbtca --help` for command mode.'));
+      const cliTrans = t().cli;
+      console.error(chalk.red(cliTrans.requiresTty));
+      console.error(chalk.dim(cliTrans.requiresTtyHint));
       process.exit(1);
     }
     await main({ skipLogo: flags.has('--no-logo') });
@@ -350,7 +355,7 @@ async function runCommandMode(argv: string[]): Promise<void> {
   if (command === 'lang' || command === 'language') {
     const language = (args[0] || '').toLowerCase() as Language;
     if (language !== 'zh' && language !== 'en') {
-      console.error(chalk.red('Invalid language. Use `zh` or `en`.'));
+      console.error(chalk.red(t().cli.invalidLang));
       process.exit(1);
     }
     const persisted = setLanguage(language);
@@ -381,8 +386,9 @@ async function runCommandMode(argv: string[]): Promise<void> {
 
   const action = ACTION_ALIASES[command];
   if (!action) {
-    console.error(chalk.red(`Unknown command: ${command}`));
-    console.error(chalk.dim('Run `nbtca --help` to see available commands.'));
+    const cliT = t().cli;
+    console.error(chalk.red(fmt(cliT.unknownCommand, { command })));
+    console.error(chalk.dim(cliT.unknownCommandHint));
     process.exit(1);
   }
 
@@ -393,7 +399,7 @@ async function runCommandMode(argv: string[]): Promise<void> {
 
   if (action === 'status') {
     const ok = await runStatusCommand(flags);
-    if (!ok) process.exit(1);
+    if (!ok && !flags.has('--json')) process.exit(1);
     return;
   }
 
@@ -421,9 +427,13 @@ async function runCommandMode(argv: string[]): Promise<void> {
     const content = [
       row(trans.about.project, APP_INFO.name),
       row(trans.about.version, `v${APP_INFO.version}`),
+      row(trans.about.description, trans.about.descriptionText),
       '',
       link(trans.about.github, APP_INFO.repository),
       link(trans.about.website, URLS.homepage),
+      link(trans.about.email, URLS.email),
+      '',
+      row(trans.about.license, `MIT  |  ${trans.about.author}: m1ngsama`),
     ].join('\n');
     note(content, trans.about.title);
     return;
