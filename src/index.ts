@@ -12,7 +12,7 @@ import { applyColorModePreference } from './config/preferences.js';
 import { openDocsInBrowser } from './features/docs.js';
 import { runThemeCommand } from './features/theme.js';
 import { setLanguage, t, fmt, type Language } from './i18n/index.js';
-import { clearScreen } from './core/ui.js';
+import { clearScreen, handleGracefulExit } from './core/ui.js';
 import { APP_INFO, URLS } from './config/data.js';
 import { runUpdateCheck } from './features/update.js';
 
@@ -437,17 +437,4 @@ async function runCommandMode(argv: string[]): Promise<void> {
   }
 }
 
-runCommandMode(process.argv.slice(2)).catch((err: any) => {
-  if (err?.message?.includes('SIGINT') || err?.message?.includes('User force closed')) {
-    console.log();
-    console.log(chalk.dim(t().common.goodbye));
-    process.exit(0);
-  }
-
-  if (err?.message) {
-    console.error(err.message);
-  } else {
-    console.error('Error occurred:', err);
-  }
-  process.exit(1);
-});
+runCommandMode(process.argv.slice(2)).catch(handleGracefulExit);

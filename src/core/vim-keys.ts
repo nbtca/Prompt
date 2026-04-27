@@ -16,6 +16,12 @@ const VIM_TO_SEQ: Record<string, Buffer> = {
   q: Buffer.from('\u0003'),   // quit
 };
 
+let vimActive = true;
+
+export function setVimKeysActive(active: boolean): void {
+  vimActive = active;
+}
+
 export function enableVimKeys(): void {
   const stdin = process.stdin;
   if (!stdin.isTTY) return;
@@ -23,7 +29,7 @@ export function enableVimKeys(): void {
   const originalEmit = stdin.emit.bind(stdin);
 
   (stdin.emit as any) = function (event: string, ...args: any[]) {
-    if (event === 'data') {
+    if (event === 'data' && vimActive) {
       const chunk = args[0];
       if (Buffer.isBuffer(chunk) && chunk.length === 1) {
         const seq = VIM_TO_SEQ[String.fromCharCode(chunk[0] as number)];

@@ -6,6 +6,7 @@
 import { log, spinner as clackSpinner } from '@clack/prompts';
 import chalk from 'chalk';
 import { pickIcon } from './icons.js';
+import { t } from '../i18n/index.js';
 
 /**
  * Display success message
@@ -70,4 +71,19 @@ export function createSpinner(msg: string) {
   const s = clackSpinner();
   s.start(msg);
   return s;
+}
+
+export function handleGracefulExit(err: unknown): never {
+  const message = err instanceof Error ? err.message : String(err ?? '');
+  if (message.includes('SIGINT') || message.includes('User force closed')) {
+    console.log();
+    console.log(chalk.dim(t().common.goodbye));
+    process.exit(0);
+  }
+  if (message) {
+    console.error(message);
+  } else {
+    console.error('Error occurred:', err);
+  }
+  process.exit(1);
 }

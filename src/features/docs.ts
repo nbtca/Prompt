@@ -14,6 +14,7 @@ import { pickIcon } from '../core/icons.js';
 import { spawn, execFileSync } from 'child_process';
 import { APP_INFO, GITHUB_REPO, URLS } from '../config/data.js';
 import { t } from '../i18n/index.js';
+import { setVimKeysActive } from '../core/vim-keys.js';
 
 // ─── Terminal capability detection ───────────────────────────────────────────
 
@@ -518,7 +519,9 @@ async function browseDirectory(dirPath: string = ''): Promise<void> {
     const errMsg = err instanceof Error ? err.message : String(err);
     console.log(chalk.gray(`  ${trans.docs.errorHint}: ${errMsg}`));
 
+    setVimKeysActive(false);
     const retry = await confirm({ message: trans.docs.retry });
+    setVimKeysActive(true);
     if (!isCancel(retry) && retry) {
       await browseDirectory(dirPath);
     }
@@ -584,7 +587,9 @@ async function viewMarkdownFile(filePath: string): Promise<void> {
     const errMsg = err instanceof Error ? err.message : String(err);
     console.log(chalk.gray(`  ${trans.docs.errorHint}: ${errMsg}`));
 
+    setVimKeysActive(false);
     const openBrowser = await confirm({ message: trans.docs.openBrowserPrompt });
+    setVimKeysActive(true);
     if (!isCancel(openBrowser) && openBrowser) {
       await openDocsInBrowser(filePath);
     }
@@ -613,10 +618,12 @@ export async function openDocsInBrowser(path?: string): Promise<void> {
 
 async function searchDocs(): Promise<void> {
   const trans = t();
+  setVimKeysActive(false);
   const query = await text({
     message: trans.docs.searchPrompt,
     placeholder: trans.docs.searchPlaceholder,
   });
+  setVimKeysActive(true);
 
   if (isCancel(query) || !query.trim()) return;
 
