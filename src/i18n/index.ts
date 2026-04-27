@@ -7,7 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-import { getConfigDir } from '../config/paths.js';
+import { getConfigDir, getWritableConfigDir } from '../config/paths.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -189,10 +189,17 @@ export interface Translations {
 let currentLanguage: Language = 'zh'; // Default to Chinese
 
 /**
- * Get language configuration file path
+ * Get language configuration file path (read, with legacy fallback)
  */
 function getLanguageConfigPath(): string {
   return path.join(getConfigDir(), 'language.json');
+}
+
+/**
+ * Get writable language configuration file path (XDG, creates dir)
+ */
+function getWritableLanguageConfigPath(): string {
+  return path.join(getWritableConfigDir(), 'language.json');
 }
 
 /**
@@ -216,11 +223,7 @@ export function loadLanguagePreference(): Language {
  */
 export function saveLanguagePreference(language: Language): boolean {
   try {
-    const configDir = getConfigDir();
-    if (!fs.existsSync(configDir)) {
-      fs.mkdirSync(configDir, { recursive: true });
-    }
-    const configPath = getLanguageConfigPath();
+    const configPath = getWritableLanguageConfigPath();
     fs.writeFileSync(configPath, JSON.stringify({ language }, null, 2));
     currentLanguage = language;
     return true;

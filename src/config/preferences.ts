@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { getConfigDir } from './paths.js';
+import { getConfigDir, getWritableConfigDir } from './paths.js';
 
 export type IconMode = 'auto' | 'ascii' | 'unicode';
 export type ColorMode = 'auto' | 'on' | 'off';
@@ -19,11 +19,8 @@ function getPreferencesPath(): string {
   return path.join(getConfigDir(), 'preferences.json');
 }
 
-function ensureConfigDir(): void {
-  const configDir = getConfigDir();
-  if (!fs.existsSync(configDir)) {
-    fs.mkdirSync(configDir, { recursive: true });
-  }
+function getWritablePreferencesPath(): string {
+  return path.join(getWritableConfigDir(), 'preferences.json');
 }
 
 export function loadPreferences(): Preferences {
@@ -46,8 +43,7 @@ export function loadPreferences(): Preferences {
 
 function savePreferences(preferences: Preferences): boolean {
   try {
-    ensureConfigDir();
-    fs.writeFileSync(getPreferencesPath(), JSON.stringify(preferences, null, 2));
+    fs.writeFileSync(getWritablePreferencesPath(), JSON.stringify(preferences, null, 2));
     return true;
   } catch {
     return false;
