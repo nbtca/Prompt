@@ -38,9 +38,3 @@ export async function showLinksMenu(): Promise<void> {
   if (isCancel(selected) || selected === '__back__') return;
   await openUrl(selected);
 }
-
-/** Direct openers for CLI non-interactive mode */
-export async function openHomepage(): Promise<void> { await openUrl(URLS.homepage); }
-export async function openGithub(): Promise<void> { await openUrl(URLS.github); }
-export async function openRoadmap(): Promise<void> { await openUrl(URLS.roadmap); }
-export async function openRepairService(): Promise<void> { await openUrl(URLS.repair); }

@@ -5,7 +5,7 @@
 
 import chalk from 'chalk';
 import { APP_INFO } from '../config/data.js';
-import { t } from '../i18n/index.js';
+import { t, fmt } from '../i18n/index.js';
 
 const NPM_REGISTRY_URL = `https://registry.npmjs.org/@nbtca/prompt/latest`;
 
@@ -56,7 +56,7 @@ export async function checkForUpdate(): Promise<string | null> {
   const latest = await fetchLatestVersion();
   if (!latest || !isNewer(APP_INFO.version, latest)) return null;
   const trans = t();
-  return `${trans.update.available.replace('{latest}', latest).replace('{current}', APP_INFO.version)}  ${chalk.dim(trans.update.command)}`;
+  return `${fmt(trans.update.available, { latest, current: APP_INFO.version })}  ${chalk.dim(trans.update.command)}`;
 }
 
 /**
@@ -72,9 +72,9 @@ export async function runUpdateCheck(): Promise<void> {
   }
 
   if (isNewer(APP_INFO.version, latest)) {
-    console.log(chalk.yellow(`${trans.update.available.replace('{latest}', latest).replace('{current}', APP_INFO.version)}`));
+    console.log(chalk.yellow(`${fmt(trans.update.available, { latest, current: APP_INFO.version })}`));
     console.log(chalk.dim(trans.update.command));
   } else {
-    console.log(chalk.green(`${trans.update.upToDate.replace('{version}', APP_INFO.version)}`));
+    console.log(chalk.green(`${fmt(trans.update.upToDate, { version: APP_INFO.version })}`));
   }
 }

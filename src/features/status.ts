@@ -1,4 +1,3 @@
-import axios from 'axios';
 import chalk from 'chalk';
 import { APP_INFO, URLS } from '../config/data.js';
 import { pickIcon } from '../core/icons.js';
@@ -34,18 +33,22 @@ function getServiceTargets() {
 async function checkService(name: string, url: string, timeoutMs: number): Promise<ServiceStatus> {
   const start = Date.now();
   try {
-    const response = await axios.get(url, {
-      timeout: timeoutMs,
-      maxRedirects: 5,
-      validateStatus: () => true,
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const response = await fetch(url, {
+      signal: controller.signal,
+      redirect: 'follow',
       headers: { 'User-Agent': `NBTCA-CLI/${APP_INFO.version}` },
     });
+    clearTimeout(timeout);
     const latencyMs = Date.now() - start;
     const ok = response.status >= 200 && response.status < 400;
     return { name, url, ok, statusCode: response.status, latencyMs };
-  } catch (err: any) {
+  } catch (err: unknown) {
     const latencyMs = Date.now() - start;
-    const error = err instanceof Error ? err.message : String(err);
+    const error = err instanceof Error
+      ? (err.name === 'AbortError' ? 'Request timed out' : err.message)
+      : String(err);
     return { name, url, ok: false, latencyMs, error };
   }
 }

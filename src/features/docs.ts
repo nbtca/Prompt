@@ -3,7 +3,6 @@
  * 获取并渲染Markdown文档
  */
 
-import axios from 'axios';
 import { marked } from 'marked';
 import TerminalRenderer from 'marked-terminal';
 import chalk from 'chalk';
@@ -13,7 +12,8 @@ import { error, warning, success, createSpinner } from '../core/ui.js';
 import { pickIcon } from '../core/icons.js';
 import { spawn, execFileSync } from 'child_process';
 import { APP_INFO, GITHUB_REPO, URLS } from '../config/data.js';
-import { t } from '../i18n/index.js';
+import { t, fmt } from '../i18n/index.js';
+import { setVimKeysActive } from '../core/vim-keys.js';
 
 // ─── Terminal capability detection ───────────────────────────────────────────
 
@@ -61,8 +61,9 @@ let _markedConfigured = false;
 function ensureMarkedConfigured(): void {
   if (_markedConfigured) return;
   _markedConfigured = true;
-  // @ts-ignore - marked v11 / marked-terminal v7 type incompatibility
-  marked.setOptions({ renderer: new TerminalRenderer(getRendererOptions(getTerminalType())) });
+  marked.use({
+    renderer: new TerminalRenderer(getRendererOptions(getTerminalType())) as any
+  });
 }
 
 // ─── marked-terminal renderer ─────────────────────────────────────────────────
@@ -187,6 +188,18 @@ function setCacheValue<T>(cache: Map<string, CacheEntry<T>>, key: string, value:
   cache.set(key, { value, expiresAt: Date.now() + ttlMs });
 }
 
+const DIR_CACHE_MAX = 30;
+const FILE_CACHE_MAX = 50;
+const RENDER_CACHE_MAX = 50;
+
+function evictStalest<T>(cache: Map<string, CacheEntry<T>>, maxSize: number): void {
+  if (cache.size <= maxSize) return;
+  const oldest = [...cache.entries()]
+    .sort((a, b) => a[1].expiresAt - b[1].expiresAt)
+    .slice(0, cache.size - maxSize);
+  for (const [key] of oldest) cache.delete(key);
+}
+
 function contentFingerprint(content: string): string {
   const head = content.slice(0, 80);
   const tail = content.slice(-80);
@@ -216,14 +229,34 @@ async function fetchGitHubDirectory(
   try {
     const headers: Record<string, string> = {
       'Accept': 'application/vnd.github.v3+json',
-      'User-Agent': `NBTCA-CLI/${APP_INFO.version}`
+      'User-Agent': `NBTCA-CLI/${APP_INFO.version}`,
     };
     if (GITHUB_TOKEN) headers['Authorization'] = `Bearer ${GITHUB_TOKEN}`;
 
-    const response = await axios.get(url, { timeout: 10000, headers });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    const response = await fetch(url, { signal: controller.signal, headers });
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      const trans = t();
+      if (response.status === 403) {
+        const rateLimitRemaining = response.headers.get('x-ratelimit-remaining');
+        const rateLimitReset = response.headers.get('x-ratelimit-reset');
+        if (rateLimitRemaining === '0' && rateLimitReset) {
+          const resetDate = new Date(Number.parseInt(rateLimitReset, 10) * 1000);
+          throw new Error(
+            `${fmt(trans.docs.githubRateLimited, { time: resetDate.toLocaleTimeString() })}\n${trans.docs.githubTokenHint}`
+          );
+        }
+        throw new Error(`${trans.docs.githubForbidden}\n${trans.docs.githubTokenHint}`);
+      }
+      throw new Error(`HTTP ${response.status}`);
+    }
 
     interface GitHubContentItem { name: string; path: string; type: string; sha: string }
-    const items = (response.data as GitHubContentItem[])
+    const data = (await response.json()) as GitHubContentItem[];
+    const items = data
       .filter((item) =>
         !item.name.startsWith('.') &&
         !SKIP_NAMES.has(item.name) &&
@@ -242,6 +275,7 @@ async function fetchGitHubDirectory(
       });
 
     setCacheValue(dirCache, cacheKey, items, DIR_CACHE_TTL_MS);
+    evictStalest(dirCache, DIR_CACHE_MAX);
     return { data: items, fromCache: false, staleFallback: false };
   } catch (err: unknown) {
     const staleCached = getAnyCacheValue(dirCache, cacheKey);
@@ -250,20 +284,10 @@ async function fetchGitHubDirectory(
     }
 
     const trans = t();
-    const errorMessage = err instanceof Error ? err.message : String(err);
-    const axiosErr = err as { response?: { status?: number; headers?: Record<string, string> } };
-    if (axiosErr.response?.status === 403) {
-      const rateLimitRemaining = axiosErr.response.headers?.['x-ratelimit-remaining'];
-      const rateLimitReset = axiosErr.response.headers?.['x-ratelimit-reset'];
-      if (rateLimitRemaining === '0' && rateLimitReset) {
-        const resetDate = new Date(Number.parseInt(rateLimitReset, 10) * 1000);
-        throw new Error(
-          `${trans.docs.githubRateLimited.replace('{time}', resetDate.toLocaleTimeString())}\n${trans.docs.githubTokenHint}`
-        );
-      }
-      throw new Error(`${trans.docs.githubForbidden}\n${trans.docs.githubTokenHint}`);
-    }
-    throw new Error(trans.docs.fetchDirFailed.replace('{error}', errorMessage));
+    const errorMessage = err instanceof Error
+      ? (err.name === 'AbortError' ? 'Request timed out' : err.message)
+      : String(err);
+    throw new Error(fmt(trans.docs.fetchDirFailed, { error: errorMessage }));
   }
 }
 
@@ -280,9 +304,17 @@ async function fetchGitHubRawContent(
 
   const url = `https://raw.githubusercontent.com/${GITHUB_REPO.owner}/${GITHUB_REPO.repo}/${GITHUB_REPO.branch}/${path}`;
   try {
-    const response = await axios.get(url, { timeout: 15000, headers: { 'User-Agent': `NBTCA-CLI/${APP_INFO.version}` } });
-    const content = String(response.data);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': `NBTCA-CLI/${APP_INFO.version}` },
+    });
+    clearTimeout(timeout);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const content = await response.text();
     setCacheValue(fileCache, path, content, FILE_CACHE_TTL_MS);
+    evictStalest(fileCache, FILE_CACHE_MAX);
     return { data: content, fromCache: false, staleFallback: false };
   } catch (err: unknown) {
     const staleCached = getAnyCacheValue(fileCache, path);
@@ -291,8 +323,10 @@ async function fetchGitHubRawContent(
     }
 
     const trans = t();
-    const errorMessage = err instanceof Error ? err.message : String(err);
-    throw new Error(trans.docs.fetchFileFailed.replace('{error}', errorMessage));
+    const errorMessage = err instanceof Error
+      ? (err.name === 'AbortError' ? 'Request timed out' : err.message)
+      : String(err);
+    throw new Error(fmt(trans.docs.fetchFileFailed, { error: errorMessage }));
   }
 }
 
@@ -465,25 +499,44 @@ async function displayWithLess(
 
 // ─── Directory browser ────────────────────────────────────────────────────────
 
-async function browseDirectory(dirPath: string = ''): Promise<void> {
-  const trans = t();
-  try {
-    const s = createSpinner(dirPath ? `${trans.docs.loadingDir}: ${dirPath}` : trans.docs.loading);
-    const result = await fetchGitHubDirectory(dirPath);
-    const items = result.data;
-    s.stop(dirPath || trans.docs.chooseDoc);
+async function browseDirectory(initialPath: string = ''): Promise<void> {
+  let currentPath = initialPath;
 
-    if (result.staleFallback) {
-      warning(trans.docs.usingCachedData);
+  while (true) {
+    const trans = t();
+    let items: DocItem[];
+    try {
+      const s = createSpinner(currentPath ? `${trans.docs.loadingDir}: ${currentPath}` : trans.docs.loading);
+      const result = await fetchGitHubDirectory(currentPath);
+      items = result.data;
+      s.stop(currentPath || trans.docs.chooseDoc);
+
+      if (result.staleFallback) {
+        warning(trans.docs.usingCachedData);
+      }
+    } catch (err: unknown) {
+      error(trans.docs.loadError);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.log(chalk.gray(`  ${trans.docs.errorHint}: ${errMsg}`));
+
+      setVimKeysActive(false);
+      const retry = await confirm({ message: trans.docs.retry });
+      setVimKeysActive(true);
+      if (!isCancel(retry) && retry) continue;
+      return;
     }
 
     if (items.length === 0) {
       warning(trans.docs.emptyDir);
+      if (currentPath) {
+        currentPath = currentPath.split('/').slice(0, -1).join('/');
+        continue;
+      }
       return;
     }
 
     const options = [
-      ...(dirPath ? [{ value: '__back__', label: chalk.dim(trans.docs.upToParent) }] : []),
+      ...(currentPath ? [{ value: '__back__', label: chalk.dim(trans.docs.upToParent) }] : []),
       ...items.map(item => ({
         value: item.path,
         label: item.type === 'dir'
@@ -495,32 +548,24 @@ async function browseDirectory(dirPath: string = ''): Promise<void> {
     ];
 
     const selected = await select({
-      message: dirPath ? `${trans.docs.currentDir}: ${dirPath}` : trans.docs.chooseDoc,
+      message: currentPath ? `${trans.docs.currentDir}: ${currentPath}` : trans.docs.chooseDoc,
       options,
     });
 
     if (isCancel(selected) || selected === '__exit__') return;
 
     if (selected === '__back__') {
-      const parentPath = dirPath.split('/').slice(0, -1).join('/');
-      await browseDirectory(parentPath);
-    } else {
-      const item = items.find(i => i.path === selected);
-      if (item?.type === 'dir') {
-        await browseDirectory(selected);
-      } else if (item?.type === 'file') {
-        await viewMarkdownFile(selected);
-        await browseDirectory(dirPath);
-      }
+      currentPath = currentPath.split('/').slice(0, -1).join('/');
+      continue;
     }
-  } catch (err: unknown) {
-    error(trans.docs.loadError);
-    const errMsg = err instanceof Error ? err.message : String(err);
-    console.log(chalk.gray(`  ${trans.docs.errorHint}: ${errMsg}`));
 
-    const retry = await confirm({ message: trans.docs.retry });
-    if (!isCancel(retry) && retry) {
-      await browseDirectory(dirPath);
+    const item = items.find(i => i.path === selected);
+    if (item?.type === 'dir') {
+      currentPath = selected;
+      continue;
+    }
+    if (item?.type === 'file') {
+      await viewMarkdownFile(selected);
     }
   }
 }
@@ -529,64 +574,73 @@ async function browseDirectory(dirPath: string = ''): Promise<void> {
 
 async function viewMarkdownFile(filePath: string): Promise<void> {
   const trans = t();
-  try {
-    ensureMarkedConfigured();
-    const s = createSpinner(`${trans.docs.loading.replace('...', '')}: ${filePath}`);
 
-    const rawResult = await fetchGitHubRawContent(filePath);
-    if (rawResult.staleFallback) {
-      warning(trans.docs.usingCachedData);
-    }
+  while (true) {
+    try {
+      ensureMarkedConfigured();
+      const s = createSpinner(`${trans.docs.loading.replace('...', '')}: ${filePath}`);
 
-    const rawContent = rawResult.data;
-    const fingerprint = contentFingerprint(rawContent);
-    const cachedRendered = getFreshCacheValue(renderCache, filePath);
+      const rawResult = await fetchGitHubRawContent(filePath);
+      if (rawResult.staleFallback) {
+        warning(trans.docs.usingCachedData);
+      }
 
-    let renderedDoc: RenderedDoc;
-    if (cachedRendered && cachedRendered.fingerprint === fingerprint) {
-      renderedDoc = cachedRendered;
-    } else {
-      const cleaned = cleanMarkdownContent(rawContent, getTerminalType());
-      const title = extractDocTitle(rawContent, cleaned) || filePath.split('/').pop() || filePath;
-      const readTime = estimateReadTime(cleaned);
-      const rendered = await marked(cleaned) as string;
-      renderedDoc = { fingerprint, cleaned, rendered, title, readTime };
-      setCacheValue(renderCache, filePath, renderedDoc, RENDER_CACHE_TTL_MS);
-    }
+      const rawContent = rawResult.data;
+      const fingerprint = contentFingerprint(rawContent);
+      const cachedRendered = getFreshCacheValue(renderCache, filePath);
 
-    s.stop(`${chalk.bold(renderedDoc.title)}  ${chalk.dim(renderedDoc.readTime)}`);
+      let renderedDoc: RenderedDoc;
+      if (cachedRendered && cachedRendered.fingerprint === fingerprint) {
+        renderedDoc = cachedRendered;
+      } else {
+        const cleaned = cleanMarkdownContent(rawContent, getTerminalType());
+        const title = extractDocTitle(rawContent, cleaned) || filePath.split('/').pop() || filePath;
+        const readTime = estimateReadTime(cleaned);
+        const rendered = await marked(cleaned) as string;
+        renderedDoc = { fingerprint, cleaned, rendered, title, readTime };
+        setCacheValue(renderCache, filePath, renderedDoc, RENDER_CACHE_TTL_MS);
+        evictStalest(renderCache, RENDER_CACHE_MAX);
+      }
 
-    if (hasGlow()) {
-      await displayWithGlow(renderedDoc.cleaned);
-    } else {
-      await displayWithLess(renderedDoc.rendered, renderedDoc.title, filePath, renderedDoc.readTime);
-    }
+      s.stop(`${chalk.bold(renderedDoc.title)}  ${chalk.dim(renderedDoc.readTime)}`);
 
-    console.log();
-    success(trans.docs.docCompleted);
-    console.log();
+      if (hasGlow()) {
+        await displayWithGlow(renderedDoc.cleaned);
+      } else {
+        await displayWithLess(renderedDoc.rendered, renderedDoc.title, filePath, renderedDoc.readTime);
+      }
 
-    const action = await select({
-      message: trans.docs.chooseAction,
-      options: [
-        { value: 'back',    label: trans.docs.backToList },
-        { value: 'reread',  label: trans.docs.reread },
-        { value: 'browser', label: trans.docs.openBrowser },
-      ],
-    });
+      console.log();
+      success(trans.docs.docCompleted);
+      console.log();
 
-    if (isCancel(action)) return;
-    if (action === 'browser') await openDocsInBrowser(filePath);
-    if (action === 'reread')  await viewMarkdownFile(filePath);
+      const action = await select({
+        message: trans.docs.chooseAction,
+        options: [
+          { value: 'back',    label: trans.docs.backToList },
+          { value: 'reread',  label: trans.docs.reread },
+          { value: 'browser', label: trans.docs.openBrowser },
+        ],
+      });
 
-  } catch (err: unknown) {
-    error(trans.docs.loadError);
-    const errMsg = err instanceof Error ? err.message : String(err);
-    console.log(chalk.gray(`  ${trans.docs.errorHint}: ${errMsg}`));
+      if (isCancel(action) || action === 'back') return;
+      if (action === 'browser') {
+        await openDocsInBrowser(filePath);
+        return;
+      }
+      // action === 'reread' → continue loop
+    } catch (err: unknown) {
+      error(trans.docs.loadError);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.log(chalk.gray(`  ${trans.docs.errorHint}: ${errMsg}`));
 
-    const openBrowser = await confirm({ message: trans.docs.openBrowserPrompt });
-    if (!isCancel(openBrowser) && openBrowser) {
-      await openDocsInBrowser(filePath);
+      setVimKeysActive(false);
+      const openBrowser = await confirm({ message: trans.docs.openBrowserPrompt });
+      setVimKeysActive(true);
+      if (!isCancel(openBrowser) && openBrowser) {
+        await openDocsInBrowser(filePath);
+      }
+      return;
     }
   }
 }
@@ -613,10 +667,12 @@ export async function openDocsInBrowser(path?: string): Promise<void> {
 
 async function searchDocs(): Promise<void> {
   const trans = t();
+  setVimKeysActive(false);
   const query = await text({
     message: trans.docs.searchPrompt,
     placeholder: trans.docs.searchPlaceholder,
   });
+  setVimKeysActive(true);
 
   if (isCancel(query) || !query.trim()) return;
 
@@ -642,6 +698,15 @@ async function searchDocs(): Promise<void> {
         if (nameLC.includes(keyword)) {
           results.push({ name: item.name, path: item.path, category: result.value.category });
         }
+      }
+    }
+
+    // Also search already-cached file content
+    for (const [cachedPath, entry] of fileCache) {
+      if (results.some(r => r.path === cachedPath)) continue;
+      if (entry.value.toLowerCase().includes(keyword)) {
+        const name = cachedPath.split('/').pop() || cachedPath;
+        results.push({ name, path: cachedPath, category: trans.docs.searchResults });
       }
     }
 

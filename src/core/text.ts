@@ -2,16 +2,20 @@
 function charWidth(ch: string): 1 | 2 {
   const cp = ch.codePointAt(0) ?? 0;
   return (
-    (cp >= 0x1100 && cp <= 0x115F) ||  // Hangul Jamo
-    (cp >= 0x2E80 && cp <= 0x303F) ||  // CJK Radicals / Kangxi
-    (cp >= 0x3040 && cp <= 0x33FF) ||  // Japanese kana + CJK symbols
-    (cp >= 0x3400 && cp <= 0x4DBF) ||  // CJK Extension A
-    (cp >= 0x4E00 && cp <= 0x9FFF) ||  // CJK Unified Ideographs
-    (cp >= 0xAC00 && cp <= 0xD7AF) ||  // Hangul Syllables
-    (cp >= 0xF900 && cp <= 0xFAFF) ||  // CJK Compatibility Ideographs
-    (cp >= 0xFE30 && cp <= 0xFE4F) ||  // CJK Compatibility Forms
-    (cp >= 0xFF00 && cp <= 0xFF60) ||  // Fullwidth Forms
-    (cp >= 0xFFE0 && cp <= 0xFFE6)     // Fullwidth Signs
+    (cp >= 0x1100 && cp <= 0x115F) ||
+    (cp >= 0x2E80 && cp <= 0x303F) ||
+    (cp >= 0x3040 && cp <= 0x33FF) ||
+    (cp >= 0x3400 && cp <= 0x4DBF) ||
+    (cp >= 0x4E00 && cp <= 0x9FFF) ||
+    (cp >= 0xAC00 && cp <= 0xD7AF) ||
+    (cp >= 0xF900 && cp <= 0xFAFF) ||
+    (cp >= 0xFE30 && cp <= 0xFE4F) ||
+    (cp >= 0xFF00 && cp <= 0xFF60) ||
+    (cp >= 0xFFE0 && cp <= 0xFFE6) ||
+    (cp >= 0x20000 && cp <= 0x2A6DF) ||
+    (cp >= 0x2A700 && cp <= 0x2CEAF) ||
+    (cp >= 0x2CEB0 && cp <= 0x2EBEF) ||
+    (cp >= 0x30000 && cp <= 0x323AF)
   ) ? 2 : 1;
 }
 

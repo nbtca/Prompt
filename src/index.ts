@@ -11,8 +11,8 @@ import { pickIcon } from './core/icons.js';
 import { applyColorModePreference } from './config/preferences.js';
 import { openDocsInBrowser } from './features/docs.js';
 import { runThemeCommand } from './features/theme.js';
-import { setLanguage, t, type Language } from './i18n/index.js';
-import { clearScreen } from './core/ui.js';
+import { setLanguage, t, fmt, type Language } from './i18n/index.js';
+import { clearScreen, handleGracefulExit } from './core/ui.js';
 import { APP_INFO, URLS } from './config/data.js';
 import { runUpdateCheck } from './features/update.js';
 
@@ -187,8 +187,12 @@ async function runEventsCommand(flags: Set<string>): Promise<void> {
 
   if (flags.has('--today')) {
     const now = new Date();
-    const todayStr = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    events = events.filter(e => e.date === todayStr);
+    events = events.filter(e => {
+      const d = e.startDate;
+      return d.getFullYear() === now.getFullYear() &&
+             d.getMonth() === now.getMonth() &&
+             d.getDate() === now.getDate();
+    });
   }
 
   const nextFlag = Array.from(flags).find(f => f.startsWith('--next='));
@@ -226,13 +230,13 @@ async function runStatusCommand(flags: Set<string>): Promise<boolean> {
   }
   if (!Number.isInteger(timeoutMs) || timeoutMs < STATUS_TIMEOUT_MIN || timeoutMs > STATUS_TIMEOUT_MAX) {
     console.error(chalk.red(
-      trans.status.invalidTimeout.replace('{min}', String(STATUS_TIMEOUT_MIN)).replace('{max}', String(STATUS_TIMEOUT_MAX))
+      fmt(trans.status.invalidTimeout, { min: STATUS_TIMEOUT_MIN, max: STATUS_TIMEOUT_MAX })
     ));
     process.exit(1);
   }
   if (!Number.isInteger(retries) || retries < STATUS_RETRIES_MIN || retries > STATUS_RETRIES_MAX) {
     console.error(chalk.red(
-      trans.status.invalidRetries.replace('{min}', String(STATUS_RETRIES_MIN)).replace('{max}', String(STATUS_RETRIES_MAX))
+      fmt(trans.status.invalidRetries, { min: STATUS_RETRIES_MIN, max: STATUS_RETRIES_MAX })
     ));
     process.exit(1);
   }
@@ -242,7 +246,7 @@ async function runStatusCommand(flags: Set<string>): Promise<boolean> {
   }
   if (watch && (!Number.isInteger(intervalSeconds) || intervalSeconds < STATUS_WATCH_INTERVAL_MIN || intervalSeconds > STATUS_WATCH_INTERVAL_MAX)) {
     console.error(chalk.red(
-      trans.status.invalidInterval.replace('{min}', String(STATUS_WATCH_INTERVAL_MIN)).replace('{max}', String(STATUS_WATCH_INTERVAL_MAX))
+      fmt(trans.status.invalidInterval, { min: STATUS_WATCH_INTERVAL_MIN, max: STATUS_WATCH_INTERVAL_MAX })
     ));
     process.exit(1);
   }
@@ -257,7 +261,7 @@ async function runStatusCommand(flags: Set<string>): Promise<boolean> {
     process.once('SIGINT', onSigint);
 
     console.log(chalk.dim(
-      `${trans.status.watchStarted.replace('{seconds}', String(intervalSeconds))} | ${trans.status.watchHint}`
+      `${fmt(trans.status.watchStarted, { seconds: intervalSeconds })} | ${trans.status.watchHint}`
     ));
 
     try {
@@ -437,17 +441,4 @@ async function runCommandMode(argv: string[]): Promise<void> {
   }
 }
 
-runCommandMode(process.argv.slice(2)).catch((err: any) => {
-  if (err?.message?.includes('SIGINT') || err?.message?.includes('User force closed')) {
-    console.log();
-    console.log(chalk.dim(t().common.goodbye));
-    process.exit(0);
-  }
-
-  if (err?.message) {
-    console.error(err.message);
-  } else {
-    console.error('Error occurred:', err);
-  }
-  process.exit(1);
-});
+runCommandMode(process.argv.slice(2)).catch(handleGracefulExit);
