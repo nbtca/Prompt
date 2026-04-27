@@ -3,7 +3,6 @@
  * 获取并渲染Markdown文档
  */
 
-import axios from 'axios';
 import { marked } from 'marked';
 import TerminalRenderer from 'marked-terminal';
 import chalk from 'chalk';
@@ -62,8 +61,9 @@ let _markedConfigured = false;
 function ensureMarkedConfigured(): void {
   if (_markedConfigured) return;
   _markedConfigured = true;
-  // @ts-ignore - marked v11 / marked-terminal v7 type incompatibility
-  marked.setOptions({ renderer: new TerminalRenderer(getRendererOptions(getTerminalType())) });
+  marked.use({
+    renderer: new TerminalRenderer(getRendererOptions(getTerminalType())) as any
+  });
 }
 
 // ─── marked-terminal renderer ─────────────────────────────────────────────────
@@ -229,14 +229,34 @@ async function fetchGitHubDirectory(
   try {
     const headers: Record<string, string> = {
       'Accept': 'application/vnd.github.v3+json',
-      'User-Agent': `NBTCA-CLI/${APP_INFO.version}`
+      'User-Agent': `NBTCA-CLI/${APP_INFO.version}`,
     };
     if (GITHUB_TOKEN) headers['Authorization'] = `Bearer ${GITHUB_TOKEN}`;
 
-    const response = await axios.get(url, { timeout: 10000, headers });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    const response = await fetch(url, { signal: controller.signal, headers });
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      const trans = t();
+      if (response.status === 403) {
+        const rateLimitRemaining = response.headers.get('x-ratelimit-remaining');
+        const rateLimitReset = response.headers.get('x-ratelimit-reset');
+        if (rateLimitRemaining === '0' && rateLimitReset) {
+          const resetDate = new Date(Number.parseInt(rateLimitReset, 10) * 1000);
+          throw new Error(
+            `${trans.docs.githubRateLimited.replace('{time}', resetDate.toLocaleTimeString())}\n${trans.docs.githubTokenHint}`
+          );
+        }
+        throw new Error(`${trans.docs.githubForbidden}\n${trans.docs.githubTokenHint}`);
+      }
+      throw new Error(`HTTP ${response.status}`);
+    }
 
     interface GitHubContentItem { name: string; path: string; type: string; sha: string }
-    const items = (response.data as GitHubContentItem[])
+    const data = (await response.json()) as GitHubContentItem[];
+    const items = data
       .filter((item) =>
         !item.name.startsWith('.') &&
         !SKIP_NAMES.has(item.name) &&
@@ -265,18 +285,6 @@ async function fetchGitHubDirectory(
 
     const trans = t();
     const errorMessage = err instanceof Error ? err.message : String(err);
-    const axiosErr = err as { response?: { status?: number; headers?: Record<string, string> } };
-    if (axiosErr.response?.status === 403) {
-      const rateLimitRemaining = axiosErr.response.headers?.['x-ratelimit-remaining'];
-      const rateLimitReset = axiosErr.response.headers?.['x-ratelimit-reset'];
-      if (rateLimitRemaining === '0' && rateLimitReset) {
-        const resetDate = new Date(Number.parseInt(rateLimitReset, 10) * 1000);
-        throw new Error(
-          `${trans.docs.githubRateLimited.replace('{time}', resetDate.toLocaleTimeString())}\n${trans.docs.githubTokenHint}`
-        );
-      }
-      throw new Error(`${trans.docs.githubForbidden}\n${trans.docs.githubTokenHint}`);
-    }
     throw new Error(trans.docs.fetchDirFailed.replace('{error}', errorMessage));
   }
 }
@@ -294,8 +302,15 @@ async function fetchGitHubRawContent(
 
   const url = `https://raw.githubusercontent.com/${GITHUB_REPO.owner}/${GITHUB_REPO.repo}/${GITHUB_REPO.branch}/${path}`;
   try {
-    const response = await axios.get(url, { timeout: 15000, headers: { 'User-Agent': `NBTCA-CLI/${APP_INFO.version}` } });
-    const content = String(response.data);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': `NBTCA-CLI/${APP_INFO.version}` },
+    });
+    clearTimeout(timeout);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const content = await response.text();
     setCacheValue(fileCache, path, content, FILE_CACHE_TTL_MS);
     evictOldest(fileCache, FILE_CACHE_MAX);
     return { data: content, fromCache: false, staleFallback: false };

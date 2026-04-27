@@ -3,7 +3,6 @@
  * Fetches and renders upcoming events with Unicode box table.
  */
 
-import axios from 'axios';
 import ICAL from 'ical.js';
 import chalk from 'chalk';
 import { select, isCancel } from '@clack/prompts';
@@ -33,14 +32,17 @@ export interface EventOutputItem {
 
 export async function fetchEvents(): Promise<Event[]> {
   try {
-    const response = await axios.get('https://ical.nbtca.space', {
-      timeout: 5000,
-      headers: {
-        'User-Agent': `NBTCA-CLI/${APP_INFO.version}`
-      }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const response = await fetch('https://ical.nbtca.space', {
+      signal: controller.signal,
+      headers: { 'User-Agent': `NBTCA-CLI/${APP_INFO.version}` },
     });
+    clearTimeout(timeout);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.text();
 
-    const jcalData = ICAL.parse(response.data);
+    const jcalData = ICAL.parse(data);
     const comp = new ICAL.Component(jcalData);
     const vevents = comp.getAllSubcomponents('vevent');
 
