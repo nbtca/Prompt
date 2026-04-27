@@ -11,7 +11,7 @@ import { pickIcon } from './core/icons.js';
 import { applyColorModePreference } from './config/preferences.js';
 import { openDocsInBrowser } from './features/docs.js';
 import { runThemeCommand } from './features/theme.js';
-import { setLanguage, t, type Language } from './i18n/index.js';
+import { setLanguage, t, fmt, type Language } from './i18n/index.js';
 import { clearScreen } from './core/ui.js';
 import { APP_INFO, URLS } from './config/data.js';
 import { runUpdateCheck } from './features/update.js';
@@ -226,13 +226,13 @@ async function runStatusCommand(flags: Set<string>): Promise<boolean> {
   }
   if (!Number.isInteger(timeoutMs) || timeoutMs < STATUS_TIMEOUT_MIN || timeoutMs > STATUS_TIMEOUT_MAX) {
     console.error(chalk.red(
-      trans.status.invalidTimeout.replace('{min}', String(STATUS_TIMEOUT_MIN)).replace('{max}', String(STATUS_TIMEOUT_MAX))
+      fmt(trans.status.invalidTimeout, { min: STATUS_TIMEOUT_MIN, max: STATUS_TIMEOUT_MAX })
     ));
     process.exit(1);
   }
   if (!Number.isInteger(retries) || retries < STATUS_RETRIES_MIN || retries > STATUS_RETRIES_MAX) {
     console.error(chalk.red(
-      trans.status.invalidRetries.replace('{min}', String(STATUS_RETRIES_MIN)).replace('{max}', String(STATUS_RETRIES_MAX))
+      fmt(trans.status.invalidRetries, { min: STATUS_RETRIES_MIN, max: STATUS_RETRIES_MAX })
     ));
     process.exit(1);
   }
@@ -242,7 +242,7 @@ async function runStatusCommand(flags: Set<string>): Promise<boolean> {
   }
   if (watch && (!Number.isInteger(intervalSeconds) || intervalSeconds < STATUS_WATCH_INTERVAL_MIN || intervalSeconds > STATUS_WATCH_INTERVAL_MAX)) {
     console.error(chalk.red(
-      trans.status.invalidInterval.replace('{min}', String(STATUS_WATCH_INTERVAL_MIN)).replace('{max}', String(STATUS_WATCH_INTERVAL_MAX))
+      fmt(trans.status.invalidInterval, { min: STATUS_WATCH_INTERVAL_MIN, max: STATUS_WATCH_INTERVAL_MAX })
     ));
     process.exit(1);
   }
@@ -257,7 +257,7 @@ async function runStatusCommand(flags: Set<string>): Promise<boolean> {
     process.once('SIGINT', onSigint);
 
     console.log(chalk.dim(
-      `${trans.status.watchStarted.replace('{seconds}', String(intervalSeconds))} | ${trans.status.watchHint}`
+      `${fmt(trans.status.watchStarted, { seconds: intervalSeconds })} | ${trans.status.watchHint}`
     ));
 
     try {

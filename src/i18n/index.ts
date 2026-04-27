@@ -278,6 +278,13 @@ export function t(): Translations {
   return translationsCache.get(currentLanguage)!;
 }
 
+export function fmt(template: string, vars: Record<string, string | number>): string {
+  return template.replace(/\{(\w+)\}/g, (_, key: string) => {
+    const val = vars[key];
+    return val !== undefined ? String(val) : `{${key}}`;
+  });
+}
+
 /**
  * Clear translation cache (useful when switching languages)
  */
