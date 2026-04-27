@@ -4,7 +4,7 @@
  */
 
 import { marked } from 'marked';
-import TerminalRenderer from 'marked-terminal';
+import { markedTerminal } from 'marked-terminal';
 import chalk from 'chalk';
 import open from 'open';
 import { select, isCancel, confirm, text } from '@clack/prompts';
@@ -62,9 +62,7 @@ let _markedConfigured = false;
 function ensureMarkedConfigured(): void {
   if (_markedConfigured) return;
   _markedConfigured = true;
-  marked.use({
-    renderer: new TerminalRenderer(getRendererOptions(getTerminalType())) as any
-  });
+  marked.use(markedTerminal(getRendererOptions(getTerminalType())));
 }
 
 // ─── marked-terminal renderer ─────────────────────────────────────────────────
@@ -378,7 +376,7 @@ function cleanMarkdownContent(content: string, type: TerminalType = getTerminalT
       /!\[([^\]]*)\]\([^)]+\)/g,
       (_, alt) => `${pickIcon('📎', '[image]')} ${alt || 'image'}`
     );
-  } else if (type === 'enhanced') {
+  } else {
     c = c.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) => {
       const filename = (url as string).split('/').pop() || url;
       return `${pickIcon('🖼️', '[image]')} **${alt || 'image'}** _(${filename})_`;
