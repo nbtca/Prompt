@@ -48,7 +48,12 @@
     "tbdLocation": "TBD",
     "subscribeHint": "Subscribe to calendar",
     "viewDetail": "Select an event for details:",
-    "noDescription": "No additional details"
+    "noDescription": "No additional details",
+    "heatmap": {
+      "title": "Activity (last 12 months)",
+      "legendLess": "Less",
+      "legendMore": "More"
+    }
   },
   "docs": {
     "loading": "Loading documentation list...",
@@ -187,6 +192,7 @@
     "flagInterval": "Refresh interval (status --watch)",
     "flagTimeout": "HTTP timeout (status)",
     "flagRetries": "Retry count (status)",
+    "flagHeatmap": "Activity heatmap (events)",
     "flagPlain": "Disable colors",
     "flagNoLogo": "Skip logo",
     "unknownCommand": "Unknown command: {command}",

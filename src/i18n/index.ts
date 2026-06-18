@@ -68,6 +68,11 @@ export interface Translations {
     subscribeHint: string;
     viewDetail: string;
     noDescription: string;
+    heatmap: {
+      title: string;
+      legendLess: string;
+      legendMore: string;
+    };
   };
   docs: {
     loading: string;
@@ -206,6 +211,7 @@ export interface Translations {
     flagInterval: string;
     flagTimeout: string;
     flagRetries: string;
+    flagHeatmap: string;
     flagPlain: string;
     flagNoLogo: string;
     unknownCommand: string;

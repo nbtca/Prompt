@@ -135,4 +135,11 @@ if ! grep -q "Interactive mode requires a TTY terminal" "$interactive_stderr"; t
 fi
 rm -f "$interactive_stderr"
 
+# Verify the --heatmap flag is wired (network-free; the renderer itself is unit-tested).
+help_heatmap_output="$(node dist/index.js --help)"
+if [[ "$help_heatmap_output" != *"--heatmap"* ]]; then
+  echo "--heatmap flag missing from help output" >&2
+  exit 1
+fi
+
 echo "CLI contract tests passed."

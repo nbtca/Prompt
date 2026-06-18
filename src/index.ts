@@ -5,7 +5,8 @@
 import chalk from 'chalk';
 import open from 'open';
 import { main } from './main.js';
-import { fetchEvents, renderEventsTable, serializeEvents } from './features/calendar.js';
+import { fetchEvents, fetchHeatmapBuckets, renderEventsTable, serializeEvents } from './features/calendar.js';
+import { renderHeatmap } from './features/calendar-heatmap.js';
 import { checkServices, countServiceHealth, hasServiceFailures, renderServiceStatusTable, serializeServiceStatus } from './features/status.js';
 import { pickIcon } from './core/icons.js';
 import { applyColorModePreference } from './config/preferences.js';
@@ -47,7 +48,7 @@ interface ParsedArgs {
   flags: Set<string>;
 }
 
-const KNOWN_FLAGS = new Set(['--help', '--version', '--open', '--json', '--plain', '--no-logo', '--watch', '--today']);
+const KNOWN_FLAGS = new Set(['--help', '--version', '--open', '--json', '--plain', '--no-logo', '--watch', '--today', '--heatmap']);
 const KNOWN_FLAG_PREFIXES = ['--interval=', '--timeout=', '--retries=', '--next='];
 const STATUS_WATCH_INTERVAL_MIN = 3;
 const STATUS_WATCH_INTERVAL_MAX = 300;
@@ -98,6 +99,7 @@ function getAllowedFlagsFor(command?: string): Set<string> {
     case 'events':
       allowed.add('--json');
       allowed.add('--today');
+      allowed.add('--heatmap');
       return allowed;
     case 'status':
       allowed.add('--json');
@@ -176,6 +178,7 @@ function printHelp(): void {
   console.log(`  --help             ${c.flagHelp}`);
   console.log(`  --open             ${c.flagOpen}`);
   console.log(`  --json             ${c.flagJson}`);
+  console.log(`  --heatmap          ${c.flagHeatmap}`);
   console.log(`  --today            ${c.flagToday}`);
   console.log(`  --next=<n>         ${c.flagNext}`);
   console.log(`  --watch            ${c.flagWatch}`);
@@ -187,6 +190,17 @@ function printHelp(): void {
 }
 
 async function runEventsCommand(flags: Set<string>): Promise<void> {
+  if (flags.has('--heatmap')) {
+    const buckets = await fetchHeatmapBuckets();
+    if (flags.has('--json')) {
+      process.stdout.write(JSON.stringify(buckets, null, 2) + '\n');
+    } else {
+      const useColor = !flags.has('--plain') && !!process.stdout.isTTY;
+      console.log(renderHeatmap(buckets, new Date(), { color: useColor }));
+    }
+    return;
+  }
+
   let events = await fetchEvents();
 
   if (flags.has('--today')) {

@@ -48,7 +48,12 @@
     "tbdLocation": "待定",
     "subscribeHint": "订阅日历",
     "viewDetail": "选择活动查看详情:",
-    "noDescription": "暂无详细信息"
+    "noDescription": "暂无详细信息",
+    "heatmap": {
+      "title": "近一年活跃度",
+      "legendLess": "少",
+      "legendMore": "多"
+    }
   },
   "docs": {
     "loading": "正在加载文档列表...",
@@ -187,6 +192,7 @@
     "flagInterval": "刷新间隔（status --watch）",
     "flagTimeout": "HTTP 超时时间（status）",
     "flagRetries": "重试次数（status）",
+    "flagHeatmap": "活动热力图 (events)",
     "flagPlain": "禁用颜色",
     "flagNoLogo": "跳过 Logo",
     "unknownCommand": "未知命令: {command}",

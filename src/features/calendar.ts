@@ -1,16 +1,19 @@
 /**
- * ICS calendar module
+ * Calendar module
  * Fetches and renders upcoming events with Unicode box table.
+ * Data layer powered by @nbtca/nbtcal.
  */
 
-import ICAL from 'ical.js';
+import { loadCalendar, FeedFetchError, FeedParseError } from '@nbtca/nbtcal';
+import type { Calendar, CalendarEvent, HeatmapBucket } from '@nbtca/nbtcal';
 import chalk from 'chalk';
 import { select, isCancel } from '@clack/prompts';
 import { info, createSpinner } from '../core/ui.js';
 import { pickIcon } from '../core/icons.js';
 import { padEndV, truncate } from '../core/text.js';
 import { t } from '../i18n/index.js';
-import { APP_INFO, URLS } from '../config/data.js';
+import { URLS } from '../config/data.js';
+import { renderHeatmap } from './calendar-heatmap.js';
 
 export interface Event {
   date: string;
@@ -30,68 +33,6 @@ export interface EventOutputItem {
   startDateISO: string;
 }
 
-export async function fetchEvents(): Promise<Event[]> {
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-    const response = await fetch('https://ical.nbtca.space', {
-      signal: controller.signal,
-      headers: { 'User-Agent': `NBTCA-CLI/${APP_INFO.version}` },
-    });
-    clearTimeout(timeout);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const data = await response.text();
-
-    const jcalData = ICAL.parse(data);
-    const comp = new ICAL.Component(jcalData);
-    const vevents = comp.getAllSubcomponents('vevent');
-
-    const events: Event[] = [];
-    const now = new Date();
-    const thirtyDaysLater = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-
-    for (const vevent of vevents) {
-      const event = new ICAL.Event(vevent);
-      const startDate = event.startDate.toJSDate();
-
-      if (startDate >= now && startDate <= thirtyDaysLater) {
-        const trans = t();
-        const untitledEvent = trans.calendar.untitledEvent;
-        const tbdLocation = trans.calendar.tbdLocation;
-
-        events.push({
-          date: formatDate(startDate),
-          time: formatTime(startDate),
-          title: event.summary || untitledEvent,
-          location: event.location || tbdLocation,
-          description: event.description || '',
-          startDate
-        });
-      }
-    }
-
-    events.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
-    return events;
-  } catch (err) {
-    const detail = err instanceof Error
-      ? (err.name === 'AbortError' ? 'Request timed out' : err.message)
-      : String(err);
-    throw new Error(`${t().calendar.error}: ${detail}`);
-  }
-}
-
-export function serializeEvents(events: Event[]): EventOutputItem[] {
-  return events.map((event) => ({
-    date: event.date,
-    time: event.time,
-    title: event.title,
-    location: event.location,
-    description: event.description,
-    startDateISO: event.startDate.toISOString()
-  }));
-}
-
-
 function formatDate(date: Date): string {
   const now = new Date();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -106,6 +47,63 @@ function formatTime(date: Date): string {
   const hours = String(date.getHours()).padStart(2, '0');
   const minutes = String(date.getMinutes()).padStart(2, '0');
   return `${hours}:${minutes}`;
+}
+
+/**
+ * Load the calendar, wrapping errors with a localized message.
+ */
+async function loadCalendarOrThrow(): Promise<Calendar> {
+  try {
+    return await loadCalendar({ timeoutMs: 15000 });
+  } catch (err) {
+    const detail =
+      err instanceof FeedFetchError || err instanceof FeedParseError
+        ? (err as Error).message
+        : String(err);
+    throw new Error(`${t().calendar.error}: ${detail}`);
+  }
+}
+
+/**
+ * Map a nbtcal CalendarEvent to prompt's Event type.
+ */
+export function toDisplayEvent(e: CalendarEvent): Event {
+  const trans = t();
+  return {
+    date: formatDate(e.start),
+    time: e.isAllDay ? '' : formatTime(e.start),
+    title: e.title ?? trans.calendar.untitledEvent,
+    location: e.location ?? trans.calendar.tbdLocation,
+    description: e.description ?? '',
+    startDate: e.start,
+  };
+}
+
+/**
+ * Fetch upcoming events (next 30 days), including recurring occurrences.
+ */
+export async function fetchEvents(): Promise<Event[]> {
+  return (await loadCalendarOrThrow()).upcoming({ days: 30 }).map(toDisplayEvent);
+}
+
+/**
+ * Fetch trailing-year heatmap buckets.
+ */
+export async function fetchHeatmapBuckets(): Promise<HeatmapBucket[]> {
+  const now = new Date();
+  const start = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+  return (await loadCalendarOrThrow()).heatmap({ start, end: now, bucket: 'day' });
+}
+
+export function serializeEvents(events: Event[]): EventOutputItem[] {
+  return events.map((event) => ({
+    date: event.date,
+    time: event.time,
+    title: event.title,
+    location: event.location,
+    description: event.description,
+    startDateISO: event.startDate.toISOString(),
+  }));
 }
 
 /**
@@ -195,8 +193,20 @@ export async function showCalendar(): Promise<void> {
   const trans = t();
   const s = createSpinner(trans.calendar.loading);
   try {
-    const events = await fetchEvents();
+    const cal = await loadCalendarOrThrow();
+    const events = cal.upcoming({ days: 30 }).map(toDisplayEvent);
     s.stop(`${events.length} ${trans.calendar.eventsFound}`);
+
+    // Render heatmap header
+    const now = new Date();
+    const heatmapBuckets = cal.heatmap({
+      start: new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000),
+      end: now,
+      bucket: 'day',
+    });
+    console.log();
+    console.log(renderHeatmap(heatmapBuckets, now, { color: true }));
+
     displayEvents(events);
 
     if (events.length > 0) {
