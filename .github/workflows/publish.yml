@@ -25,9 +25,6 @@ jobs:
           node-version: "20"
           cache: "npm"
 
-      - name: ⬆️ Upgrade npm (trusted publishing needs >= 11.5.1)
-        run: npm install -g npm@latest
-
       - name: 📦 Install dependencies
         run: npm ci
 
@@ -54,10 +51,15 @@ jobs:
           echo "version=$PKG_VERSION" >> $GITHUB_OUTPUT
 
       # Auth via OIDC trusted publishing — no NPM_TOKEN, no stored secret.
-      # Provenance is generated automatically. Requires a trusted publisher
-      # configured on npmjs.com for @nbtca/prompt (workflow: publish.yml).
+      # npm >= 11.5.1 is required; upgrade and publish in the SAME step so the
+      # freshly installed npm is the one that runs publish. Provenance is
+      # automatic. Requires a trusted publisher configured on npmjs.com for
+      # @nbtca/prompt (workflow: publish.yml).
       - name: 🚀 Publish to npm (OIDC trusted publishing)
-        run: npm publish --access public
+        run: |
+          npm install -g npm@latest
+          echo "Using npm $(npm --version)"
+          npm publish --access public
 
       - name: ✅ Success notification
         run: |
