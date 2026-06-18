@@ -53,15 +53,13 @@ jobs:
       # freshly installed npm is the one that runs publish. Provenance is
       # automatic. Requires a trusted publisher configured on npmjs.com for
       # @nbtca/prompt (workflow: publish.yml).
+      # --provenance forces npm to engage the OIDC id-token, which performs the
+      # trusted-publishing auth (and provenance). Without it npm never attempts
+      # OIDC and fails with ENEEDAUTH/E404. Matches the working @nbtca/nbtcal job.
       - name: 🚀 Publish to npm (OIDC trusted publishing)
         run: |
           npm install -g npm@latest
-          echo "Using npm $(npm --version)"
-          # setup-node injects a placeholder _authToken into this .npmrc; remove
-          # it so npm >= 11.5.1 uses OIDC trusted publishing instead of the fake
-          # token (otherwise the registry rejects the publish as E404).
-          sed -i '/:_authToken=/d' "${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}" || true
-          npm publish --access public
+          npm publish --access public --provenance
 
       - name: ✅ Success notification
         run: |
