@@ -6,7 +6,7 @@ on:
       - "v*"
 
 permissions:
-  contents: read
+  contents: write # create the GitHub Release
   id-token: write # OIDC for npm trusted publishing
 
 jobs:
@@ -33,3 +33,8 @@ jobs:
           fi
       # Auth via OIDC trusted publishing — no NPM_TOKEN, no stored secret.
       - run: npm publish --access public
+      # Create the matching GitHub Release for this tag.
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes --verify-tag
