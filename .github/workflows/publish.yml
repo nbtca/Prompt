@@ -23,6 +23,9 @@ jobs:
           registry-url: "https://registry.npmjs.org/"
           cache: "npm"
 
+      - name: ⬆️ Upgrade npm (trusted publishing needs >= 11.5.1)
+        run: npm install -g npm@latest
+
       - name: 📦 Install dependencies
         run: npm ci
 
@@ -48,21 +51,11 @@ jobs:
           fi
           echo "version=$PKG_VERSION" >> $GITHUB_OUTPUT
 
-      - name: 🚀 Publish to npm
-        run: |
-          set +e
-          PUBLISH_OUTPUT=$(npm publish --access public --provenance 2>&1)
-          PUBLISH_EXIT=$?
-          set -e
-          echo "$PUBLISH_OUTPUT"
-          if [ "$PUBLISH_EXIT" -ne 0 ]; then
-            if echo "$PUBLISH_OUTPUT" | grep -q "EOTP"; then
-              echo "::error::npm publish failed with EOTP. Use an npm automation token for NPM_TOKEN or disable OTP requirement for token-based publish."
-            fi
-            exit "$PUBLISH_EXIT"
-          fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      # Auth via OIDC trusted publishing — no NPM_TOKEN, no stored secret.
+      # Provenance is generated automatically. Requires a trusted publisher
+      # configured on npmjs.com for @nbtca/prompt (workflow: publish.yml).
+      - name: 🚀 Publish to npm (OIDC trusted publishing)
+        run: npm publish --access public
 
       - name: ✅ Success notification
         run: |
