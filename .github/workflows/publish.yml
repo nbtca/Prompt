@@ -57,7 +57,10 @@ jobs:
         run: |
           npm install -g npm@latest
           echo "Using npm $(npm --version)"
-          echo "OIDC request url present: ${ACTIONS_ID_TOKEN_REQUEST_URL:+yes}"
+          # setup-node injects a placeholder _authToken into this .npmrc; remove
+          # it so npm >= 11.5.1 uses OIDC trusted publishing instead of the fake
+          # token (otherwise the registry rejects the publish as E404).
+          sed -i '/:_authToken=/d' "${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}" || true
           npm publish --access public
 
       - name: ✅ Success notification
