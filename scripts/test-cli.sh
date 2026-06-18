@@ -135,4 +135,14 @@ if ! grep -q "Interactive mode requires a TTY terminal" "$interactive_stderr"; t
 fi
 rm -f "$interactive_stderr"
 
+heatmap_output="$(node dist/index.js events --heatmap --plain)"
+if [[ -z "$heatmap_output" ]]; then
+  echo "events --heatmap produced no output" >&2
+  exit 1
+fi
+if [[ "$heatmap_output" != *"Activity"* && "$heatmap_output" != *"活跃度"* ]]; then
+  echo "events --heatmap output missing expected title" >&2
+  exit 1
+fi
+
 echo "CLI contract tests passed."
