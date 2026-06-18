@@ -16,13 +16,11 @@ jobs:
       - name: 🛎️ Checkout code
         uses: actions/checkout@v4
 
-      # NOTE: no `registry-url` — setup-node would write a dummy _authToken
-      # placeholder into .npmrc, which npm would try (and fail with E404),
-      # preventing OIDC trusted publishing. The default registry is npmjs.
       - name: 🟢 Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+          registry-url: "https://registry.npmjs.org"
           cache: "npm"
 
       - name: 📦 Install dependencies
@@ -59,6 +57,7 @@ jobs:
         run: |
           npm install -g npm@latest
           echo "Using npm $(npm --version)"
+          echo "OIDC request url present: ${ACTIONS_ID_TOKEN_REQUEST_URL:+yes}"
           npm publish --access public
 
       - name: ✅ Success notification
