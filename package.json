@@ -25,7 +25,7 @@
     "clean": "rm -rf dist",
     "prebuild": "npm run clean",
     "prepublishOnly": "npm run build",
-    "test": "npm run build && bash scripts/test-cli.sh"
+    "test": "npm run build && vitest run && bash scripts/test-cli.sh"
   },
   "keywords": [
     "cli",
@@ -39,9 +39,9 @@
   ],
   "dependencies": {
     "@clack/prompts": "^1.2.0",
+    "@nbtca/nbtcal": "^0.2.1",
     "chalk": "^5.6.2",
     "gradient-string": "^3.0.0",
-    "ical.js": "^2.2.1",
     "marked": "^15.0.12",
     "marked-terminal": "^7.0.0",
     "open": "^11.0.0"
@@ -50,7 +50,8 @@
     "@types/gradient-string": "^1.1.6",
     "@types/node": "^22.19.17",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
   },
   "engines": {
     "node": ">=20.12.0"
