@@ -106,50 +106,41 @@ export function renderHeatmap(
     columns.push(column);
   }
 
-  // Month labels row
-  const lang = getCurrentLanguage();
-  const monthFmt = new Intl.DateTimeFormat(lang === 'zh' ? 'zh-CN' : 'en-US', {
-    month: 'short',
-    timeZone: 'UTC',
-  });
-
-  const weekdayLabel = '   '; // 3-char prefix for weekday label column
-  const monthLabelRow: string[] = [];
+  // Month labels row. Labels are 3-letter English abbreviations (universal and
+  // single-width, so alignment holds in any language). Each grid column occupies
+  // 2 terminal cells (glyph + joining space); we write each month's label into a
+  // character buffer starting at the column where that month begins, letting it
+  // overflow rightward into the spacing of the following columns (months are
+  // ~4-5 columns apart, so labels never collide).
+  const weekdayLabel = '   '; // 3-char prefix, matches the grid rows' "Mo " prefix
+  const monthFmt = new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: 'UTC' });
+  const cellsWidth = numCols * 2;
+  const monthChars = new Array<string>(cellsWidth).fill(' ');
   let prevMonth = -1;
   for (let col = 0; col < numCols; col++) {
-    // Use the first non-null cell in the column to get the month
-    let colMonth = -1;
+    let labelDate: Date | null = null;
     for (let row = 0; row < 7; row++) {
       const cell = columns[col]?.[row];
       if (cell !== null && cell !== undefined) {
-        const proxy = parseBucketDate(cell.date);
-        colMonth = proxy.getUTCMonth();
+        labelDate = parseBucketDate(cell.date);
         break;
       }
     }
-    if (colMonth !== prevMonth && colMonth !== -1) {
-      // Find a representative date for formatting
-      let labelDate: Date | null = null;
-      for (let row = 0; row < 7; row++) {
-        const cell = columns[col]?.[row];
-        if (cell !== null && cell !== undefined) {
-          labelDate = parseBucketDate(cell.date);
-          break;
-        }
+    if (labelDate === null) continue;
+    const month = labelDate.getUTCMonth();
+    if (month !== prevMonth) {
+      prevMonth = month;
+      const label = monthFmt.format(labelDate); // e.g. "Jun"
+      const start = col * 2;
+      for (let i = 0; i < label.length && start + i < cellsWidth; i++) {
+        monthChars[start + i] = label[i] ?? ' ';
       }
-      if (labelDate !== null) {
-        const label = monthFmt.format(labelDate);
-        monthLabelRow.push(label.substring(0, 2));
-      } else {
-        monthLabelRow.push('  ');
-      }
-      prevMonth = colMonth;
-    } else {
-      monthLabelRow.push('  ');
     }
   }
+  const monthLabelLine = weekdayLabel + monthChars.join('');
 
   // Weekday labels (Mon/Wed/Fri only, index 0/2/4 in Mon-indexed scheme)
+  const lang = getCurrentLanguage();
   const weekdayNames = lang === 'zh'
     ? ['一', '  ', '三', '  ', '五', '  ', '  ']
     : ['Mo', '  ', 'We', '  ', 'Fr', '  ', '  '];
@@ -162,7 +153,7 @@ export function renderHeatmap(
   lines.push('');
 
   // Month labels line
-  lines.push(weekdayLabel + monthLabelRow.join(' '));
+  lines.push(monthLabelLine);
 
   // Grid rows (7 rows: Mon..Sun)
   for (let row = 0; row < 7; row++) {
