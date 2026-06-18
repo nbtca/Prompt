@@ -13,54 +13,31 @@ jobs:
       id-token: write
 
     steps:
-      - name: 🛎️ Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: 🟢 Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "20"
           registry-url: "https://registry.npmjs.org"
           cache: "npm"
 
-      - name: 📦 Install dependencies
-        run: npm ci
+      - run: npm ci
 
-      - name: 🔨 Build TypeScript
-        run: npm run build
+      - run: npm run build
 
-      - name: ✅ Verify build
-        run: |
-          test -d dist || (echo "dist directory not found" && exit 1)
-          test -f dist/index.js || (echo "dist/index.js not found" && exit 1)
-          echo "Build artifacts verified"
-
-      - name: 📋 Check package version
-        id: version
+      - name: Check tag matches package version
         run: |
           TAG_VERSION=${GITHUB_REF#refs/tags/v}
           PKG_VERSION=$(node -p "require('./package.json').version")
-          echo "Tag version: $TAG_VERSION"
-          echo "Package version: $PKG_VERSION"
           if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
-            echo "Version mismatch! Tag: v$TAG_VERSION, package.json: v$PKG_VERSION"
+            echo "Version mismatch: tag v$TAG_VERSION, package.json v$PKG_VERSION" >&2
             exit 1
           fi
-          echo "version=$PKG_VERSION" >> $GITHUB_OUTPUT
 
-      # Auth via OIDC trusted publishing — no NPM_TOKEN, no stored secret.
-      # npm >= 11.5.1 is required; upgrade and publish in the SAME step so the
-      # freshly installed npm is the one that runs publish. Provenance is
-      # automatic. Requires a trusted publisher configured on npmjs.com for
-      # @nbtca/prompt (workflow: publish.yml).
-      # --provenance forces npm to engage the OIDC id-token, which performs the
-      # trusted-publishing auth (and provenance). Without it npm never attempts
-      # OIDC and fails with ENEEDAUTH/E404. Matches the working @nbtca/nbtcal job.
-      - name: 🚀 Publish to npm (OIDC trusted publishing)
+      # OIDC trusted publishing: no stored token. Requires npm >= 11.5.1 and a
+      # trusted publisher configured on npmjs for @nbtca/prompt (publish.yml).
+      # --provenance engages the OIDC id-token for both auth and provenance.
+      - name: Publish
         run: |
           npm install -g npm@latest
           npm publish --access public --provenance
-
-      - name: ✅ Success notification
-        run: |
-          echo "🎉 Successfully published @nbtca/prompt@${{ steps.version.outputs.version }} to npm"
