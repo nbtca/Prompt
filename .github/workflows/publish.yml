@@ -40,4 +40,8 @@ jobs:
       - name: Publish
         run: |
           npm install -g npm@latest
+          # setup-node writes a dummy _authToken into this .npmrc; remove it so
+          # npm uses the OIDC-exchanged credential (not the fake token) for the
+          # registry write. --provenance forces npm to engage OIDC.
+          sed -i '/_authToken/d' "$NPM_CONFIG_USERCONFIG"
           npm publish --access public --provenance
