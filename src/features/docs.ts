@@ -165,7 +165,7 @@ function contentFingerprint(content: string): string {
 }
 
 export function clearDocsCache(): void {
-  docsClient = createDocsClient(); // fresh instance resets dir + file caches
+  docsClient.clear();
   renderCache.clear();
 }
 
