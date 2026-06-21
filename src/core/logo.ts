@@ -1,74 +1,53 @@
 /**
- * Smart logo display module
- * Attempts to display iTerm2 image format logo, falls back to ASCII art
+ * Startup logo: a high-precision braille dot-matrix render of the NBTCA emblem
+ * (generated from CA-logo.svg), shown with the brand blue->cyan gradient.
+ * Falls back to plain ASCII on terminals without Unicode/braille support.
  */
 
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import gradient from 'gradient-string';
+import { useUnicodeIcons } from './icons.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
-/**
- * Create blue-toned gradient effect
- */
-function createBlueGradient(text: string): string {
-  const blueGradient = gradient([
-    { color: '#1e3a8a', pos: 0 },    // Deep blue
-    { color: '#0ea5e9', pos: 0.5 },  // Sky blue
-    { color: '#06b6d4', pos: 1 }     // Cyan
-  ]);
-  return blueGradient(text);
-}
+const TAGLINE = 'To be at the intersection of technology and liberal arts.';
 
-/**
- * Display description text (instant, no animation)
- */
-function printDescription(): void {
-  const tagline = 'To be at the intersection of technology and liberal arts.';
-  console.log();
-  if (process.env['NO_COLOR']) {
-    console.log(tagline);
-  } else {
-    console.log(createBlueGradient(tagline));
+// Brand gradient: emblem blue -> sky -> cyan.
+const brand = gradient([
+  { color: '#124689', pos: 0 },
+  { color: '#0ea5e9', pos: 0.55 },
+  { color: '#06b6d4', pos: 1 },
+]);
+
+function readArt(file: string): string | null {
+  try {
+    return readFileSync(join(__dirname, '../logo', file), 'utf-8').replace(/\s+$/, '');
+  } catch {
+    return null;
   }
-  console.log();
 }
 
-/**
- * Attempt to read and display logo file
- */
+function paint(text: string, color: boolean): string {
+  if (!color) return text;
+  // multiline keeps the gradient aligned down the whole block; fall back to a
+  // per-line gradient if the installed gradient-string lacks .multiline.
+  const fn = brand as unknown as { multiline?: (s: string) => string };
+  return typeof fn.multiline === 'function'
+    ? fn.multiline(text)
+    : text.split('\n').map((line) => brand(line)).join('\n');
+}
+
 export function printLogo(): void {
-  if (!process.stdout.isTTY) {
-    return;
-  }
+  if (!process.stdout.isTTY) return;
 
-  try {
-    const logoPath = join(__dirname, '../logo/logo.txt');
-    const logoContent = readFileSync(logoPath, 'utf-8');
-    if (logoContent && logoContent.length > 100) {
-      console.log(logoContent);
-      printDescription();
-      return;
-    }
-  } catch {
-    // iTerm2 logo read failed, continue trying ASCII logo
-  }
+  const color = !process.env['NO_COLOR'];
+  const art = useUnicodeIcons() ? readArt('ca-dotmatrix.txt') : readArt('ascii-logo.txt');
 
-  try {
-    const asciiLogoPath = join(__dirname, '../logo/ascii-logo.txt');
-    const asciiContent = readFileSync(asciiLogoPath, 'utf-8');
-    console.log();
-    const lines = asciiContent.split('\n').filter(line => line.trim());
-    lines.forEach(line => {
-      console.log(createBlueGradient(line));
-    });
-    printDescription();
-  } catch {
-    console.log();
-    console.log(createBlueGradient('  NBTCA'));
-    printDescription();
-  }
+  console.log();
+  console.log(paint(art ?? 'NBTCA', color));
+  console.log();
+  console.log(color ? brand(TAGLINE) : TAGLINE);
+  console.log();
 }
