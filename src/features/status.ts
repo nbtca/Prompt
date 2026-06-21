@@ -1,7 +1,8 @@
 import chalk from 'chalk';
 import { APP_INFO, URLS } from '../config/data.js';
 import { pickIcon } from '../core/icons.js';
-import { padEndV } from '../core/text.js';
+import { padEndV, visualWidth } from '../core/text.js';
+import { c } from '../core/theme.js';
 import { createSpinner } from '../core/ui.js';
 import { t } from '../i18n/index.js';
 
@@ -111,49 +112,47 @@ export function countServiceHealth(items: ServiceStatus[]): { up: number; down: 
 }
 
 export function renderServiceStatusTable(items: ServiceStatus[], options?: { color?: boolean }): string {
-  const color = options?.color !== false;
+  const useColor = options?.color !== false;
   const id = (s: string) => s;
-  const dim = color ? chalk.dim : id;
-  const green = color ? chalk.green : id;
-  const red = color ? chalk.red : id;
-  const cyan = color ? chalk.cyan : id;
+  const applyDim    = useColor ? chalk.dim                  : id;
+  const applyGreen  = useColor ? chalk.green                : id;
+  const applyRed    = useColor ? chalk.red                  : id;
+  const applyCyan   = useColor ? chalk.cyan                 : id;
+  const applyLatency = useColor ? c.latency                 : (ms: number) => `${ms}ms`;
 
   const trans = t();
-  const nameWidth = 10;
-  const statusWidth = 9;
-  const latencyWidth = 10;
+  const nameWidth = Math.max(...items.map(i => visualWidth(i.name)), visualWidth(trans.status.service));
+  const statusWidth = 10; // "● online" / "✕ offline"
 
-  const h = pickIcon('─', '-');
-  const v = pickIcon('│', '|');
-  const topLeft = pickIcon('┌', '+');
-  const topMid = pickIcon('┬', '+');
-  const topRight = pickIcon('┐', '+');
-  const midLeft = pickIcon('├', '+');
-  const midMid = pickIcon('┼', '+');
-  const midRight = pickIcon('┤', '+');
-  const bottomLeft = pickIcon('└', '+');
-  const bottomMid = pickIcon('┴', '+');
-  const bottomRight = pickIcon('┘', '+');
+  const onIcon  = pickIcon('●', '+');
+  const offIcon = pickIcon('✕', '!');
+  const sep     = pickIcon('─', '-');
 
-  const top = `${topLeft}${h.repeat(nameWidth + 2)}${topMid}${h.repeat(statusWidth + 2)}${topMid}${h.repeat(latencyWidth + 2)}${topRight}`;
-  const divider = `${midLeft}${h.repeat(nameWidth + 2)}${midMid}${h.repeat(statusWidth + 2)}${midMid}${h.repeat(latencyWidth + 2)}${midRight}`;
-  const bottom = `${bottomLeft}${h.repeat(nameWidth + 2)}${bottomMid}${h.repeat(statusWidth + 2)}${bottomMid}${h.repeat(latencyWidth + 2)}${bottomRight}`;
+  const headerName   = padEndV(applyDim(trans.status.service), nameWidth);
+  const headerStatus = padEndV(applyDim(trans.status.health),  statusWidth);
+  const headerLatency = applyDim(trans.status.latency);
+  const divider = applyDim(sep.repeat(nameWidth + statusWidth + 12));
 
-  const header =
-    `${v} ${padEndV(trans.status.service, nameWidth)} ${v} ${padEndV(trans.status.health, statusWidth)} ${v} ${padEndV(trans.status.latency, latencyWidth)} ${v}`;
+  const lines: string[] = [
+    `  ${headerName}  ${headerStatus}  ${headerLatency}`,
+    `  ${divider}`,
+  ];
 
-  const lines = [dim(top), header, dim(divider)];
   for (const item of items) {
-    const statusLabel = item.ok
-      ? green(`${pickIcon('●', 'OK')} ${trans.status.up}`)
-      : red(`${pickIcon('●', '!!')} ${trans.status.down}`);
-    const latency = item.latencyMs != null ? `${item.latencyMs}ms` : '-';
+    const nameCol = padEndV(applyCyan(item.name), nameWidth);
 
-    lines.push(
-      `${v} ${padEndV(cyan(item.name), nameWidth)} ${v} ${padEndV(statusLabel, statusWidth)} ${v} ${padEndV(latency, latencyWidth)} ${v}`
-    );
+    const statusLabel = item.ok
+      ? applyGreen(`${onIcon} ${trans.status.up}`)
+      : applyRed(`${offIcon} ${trans.status.down}`);
+    const statusCol = padEndV(statusLabel, statusWidth);
+
+    const latencyCol = item.latencyMs != null
+      ? applyLatency(item.latencyMs)
+      : applyDim('—');
+
+    lines.push(`  ${nameCol}  ${statusCol}  ${latencyCol}`);
   }
-  lines.push(dim(bottom));
+
   return lines.join('\n');
 }
 
@@ -167,6 +166,8 @@ export async function showServiceStatus(): Promise<ServiceStatus[]> {
   } else {
     spinner.stop(trans.status.summaryOk);
   }
+  console.log();
   console.log(renderServiceStatusTable(items, { color: !!process.stdout.isTTY }));
+  console.log();
   return items;
 }
