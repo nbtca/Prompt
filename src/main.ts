@@ -1,13 +1,8 @@
-/**
- * NBTCA Welcome Tool
- * Minimalist startup flow
- */
-
-import chalk from 'chalk';
-import { intro } from '@clack/prompts';
 import { printLogo } from './core/logo.js';
 import { clearScreen, handleGracefulExit } from './core/ui.js';
 import { showMainMenu } from './core/menu.js';
+import { printPanel } from './core/panel.js';
+import { c } from './core/theme.js';
 import { APP_INFO } from './config/data.js';
 import { enableVimKeys } from './core/vim-keys.js';
 import { checkForUpdate } from './features/update.js';
@@ -16,38 +11,42 @@ export interface MainOptions {
   skipLogo?: boolean;
 }
 
-/**
- * Main program entry point
- */
+function buildWelcomeContent(): string {
+  const now = new Date();
+  const date = now.toISOString().slice(0, 10);
+  const node = process.version;
+
+  const left  = `${c.heading(APP_INFO.name)}  ${c.version('v' + APP_INFO.version)}`;
+  const right = c.muted(`${date}  ·  Node ${node}`);
+  const gap   = '   ';
+
+  return `${left}${gap}${right}\n${c.muted(APP_INFO.description)}`;
+}
+
 export async function main(options: MainOptions = {}): Promise<void> {
   try {
-    // Enable Vim key bindings
     enableVimKeys();
 
-    // Clear screen
     if (process.stdout.isTTY) {
       clearScreen();
     }
 
-    // Display logo (smart fallback)
     if (!options.skipLogo) {
       printLogo();
     }
 
-    // Non-blocking update check (fire and forget, print before menu if resolved in time)
     const updatePromise = checkForUpdate();
 
-    // Open session frame
-    intro(chalk.cyan('NBTCA Prompt') + chalk.dim(` v${APP_INFO.version}`));
+    if (process.stdout.isTTY) {
+      printPanel(buildWelcomeContent(), { dim: true });
+    }
 
-    // Show update notification if ready
     const updateMsg = await Promise.race([
       updatePromise,
       new Promise<null>(r => setTimeout(r, 500, null)),
     ]);
-    if (updateMsg) console.log(chalk.yellow(updateMsg));
+    if (updateMsg) console.log(c.warn(updateMsg));
 
-    // Show main menu (loop)
     await showMainMenu();
 
   } catch (err: unknown) {

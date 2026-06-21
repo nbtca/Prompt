@@ -1,7 +1,4 @@
-/**
- * 核心URL配置
- * 集中管理所有外部链接
- */
+/** Core URL and application constants. */
 
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -39,7 +36,7 @@ export const GITHUB_REPO = {
 export const APP_INFO = {
   name: 'Prompt',
   version: readPackageVersion(),
-  description: '浙大宁波理工学院计算机协会',
+  description: 'NingboTech Computer Association',
   author: 'm1ngsama <contact@m1ng.space>',
   license: 'MIT',
   repository: 'https://github.com/nbtca/prompt'
