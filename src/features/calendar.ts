@@ -2,7 +2,7 @@ import { loadCalendar, FeedFetchError, FeedParseError } from '@nbtca/nbtcal';
 import type { Calendar, CalendarEvent, HeatmapBucket } from '@nbtca/nbtcal';
 import chalk from 'chalk';
 import { select, isCancel } from '@clack/prompts';
-import { info, createSpinner } from '../core/ui.js';
+import { createSpinner } from '../core/ui.js';
 import { c } from '../core/theme.js';
 import { pickIcon } from '../core/icons.js';
 import { padEndV, truncate } from '../core/text.js';
@@ -160,14 +160,15 @@ export async function showEventsPreview(): Promise<void> {
 
     if (events.length === 0) {
       s.stop(trans.calendar.noEvents);
-    } else {
-      s.stop(`${events.length} ${trans.calendar.eventsFound}`);
+      console.log();
+      return;
     }
 
+    s.stop(`${events.length} ${trans.calendar.eventsFound}`);
     console.log();
     console.log(renderEventsTable(events.slice(0, 5), { color: !!process.stdout.isTTY }));
     console.log();
-    if (events.length > 0) renderSubscribeHint();
+    renderSubscribeHint();
     console.log();
   } catch {
     s.error(trans.calendar.error);
@@ -198,16 +199,17 @@ export async function showPastEvents(): Promise<void> {
   try {
     const cal = await loadCalendarOrThrow();
     const events = cal.past({ days: 30 }).reverse().map(toDisplayEvent);
-    s.stop(`${events.length} ${trans.calendar.eventsFound}`);
 
+    if (events.length === 0) {
+      s.stop(trans.calendar.noPastEvents);
+      console.log();
+      return;
+    }
+
+    s.stop(`${events.length} ${trans.calendar.eventsFound}`);
     console.log();
     console.log(renderEventsTable(events, { color: true }));
     console.log();
-
-    if (events.length === 0) {
-      info(trans.calendar.noPastEvents);
-      return;
-    }
 
     const options = [
       ...events.map((e, i) => ({
@@ -237,7 +239,6 @@ export async function showCalendar(): Promise<void> {
   try {
     const cal = await loadCalendarOrThrow();
     const events = cal.upcoming({ days: 30 }).map(toDisplayEvent);
-    s.stop(`${events.length} ${trans.calendar.eventsFound}`);
 
     const now = new Date();
     const heatmapBuckets = cal.heatmap({
@@ -245,6 +246,16 @@ export async function showCalendar(): Promise<void> {
       end: now,
       bucket: 'day',
     });
+
+    if (events.length === 0) {
+      s.stop(trans.calendar.noEvents);
+      console.log();
+      console.log(renderHeatmap(heatmapBuckets, now, { color: true }));
+      console.log();
+      return;
+    }
+
+    s.stop(`${events.length} ${trans.calendar.eventsFound}`);
     console.log();
     console.log(renderHeatmap(heatmapBuckets, now, { color: true }));
     console.log();
@@ -252,11 +263,6 @@ export async function showCalendar(): Promise<void> {
     console.log();
     renderSubscribeHint();
     console.log();
-
-    if (events.length === 0) {
-      info(trans.calendar.noEvents);
-      return;
-    }
 
     const options = [
       ...events.map((e, i) => ({

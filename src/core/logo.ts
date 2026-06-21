@@ -7,8 +7,10 @@
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import chalk from 'chalk';
 import gradient from 'gradient-string';
 import { useUnicodeIcons } from './icons.js';
+import { APP_INFO } from '../config/data.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -49,5 +51,6 @@ export function printLogo(): void {
   console.log(paint(art ?? 'NBTCA', color));
   console.log();
   console.log(color ? brand(TAGLINE) : TAGLINE);
+  console.log(chalk.dim(`@nbtca/prompt  v${APP_INFO.version}`));
   console.log();
 }
