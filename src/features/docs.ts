@@ -1,8 +1,3 @@
-/**
- * 知识库终端查看模块
- * 获取并渲染Markdown文档
- */
-
 import { marked } from 'marked';
 import { markedTerminal } from 'marked-terminal';
 import chalk from 'chalk';
@@ -11,9 +6,11 @@ import { select, isCancel, confirm, text } from '@clack/prompts';
 import { error, warning, success, createSpinner } from '../core/ui.js';
 import { pickIcon } from '../core/icons.js';
 import { spawn, execFileSync } from 'child_process';
-import { APP_INFO, GITHUB_REPO, URLS } from '../config/data.js';
+import { URLS } from '../config/data.js';
 import { t, fmt } from '../i18n/index.js';
 import { setVimKeysActive } from '../core/vim-keys.js';
+import { createDocsClient, DocsFetchError } from '@nbtca/docs';
+import type { DocItem } from '@nbtca/docs';
 
 // ─── Terminal capability detection ───────────────────────────────────────────
 
@@ -120,28 +117,7 @@ function getRendererOptions(type: TerminalType): Record<string, unknown> {
 }
 
 
-// ─── GitHub data layer ────────────────────────────────────────────────────────
-
-
-const GITHUB_TOKEN = process.env['GITHUB_TOKEN'] || process.env['GH_TOKEN'];
-
-interface DocItem {
-  name: string;
-  path: string;
-  type: 'file' | 'dir';
-  sha?: string;
-}
-
-interface CachedFetchResult<T> {
-  data: T;
-  fromCache: boolean;
-  staleFallback: boolean;
-}
-
-interface CacheEntry<T> {
-  value: T;
-  expiresAt: number;
-}
+// ─── Data layer ───────────────────────────────────────────────────────────────
 
 interface RenderedDoc {
   fingerprint: string;
@@ -151,181 +127,66 @@ interface RenderedDoc {
   readTime: string;
 }
 
-const SKIP_NAMES = new Set(['node_modules', 'package.json', 'pnpm-lock.yaml']);
-const DIR_CACHE_TTL_MS = 5 * 60 * 1000;
-const FILE_CACHE_TTL_MS = 10 * 60 * 1000;
+interface CacheEntry<T> { value: T; expiresAt: number }
+
 const RENDER_CACHE_TTL_MS = 10 * 60 * 1000;
-const dirCache = new Map<string, CacheEntry<DocItem[]>>();
-const fileCache = new Map<string, CacheEntry<string>>();
+const RENDER_CACHE_MAX = 50;
 const renderCache = new Map<string, CacheEntry<RenderedDoc>>();
+
+let docsClient = createDocsClient();
 
 function getDocCategories() {
   const trans = t();
   return [
-    { name: trans.docs.categoryTutorial,    path: 'tutorial' },
-    { name: trans.docs.categoryRepairLogs,  path: '维修日' },
-    { name: trans.docs.categoryEvents,      path: '相关活动举办' },
-    { name: trans.docs.categoryProcess,     path: 'process' },
-    { name: trans.docs.categoryRepair,      path: 'repair' },
-    { name: trans.docs.categoryArchived,    path: 'archived' },
+    { name: trans.docs.categoryTutorial,   path: 'tutorial' },
+    { name: trans.docs.categoryRepairLogs, path: '维修日' },
+    { name: trans.docs.categoryEvents,     path: '相关活动举办' },
+    { name: trans.docs.categoryProcess,    path: 'process' },
+    { name: trans.docs.categoryRepair,     path: 'repair' },
+    { name: trans.docs.categoryArchived,   path: 'archived' },
   ];
 }
 
-function getFreshCacheValue<T>(cache: Map<string, CacheEntry<T>>, key: string): T | null {
-  const entry = cache.get(key);
-  if (!entry) return null;
-  if (entry.expiresAt > Date.now()) return entry.value;
-  return null;
+function getFreshRender(key: string): RenderedDoc | null {
+  const entry = renderCache.get(key);
+  return entry && entry.expiresAt > Date.now() ? entry.value : null;
 }
 
-function getAnyCacheValue<T>(cache: Map<string, CacheEntry<T>>, key: string): T | null {
-  const entry = cache.get(key);
-  return entry?.value ?? null;
-}
-
-function setCacheValue<T>(cache: Map<string, CacheEntry<T>>, key: string, value: T, ttlMs: number): void {
-  cache.set(key, { value, expiresAt: Date.now() + ttlMs });
-}
-
-const DIR_CACHE_MAX = 30;
-const FILE_CACHE_MAX = 50;
-const RENDER_CACHE_MAX = 50;
-
-function evictStalest<T>(cache: Map<string, CacheEntry<T>>, maxSize: number): void {
-  if (cache.size <= maxSize) return;
-  const oldest = [...cache.entries()]
-    .sort((a, b) => a[1].expiresAt - b[1].expiresAt)
-    .slice(0, cache.size - maxSize);
-  for (const [key] of oldest) cache.delete(key);
+function setRender(key: string, value: RenderedDoc): void {
+  renderCache.set(key, { value, expiresAt: Date.now() + RENDER_CACHE_TTL_MS });
+  if (renderCache.size > RENDER_CACHE_MAX) {
+    const oldest = [...renderCache.entries()].sort((a, b) => a[1].expiresAt - b[1].expiresAt)[0];
+    if (oldest) renderCache.delete(oldest[0]);
+  }
 }
 
 function contentFingerprint(content: string): string {
-  const head = content.slice(0, 80);
-  const tail = content.slice(-80);
-  return `${content.length}:${head}:${tail}`;
+  return `${content.length}:${content.slice(0, 80)}:${content.slice(-80)}`;
 }
 
 export function clearDocsCache(): void {
-  dirCache.clear();
-  fileCache.clear();
+  docsClient = createDocsClient(); // fresh instance resets dir + file caches
   renderCache.clear();
 }
 
-async function fetchGitHubDirectory(
-  path: string = '',
-  options: { forceRefresh?: boolean } = {}
-): Promise<CachedFetchResult<DocItem[]>> {
-  const cacheKey = path || '__root__';
-  if (!options.forceRefresh) {
-    const cached = getFreshCacheValue(dirCache, cacheKey);
-    if (cached) {
-      return { data: cached, fromCache: true, staleFallback: false };
-    }
-  }
-
-  const url = `https://api.github.com/repos/${GITHUB_REPO.owner}/${GITHUB_REPO.repo}/contents/${path}?ref=${GITHUB_REPO.branch}`;
-
+async function fetchDirectory(path = ''): Promise<DocItem[]> {
   try {
-    const headers: Record<string, string> = {
-      'Accept': 'application/vnd.github.v3+json',
-      'User-Agent': `NBTCA-CLI/${APP_INFO.version}`,
-    };
-    if (GITHUB_TOKEN) headers['Authorization'] = `Bearer ${GITHUB_TOKEN}`;
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
-    const response = await fetch(url, { signal: controller.signal, headers });
-    clearTimeout(timeout);
-
-    if (!response.ok) {
-      const trans = t();
-      if (response.status === 403) {
-        const rateLimitRemaining = response.headers.get('x-ratelimit-remaining');
-        const rateLimitReset = response.headers.get('x-ratelimit-reset');
-        if (rateLimitRemaining === '0' && rateLimitReset) {
-          const resetDate = new Date(Number.parseInt(rateLimitReset, 10) * 1000);
-          throw new Error(
-            `${fmt(trans.docs.githubRateLimited, { time: resetDate.toLocaleTimeString() })}\n${trans.docs.githubTokenHint}`
-          );
-        }
-        throw new Error(`${trans.docs.githubForbidden}\n${trans.docs.githubTokenHint}`);
-      }
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    interface GitHubContentItem { name: string; path: string; type: string; sha: string }
-    const data = (await response.json()) as GitHubContentItem[];
-    const items = data
-      .filter((item) =>
-        !item.name.startsWith('.') &&
-        !SKIP_NAMES.has(item.name) &&
-        !(item.type === 'file' && !item.name.endsWith('.md'))
-      )
-      .map((item) => ({
-        name: item.name,
-        path: item.path,
-        type: (item.type === 'dir' ? 'dir' : 'file') as 'dir' | 'file',
-        sha: item.sha
-      }))
-      .sort((a: DocItem, b: DocItem) => {
-        if (a.type === 'dir' && b.type === 'file') return -1;
-        if (a.type === 'file' && b.type === 'dir') return 1;
-        return a.name.localeCompare(b.name);
-      });
-
-    setCacheValue(dirCache, cacheKey, items, DIR_CACHE_TTL_MS);
-    evictStalest(dirCache, DIR_CACHE_MAX);
-    return { data: items, fromCache: false, staleFallback: false };
-  } catch (err: unknown) {
-    const staleCached = getAnyCacheValue(dirCache, cacheKey);
-    if (staleCached) {
-      return { data: staleCached, fromCache: true, staleFallback: true };
-    }
-
+    return await docsClient.listDir(path);
+  } catch (err) {
     const trans = t();
-    const errorMessage = err instanceof Error
-      ? (err.name === 'AbortError' ? 'Request timed out' : err.message)
+    const msg = err instanceof DocsFetchError
+      ? (err.status === 403 ? `${trans.docs.githubForbidden}\n${trans.docs.githubTokenHint}` : `HTTP ${err.status}`)
       : String(err);
-    throw new Error(fmt(trans.docs.fetchDirFailed, { error: errorMessage }));
+    throw new Error(fmt(trans.docs.fetchDirFailed, { error: msg }));
   }
 }
 
-async function fetchGitHubRawContent(
-  path: string,
-  options: { forceRefresh?: boolean } = {}
-): Promise<CachedFetchResult<string>> {
-  if (!options.forceRefresh) {
-    const cached = getFreshCacheValue(fileCache, path);
-    if (cached) {
-      return { data: cached, fromCache: true, staleFallback: false };
-    }
-  }
-
-  const url = `https://raw.githubusercontent.com/${GITHUB_REPO.owner}/${GITHUB_REPO.repo}/${GITHUB_REPO.branch}/${path}`;
+async function fetchFileContent(path: string): Promise<string> {
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: { 'User-Agent': `NBTCA-CLI/${APP_INFO.version}` },
-    });
-    clearTimeout(timeout);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const content = await response.text();
-    setCacheValue(fileCache, path, content, FILE_CACHE_TTL_MS);
-    evictStalest(fileCache, FILE_CACHE_MAX);
-    return { data: content, fromCache: false, staleFallback: false };
-  } catch (err: unknown) {
-    const staleCached = getAnyCacheValue(fileCache, path);
-    if (staleCached) {
-      return { data: staleCached, fromCache: true, staleFallback: true };
-    }
-
+    return await docsClient.getFile(path);
+  } catch (err) {
     const trans = t();
-    const errorMessage = err instanceof Error
-      ? (err.name === 'AbortError' ? 'Request timed out' : err.message)
-      : String(err);
-    throw new Error(fmt(trans.docs.fetchFileFailed, { error: errorMessage }));
+    throw new Error(fmt(trans.docs.fetchFileFailed, { error: String(err) }));
   }
 }
 
@@ -506,13 +367,8 @@ async function browseDirectory(initialPath: string = ''): Promise<void> {
     let items: DocItem[];
     try {
       const s = createSpinner(currentPath ? `${trans.docs.loadingDir}: ${currentPath}` : trans.docs.loading);
-      const result = await fetchGitHubDirectory(currentPath);
-      items = result.data;
+      items = await fetchDirectory(currentPath);
       s.stop(currentPath || trans.docs.chooseDoc);
-
-      if (result.staleFallback) {
-        warning(trans.docs.usingCachedData);
-      }
     } catch (err: unknown) {
       error(trans.docs.loadError);
       const errMsg = err instanceof Error ? err.message : String(err);
@@ -579,14 +435,9 @@ async function viewMarkdownFile(filePath: string): Promise<void> {
       ensureMarkedConfigured();
       const s = createSpinner(`${trans.docs.loadingFile}: ${filePath}`);
 
-      const rawResult = await fetchGitHubRawContent(filePath);
-      if (rawResult.staleFallback) {
-        warning(trans.docs.usingCachedData);
-      }
-
-      const rawContent = rawResult.data;
+      const rawContent = await fetchFileContent(filePath);
       const fingerprint = contentFingerprint(rawContent);
-      const cachedRendered = getFreshCacheValue(renderCache, filePath);
+      const cachedRendered = getFreshRender(filePath);
 
       let renderedDoc: RenderedDoc;
       if (cachedRendered && cachedRendered.fingerprint === fingerprint) {
@@ -597,8 +448,7 @@ async function viewMarkdownFile(filePath: string): Promise<void> {
         const readTime = estimateReadTime(cleaned);
         const rendered = await marked(cleaned) as string;
         renderedDoc = { fingerprint, cleaned, rendered, title, readTime };
-        setCacheValue(renderCache, filePath, renderedDoc, RENDER_CACHE_TTL_MS);
-        evictStalest(renderCache, RENDER_CACHE_MAX);
+        setRender(filePath, renderedDoc);
       }
 
       s.stop(`${chalk.bold(renderedDoc.title)}  ${chalk.dim(renderedDoc.readTime)}`);
@@ -685,29 +535,17 @@ async function searchDocs(): Promise<void> {
   try {
     const fetches = await Promise.allSettled(
       categories.map(async cat => {
-        const res = await fetchGitHubDirectory(cat.path);
-        return { items: res.data, category: cat.name };
+        const items = await fetchDirectory(cat.path);
+        return { items, category: cat.name };
       })
     );
 
     for (const result of fetches) {
       if (result.status !== 'fulfilled') continue;
       for (const item of result.value.items) {
-        const nameLC = item.name.toLowerCase();
-        if (nameLC.includes(keyword)) {
+        if (item.name.toLowerCase().includes(keyword)) {
           results.push({ name: item.name, path: item.path, category: result.value.category });
         }
-      }
-    }
-
-    // Also search already-cached file content
-    for (const [cachedPath, entry] of fileCache) {
-      if (results.some(r => r.path === cachedPath)) continue;
-      if (entry.value.toLowerCase().includes(keyword)) {
-        const name = cachedPath.split('/').pop() || cachedPath;
-        const parentDir = cachedPath.split('/').slice(0, -1).join('/');
-        const matchedCat = categories.find(c => parentDir.startsWith(c.path));
-        results.push({ name, path: cachedPath, category: matchedCat?.name ?? parentDir });
       }
     }
 
