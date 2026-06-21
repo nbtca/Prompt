@@ -185,6 +185,7 @@ export interface Translations {
     updated: string;
     updatedSessionOnly: string;
     reset: string;
+    resetLabel: string;
     resetSessionOnly: string;
     usage: string;
     invalidValue: string;

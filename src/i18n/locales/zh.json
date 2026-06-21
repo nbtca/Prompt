@@ -12,19 +12,19 @@
   },
   "menu": {
     "events": "活动",
-    "eventsDesc": "近期活动安排",
+    "eventsDesc": "",
     "docs": "文档",
     "docsDesc": "知识库",
     "status": "状态",
-    "statusDesc": "服务健康检查",
+    "statusDesc": "在线状态",
     "links": "链接",
-    "linksDesc": "官网、GitHub、路线图",
+    "linksDesc": "官网 · GitHub · 路线图",
     "settings": "设置",
-    "settingsDesc": "语言、主题、关于",
-    "chooseAction": "选择一个操作"
+    "settingsDesc": "语言 · 主题 · 关于",
+    "chooseAction": "nbtca"
   },
   "about": {
-    "title": "关于 NBTCA",
+    "title": "关于",
     "project": "项目",
     "version": "版本",
     "description": "描述",
@@ -95,7 +95,7 @@
     "tocTitle": "目录",
     "tableHint": "图表与表格在浏览器中效果更佳",
     "mermaidHint": "在浏览器中查看图表",
-    "endOfDocument": "文档结束 - 按 q 退出",
+    "endOfDocument": "文档结束  ·  q 退出  ·  / 搜索",
     "githubRateLimited": "GitHub API 速率限制已达上限，将在 {time} 重置。",
     "githubForbidden": "GitHub API 拒绝访问 (403)。",
     "githubTokenHint": "提示: 设置 GITHUB_TOKEN 环境变量可获得更高的速率限制。",
@@ -109,7 +109,7 @@
     "loadingFile": "正在加载"
   },
   "links": {
-    "choose": "打开链接:",
+    "choose": "链接",
     "website": "官方网站",
     "github": "GitHub",
     "roadmap": "路线图",
@@ -166,12 +166,13 @@
     "updated": "主题设置已更新",
     "updatedSessionOnly": "主题设置仅在当前会话生效（无法写入配置文件）",
     "reset": "主题设置已重置",
+    "resetLabel": "重置",
     "resetSessionOnly": "主题设置仅在当前会话重置（无法写入配置文件）",
     "usage": "用法: nbtca theme | nbtca theme icon <auto|ascii|unicode> | nbtca theme color <auto|on|off> | nbtca theme reset",
     "invalidValue": "无效取值，可选:"
   },
   "language": {
-    "selectLanguage": "选择语言:",
+    "selectLanguage": "语言",
     "zh": "简体中文",
     "en": "English",
     "changed": "语言已切换",

@@ -31,10 +31,9 @@ export async function showLinksMenu(): Promise<void> {
       { value: URLS.github,   label: trans.links.github },
       { value: URLS.roadmap,  label: trans.links.roadmap },
       { value: URLS.repair,   label: trans.links.repair },
-      { value: '__back__',    label: chalk.dim(trans.common.back) },
     ],
   });
 
-  if (isCancel(selected) || selected === '__back__') return;
-  await openUrl(selected);
+  if (isCancel(selected)) return;
+  await openUrl(selected as string);
 }

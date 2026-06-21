@@ -12,19 +12,19 @@
   },
   "menu": {
     "events": "Events",
-    "eventsDesc": "Upcoming activities",
+    "eventsDesc": "",
     "docs": "Docs",
     "docsDesc": "Knowledge base",
     "status": "Status",
-    "statusDesc": "Service health",
+    "statusDesc": "Online status",
     "links": "Links",
-    "linksDesc": "Website, GitHub, Roadmap",
+    "linksDesc": "website · GitHub · roadmap",
     "settings": "Settings",
-    "settingsDesc": "Language, theme, about",
-    "chooseAction": "Choose an action"
+    "settingsDesc": "language · theme · about",
+    "chooseAction": "nbtca"
   },
   "about": {
-    "title": "About NBTCA",
+    "title": "About",
     "project": "Project",
     "version": "Version",
     "description": "Description",
@@ -95,7 +95,7 @@
     "tocTitle": "Table of Contents",
     "tableHint": "diagrams and tables render better in browser",
     "mermaidHint": "open in browser to view",
-    "endOfDocument": "End of document - Press q to quit",
+    "endOfDocument": "end of document  ·  q quit  ·  / search",
     "githubRateLimited": "GitHub API rate limit reached. Resets at {time}.",
     "githubForbidden": "GitHub API access denied (403).",
     "githubTokenHint": "Tip: set GITHUB_TOKEN for a higher rate limit.",
@@ -109,7 +109,7 @@
     "loadingFile": "Loading"
   },
   "links": {
-    "choose": "Open a link:",
+    "choose": "Links",
     "website": "Official Website",
     "github": "GitHub",
     "roadmap": "Roadmap",
@@ -166,12 +166,13 @@
     "updated": "Theme setting updated",
     "updatedSessionOnly": "Theme setting updated for this session only (failed to save config)",
     "reset": "Theme settings reset",
+    "resetLabel": "Reset",
     "resetSessionOnly": "Theme settings reset for this session only (failed to save config)",
     "usage": "Usage: nbtca theme | nbtca theme icon <auto|ascii|unicode> | nbtca theme color <auto|on|off> | nbtca theme reset",
     "invalidValue": "Invalid value. Use one of:"
   },
   "language": {
-    "selectLanguage": "Select a language:",
+    "selectLanguage": "Language",
     "zh": "简体中文 (Simplified Chinese)",
     "en": "English",
     "changed": "Language changed successfully",

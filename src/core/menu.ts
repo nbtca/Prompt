@@ -4,7 +4,7 @@
 
 import { select, isCancel, outro } from '@clack/prompts';
 import chalk from 'chalk';
-import { showCalendarMenu } from '../features/calendar.js';
+import { showCalendar } from '../features/calendar.js';
 import { showDocsMenu } from '../features/docs.js';
 import { showServiceStatus } from '../features/status.js';
 import { showLinksMenu } from '../features/links.js';
@@ -16,20 +16,18 @@ export type MenuAction = 'events' | 'docs' | 'status' | 'links' | 'settings';
 function getMainMenuOptions() {
   const trans = t();
   return [
-    { value: 'events',   label: trans.menu.events,   hint: trans.menu.eventsDesc },
-    { value: 'docs',     label: trans.menu.docs,     hint: trans.menu.docsDesc },
-    { value: 'status',   label: trans.menu.status,   hint: trans.menu.statusDesc },
-    { value: 'links',    label: trans.menu.links,    hint: trans.menu.linksDesc },
-    { value: 'settings', label: trans.menu.settings,  hint: trans.menu.settingsDesc },
+    { value: 'events',   label: trans.menu.events,   hint: trans.menu.eventsDesc   || undefined },
+    { value: 'docs',     label: trans.menu.docs,     hint: trans.menu.docsDesc     || undefined },
+    { value: 'status',   label: trans.menu.status,   hint: trans.menu.statusDesc   || undefined },
+    { value: 'links',    label: trans.menu.links,    hint: trans.menu.linksDesc    || undefined },
+    { value: 'settings', label: trans.menu.settings, hint: trans.menu.settingsDesc || undefined },
   ];
 }
 
 export async function showMainMenu(): Promise<void> {
   while (true) {
-    const trans = t();
-
     const action = await select({
-      message: trans.menu.chooseAction,
+      message: 'nbtca',
       options: getMainMenuOptions(),
     });
 
@@ -44,7 +42,7 @@ export async function showMainMenu(): Promise<void> {
 
 export async function runMenuAction(action: MenuAction): Promise<void> {
   switch (action) {
-    case 'events':   await showCalendarMenu();    break;
+    case 'events':   await showCalendar();        break;
     case 'docs':     await showDocsMenu();       break;
     case 'status':   await showServiceStatus();  break;
     case 'links':    await showLinksMenu();       break;

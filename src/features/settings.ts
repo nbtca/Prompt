@@ -58,16 +58,15 @@ export async function showSettingsMenu(): Promise<void> {
     const action = await select({
       message: trans.theme.chooseAction,
       options: [
-        { value: 'language', label: trans.language.selectLanguage.replace(':', ''), hint: currentLang === 'zh' ? trans.language.zh : trans.language.en },
+        { value: 'language', label: trans.language.selectLanguage, hint: currentLang === 'zh' ? trans.language.zh : trans.language.en },
         { value: 'icon',     label: trans.theme.iconMode,  hint: prefs.iconMode },
         { value: 'color',    label: trans.theme.colorMode, hint: prefs.colorMode },
-        { value: 'reset',    label: trans.theme.reset },
+        { value: 'reset',    label: trans.theme.resetLabel },
         { value: 'about',    label: trans.about.title },
-        { value: 'back',     label: chalk.dim(trans.common.back) },
       ],
     });
 
-    if (isCancel(action) || action === 'back') return;
+    if (isCancel(action)) return;
 
     if (action === 'about') {
       showAbout();

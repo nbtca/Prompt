@@ -458,7 +458,7 @@ async function displayWithLess(
   const footer = [
     '',
     rule,
-    chalk.dim(`  ${trans.docs.endOfDocument}  ·  / to search`),
+    chalk.dim(`  ${trans.docs.endOfDocument}`),
     '',
   ].join('\n');
 
