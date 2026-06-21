@@ -175,6 +175,61 @@ export async function showEventsPreview(): Promise<void> {
   }
 }
 
+/** Submenu: choose between upcoming and past events. */
+export async function showCalendarMenu(): Promise<void> {
+  const trans = t();
+  const choice = await select({
+    message: trans.menu.chooseAction,
+    options: [
+      { value: 'upcoming', label: trans.menu.events,      hint: trans.menu.eventsDesc },
+      { value: 'past',     label: trans.calendar.pastEvents, hint: trans.calendar.pastEventsDesc },
+      { value: '__back__', label: c.muted(trans.common.back) },
+    ],
+  });
+  if (isCancel(choice) || choice === '__back__') return;
+  if (choice === 'upcoming') await showCalendar();
+  else if (choice === 'past') await showPastEvents();
+}
+
+/** Past events: shows historical events from the last 30 days with detail selection. */
+export async function showPastEvents(): Promise<void> {
+  const trans = t();
+  const s = createSpinner(trans.calendar.pastLoading);
+  try {
+    const cal = await loadCalendarOrThrow();
+    const events = cal.past({ days: 30 }).reverse().map(toDisplayEvent);
+    s.stop(`${events.length} ${trans.calendar.eventsFound}`);
+
+    console.log();
+    console.log(renderEventsTable(events, { color: true }));
+    console.log();
+
+    if (events.length === 0) {
+      info(trans.calendar.noPastEvents);
+      return;
+    }
+
+    const options = [
+      ...events.map((e, i) => ({
+        value: String(i),
+        label: `${e.date}${e.time ? ' ' + e.time : ''}  ${e.title}`,
+        hint: e.location,
+      })),
+      { value: '__back__', label: c.muted(trans.common.back) },
+    ];
+
+    const selected = await select({ message: trans.calendar.viewPastDetail, options });
+    if (!isCancel(selected) && selected !== '__back__') {
+      const event = events[Number.parseInt(selected, 10)];
+      if (event) await showEventDetail(event);
+    }
+  } catch {
+    s.error(trans.calendar.error);
+    console.log(c.muted('  ' + trans.calendar.errorHint));
+    console.log();
+  }
+}
+
 /** Full interactive calendar: heatmap + event list + detail selection. */
 export async function showCalendar(): Promise<void> {
   const trans = t();

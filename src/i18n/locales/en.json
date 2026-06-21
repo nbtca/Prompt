@@ -53,7 +53,12 @@
       "title": "Activity (last 12 months)",
       "legendLess": "Less",
       "legendMore": "More"
-    }
+    },
+    "pastLoading": "Loading past events...",
+    "pastEvents": "Past Events",
+    "pastEventsDesc": "Recent activity history",
+    "noPastEvents": "No past events in the last 30 days",
+    "viewPastDetail": "Select an event for details:"
   },
   "docs": {
     "loading": "Loading documentation list...",

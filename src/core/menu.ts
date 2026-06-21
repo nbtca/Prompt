@@ -4,7 +4,7 @@
 
 import { select, isCancel, outro } from '@clack/prompts';
 import chalk from 'chalk';
-import { showCalendar } from '../features/calendar.js';
+import { showCalendarMenu } from '../features/calendar.js';
 import { showDocsMenu } from '../features/docs.js';
 import { showServiceStatus } from '../features/status.js';
 import { showLinksMenu } from '../features/links.js';
@@ -44,7 +44,7 @@ export async function showMainMenu(): Promise<void> {
 
 export async function runMenuAction(action: MenuAction): Promise<void> {
   switch (action) {
-    case 'events':   await showCalendar();       break;
+    case 'events':   await showCalendarMenu();    break;
     case 'docs':     await showDocsMenu();       break;
     case 'status':   await showServiceStatus();  break;
     case 'links':    await showLinksMenu();       break;

@@ -73,6 +73,11 @@ export interface Translations {
       legendLess: string;
       legendMore: string;
     };
+    pastLoading: string;
+    pastEvents: string;
+    pastEventsDesc: string;
+    noPastEvents: string;
+    viewPastDetail: string;
   };
   docs: {
     loading: string;

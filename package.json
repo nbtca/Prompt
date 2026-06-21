@@ -39,8 +39,8 @@
   ],
   "dependencies": {
     "@clack/prompts": "^1.2.0",
-    "@nbtca/docs": "^0.1.2",
-    "@nbtca/nbtcal": "^0.2.1",
+    "@nbtca/docs": "^0.2.0",
+    "@nbtca/nbtcal": "^0.3.0",
     "chalk": "^5.6.2",
     "gradient-string": "^3.0.0",
     "marked": "^15.0.12",

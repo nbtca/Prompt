@@ -53,7 +53,12 @@
       "title": "近一年活跃度",
       "legendLess": "少",
       "legendMore": "多"
-    }
+    },
+    "pastLoading": "正在加载历史活动...",
+    "pastEvents": "历史活动",
+    "pastEventsDesc": "近期活动记录",
+    "noPastEvents": "最近 30 天内暂无历史活动",
+    "viewPastDetail": "选择活动查看详情:"
   },
   "docs": {
     "loading": "正在加载文档列表...",
