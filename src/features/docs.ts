@@ -169,10 +169,11 @@ function processFencedCodeBlocks(content: string): string {
 
   for (const line of lines) {
     if (!inBlock) {
-      const m = line.match(/^(`{3,})(\w+)?\s*$/);
+      // Accept VitePress code meta after language: ```js{1,3} or ```ts [file.ts] :line-numbers
+      const m = line.match(/^(`{3,})(\w+)?[^`\n]*$/);
       if (m) {
-        inBlock  = true;
-        fence    = m[1]!;
+        inBlock   = true;
+        fence     = m[1]!;
         blockLang = (m[2] ?? '').toLowerCase();
         blockBody = [];
       } else {
@@ -184,7 +185,10 @@ function processFencedCodeBlocks(content: string): string {
         const body = blockBody.join('\n');
 
         if (blockLang === 'mermaid') {
-          const firstToken = body.trim().split(/\s+/)[0] ?? 'diagram';
+          // Skip %%{ init: ... }%% config directives to find the actual diagram type
+          const meaningfulLine = body.trim().split('\n')
+            .find(l => !l.trimStart().startsWith('%%') && l.trim()) ?? '';
+          const firstToken = meaningfulLine.trim().split(/\s+/)[0] ?? 'diagram';
           const icon = pickIcon('📊', '[diagram]');
           result.push(`> ${icon} **${firstToken}** — _${trans.docs.mermaidHint}_`);
         } else {
@@ -247,6 +251,12 @@ function cleanMarkdownContent(content: string, type: TerminalType = getTerminalT
   // 5. [[toc]] — no value in terminal
   c = c.replace(/\[\[toc\]\]/gi, '');
 
+  // 5.5. VitePress heading anchors {#custom-id} — no value in terminal
+  c = c.replace(/^(#{1,6}\s+[^\n]*?)\s*\{#[^}]+\}\s*$/gm, '$1');
+
+  // 5.6. ==highlight== → bold (VitePress extended syntax)
+  c = c.replace(/==([^=\n]+)==/g, '**$1**');
+
   // 6. Images — adapt to terminal capability
   if (type === 'basic') {
     c = c.replace(
@@ -264,6 +274,8 @@ function cleanMarkdownContent(content: string, type: TerminalType = getTerminalT
   c = c.replace(/<!--[\s\S]*?-->/g, '');
 
   // 8. Strip HTML tags, keep inner text
+  c = c.replace(/<br\s*\/?>/gi, '\n');                                   // void: line break
+  c = c.replace(/<(?:hr|input|link|meta)\b[^>]*\/?>/gi, '');            // void: discard
   c = c.replace(/<([a-z][a-z0-9]*)\b[^>]*>([\s\S]*?)<\/\1>/gi, '$2');
   c = c.replace(/<[a-z][a-z0-9]*\b[^>]*\/>/gi, '');
 
