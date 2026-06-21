@@ -6,6 +6,15 @@ import { c } from '../core/theme.js';
 import { createSpinner } from '../core/ui.js';
 import { t } from '../i18n/index.js';
 
+type ServiceGroup = 'nbtca' | 'external' | 'intranet';
+
+interface ServiceTarget {
+  name: string;
+  url: string;
+  group: ServiceGroup;
+  intranet?: boolean;
+}
+
 export interface ServiceStatus {
   name: string;
   url: string;
@@ -13,6 +22,8 @@ export interface ServiceStatus {
   statusCode?: number;
   latencyMs?: number;
   error?: string;
+  group?: ServiceGroup;
+  intranet?: boolean;
 }
 
 export interface StatusCheckOptions {
@@ -20,18 +31,24 @@ export interface StatusCheckOptions {
   retries?: number;
 }
 
-function getServiceTargets() {
+function getServiceTargets(): ServiceTarget[] {
   const trans = t();
   return [
-    { name: trans.status.serviceWebsite,  url: URLS.homepage },
-    { name: trans.status.serviceDocs,     url: URLS.docs },
-    { name: trans.status.serviceCalendar, url: URLS.calendar },
-    { name: trans.status.serviceGithub,   url: URLS.github },
-    { name: trans.status.serviceRoadmap,  url: URLS.roadmap },
+    // NBTCA-owned services
+    { name: trans.status.serviceHomepage, url: URLS.homepage, group: 'nbtca' },
+    { name: trans.status.serviceDocs,     url: URLS.docs,     group: 'nbtca' },
+    { name: trans.status.serviceIcal,     url: URLS.calendar, group: 'nbtca' },
+    { name: trans.status.serviceRepair,   url: URLS.repair,   group: 'nbtca' },
+    // External platforms
+    { name: trans.status.serviceGithub,   url: URLS.github,   group: 'external' },
+    { name: trans.status.serviceRoadmap,  url: URLS.roadmap,  group: 'external' },
+    // Intranet services (campus LAN only)
+    { name: trans.status.serviceCloud,    url: URLS.cloud,    group: 'intranet', intranet: true },
+    { name: trans.status.serviceMirror,   url: URLS.mirror,   group: 'intranet', intranet: true },
   ];
 }
 
-async function checkService(name: string, url: string, timeoutMs: number): Promise<ServiceStatus> {
+async function checkService(name: string, url: string, timeoutMs: number): Promise<Omit<ServiceStatus, 'group' | 'intranet'>> {
   const start = Date.now();
   try {
     const controller = new AbortController();
@@ -55,32 +72,25 @@ async function checkService(name: string, url: string, timeoutMs: number): Promi
 }
 
 async function checkServiceWithRetry(
-  name: string,
-  url: string,
+  target: ServiceTarget,
   timeoutMs: number,
   retries: number
 ): Promise<ServiceStatus> {
-  let lastResult = await checkService(name, url, timeoutMs);
-  if (lastResult.ok) return lastResult;
-
-  for (let attempt = 0; attempt < retries; attempt++) {
-    // Retry for transient transport errors and upstream server errors.
-    if (!lastResult.error && !(lastResult.statusCode != null && lastResult.statusCode >= 500)) {
-      break;
+  let lastResult = await checkService(target.name, target.url, timeoutMs);
+  if (!lastResult.ok) {
+    for (let attempt = 0; attempt < retries; attempt++) {
+      if (!lastResult.error && !(lastResult.statusCode != null && lastResult.statusCode >= 500)) break;
+      lastResult = await checkService(target.name, target.url, timeoutMs);
+      if (lastResult.ok) break;
     }
-    lastResult = await checkService(name, url, timeoutMs);
-    if (lastResult.ok) return lastResult;
   }
-
-  return lastResult;
+  return { ...lastResult, group: target.group, intranet: target.intranet };
 }
 
 export async function checkServices(options: StatusCheckOptions = {}): Promise<ServiceStatus[]> {
   const timeoutMs = options.timeoutMs ?? 6000;
   const retries = options.retries ?? 1;
-  return Promise.all(
-    getServiceTargets().map((service) => checkServiceWithRetry(service.name, service.url, timeoutMs, retries))
-  );
+  return Promise.all(getServiceTargets().map(t => checkServiceWithRetry(t, timeoutMs, retries)));
 }
 
 export function serializeServiceStatus(items: ServiceStatus[]) {
@@ -91,22 +101,20 @@ export function serializeServiceStatus(items: ServiceStatus[]) {
     statusCode: item.statusCode ?? null,
     latencyMs: item.latencyMs ?? null,
     error: item.error ?? null,
+    group: item.group ?? null,
+    intranet: item.intranet ?? false,
   }));
 }
 
 export function hasServiceFailures(items: ServiceStatus[]): boolean {
-  return items.some((item) => !item.ok);
+  return items.some(item => !item.ok && !item.intranet);
 }
 
 export function countServiceHealth(items: ServiceStatus[]): { up: number; down: number } {
   let up = 0;
   let down = 0;
-  for (const item of items) {
-    if (item.ok) {
-      up += 1;
-    } else {
-      down += 1;
-    }
+  for (const item of items.filter(i => !i.intranet)) {
+    if (item.ok) up++; else down++;
   }
   return { up, down };
 }
@@ -114,39 +122,51 @@ export function countServiceHealth(items: ServiceStatus[]): { up: number; down: 
 export function renderServiceStatusTable(items: ServiceStatus[], options?: { color?: boolean }): string {
   const useColor = options?.color !== false;
   const id = (s: string) => s;
-  const applyDim    = useColor ? chalk.dim                  : id;
-  const applyGreen  = useColor ? chalk.green                : id;
-  const applyRed    = useColor ? chalk.red                  : id;
-  const applyCyan   = useColor ? chalk.cyan                 : id;
-  const applyLatency = useColor ? c.latency                 : (ms: number) => `${ms}ms`;
+  const applyDim     = useColor ? chalk.dim    : id;
+  const applyGreen   = useColor ? chalk.green  : id;
+  const applyRed     = useColor ? chalk.red    : id;
+  const applyCyan    = useColor ? chalk.cyan   : id;
+  const applyLatency = useColor ? c.latency    : (ms: number) => `${ms}ms`;
 
   const trans = t();
   const nameWidth = Math.max(...items.map(i => visualWidth(i.name)), visualWidth(trans.status.service));
-  const statusWidth = 10; // "● online" / "✕ offline"
+  const statusWidth = 10;
 
   const onIcon  = pickIcon('●', '+');
   const offIcon = pickIcon('✕', '!');
+  const lanIcon = pickIcon('○', 'o');
   const sep     = pickIcon('─', '-');
 
-  const headerName   = padEndV(applyDim(trans.status.service), nameWidth);
-  const headerStatus = padEndV(applyDim(trans.status.health),  statusWidth);
-  const headerLatency = applyDim(trans.status.latency);
-  const divider = applyDim(sep.repeat(nameWidth + statusWidth + 12));
-
-  const lines: string[] = [
-    `  ${headerName}  ${headerStatus}  ${headerLatency}`,
-    `  ${divider}`,
-  ];
+  const lines: string[] = [];
+  let currentGroup: ServiceGroup | undefined;
 
   for (const item of items) {
-    const nameCol = padEndV(applyCyan(item.name), nameWidth);
+    if (item.group !== currentGroup) {
+      if (currentGroup !== undefined) lines.push('');
 
-    const statusLabel = item.ok
-      ? applyGreen(`${onIcon} ${trans.status.up}`)
-      : applyRed(`${offIcon} ${trans.status.down}`);
+      const groupLabel =
+        item.group === 'nbtca'     ? trans.status.groupNbtca     :
+        item.group === 'external'  ? trans.status.groupExternal  :
+        item.group === 'intranet'  ? trans.status.groupIntranet  : '';
+
+      lines.push(`  ${applyDim(groupLabel)}`);
+      lines.push(`  ${applyDim(sep.repeat(nameWidth + statusWidth + 12))}`);
+      currentGroup = item.group;
+    }
+
+    const nameCol = padEndV(item.intranet ? applyDim(item.name) : applyCyan(item.name), nameWidth);
+
+    let statusLabel: string;
+    if (item.ok) {
+      statusLabel = applyGreen(`${onIcon} ${trans.status.up}`);
+    } else if (item.intranet) {
+      statusLabel = applyDim(`${lanIcon} ${trans.status.down}`);
+    } else {
+      statusLabel = applyRed(`${offIcon} ${trans.status.down}`);
+    }
     const statusCol = padEndV(statusLabel, statusWidth);
 
-    const latencyCol = item.latencyMs != null
+    const latencyCol = item.ok && item.latencyMs != null
       ? applyLatency(item.latencyMs)
       : applyDim('—');
 

@@ -25,6 +25,8 @@ export const URLS = {
   repair:   'https://nbtca.space/repair',
   calendar: 'https://ical.nbtca.space',
   email:    'contact@nbtca.space',
+  cloud:    'https://cloud.nbtca.space',
+  mirror:   'https://i.nbtca.space',
 } as const;
 
 export const GITHUB_REPO = {
