@@ -528,53 +528,37 @@ async function searchDocs(): Promise<void> {
   const keyword = query.trim().toLowerCase();
   const s = createSpinner(trans.docs.searching);
 
-  // Fetch all category directories in parallel
-  const categories = getDocCategories().filter(c => c.path !== 'README.md');
-  const results: { name: string; path: string; category: string }[] = [];
-
   try {
-    const fetches = await Promise.allSettled(
-      categories.map(async cat => {
-        const items = await fetchDirectory(cat.path);
-        return { items, category: cat.name };
-      })
+    const all = await docsClient.listAll();
+    const results = all.filter(item =>
+      item.path.toLowerCase().includes(keyword)
     );
 
-    for (const result of fetches) {
-      if (result.status !== 'fulfilled') continue;
-      for (const item of result.value.items) {
-        if (item.name.toLowerCase().includes(keyword)) {
-          results.push({ name: item.name, path: item.path, category: result.value.category });
-        }
-      }
+    s.stop(`${results.length} ${trans.docs.searchResults}`);
+
+    if (results.length === 0) {
+      warning(trans.docs.searchNoResults);
+      return;
     }
 
-    s.stop(`${results.length} ${trans.docs.searchResults}`);
+    const selected = await select({
+      message: trans.docs.chooseDoc,
+      options: [
+        ...results.map(r => ({
+          value: r.path,
+          label: r.name,
+          hint: r.path.includes('/') ? r.path.split('/').slice(0, -1).join('/') : '',
+        })),
+        { value: '__back__', label: chalk.dim(trans.docs.returnToMenu) },
+      ],
+    });
+
+    if (isCancel(selected) || selected === '__back__') return;
+
+    await viewMarkdownFile(selected);
   } catch {
     s.error(trans.docs.loadError);
-    return;
   }
-
-  if (results.length === 0) {
-    warning(trans.docs.searchNoResults);
-    return;
-  }
-
-  const selected = await select({
-    message: trans.docs.chooseDoc,
-    options: [
-      ...results.map(r => ({
-        value: r.path,
-        label: r.name,
-        hint: r.category,
-      })),
-      { value: '__back__', label: chalk.dim(trans.docs.returnToMenu) },
-    ],
-  });
-
-  if (isCancel(selected) || selected === '__back__') return;
-
-  await viewMarkdownFile(selected);
 }
 
 // ─── Menu ─────────────────────────────────────────────────────────────────────
