@@ -3,7 +3,7 @@ import { markedTerminal } from 'marked-terminal';
 import chalk from 'chalk';
 import open from 'open';
 import { select, isCancel, confirm, text } from '@clack/prompts';
-import { error, warning, success, createSpinner } from '../core/ui.js';
+import { error, warning, createSpinner } from '../core/ui.js';
 import { pickIcon } from '../core/icons.js';
 import { spawn, execFileSync } from 'child_process';
 import { URLS } from '../config/data.js';
@@ -320,9 +320,14 @@ function extractTOC(content: string): string[] {
   });
 }
 
-/** True if the markdown source contains a table (pipe-delimited with separator row). */
+/** True if the markdown source contains a pipe table. */
 function hasMarkdownTable(content: string): boolean {
   return /^\|.+\|/m.test(content) && /^\|[-: |]+\|/m.test(content);
+}
+
+/** True if the markdown source contains a mermaid diagram block. */
+function hasMermaidBlock(content: string): boolean {
+  return /^```mermaid\b/m.test(content);
 }
 
 // ─── Document tree ────────────────────────────────────────────────────────────
@@ -500,11 +505,7 @@ async function showDocSection(section: DocSection): Promise<void> {
   const selected = await select({
     message: section.label,
     options: [
-      ...files.map(f => {
-        const parts = f.path.split('/');
-        const hint = parts.length > 2 ? parts.slice(1, -1).join('/') : '';
-        return { value: f.path, label: cleanFileName(f.name), hint };
-      }),
+      ...files.map(f => ({ value: f.path, label: cleanFileName(f.name) })),
       { value: '__back__', label: chalk.dim(trans.common.back) },
     ],
   });
@@ -533,7 +534,7 @@ async function showArchivedSection(files: DocItem[]): Promise<void> {
       ...sortedKeys.map(k => ({
         value: k,
         label: k,
-        hint: `${groups.get(k)!.length} docs`,
+        hint: String(groups.get(k)!.length),
       })),
       { value: '__back__', label: chalk.dim(trans.common.back) },
     ],
@@ -542,14 +543,18 @@ async function showArchivedSection(files: DocItem[]): Promise<void> {
   if (isCancel(groupKey) || groupKey === '__back__') return;
 
   const groupFiles = groups.get(groupKey as string) ?? [];
+  const subDirs = new Set(groupFiles.map(f => f.path.split('/')[2]).filter(Boolean));
   const fileSelected = await select({
-    message: `${trans.docs.categoryArchived} / ${groupKey}`,
+    message: `${trans.docs.categoryArchived} · ${groupKey}`,
     options: [
-      ...groupFiles.map(f => ({
-        value: f.path,
-        label: cleanFileName(f.name),
-        hint: f.path.split('/').slice(2, -1).join('/'),
-      })),
+      ...groupFiles.map(f => {
+        const sub = f.path.split('/').slice(2, -1).join('/');
+        return {
+          value: f.path,
+          label: cleanFileName(f.name),
+          hint: subDirs.size > 1 ? sub : undefined,
+        };
+      }),
       { value: '__back__', label: chalk.dim(trans.common.back) },
     ],
   });
@@ -562,70 +567,58 @@ async function showArchivedSection(files: DocItem[]): Promise<void> {
 
 async function viewMarkdownFile(filePath: string): Promise<void> {
   const trans = t();
+  try {
+    ensureMarkedConfigured();
+    const s = createSpinner(`${trans.docs.loadingFile}: ${filePath}`);
 
-  while (true) {
-    try {
-      ensureMarkedConfigured();
-      const s = createSpinner(`${trans.docs.loadingFile}: ${filePath}`);
+    const rawContent = await fetchFileContent(filePath);
+    const fingerprint = contentFingerprint(rawContent);
+    const cachedRendered = getFreshRender(filePath);
 
-      const rawContent = await fetchFileContent(filePath);
-      const fingerprint = contentFingerprint(rawContent);
-      const cachedRendered = getFreshRender(filePath);
+    let renderedDoc: RenderedDoc;
+    if (cachedRendered && cachedRendered.fingerprint === fingerprint) {
+      renderedDoc = cachedRendered;
+    } else {
+      const cleaned = cleanMarkdownContent(rawContent, getTerminalType());
+      const title = extractDocTitle(rawContent, cleaned) || cleanFileName(filePath.split('/').pop() ?? filePath);
+      const readTime = estimateReadTime(cleaned);
+      const rendered = await marked(cleaned) as string;
+      renderedDoc = { fingerprint, cleaned, rendered, title, readTime };
+      setRender(filePath, renderedDoc);
+    }
 
-      let renderedDoc: RenderedDoc;
-      if (cachedRendered && cachedRendered.fingerprint === fingerprint) {
-        renderedDoc = cachedRendered;
-      } else {
-        const cleaned = cleanMarkdownContent(rawContent, getTerminalType());
-        const title = extractDocTitle(rawContent, cleaned) || cleanFileName(filePath.split('/').pop() ?? filePath);
-        const readTime = estimateReadTime(cleaned);
-        const rendered = await marked(cleaned) as string;
-        renderedDoc = { fingerprint, cleaned, rendered, title, readTime };
-        setRender(filePath, renderedDoc);
-      }
+    s.stop(`${chalk.bold(renderedDoc.title)}  ${chalk.dim(renderedDoc.readTime)}`);
 
-      s.stop(`${chalk.bold(renderedDoc.title)}  ${chalk.dim(renderedDoc.readTime)}`);
+    const toc = extractTOC(renderedDoc.cleaned);
+    if (hasGlow()) {
+      await displayWithGlow(renderedDoc.cleaned);
+    } else {
+      await displayWithLess(renderedDoc.rendered, renderedDoc.title, filePath, renderedDoc.readTime, toc);
+    }
 
-      const toc = extractTOC(renderedDoc.cleaned);
-      if (hasGlow()) {
-        await displayWithGlow(renderedDoc.cleaned);
-      } else {
-        await displayWithLess(renderedDoc.rendered, renderedDoc.title, filePath, renderedDoc.readTime, toc);
-      }
+    const needsBrowser = hasMarkdownTable(rawContent) || hasMermaidBlock(rawContent);
+    const action = await select({
+      message: trans.docs.chooseAction,
+      options: [
+        { value: 'back',    label: trans.docs.backToList },
+        { value: 'browser', label: trans.docs.openBrowser,
+          hint: needsBrowser ? trans.docs.tableHint : undefined },
+      ],
+    });
 
-      console.log();
-      success(trans.docs.docCompleted);
-      console.log();
+    if (!isCancel(action) && action === 'browser') {
+      await openDocsInBrowser(filePath);
+    }
+  } catch (err: unknown) {
+    error(trans.docs.loadError);
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.log(chalk.gray(`  ${trans.docs.errorHint}: ${errMsg}`));
 
-      const hasTable = hasMarkdownTable(rawContent);
-      const action = await select({
-        message: trans.docs.chooseAction,
-        options: [
-          { value: 'back',    label: trans.docs.backToList },
-          { value: 'reread',  label: trans.docs.reread },
-          { value: 'browser', label: trans.docs.openBrowser,
-            hint: hasTable ? trans.docs.tableHint : undefined },
-        ],
-      });
-
-      if (isCancel(action) || action === 'back') return;
-      if (action === 'browser') {
-        await openDocsInBrowser(filePath);
-        return;
-      }
-      // 'reread' → loop
-    } catch (err: unknown) {
-      error(trans.docs.loadError);
-      const errMsg = err instanceof Error ? err.message : String(err);
-      console.log(chalk.gray(`  ${trans.docs.errorHint}: ${errMsg}`));
-
-      setVimKeysActive(false);
-      const openBrowser = await confirm({ message: trans.docs.openBrowserPrompt });
-      setVimKeysActive(true);
-      if (!isCancel(openBrowser) && openBrowser) {
-        await openDocsInBrowser(filePath);
-      }
-      return;
+    setVimKeysActive(false);
+    const openBrowser = await confirm({ message: trans.docs.openBrowserPrompt });
+    setVimKeysActive(true);
+    if (!isCancel(openBrowser) && openBrowser) {
+      await openDocsInBrowser(filePath);
     }
   }
 }
@@ -707,26 +700,16 @@ export async function showDocsMenu(): Promise<void> {
     const action = await select({
       message: trans.docs.chooseCategory,
       options: [
-        ...sections.map(sec => ({
-          value: sec.key,
-          label: sec.label,
-          hint: `${sec.count} docs`,
-        })),
-        { value: 'search',        label: chalk.dim(trans.docs.searchPrompt.replace(':', '')) },
-        { value: 'refresh-cache', label: chalk.dim(trans.docs.refreshCache) },
-        { value: 'browser',       label: chalk.dim(trans.docs.openBrowser) },
-        { value: 'back',          label: chalk.dim(trans.docs.returnToMenu) },
+        ...sections.map(sec => ({ value: sec.key, label: sec.label })),
+        { value: 'search',  label: chalk.dim(trans.docs.searchPrompt.replace(':', '')) },
+        { value: 'browser', label: chalk.dim(trans.docs.openBrowser) },
       ],
     });
 
-    if (isCancel(action) || action === 'back') return;
+    if (isCancel(action)) return;
 
     if (action === 'search') {
       await searchDocs();
-    } else if (action === 'refresh-cache') {
-      clearDocsCache();
-      sections = (await loadSections()) ?? sections;
-      success(trans.docs.cacheCleared);
     } else if (action === 'browser') {
       await openDocsInBrowser();
     } else {
