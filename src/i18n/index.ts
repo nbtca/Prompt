@@ -125,6 +125,7 @@ export interface Translations {
     loadingFile: string;
     tocTitle: string;
     tableHint: string;
+    mermaidHint: string;
   };
   links: {
     choose: string;

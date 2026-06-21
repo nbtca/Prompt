@@ -153,6 +153,60 @@ async function fetchFileContent(path: string): Promise<string> {
 
 // ─── Content cleaning ─────────────────────────────────────────────────────────
 
+/**
+ * Line-by-line scanner that processes fenced code blocks before marked sees them:
+ * - mermaid blocks → styled blockquote placeholder with diagram type
+ * - other blocks with a language tag → prepend an inline-code label line
+ */
+function processFencedCodeBlocks(content: string): string {
+  const trans = t();
+  const lines = content.split('\n');
+  const result: string[] = [];
+  let inBlock = false;
+  let fence = '';
+  let blockLang = '';
+  let blockBody: string[] = [];
+
+  for (const line of lines) {
+    if (!inBlock) {
+      const m = line.match(/^(`{3,})(\w+)?\s*$/);
+      if (m) {
+        inBlock  = true;
+        fence    = m[1]!;
+        blockLang = (m[2] ?? '').toLowerCase();
+        blockBody = [];
+      } else {
+        result.push(line);
+      }
+    } else {
+      if (line.startsWith(fence) && /^`+\s*$/.test(line)) {
+        inBlock = false;
+        const body = blockBody.join('\n');
+
+        if (blockLang === 'mermaid') {
+          const firstToken = body.trim().split(/\s+/)[0] ?? 'diagram';
+          const icon = pickIcon('📊', '[diagram]');
+          result.push(`> ${icon} **${firstToken}** — _${trans.docs.mermaidHint}_`);
+        } else {
+          if (blockLang) result.push(`\`${blockLang}\``);
+          result.push(fence);
+          result.push(...blockBody);
+          result.push(fence);
+        }
+      } else {
+        blockBody.push(line);
+      }
+    }
+  }
+
+  if (inBlock) {
+    result.push(`${fence}${blockLang}`);
+    result.push(...blockBody);
+  }
+
+  return result.join('\n');
+}
+
 const CONTAINER_ICONS_ASCII: Record<string, string> = {
   info: '[INFO]', tip: '[TIP]', warning: '[WARN]', danger: '[DANGER]', details: '[DETAIL]'
 };
@@ -165,6 +219,9 @@ function cleanMarkdownContent(content: string, type: TerminalType = getTerminalT
 
   // 1. YAML frontmatter
   c = c.replace(/^---\n[\s\S]*?\n---\n?/m, '');
+
+  // 1.5. Fenced code blocks: mermaid → placeholder, other langs → label prefix
+  c = processFencedCodeBlocks(c);
 
   // 2. VitePress script / style blocks
   c = c.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
@@ -209,6 +266,10 @@ function cleanMarkdownContent(content: string, type: TerminalType = getTerminalT
   // 8. Strip HTML tags, keep inner text
   c = c.replace(/<([a-z][a-z0-9]*)\b[^>]*>([\s\S]*?)<\/\1>/gi, '$2');
   c = c.replace(/<[a-z][a-z0-9]*\b[^>]*\/>/gi, '');
+
+  // 8.5. Task list checkboxes
+  c = c.replace(/^(\s*[-*+] )\[x\] /gim, '$1☑ ');
+  c = c.replace(/^(\s*[-*+] )\[ \] /gm,  '$1☐ ');
 
   // 9. Collapse runs of 3+ blank lines
   c = c.replace(/\n{3,}/g, '\n\n');
