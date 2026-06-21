@@ -92,6 +92,8 @@
     "browserError": "Failed to open browser",
     "browserErrorHint": "Please visit manually: https://docs.nbtca.space",
     "retry": "Retry?",
+    "tocTitle": "Table of Contents",
+    "tableHint": "tables render better in browser",
     "endOfDocument": "End of document - Press q to quit",
     "githubRateLimited": "GitHub API rate limit reached. Resets at {time}.",
     "githubForbidden": "GitHub API access denied (403).",

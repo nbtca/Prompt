@@ -123,6 +123,8 @@ export interface Translations {
     searchResults: string;
     searchNoResults: string;
     loadingFile: string;
+    tocTitle: string;
+    tableHint: string;
   };
   links: {
     choose: string;

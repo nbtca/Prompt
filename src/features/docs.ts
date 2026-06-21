@@ -9,7 +9,7 @@ import { spawn, execFileSync } from 'child_process';
 import { URLS } from '../config/data.js';
 import { t, fmt } from '../i18n/index.js';
 import { setVimKeysActive } from '../core/vim-keys.js';
-import { createDocsClient, DocsFetchError } from '@nbtca/docs';
+import { createDocsClient } from '@nbtca/docs';
 import type { DocItem } from '@nbtca/docs';
 
 // ─── Terminal capability detection ───────────────────────────────────────────
@@ -65,7 +65,6 @@ function ensureMarkedConfigured(): void {
 // ─── marked-terminal renderer ─────────────────────────────────────────────────
 
 function getRendererOptions(type: TerminalType): Record<string, unknown> {
-  // Cap at 80 columns — optimal prose reading width regardless of terminal size
   const width = Math.min(process.stdout.columns || 80, 80);
 
   const unicodeTableChars = {
@@ -86,30 +85,16 @@ function getRendererOptions(type: TerminalType): Record<string, unknown> {
     width,
     emoji: true,
     unescape: true,
-
-    // Heading hierarchy: h1 cyan, h2+ white bold
     firstHeading: chalk.bold.cyan,
     heading: chalk.bold.white,
-
-    // Inline code: bright yellow, distinct from prose
     codespan: chalk.yellowBright,
-
-    // Block code: yellow (marked-terminal applies per-line)
     code: chalk.yellow,
-
-    // Blockquotes: italic gray, visually recessed
     blockquote: chalk.italic.gray,
-
-    // Prose emphasis
     strong: chalk.bold,
     em: chalk.italic,
     del: chalk.dim.strikethrough,
-
-    // Links: cyan underline
     link: chalk.cyan,
     href: chalk.cyan.underline,
-
-    // Tables with Unicode borders (fallback to ASCII on basic terminals)
     tableOptions: {
       chars: type === 'basic' ? asciiTableChars : unicodeTableChars
     }
@@ -135,18 +120,6 @@ const renderCache = new Map<string, CacheEntry<RenderedDoc>>();
 
 let docsClient = createDocsClient();
 
-function getDocCategories() {
-  const trans = t();
-  return [
-    { name: trans.docs.categoryTutorial,   path: 'tutorial' },
-    { name: trans.docs.categoryRepairLogs, path: '维修日' },
-    { name: trans.docs.categoryEvents,     path: '相关活动举办' },
-    { name: trans.docs.categoryProcess,    path: 'process' },
-    { name: trans.docs.categoryRepair,     path: 'repair' },
-    { name: trans.docs.categoryArchived,   path: 'archived' },
-  ];
-}
-
 function getFreshRender(key: string): RenderedDoc | null {
   const entry = renderCache.get(key);
   return entry && entry.expiresAt > Date.now() ? entry.value : null;
@@ -167,18 +140,6 @@ function contentFingerprint(content: string): string {
 export function clearDocsCache(): void {
   docsClient.clear();
   renderCache.clear();
-}
-
-async function fetchDirectory(path = ''): Promise<DocItem[]> {
-  try {
-    return await docsClient.listDir(path);
-  } catch (err) {
-    const trans = t();
-    const msg = err instanceof DocsFetchError
-      ? (err.status === 403 ? `${trans.docs.githubForbidden}\n${trans.docs.githubTokenHint}` : `HTTP ${err.status}`)
-      : String(err);
-    throw new Error(fmt(trans.docs.fetchDirFailed, { error: msg }));
-  }
 }
 
 async function fetchFileContent(path: string): Promise<string> {
@@ -210,7 +171,6 @@ function cleanMarkdownContent(content: string, type: TerminalType = getTerminalT
   c = c.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
 
   // 3. VitePress containers → blockquote with icon
-  //    ::: warning Title\ncontent\n:::
   c = c.replace(
     /^:::\s*(info|tip|warning|danger|details)\s*(.*?)\n([\s\S]*?)^:::\s*$/gm,
     (_m, type: string, title: string, body: string) => {
@@ -220,7 +180,6 @@ function cleanMarkdownContent(content: string, type: TerminalType = getTerminalT
       return `> ${icon} **${label}**\n>\n${quoted}\n`;
     }
   );
-  // Remaining bare ::: markers
   c = c.replace(/^:::\s*\w*.*$/gm, '');
 
   // 4. GitHub / GitLab callout alerts  (> [!NOTE])
@@ -258,34 +217,123 @@ function cleanMarkdownContent(content: string, type: TerminalType = getTerminalT
 }
 
 function extractDocTitle(rawContent: string, cleanedContent: string): string | null {
-  // 1. Try YAML frontmatter title: field (before it was stripped)
   const fmMatch = rawContent.match(/^---\n[\s\S]*?\n---/m);
   if (fmMatch) {
     const titleMatch = fmMatch[0].match(/^title:\s*['"]?(.+?)['"]?\s*$/m);
     if (titleMatch?.[1]) return titleMatch[1].trim();
   }
-  // 2. Fallback to first # H1 heading in cleaned content
   const h1Match = cleanedContent.match(/^#\s+(.+)$/m);
   return h1Match?.[1]?.trim() ?? null;
 }
 
 /** Approximate reading time: ~200 words/min for technical Chinese/English prose. */
 function estimateReadTime(text: string): string {
-  const cjkChars = (text.match(/[\u3400-\u9fff]/g) || []).length;
-  const nonCjk = text.replace(/[\u3400-\u9fff]/g, ' ');
+  const cjkChars = (text.match(/[㐀-鿿]/g) || []).length;
+  const nonCjk = text.replace(/[㐀-鿿]/g, ' ');
   const words = nonCjk.trim().split(/\s+/).filter(Boolean).length;
-  // Rough equivalence: 2 CJK chars ~= 1 "word" unit
   const units = words + cjkChars / 2;
   const mins = Math.max(1, Math.ceil(units / 220));
   return mins === 1 ? '~1 min' : `~${mins} min`;
 }
 
-// ─── Pager layer ──────────────────────────────────────────────────────────────
+/** Extract h2/h3 headings for TOC display (skips the h1 title). */
+function extractTOC(content: string): string[] {
+  const lines = content.split('\n').filter(l => /^#{2,3}\s/.test(l));
+  return lines.map(l => {
+    const m = l.match(/^(#+)/);
+    const level = m?.[1]?.length ?? 2;
+    const text = l.replace(/^#+\s+/, '').trim();
+    return (level === 3 ? '  ' : '') + text;
+  });
+}
+
+/** True if the markdown source contains a table (pipe-delimited with separator row). */
+function hasMarkdownTable(content: string): boolean {
+  return /^\|.+\|/m.test(content) && /^\|[-: |]+\|/m.test(content);
+}
+
+// ─── Document tree ────────────────────────────────────────────────────────────
+
+const TOP_SECTION_ORDER = ['tutorial', 'process', 'repair', 'archived'];
+const TOP_SECTION_SKIP = new Set(['docs', 'index.md', 'README.md']);
+
+interface DocSection {
+  key: string;
+  label: string;
+  count: number;
+  files: DocItem[];
+}
 
 /**
- * Display markdown via `glow` (Charmbracelet) if available — best-in-class
- * terminal markdown rendering with built-in pager and mouse support.
+ * Convert a kebab-case filename to a display-friendly title.
+ * Preserves Chinese characters and date prefixes.
  */
+function cleanFileName(name: string): string {
+  const base = name.replace(/\.md$/, '');
+  if (/^[\d.]/.test(base)) return base;
+  return base
+    .replace(/[-_]/g, ' ')
+    .replace(/\b([a-z])/g, (_, c: string) => c.toUpperCase());
+}
+
+/** Group flat DocItem list into top-level sections. */
+function buildSections(all: DocItem[]): DocSection[] {
+  const trans = t();
+  const labelMap: Record<string, string> = {
+    tutorial: trans.docs.categoryTutorial,
+    process:  trans.docs.categoryProcess,
+    repair:   trans.docs.categoryRepair,
+    archived: trans.docs.categoryArchived,
+  };
+
+  const groups = new Map<string, DocItem[]>();
+  for (const item of all) {
+    const parts = item.path.split('/');
+    if (parts.length < 2) continue;
+    const top = parts[0]!;
+    if (TOP_SECTION_SKIP.has(top)) continue;
+    if (!TOP_SECTION_ORDER.includes(top)) continue;
+    if (!groups.has(top)) groups.set(top, []);
+    groups.get(top)!.push(item);
+  }
+
+  return TOP_SECTION_ORDER
+    .filter(k => groups.has(k))
+    .map(k => ({
+      key:   k,
+      label: labelMap[k] ?? k,
+      count: groups.get(k)!.length,
+      files: groups.get(k)!,
+    }));
+}
+
+/** Group archived files by their second path component (year / manual / etc.). */
+function getArchivedGroups(files: DocItem[]): Map<string, DocItem[]> {
+  const groups = new Map<string, DocItem[]>();
+  for (const item of files) {
+    const group = item.path.split('/')[1] ?? 'other';
+    if (!groups.has(group)) groups.set(group, []);
+    groups.get(group)!.push(item);
+  }
+  return groups;
+}
+
+async function loadSections(): Promise<DocSection[] | null> {
+  const trans = t();
+  const s = createSpinner(trans.docs.loading);
+  try {
+    const all = await docsClient.listAll();
+    const sections = buildSections(all);
+    s.stop();
+    return sections;
+  } catch {
+    s.error(trans.docs.loadError);
+    return null;
+  }
+}
+
+// ─── Pager layer ──────────────────────────────────────────────────────────────
+
 async function displayWithGlow(cleanedMarkdown: string): Promise<void> {
   const cols = String(Math.min(process.stdout.columns || 80, 80));
   return new Promise(resolve => {
@@ -295,41 +343,44 @@ async function displayWithGlow(cleanedMarkdown: string): Promise<void> {
     child.stdin.write(cleanedMarkdown, 'utf-8');
     child.stdin.end();
     child.on('close', resolve);
-    child.on('error', resolve); // glow vanished mid-run — caller handles fallback
+    child.on('error', resolve);
   });
 }
 
-/**
- * Display rendered markdown via `less` with a structured document frame.
- * Flags:
- *   -R  pass raw ANSI codes through
- *   -F  exit immediately if content fits on one screen
- *   -X  don't clear the screen on exit
- *   -i  case-insensitive search (/ to search)
- *   -j4 place search hits 4 lines from the top (less jarring)
- */
 async function displayWithLess(
   rendered: string,
   title: string,
   filePath: string,
-  readTime: string
+  readTime: string,
+  toc: string[],
 ): Promise<void> {
   const trans = t();
   const cols = Math.min(process.stdout.columns || 80, 80);
-  const rule = chalk.dim('-'.repeat(cols));
+  const rule = chalk.dim('─'.repeat(cols));
+
+  const tocBlock = toc.length >= 3
+    ? [
+        chalk.dim(`  ${trans.docs.tocTitle}`),
+        chalk.dim(`  ${'─'.repeat(36)}`),
+        ...toc.map(h => chalk.dim(`  ${h}`)),
+        chalk.dim(`  ${'─'.repeat(36)}`),
+        '',
+      ].join('\n')
+    : '';
 
   const header = [
     '',
     chalk.bold.cyan(`  ${title}`),
-    chalk.dim(`  ${filePath}`) + chalk.dim(`  |  ${readTime}`),
+    chalk.dim(`  ${filePath}`) + chalk.dim(`  ·  ${readTime}`),
     rule,
+    ...(tocBlock ? [tocBlock] : []),
     '',
   ].join('\n');
 
   const footer = [
     '',
     rule,
-    chalk.dim(`  ${trans.docs.endOfDocument}  |  / to search`),
+    chalk.dim(`  ${trans.docs.endOfDocument}  ·  / to search`),
     '',
   ].join('\n');
 
@@ -357,72 +408,81 @@ async function displayWithLess(
   });
 }
 
-// ─── Directory browser ────────────────────────────────────────────────────────
+// ─── Section browsers ─────────────────────────────────────────────────────────
 
-async function browseDirectory(initialPath: string = ''): Promise<void> {
-  let currentPath = initialPath;
+/** Show a flat file list for tutorial / process / repair. */
+async function showDocSection(section: DocSection): Promise<void> {
+  const trans = t();
 
-  while (true) {
-    const trans = t();
-    let items: DocItem[];
-    try {
-      const s = createSpinner(currentPath ? `${trans.docs.loadingDir}: ${currentPath}` : trans.docs.loading);
-      items = await fetchDirectory(currentPath);
-      s.stop(currentPath || trans.docs.chooseDoc);
-    } catch (err: unknown) {
-      error(trans.docs.loadError);
-      const errMsg = err instanceof Error ? err.message : String(err);
-      console.log(chalk.gray(`  ${trans.docs.errorHint}: ${errMsg}`));
-
-      setVimKeysActive(false);
-      const retry = await confirm({ message: trans.docs.retry });
-      setVimKeysActive(true);
-      if (!isCancel(retry) && retry) continue;
-      return;
-    }
-
-    if (items.length === 0) {
-      warning(trans.docs.emptyDir);
-      if (currentPath) {
-        currentPath = currentPath.split('/').slice(0, -1).join('/');
-        continue;
-      }
-      return;
-    }
-
-    const options = [
-      ...(currentPath ? [{ value: '__back__', label: chalk.dim(trans.docs.upToParent) }] : []),
-      ...items.map(item => ({
-        value: item.path,
-        label: item.type === 'dir'
-          ? chalk.cyan(`${item.name}/`)
-          : item.name,
-        hint: item.type === 'dir' ? 'dir' : undefined,
-      })),
-      { value: '__exit__', label: chalk.dim(trans.docs.returnToMenu) },
-    ];
-
-    const selected = await select({
-      message: currentPath ? `${trans.docs.currentDir}: ${currentPath}` : trans.docs.chooseDoc,
-      options,
-    });
-
-    if (isCancel(selected) || selected === '__exit__') return;
-
-    if (selected === '__back__') {
-      currentPath = currentPath.split('/').slice(0, -1).join('/');
-      continue;
-    }
-
-    const item = items.find(i => i.path === selected);
-    if (item?.type === 'dir') {
-      currentPath = selected;
-      continue;
-    }
-    if (item?.type === 'file') {
-      await viewMarkdownFile(selected);
-    }
+  if (section.key === 'archived') {
+    await showArchivedSection(section.files);
+    return;
   }
+
+  const files = section.files.filter(f =>
+    f.name !== 'index.md' && !f.name.startsWith('index.')
+  );
+  if (files.length === 0) return;
+
+  const selected = await select({
+    message: section.label,
+    options: [
+      ...files.map(f => {
+        const parts = f.path.split('/');
+        const hint = parts.length > 2 ? parts.slice(1, -1).join('/') : '';
+        return { value: f.path, label: cleanFileName(f.name), hint };
+      }),
+      { value: '__back__', label: chalk.dim(trans.common.back) },
+    ],
+  });
+
+  if (isCancel(selected) || selected === '__back__') return;
+  await viewMarkdownFile(selected as string);
+}
+
+/** Show archived docs grouped by year, then files within the year. */
+async function showArchivedSection(files: DocItem[]): Promise<void> {
+  const trans = t();
+  const groups = getArchivedGroups(files);
+
+  const sortedKeys = [...groups.keys()].sort((a, b) => {
+    const aYear = /^\d{4}$/.test(a);
+    const bYear = /^\d{4}$/.test(b);
+    if (aYear && bYear) return Number(b) - Number(a);
+    if (aYear) return -1;
+    if (bYear) return 1;
+    return a.localeCompare(b);
+  });
+
+  const groupKey = await select({
+    message: trans.docs.categoryArchived,
+    options: [
+      ...sortedKeys.map(k => ({
+        value: k,
+        label: k,
+        hint: `${groups.get(k)!.length} docs`,
+      })),
+      { value: '__back__', label: chalk.dim(trans.common.back) },
+    ],
+  });
+
+  if (isCancel(groupKey) || groupKey === '__back__') return;
+
+  const groupFiles = groups.get(groupKey as string) ?? [];
+  const fileSelected = await select({
+    message: `${trans.docs.categoryArchived} / ${groupKey}`,
+    options: [
+      ...groupFiles.map(f => ({
+        value: f.path,
+        label: cleanFileName(f.name),
+        hint: f.path.split('/').slice(2, -1).join('/'),
+      })),
+      { value: '__back__', label: chalk.dim(trans.common.back) },
+    ],
+  });
+
+  if (isCancel(fileSelected) || fileSelected === '__back__') return;
+  await viewMarkdownFile(fileSelected as string);
 }
 
 // ─── Document viewer ──────────────────────────────────────────────────────────
@@ -444,7 +504,7 @@ async function viewMarkdownFile(filePath: string): Promise<void> {
         renderedDoc = cachedRendered;
       } else {
         const cleaned = cleanMarkdownContent(rawContent, getTerminalType());
-        const title = extractDocTitle(rawContent, cleaned) || filePath.split('/').pop() || filePath;
+        const title = extractDocTitle(rawContent, cleaned) || cleanFileName(filePath.split('/').pop() ?? filePath);
         const readTime = estimateReadTime(cleaned);
         const rendered = await marked(cleaned) as string;
         renderedDoc = { fingerprint, cleaned, rendered, title, readTime };
@@ -453,22 +513,25 @@ async function viewMarkdownFile(filePath: string): Promise<void> {
 
       s.stop(`${chalk.bold(renderedDoc.title)}  ${chalk.dim(renderedDoc.readTime)}`);
 
+      const toc = extractTOC(renderedDoc.cleaned);
       if (hasGlow()) {
         await displayWithGlow(renderedDoc.cleaned);
       } else {
-        await displayWithLess(renderedDoc.rendered, renderedDoc.title, filePath, renderedDoc.readTime);
+        await displayWithLess(renderedDoc.rendered, renderedDoc.title, filePath, renderedDoc.readTime, toc);
       }
 
       console.log();
       success(trans.docs.docCompleted);
       console.log();
 
+      const hasTable = hasMarkdownTable(rawContent);
       const action = await select({
         message: trans.docs.chooseAction,
         options: [
           { value: 'back',    label: trans.docs.backToList },
           { value: 'reread',  label: trans.docs.reread },
-          { value: 'browser', label: trans.docs.openBrowser },
+          { value: 'browser', label: trans.docs.openBrowser,
+            hint: hasTable ? trans.docs.tableHint : undefined },
         ],
       });
 
@@ -477,7 +540,7 @@ async function viewMarkdownFile(filePath: string): Promise<void> {
         await openDocsInBrowser(filePath);
         return;
       }
-      // action === 'reread' → continue loop
+      // 'reread' → loop
     } catch (err: unknown) {
       error(trans.docs.loadError);
       const errMsg = err instanceof Error ? err.message : String(err);
@@ -546,7 +609,7 @@ async function searchDocs(): Promise<void> {
       options: [
         ...results.map(r => ({
           value: r.path,
-          label: r.name,
+          label: cleanFileName(r.name),
           hint: r.path.includes('/') ? r.path.split('/').slice(0, -1).join('/') : '',
         })),
         { value: '__back__', label: chalk.dim(trans.docs.returnToMenu) },
@@ -554,8 +617,7 @@ async function searchDocs(): Promise<void> {
     });
 
     if (isCancel(selected) || selected === '__back__') return;
-
-    await viewMarkdownFile(selected);
+    await viewMarkdownFile(selected as string);
   } catch {
     s.error(trans.docs.loadError);
   }
@@ -564,20 +626,24 @@ async function searchDocs(): Promise<void> {
 // ─── Menu ─────────────────────────────────────────────────────────────────────
 
 export async function showDocsMenu(): Promise<void> {
+  let sections = await loadSections();
+  if (!sections) return;
+
   while (true) {
     const trans = t();
-    const categories = getDocCategories();
-    const options = [
-      ...categories.map(cat => ({ value: cat.path, label: cat.name })),
-      { value: 'search', label: chalk.dim(trans.docs.searchPrompt.replace(':', '')) },
-      { value: 'refresh-cache', label: chalk.dim(trans.docs.refreshCache) },
-      { value: 'browser', label: chalk.dim(trans.docs.openBrowser) },
-      { value: 'back',    label: chalk.dim(trans.docs.returnToMenu) },
-    ];
-
     const action = await select({
       message: trans.docs.chooseCategory,
-      options,
+      options: [
+        ...sections.map(sec => ({
+          value: sec.key,
+          label: sec.label,
+          hint: `${sec.count} docs`,
+        })),
+        { value: 'search',        label: chalk.dim(trans.docs.searchPrompt.replace(':', '')) },
+        { value: 'refresh-cache', label: chalk.dim(trans.docs.refreshCache) },
+        { value: 'browser',       label: chalk.dim(trans.docs.openBrowser) },
+        { value: 'back',          label: chalk.dim(trans.docs.returnToMenu) },
+      ],
     });
 
     if (isCancel(action) || action === 'back') return;
@@ -586,11 +652,13 @@ export async function showDocsMenu(): Promise<void> {
       await searchDocs();
     } else if (action === 'refresh-cache') {
       clearDocsCache();
+      sections = (await loadSections()) ?? sections;
       success(trans.docs.cacheCleared);
     } else if (action === 'browser') {
       await openDocsInBrowser();
     } else {
-      await browseDirectory(action);
+      const section = sections.find(s => s.key === action);
+      if (section) await showDocSection(section);
     }
   }
 }
