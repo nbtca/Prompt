@@ -101,7 +101,8 @@ export function renderEventsTable(events: Event[], options?: { color?: boolean }
   const applyBold = useColor ? chalk.bold  : id;
   const applyGray = useColor ? chalk.gray  : id;
 
-  const dateWidth  = 14;
+  // dateWidth must fit YYYY-MM-DD HH:MM (16 chars) for cross-year events
+  const dateWidth  = 16;
   const titleWidth = 32;
   const locWidth   = 14;
   const sep        = pickIcon('─', '-');
@@ -109,7 +110,8 @@ export function renderEventsTable(events: Event[], options?: { color?: boolean }
   const headerDate  = padEndV(applyDim(trans.calendar.dateTime),  dateWidth);
   const headerTitle = padEndV(applyDim(trans.calendar.eventName), titleWidth);
   const headerLoc   = applyDim(trans.calendar.location);
-  const divider     = applyDim(sep.repeat(dateWidth + titleWidth + locWidth + 8));
+  // divider covers exactly: dateWidth + 2-char sep + titleWidth + 2-char sep + locWidth
+  const divider     = applyDim(sep.repeat(dateWidth + 2 + titleWidth + 2 + locWidth));
 
   const lines: string[] = [
     `  ${headerDate}  ${headerTitle}  ${headerLoc}`,
@@ -118,7 +120,7 @@ export function renderEventsTable(events: Event[], options?: { color?: boolean }
 
   for (const event of events) {
     const dateTime = event.time ? `${event.date} ${event.time}` : event.date;
-    const dateCol  = padEndV(applyCyan(dateTime),                        dateWidth);
+    const dateCol  = padEndV(applyCyan(dateTime),                          dateWidth);
     const titleCol = padEndV(applyBold(truncate(event.title, titleWidth)), titleWidth);
     const locCol   = applyGray(truncate(event.location, locWidth));
     lines.push(`  ${dateCol}  ${titleCol}  ${locCol}`);
