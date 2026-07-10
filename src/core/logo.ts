@@ -11,6 +11,7 @@ import chalk from 'chalk';
 import gradient from 'gradient-string';
 import { useUnicodeIcons } from './icons.js';
 import { APP_INFO } from '../config/data.js';
+import { typeReveal } from './motion.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -39,6 +40,26 @@ function paint(text: string, color: boolean): string {
   return typeof fn.multiline === 'function'
     ? fn.multiline(text)
     : text.split('\n').map((line) => brand(line)).join('\n');
+}
+
+export function buildLogoLines(): string[] {
+  const color = !process.env['NO_COLOR'];
+  const art = useUnicodeIcons() ? readArt('ca-dotmatrix.txt') : readArt('ascii-logo.txt');
+  const paintedArt = paint(art ?? 'NBTCA', color).split('\n');
+
+  return [
+    '',
+    ...paintedArt,
+    '',
+    color ? brand(TAGLINE) : TAGLINE,
+    chalk.dim(`@nbtca/prompt  v${APP_INFO.version}`),
+    '',
+  ];
+}
+
+export async function runStartup(): Promise<void> {
+  if (!process.stdout.isTTY) return;
+  await typeReveal(buildLogoLines());
 }
 
 export function printLogo(): void {
