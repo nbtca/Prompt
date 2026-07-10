@@ -4,8 +4,7 @@
 
 import open from 'open';
 import chalk from 'chalk';
-import { runMenu } from '../core/components/menu.js';
-import { glyph } from '../core/theme.js';
+import { runMenu, menuFooter } from '../core/components/menu.js';
 import { createSpinner } from '../core/ui.js';
 import { URLS } from '../config/data.js';
 import { t } from '../i18n/index.js';
@@ -24,7 +23,6 @@ async function openUrl(url: string): Promise<void> {
 
 export async function showLinksMenu(): Promise<void> {
   const trans = t();
-  const footer = `${glyph.updown()} ${trans.menu.hintMove}   ${glyph.enter()} ${trans.menu.hintOpen}   q ${trans.menu.hintQuit}`;
 
   const selected = await runMenu({
     title: trans.links.choose,
@@ -34,7 +32,7 @@ export async function showLinksMenu(): Promise<void> {
       { value: URLS.roadmap,  label: trans.links.roadmap },
       { value: URLS.repair,   label: trans.links.repair },
     ],
-    footer,
+    footer: menuFooter(),
   });
 
   if (selected === null) return;

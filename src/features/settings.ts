@@ -18,9 +18,8 @@ import { padEndV } from '../core/text.js';
 import { success, warning } from '../core/ui.js';
 import { APP_INFO, URLS } from '../config/data.js';
 import { t, getCurrentLanguage, setLanguage, clearTranslationCache, type Language } from '../i18n/index.js';
-import { runMenu } from '../core/components/menu.js';
+import { runMenu, menuFooter } from '../core/components/menu.js';
 import { note } from '../core/components/note.js';
-import { glyph } from '../core/theme.js';
 
 function notifyResult(saved: boolean, successMsg: string, warningMsg: string): void {
   if (saved) {
@@ -56,7 +55,7 @@ export async function showSettingsMenu(): Promise<void> {
     const trans = t();
     const prefs = loadPreferences();
     const currentLang = getCurrentLanguage();
-    const footer = `${glyph.updown()} ${trans.menu.hintMove}   ${glyph.enter()} ${trans.menu.hintOpen}   q ${trans.menu.hintQuit}`;
+    const footer = menuFooter();
 
     const action = await runMenu({
       title: trans.theme.chooseAction,

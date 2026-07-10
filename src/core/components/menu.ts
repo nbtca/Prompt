@@ -2,6 +2,7 @@ import { glyph, type, space } from '../theme.js';
 import { visualWidth, padEndV } from '../text.js';
 import { ansi, ensureCursorRestored } from '../canvas.js';
 import { createPainter } from './painter.js';
+import { t } from '../../i18n/index.js';
 
 export type MenuKey = 'up' | 'down' | 'home' | 'end' | 'enter' | 'cancel' | 'none';
 
@@ -70,6 +71,12 @@ export function renderMenu(state: MenuState): string {
   return lines.join('\n');
 }
 
+/** Standard navigation keyhint footer shared by every menu surface. */
+export function menuFooter(): string {
+  const m = t().menu;
+  return `${glyph.updown()} ${m.hintMove}   ${glyph.enter()} ${m.hintOpen}   q ${m.hintQuit}`;
+}
+
 export interface RunMenuConfig {
   title: string;
   options: MenuOption[];
@@ -77,6 +84,8 @@ export interface RunMenuConfig {
   initialIndex?: number;
 }
 
+// Note: runMenu relies on ambient vim-key translation (j/k/l/g/G/q) being ACTIVE.
+// Callers must not invoke it with setVimKeysActive(false) still in effect.
 export function runMenu(config: RunMenuConfig): Promise<string | null> {
   return new Promise((resolve) => {
     const stdin = process.stdin;

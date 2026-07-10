@@ -2,8 +2,8 @@ import { loadCalendar, FeedFetchError, FeedParseError } from '@nbtca/nbtcal';
 import type { Calendar, CalendarEvent, HeatmapBucket } from '@nbtca/nbtcal';
 import chalk from 'chalk';
 import { createSpinner } from '../core/ui.js';
-import { c, glyph } from '../core/theme.js';
-import { runMenu } from '../core/components/menu.js';
+import { c } from '../core/theme.js';
+import { runMenu, menuFooter } from '../core/components/menu.js';
 import { pickIcon } from '../core/icons.js';
 import { padEndV, truncate } from '../core/text.js';
 import { t } from '../i18n/index.js';
@@ -204,7 +204,7 @@ async function showPastEvents(): Promise<void> {
       { value: '__back__', label: c.muted(trans.common.back) },
     ];
 
-    const footer = `${glyph.updown()} ${trans.menu.hintMove}   ${glyph.enter()} ${trans.menu.hintOpen}   q ${trans.menu.hintQuit}`;
+    const footer = menuFooter();
     const selected = await runMenu({ title: trans.calendar.viewPastDetail, options, footer });
     if (selected !== null && selected !== '__back__') {
       const event = events[Number.parseInt(selected, 10)];
@@ -259,7 +259,7 @@ export async function showCalendar(): Promise<void> {
       { value: '__back__', label: c.muted(trans.common.back) },
     ];
 
-    const footer = `${glyph.updown()} ${trans.menu.hintMove}   ${glyph.enter()} ${trans.menu.hintOpen}   q ${trans.menu.hintQuit}`;
+    const footer = menuFooter();
     const selected = await runMenu({ title: trans.calendar.viewDetail, options, footer });
     if (selected === null || selected === '__back__') return;
     if (selected === '__past__') { await showPastEvents(); return; }

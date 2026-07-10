@@ -2,22 +2,16 @@ import { marked } from 'marked';
 import { markedTerminal } from 'marked-terminal';
 import chalk from 'chalk';
 import open from 'open';
-import { runMenu } from '../core/components/menu.js';
+import { runMenu, menuFooter } from '../core/components/menu.js';
 import { runTextInput } from '../core/components/text-input.js';
 import { runConfirm } from '../core/components/confirm.js';
-import { glyph } from '../core/theme.js';
-import { error, warning, createSpinner } from '../core/ui.js';
+import { warning, createSpinner } from '../core/ui.js';
 import { pickIcon } from '../core/icons.js';
 import { spawn, execFileSync } from 'child_process';
 import { URLS } from '../config/data.js';
 import { t, fmt } from '../i18n/index.js';
 import { createDocsClient } from '@nbtca/docs';
 import type { DocItem } from '@nbtca/docs';
-
-function menuFooter(): string {
-  const trans = t();
-  return `${glyph.updown()} ${trans.menu.hintMove}   ${glyph.enter()} ${trans.menu.hintOpen}   q ${trans.menu.hintQuit}`;
-}
 
 // ─── Terminal capability detection ───────────────────────────────────────────
 
@@ -577,10 +571,9 @@ async function showArchivedSection(files: DocItem[]): Promise<void> {
 
 async function viewMarkdownFile(filePath: string): Promise<void> {
   const trans = t();
+  ensureMarkedConfigured();
+  const s = createSpinner(`${trans.docs.loadingFile}: ${filePath}`);
   try {
-    ensureMarkedConfigured();
-    const s = createSpinner(`${trans.docs.loadingFile}: ${filePath}`);
-
     const rawContent = await fetchFileContent(filePath);
     const fingerprint = contentFingerprint(rawContent);
     const cachedRendered = getFreshRender(filePath);
@@ -621,7 +614,7 @@ async function viewMarkdownFile(filePath: string): Promise<void> {
       await openDocsInBrowser(filePath);
     }
   } catch (err: unknown) {
-    error(trans.docs.loadError);
+    s.error(trans.docs.loadError);
     const errMsg = err instanceof Error ? err.message : String(err);
     console.log(chalk.gray(`  ${trans.docs.errorHint}: ${errMsg}`));
 
