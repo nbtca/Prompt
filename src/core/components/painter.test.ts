@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createPainter } from './painter.js';
+import { createPainter, frameRows } from './painter.js';
 import { ansi } from '../canvas.js';
 
 describe('createPainter', () => {
@@ -41,5 +41,20 @@ describe('createPainter', () => {
     paint();
     // previous frame was 2 lines, so cursorUp(1)
     expect(writes[0]).toBe(ansi.cursorUp(1) + ansi.cursorToCol0 + ansi.eraseDown);
+  });
+});
+
+describe('frameRows', () => {
+  it('counts one row per short line', () => {
+    expect(frameRows('abc', 80)).toBe(1);
+    expect(frameRows('a\nb\nc', 80)).toBe(3);
+  });
+  it('counts wrapped rows for over-wide lines', () => {
+    expect(frameRows('x'.repeat(90), 80)).toBe(2);
+    expect(frameRows('x'.repeat(161), 80)).toBe(3);
+  });
+  it('treats an empty line as one row', () => {
+    expect(frameRows('', 80)).toBe(1);
+    expect(frameRows('a\n\nb', 80)).toBe(3);
   });
 });
