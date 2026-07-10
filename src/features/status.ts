@@ -1,10 +1,11 @@
 import chalk from 'chalk';
 import { APP_INFO, URLS } from '../config/data.js';
+import { getCapabilities } from '../core/capabilities.js';
+import { createPainter } from '../core/components/painter.js';
 import { pickIcon } from '../core/icons.js';
 import { padEndV, visualWidth } from '../core/text.js';
 import { c } from '../core/theme.js';
 import { createSpinner } from '../core/ui.js';
-import { enterScreen, breadcrumb } from '../core/transitions.js';
 import { t } from '../i18n/index.js';
 
 type ServiceGroup = 'nbtca' | 'external' | 'intranet';
@@ -25,6 +26,7 @@ export interface ServiceStatus {
   error?: string;
   group?: ServiceGroup;
   intranet?: boolean;
+  pending?: boolean;
 }
 
 export interface StatusCheckOptions {
@@ -72,7 +74,7 @@ async function checkService(name: string, url: string, timeoutMs: number): Promi
   }
 }
 
-async function checkServiceWithRetry(
+export async function checkServiceWithRetry(
   target: ServiceTarget,
   timeoutMs: number,
   retries: number
@@ -155,10 +157,12 @@ export function renderServiceStatusTable(items: ServiceStatus[], options?: { col
       currentGroup = item.group;
     }
 
-    const nameCol = padEndV(item.intranet ? applyDim(item.name) : applyCyan(item.name), nameWidth);
+    const nameCol = padEndV(item.pending ? applyDim(item.name) : (item.intranet ? applyDim(item.name) : applyCyan(item.name)), nameWidth);
 
     let statusLabel: string;
-    if (item.ok) {
+    if (item.pending) {
+      statusLabel = applyDim(`${pickIcon('…', '.')} ${trans.status.checking}`);
+    } else if (item.ok) {
       statusLabel = applyGreen(`${onIcon} ${trans.status.up}`);
     } else if (item.intranet) {
       statusLabel = applyDim(`${lanIcon} ${trans.status.down}`);
@@ -167,7 +171,7 @@ export function renderServiceStatusTable(items: ServiceStatus[], options?: { col
     }
     const statusCol = padEndV(statusLabel, statusWidth);
 
-    const latencyCol = item.ok && item.latencyMs != null
+    const latencyCol = !item.pending && item.ok && item.latencyMs != null
       ? applyLatency(item.latencyMs)
       : applyDim('—');
 
@@ -178,18 +182,35 @@ export function renderServiceStatusTable(items: ServiceStatus[], options?: { col
 }
 
 export async function showServiceStatus(): Promise<ServiceStatus[]> {
-  await enterScreen(breadcrumb(t().menu.status));
   const trans = t();
-  const spinner = createSpinner(trans.status.checking);
-  const items = await checkServices();
-  const hasFailures = hasServiceFailures(items);
-  if (hasFailures) {
-    spinner.error(trans.status.summaryFail);
-  } else {
-    spinner.stop(trans.status.summaryOk);
+  const targets = getServiceTargets();
+
+  if (getCapabilities().reducedMotion) {
+    const spinner = createSpinner(trans.status.checking);
+    const items = await checkServices();
+    const hasFailures = hasServiceFailures(items);
+    if (hasFailures) spinner.error(trans.status.summaryFail);
+    else spinner.stop(trans.status.summaryOk);
+    console.log();
+    console.log(renderServiceStatusTable(items, { color: !!process.stdout.isTTY }));
+    console.log();
+    return items;
   }
+
+  const items: ServiceStatus[] = targets.map((tg) => ({
+    name: tg.name, url: tg.url, ok: false, group: tg.group, intranet: tg.intranet, pending: true,
+  }));
+  const paint = createPainter(() => renderServiceStatusTable(items, { color: true }));
   console.log();
-  console.log(renderServiceStatusTable(items, { color: !!process.stdout.isTTY }));
+  paint();
+  await Promise.all(targets.map(async (target, i) => {
+    const status = await checkServiceWithRetry(target, 6000, 1);
+    items[i] = { ...status, pending: false };
+    paint();
+  }));
+  console.log('\n');
+  const hasFailures = hasServiceFailures(items);
+  console.log(hasFailures ? c.warn(trans.status.summaryFail) : c.success(trans.status.summaryOk));
   console.log();
   return items;
 }
