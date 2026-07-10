@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { renderMessage } from './messages.js';
 import { stripAnsi } from '../text.js';
 import { resetIconCache } from '../icons.js';
