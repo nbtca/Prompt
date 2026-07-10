@@ -16,6 +16,7 @@ import { setLanguage, t, fmt, type Language } from './i18n/index.js';
 import { clearScreen, handleGracefulExit } from './core/ui.js';
 import { APP_INFO, URLS } from './config/data.js';
 import { runUpdateCheck } from './features/update.js';
+import { runStudentTimetableCommand } from './features/student-timetable.js';
 
 type CliAction = 'events' | 'status' | 'docs' | 'repair' | 'website' | 'github' | 'roadmap' | 'about';
 
@@ -48,8 +49,11 @@ interface ParsedArgs {
   flags: Set<string>;
 }
 
-const KNOWN_FLAGS = new Set(['--help', '--version', '--open', '--json', '--plain', '--no-logo', '--watch', '--today', '--heatmap', '--week', '--month']);
-const KNOWN_FLAG_PREFIXES = ['--interval=', '--timeout=', '--retries=', '--next=', '--search='];
+const KNOWN_FLAGS = new Set([
+  '--help', '--version', '--open', '--json', '--plain', '--no-logo', '--watch', '--today', '--heatmap',
+  '--week', '--month', '--one-shot', '--no-save',
+]);
+const KNOWN_FLAG_PREFIXES = ['--interval=', '--timeout=', '--retries=', '--next=', '--search=', '--term=', '--output=', '--week-one='];
 const STATUS_WATCH_INTERVAL_MIN = 3;
 const STATUS_WATCH_INTERVAL_MAX = 300;
 const STATUS_TIMEOUT_MIN = 1000;
@@ -91,6 +95,11 @@ function getAllowedFlagsFor(command?: string): Set<string> {
 
   if (command === 'lang' || command === 'language') return allowed;
   if (command === 'theme') return allowed;
+  if (command === 'schedule' || command === 'timetable') {
+    allowed.add('--one-shot');
+    allowed.add('--no-save');
+    return allowed;
+  }
 
   const action = ACTION_ALIASES[command];
   if (!action) return allowed;
@@ -122,6 +131,9 @@ function getAllowedFlagsFor(command?: string): Set<string> {
 
 function getAllowedFlagPrefixesFor(command?: string): string[] {
   if (!command) return [];
+  if (command === 'schedule' || command === 'timetable') {
+    return ['--term=', '--output=', '--week-one='];
+  }
   const action = ACTION_ALIASES[command];
   if (action === 'events') return ['--next=', '--search='];
   if (action === 'status') return ['--interval=', '--timeout=', '--retries='];
@@ -167,6 +179,8 @@ function printHelp(): void {
   console.log(`  events         ${trans.menu.eventsDesc}`);
   console.log(`  docs           ${trans.menu.docsDesc}`);
   console.log(`  status         ${trans.menu.statusDesc}`);
+  console.log('  schedule <login|logout|status|terms|export>');
+  console.log(`                 ${c.cmdSchedule}`);
   console.log(`  website        ${c.cmdWebsite}`);
   console.log(`  github         ${c.cmdGithub}`);
   console.log(`  roadmap        ${c.cmdRoadmap}`);
@@ -192,6 +206,11 @@ function printHelp(): void {
   console.log(`  --retries=<n>      ${c.flagRetries}`);
   console.log(`  --plain            ${c.flagPlain}`);
   console.log(`  --no-logo          ${c.flagNoLogo}`);
+  console.log(`  --one-shot         ${c.flagOneShot}`);
+  console.log(`  --no-save          ${c.flagNoSave}`);
+  console.log(`  --term=<year:code> ${c.flagTerm}`);
+  console.log(`  --output=<path>    ${c.flagOutput}`);
+  console.log(`  --week-one=<date>  ${c.flagWeekOne}`);
 }
 
 async function runEventsCommand(flags: Set<string>): Promise<void> {
@@ -418,6 +437,17 @@ async function runCommandMode(argv: string[]): Promise<void> {
 
   if (command === 'update') {
     await runUpdateCheck();
+    return;
+  }
+
+  if (command === 'schedule' || command === 'timetable') {
+    if (args.length > 1) {
+      console.error(chalk.red(t().timetable.invalidArguments));
+      process.exitCode = 1;
+      return;
+    }
+    const exitCode = await runStudentTimetableCommand(args[0], { flags });
+    if (exitCode !== 0) process.exitCode = exitCode;
     return;
   }
 

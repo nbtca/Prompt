@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { parseInputData, applyInputEvent, renderInput, runTextInput } from './text-input.js';
+import { parseInputData, applyInputEvent, renderInput, runSecretInput, runTextInput } from './text-input.js';
 import { stripAnsi } from '../text.js';
 import { resetIconCache } from '../icons.js';
 
@@ -56,11 +56,27 @@ describe('renderInput', () => {
   it('shows the placeholder when value is empty', () => {
     expect(plain({ message: 'Search', value: '', placeholder: 'type here' })).toContain('type here');
   });
+  it('masks secrets by Unicode code point and never renders their value', () => {
+    const secret = 'p@ss密';
+    const output = plain({ message: 'Password', value: secret, secret: true });
+    expect(output).toContain('*****');
+    expect(output).not.toContain(secret);
+    expect(output).not.toContain('密');
+  });
+  it('supports a caller-selected mask without revealing pasted input', () => {
+    const output = plain({ message: 'Password', value: 'pasted secret', secret: true, mask: '•' });
+    expect(output).toContain('•'.repeat(13));
+    expect(output).not.toContain('pasted secret');
+  });
 });
 
 describe('runTextInput', () => {
   it('resolves null when not attached to a TTY (vitest)', async () => {
     const result = await runTextInput({ message: 'Search', placeholder: 'x' });
+    expect(result).toBeNull();
+  });
+  it('secret wrapper also resolves null without a TTY', async () => {
+    const result = await runSecretInput({ message: 'Password', allowEmpty: false });
     expect(result).toBeNull();
   });
 });

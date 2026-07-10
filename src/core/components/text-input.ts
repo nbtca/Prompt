@@ -28,9 +28,18 @@ export function applyInputEvent(value: string, ev: InputEvent): string {
   return value;
 }
 
-export function renderInput(opts: { message: string; value: string; placeholder?: string }): string {
+export function renderInput(opts: {
+  message: string;
+  value: string;
+  placeholder?: string;
+  secret?: boolean;
+  mask?: string;
+}): string {
+  const visibleValue = opts.secret
+    ? (opts.mask ?? '*').repeat([...opts.value].length)
+    : opts.value;
   const shown = opts.value.length > 0
-    ? type.body(opts.value)
+    ? type.body(visibleValue)
     : type.hint(opts.placeholder ?? '');
   return [
     space.indent + type.label(opts.message),
@@ -41,20 +50,34 @@ export function renderInput(opts: { message: string; value: string; placeholder?
 export interface RunTextInputConfig {
   message: string;
   placeholder?: string;
+  /** Never renders the entered value. */
+  secret?: boolean;
+  mask?: string;
+  /** Defaults to true to preserve existing text-input behavior. */
+  allowEmpty?: boolean;
 }
 
 export function runTextInput(config: RunTextInputConfig): Promise<string | null> {
   return new Promise((resolve) => {
     let value = '';
 
-    const frame = () => renderInput({ message: config.message, value, placeholder: config.placeholder });
+    const frame = () => renderInput({
+      message: config.message,
+      value,
+      placeholder: config.placeholder,
+      secret: config.secret,
+      mask: config.mask,
+    });
 
     const paint = createPainter(frame);
 
     const onData = (data: Buffer) => {
       const ev = parseInputData(data);
       if (ev.type === 'cancel') { finish(null); return; }
-      if (ev.type === 'enter') { finish(value); return; }
+      if (ev.type === 'enter') {
+        if (value.length > 0 || config.allowEmpty !== false) finish(value);
+        return;
+      }
       const next = applyInputEvent(value, ev);
       if (next !== value) { value = next; paint(); }
     };
@@ -71,4 +94,10 @@ export function runTextInput(config: RunTextInputConfig): Promise<string | null>
     if (!handle) { setVimKeysActive(true); resolve(null); return; }
     paint();
   });
+}
+
+export function runSecretInput(
+  config: Omit<RunTextInputConfig, 'secret'>,
+): Promise<string | null> {
+  return runTextInput({ ...config, secret: true });
 }

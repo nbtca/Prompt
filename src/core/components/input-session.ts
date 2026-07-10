@@ -21,6 +21,7 @@ export function startRawInput(onData: (data: Buffer) => void): RawInputHandle | 
       stopped = true;
       stdin.removeListener('data', onData);
       if (stdin.isTTY) stdin.setRawMode(false);
+      stdin.pause();
       process.stdout.write(ansi.showCursor);
     },
   };
