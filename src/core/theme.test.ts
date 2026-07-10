@@ -20,6 +20,34 @@ describe('design tokens', () => {
     resetIconCache();
   });
 
+  it('updown glyph is ↑↓ in unicode mode', () => {
+    process.env['NBTCA_ICON_MODE'] = 'unicode';
+    resetIconCache();
+    expect(glyph.updown()).toBe('↑↓');
+  });
+
+  it('updown glyph falls back to up/down in ascii mode', () => {
+    process.env['NBTCA_ICON_MODE'] = 'ascii';
+    resetIconCache();
+    expect(glyph.updown()).toBe('up/down');
+    process.env['NBTCA_ICON_MODE'] = 'unicode';
+    resetIconCache();
+  });
+
+  it('enter glyph is ⏎ in unicode mode', () => {
+    process.env['NBTCA_ICON_MODE'] = 'unicode';
+    resetIconCache();
+    expect(glyph.enter()).toBe('⏎');
+  });
+
+  it('enter glyph falls back to enter in ascii mode', () => {
+    process.env['NBTCA_ICON_MODE'] = 'ascii';
+    resetIconCache();
+    expect(glyph.enter()).toBe('enter');
+    process.env['NBTCA_ICON_MODE'] = 'unicode';
+    resetIconCache();
+  });
+
   it('indent is three spaces', () => {
     expect(space.indent).toBe('   ');
   });

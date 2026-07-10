@@ -30,6 +30,8 @@ export const glyph = {
   rule:   () => pickIcon('─', '-'),
   bullet: () => pickIcon('·', '.'),
   dot:    () => pickIcon('●', '*'),
+  updown: () => pickIcon('↑↓', 'up/down'),
+  enter:  () => pickIcon('⏎', 'enter'),
 };
 
 export const space = {

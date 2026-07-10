@@ -22,9 +22,9 @@
     "settings": "Settings",
     "settingsDesc": "language · theme · about",
     "chooseAction": "nbtca",
-    "hintMove": "↑↓ move",
-    "hintOpen": "⏎ open",
-    "hintQuit": "q quit"
+    "hintMove": "move",
+    "hintOpen": "open",
+    "hintQuit": "quit"
   },
   "about": {
     "title": "About",
