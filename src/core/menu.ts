@@ -4,6 +4,7 @@
 
 import { runMenu, type MenuOption } from './components/menu.js';
 import { type, space, glyph } from './theme.js';
+import { clearScreen } from './ui.js';
 import { showCalendar } from '../features/calendar.js';
 import { showDocsMenu } from '../features/docs.js';
 import { showServiceStatus } from '../features/status.js';
@@ -26,6 +27,7 @@ function getMainMenuOptions(): MenuOption[] {
 
 export async function showMainMenu(): Promise<void> {
   while (true) {
+    clearScreen();
     const trans = t();
     const footer = `${glyph.updown()} ${trans.menu.hintMove}   ${glyph.enter()} ${trans.menu.hintOpen}   q ${trans.menu.hintQuit}`;
     const action = await runMenu({

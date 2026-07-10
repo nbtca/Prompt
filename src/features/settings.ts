@@ -20,6 +20,7 @@ import { APP_INFO, URLS } from '../config/data.js';
 import { t, getCurrentLanguage, setLanguage, clearTranslationCache, type Language } from '../i18n/index.js';
 import { runMenu, menuFooter } from '../core/components/menu.js';
 import { note } from '../core/components/note.js';
+import { enterScreen, breadcrumb } from '../core/transitions.js';
 
 function notifyResult(saved: boolean, successMsg: string, warningMsg: string): void {
   if (saved) {
@@ -51,6 +52,7 @@ function showAbout(): void {
 }
 
 export async function showSettingsMenu(): Promise<void> {
+  await enterScreen(breadcrumb(t().menu.settings));
   while (true) {
     const trans = t();
     const prefs = loadPreferences();

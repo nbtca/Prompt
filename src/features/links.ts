@@ -8,6 +8,7 @@ import { runMenu, menuFooter } from '../core/components/menu.js';
 import { createSpinner } from '../core/ui.js';
 import { URLS } from '../config/data.js';
 import { t } from '../i18n/index.js';
+import { enterScreen, breadcrumb } from '../core/transitions.js';
 
 async function openUrl(url: string): Promise<void> {
   const trans = t();
@@ -23,6 +24,7 @@ async function openUrl(url: string): Promise<void> {
 
 export async function showLinksMenu(): Promise<void> {
   const trans = t();
+  await enterScreen(breadcrumb(trans.menu.links));
 
   const selected = await runMenu({
     title: trans.links.choose,

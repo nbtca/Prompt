@@ -10,6 +10,7 @@ import { pickIcon } from '../core/icons.js';
 import { spawn, execFileSync } from 'child_process';
 import { URLS } from '../config/data.js';
 import { t, fmt } from '../i18n/index.js';
+import { enterScreen, breadcrumb } from '../core/transitions.js';
 import { createDocsClient } from '@nbtca/docs';
 import type { DocItem } from '@nbtca/docs';
 
@@ -693,6 +694,7 @@ async function searchDocs(): Promise<void> {
 // ─── Menu ─────────────────────────────────────────────────────────────────────
 
 export async function showDocsMenu(): Promise<void> {
+  await enterScreen(breadcrumb(t().menu.docs));
   let sections = await loadSections();
   if (!sections) return;
 

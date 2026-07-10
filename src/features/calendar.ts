@@ -7,6 +7,7 @@ import { runMenu, menuFooter } from '../core/components/menu.js';
 import { pickIcon } from '../core/icons.js';
 import { padEndV, truncate } from '../core/text.js';
 import { t } from '../i18n/index.js';
+import { enterScreen, breadcrumb } from '../core/transitions.js';
 import { URLS } from '../config/data.js';
 import { renderHeatmap } from './calendar-heatmap.js';
 
@@ -220,6 +221,7 @@ async function showPastEvents(): Promise<void> {
 /** Full interactive calendar: heatmap + event list + detail selection. */
 export async function showCalendar(): Promise<void> {
   const trans = t();
+  await enterScreen(breadcrumb(trans.menu.events));
   const s = createSpinner(trans.calendar.loading);
   try {
     const cal = await loadCalendarOrThrow();
