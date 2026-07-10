@@ -432,7 +432,7 @@ async function runCommandMode(argv: string[]): Promise<void> {
   }
 
   if (action === 'about') {
-    const { note } = await import('@clack/prompts');
+    const { note } = await import('./core/components/note.js');
     const { padEndV } = await import('./core/text.js');
     const pad = 12;
     const row  = (label: string, value: string) => `${chalk.dim(padEndV(label, pad))}${value}`;
