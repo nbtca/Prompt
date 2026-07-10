@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { parseInputData, applyInputEvent, renderInput } from './text-input.js';
+import { parseInputData, applyInputEvent, renderInput, runTextInput } from './text-input.js';
 import { stripAnsi } from '../text.js';
 import { resetIconCache } from '../icons.js';
 
@@ -49,5 +49,12 @@ describe('renderInput', () => {
   });
   it('shows the placeholder when value is empty', () => {
     expect(plain({ message: 'Search', value: '', placeholder: 'type here' })).toContain('type here');
+  });
+});
+
+describe('runTextInput', () => {
+  it('resolves null when not attached to a TTY (vitest)', async () => {
+    const result = await runTextInput({ message: 'Search', placeholder: 'x' });
+    expect(result).toBeNull();
   });
 });
