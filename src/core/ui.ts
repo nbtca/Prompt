@@ -1,40 +1,15 @@
 /**
  * Minimalist UI component library
- * Delegates to @clack/prompts for modern terminal output
+ * Delegates to self-rendered widgets for terminal output
  */
 
-import { log, spinner as clackSpinner } from '@clack/prompts';
+import { success, error, warning, info } from './components/messages.js';
+import { startSpinner } from './components/spinner.js';
 import chalk from 'chalk';
 import { pickIcon } from './icons.js';
 import { t } from '../i18n/index.js';
 
-/**
- * Display success message
- */
-export function success(msg: string): void {
-  log.success(msg);
-}
-
-/**
- * Display error message
- */
-export function error(msg: string): void {
-  log.error(msg);
-}
-
-/**
- * Display info message
- */
-export function info(msg: string): void {
-  log.info(msg);
-}
-
-/**
- * Display warning message
- */
-export function warning(msg: string): void {
-  log.warn(msg);
-}
+export { success, error, warning, info };
 
 /**
  * Display divider line
@@ -68,9 +43,7 @@ export function printNewLine(count: number = 1): void {
  * Caller is responsible for calling .stop(msg) or .stop(msg, 1) on error.
  */
 export function createSpinner(msg: string) {
-  const s = clackSpinner();
-  s.start(msg);
-  return s;
+  return startSpinner(msg);
 }
 
 export function handleGracefulExit(err: unknown): never {
