@@ -1,4 +1,5 @@
 import chalk from 'chalk';
+import { pickIcon } from './icons.js';
 
 export const c = {
   brand:   (s: string) => chalk.hex('#0ea5e9')(s),
@@ -22,4 +23,22 @@ export const c = {
     if (ms < 1000) return chalk.yellow(s);
     return chalk.red(s);
   },
+};
+
+export const glyph = {
+  cursor: () => pickIcon('→', '>'),
+  rule:   () => pickIcon('─', '-'),
+  bullet: () => pickIcon('·', '.'),
+  dot:    () => pickIcon('●', '*'),
+};
+
+export const space = {
+  indent: '   ',
+} as const;
+
+export const type = {
+  heading: (s: string) => chalk.bold.white(s),
+  label:   (s: string) => chalk.white(s),
+  body:    (s: string) => s,
+  hint:    (s: string) => chalk.dim(s),
 };
