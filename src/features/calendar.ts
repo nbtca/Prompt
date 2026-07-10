@@ -2,7 +2,7 @@ import { loadCalendar, FeedFetchError, FeedParseError } from '@nbtca/nbtcal';
 import type { Calendar, CalendarEvent, HeatmapBucket } from '@nbtca/nbtcal';
 import chalk from 'chalk';
 import { createSpinner } from '../core/ui.js';
-import { c } from '../core/theme.js';
+import { c, type, space } from '../core/theme.js';
 import { runMenu, menuFooter } from '../core/components/menu.js';
 import { pickIcon } from '../core/icons.js';
 import { padEndV, truncate } from '../core/text.js';
@@ -94,7 +94,7 @@ export function renderEventsTable(events: Event[], options?: { color?: boolean }
   const trans = t();
   const useColor = options?.color !== false;
 
-  if (events.length === 0) return `  ${trans.calendar.noEvents}`;
+  if (events.length === 0) return `${space.indent}${type.hint(trans.calendar.noEvents)}`;
 
   const id       = (s: string) => s;
   const applyDim  = useColor ? chalk.dim   : id;
