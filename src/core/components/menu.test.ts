@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseKey, nextIndex, renderMenu } from './menu.js';
+import { parseKey, nextIndex, renderMenu, runMenu } from './menu.js';
 import { stripAnsi } from '../text.js';
 import { resetIconCache } from '../icons.js';
 
@@ -83,5 +83,15 @@ describe('renderMenu', () => {
     const lines = plain();
     expect(lines.some((l) => l.includes('3 upcoming'))).toBe(true);
     expect(lines.some((l) => l.includes('wiki'))).toBe(true);
+  });
+});
+
+describe('runMenu', () => {
+  it('resolves null when not attached to a TTY (vitest)', async () => {
+    const result = await runMenu({
+      title: 'nbtca',
+      options: [{ value: 'events', label: 'Events' }],
+    });
+    expect(result).toBeNull();
   });
 });

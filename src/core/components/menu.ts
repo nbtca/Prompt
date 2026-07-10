@@ -1,5 +1,6 @@
 import { glyph, type, space } from '../theme.js';
 import { visualWidth, padEndV } from '../text.js';
+import { ansi, ensureCursorRestored } from '../canvas.js';
 
 export type MenuKey = 'up' | 'down' | 'home' | 'end' | 'enter' | 'cancel' | 'none';
 
@@ -66,4 +67,74 @@ export function renderMenu(state: MenuState): string {
   }
 
   return lines.join('\n');
+}
+
+export interface RunMenuConfig {
+  title: string;
+  options: MenuOption[];
+  footer?: string;
+  initialIndex?: number;
+}
+
+export function runMenu(config: RunMenuConfig): Promise<string | null> {
+  return new Promise((resolve) => {
+    const stdin = process.stdin;
+    if (!stdin.isTTY || !process.stdout.isTTY) {
+      resolve(null);
+      return;
+    }
+
+    let index = config.initialIndex ?? 0;
+    let painted = 0;
+
+    const frame = () =>
+      renderMenu({
+        title: config.title,
+        options: config.options,
+        selectedIndex: index,
+        footer: config.footer,
+      });
+
+    const paint = () => {
+      const f = frame();
+      const lineCount = f.split('\n').length;
+      if (painted > 0) {
+        process.stdout.write(ansi.cursorUp(painted - 1) + ansi.cursorToCol0 + ansi.eraseDown);
+      }
+      process.stdout.write(f);
+      painted = lineCount;
+    };
+
+    const cleanup = () => {
+      stdin.removeListener('data', onData);
+      if (stdin.isTTY) stdin.setRawMode(false);
+      process.stdout.write('\n' + ansi.showCursor);
+    };
+
+    const onData = (data: Buffer) => {
+      const key = parseKey(data);
+      if (key === 'cancel') {
+        cleanup();
+        resolve(null);
+        return;
+      }
+      if (key === 'enter') {
+        cleanup();
+        resolve(config.options[index]?.value ?? null);
+        return;
+      }
+      const next = nextIndex(index, key, config.options.length);
+      if (next !== index) {
+        index = next;
+        paint();
+      }
+    };
+
+    ensureCursorRestored();
+    stdin.setRawMode(true);
+    stdin.resume();
+    process.stdout.write(ansi.hideCursor);
+    paint();
+    stdin.on('data', onData);
+  });
 }
