@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { parseKey, nextIndex } from './menu.js';
+import { parseKey, nextIndex, renderMenu } from './menu.js';
+import { stripAnsi } from '../text.js';
+import { resetIconCache } from '../icons.js';
 
 describe('parseKey', () => {
   it('maps arrow sequences', () => {
@@ -40,5 +42,46 @@ describe('nextIndex', () => {
   });
   it('empty list stays at 0', () => {
     expect(nextIndex(0, 'down', 0)).toBe(0);
+  });
+});
+
+describe('renderMenu', () => {
+  const state = {
+    title: 'nbtca',
+    options: [
+      { value: 'events', label: 'Events', hint: '3 upcoming' },
+      { value: 'docs', label: 'Docs', hint: 'wiki' },
+    ],
+    selectedIndex: 0,
+    footer: 'up/down move',
+  };
+
+  function plain(): string[] {
+    process.env['NBTCA_ICON_MODE'] = 'ascii';
+    resetIconCache();
+    const out = stripAnsi(renderMenu(state)).split('\n');
+    process.env['NBTCA_ICON_MODE'] = 'unicode';
+    resetIconCache();
+    return out;
+  }
+
+  it('marks the selected option with the cursor glyph', () => {
+    const lines = plain();
+    const eventsLine = lines.find((l) => l.includes('Events'))!;
+    const docsLine = lines.find((l) => l.includes('Docs'))!;
+    expect(eventsLine).toContain('>');
+    expect(docsLine).not.toContain('>');
+  });
+
+  it('includes the title and the footer', () => {
+    const lines = plain();
+    expect(lines[0]).toContain('nbtca');
+    expect(lines[lines.length - 1]).toContain('up/down move');
+  });
+
+  it('renders hints for each option', () => {
+    const lines = plain();
+    expect(lines.some((l) => l.includes('3 upcoming'))).toBe(true);
+    expect(lines.some((l) => l.includes('wiki'))).toBe(true);
   });
 });
