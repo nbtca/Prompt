@@ -2,15 +2,22 @@ import { marked } from 'marked';
 import { markedTerminal } from 'marked-terminal';
 import chalk from 'chalk';
 import open from 'open';
-import { select, isCancel, confirm, text } from '@clack/prompts';
+import { runMenu } from '../core/components/menu.js';
+import { runTextInput } from '../core/components/text-input.js';
+import { runConfirm } from '../core/components/confirm.js';
+import { glyph } from '../core/theme.js';
 import { error, warning, createSpinner } from '../core/ui.js';
 import { pickIcon } from '../core/icons.js';
 import { spawn, execFileSync } from 'child_process';
 import { URLS } from '../config/data.js';
 import { t, fmt } from '../i18n/index.js';
-import { setVimKeysActive } from '../core/vim-keys.js';
 import { createDocsClient } from '@nbtca/docs';
 import type { DocItem } from '@nbtca/docs';
+
+function menuFooter(): string {
+  const trans = t();
+  return `${glyph.updown()} ${trans.menu.hintMove}   ${glyph.enter()} ${trans.menu.hintOpen}   q ${trans.menu.hintQuit}`;
+}
 
 // ─── Terminal capability detection ───────────────────────────────────────────
 
@@ -502,16 +509,17 @@ async function showDocSection(section: DocSection): Promise<void> {
   );
   if (files.length === 0) return;
 
-  const selected = await select({
-    message: section.label,
+  const selected = await runMenu({
+    title: section.label,
     options: [
       ...files.map(f => ({ value: f.path, label: cleanFileName(f.name) })),
       { value: '__back__', label: chalk.dim(trans.common.back) },
     ],
+    footer: menuFooter(),
   });
 
-  if (isCancel(selected) || selected === '__back__') return;
-  await viewMarkdownFile(selected as string);
+  if (selected === null || selected === '__back__') return;
+  await viewMarkdownFile(selected);
 }
 
 /** Show archived docs grouped by year, then files within the year. */
@@ -528,8 +536,8 @@ async function showArchivedSection(files: DocItem[]): Promise<void> {
     return a.localeCompare(b);
   });
 
-  const groupKey = await select({
-    message: trans.docs.categoryArchived,
+  const groupKey = await runMenu({
+    title: trans.docs.categoryArchived,
     options: [
       ...sortedKeys.map(k => ({
         value: k,
@@ -538,14 +546,15 @@ async function showArchivedSection(files: DocItem[]): Promise<void> {
       })),
       { value: '__back__', label: chalk.dim(trans.common.back) },
     ],
+    footer: menuFooter(),
   });
 
-  if (isCancel(groupKey) || groupKey === '__back__') return;
+  if (groupKey === null || groupKey === '__back__') return;
 
-  const groupFiles = groups.get(groupKey as string) ?? [];
+  const groupFiles = groups.get(groupKey) ?? [];
   const subDirs = new Set(groupFiles.map(f => f.path.split('/')[2]).filter(Boolean));
-  const fileSelected = await select({
-    message: `${trans.docs.categoryArchived} · ${groupKey}`,
+  const fileSelected = await runMenu({
+    title: `${trans.docs.categoryArchived} · ${groupKey}`,
     options: [
       ...groupFiles.map(f => {
         const sub = f.path.split('/').slice(2, -1).join('/');
@@ -557,10 +566,11 @@ async function showArchivedSection(files: DocItem[]): Promise<void> {
       }),
       { value: '__back__', label: chalk.dim(trans.common.back) },
     ],
+    footer: menuFooter(),
   });
 
-  if (isCancel(fileSelected) || fileSelected === '__back__') return;
-  await viewMarkdownFile(fileSelected as string);
+  if (fileSelected === null || fileSelected === '__back__') return;
+  await viewMarkdownFile(fileSelected);
 }
 
 // ─── Document viewer ──────────────────────────────────────────────────────────
@@ -597,16 +607,17 @@ async function viewMarkdownFile(filePath: string): Promise<void> {
     }
 
     const needsBrowser = hasMarkdownTable(rawContent) || hasMermaidBlock(rawContent);
-    const action = await select({
-      message: trans.docs.chooseAction,
+    const action = await runMenu({
+      title: trans.docs.chooseAction,
       options: [
         { value: 'back',    label: trans.docs.backToList },
         { value: 'browser', label: trans.docs.openBrowser,
           hint: needsBrowser ? trans.docs.tableHint : undefined },
       ],
+      footer: menuFooter(),
     });
 
-    if (!isCancel(action) && action === 'browser') {
+    if (action === 'browser') {
       await openDocsInBrowser(filePath);
     }
   } catch (err: unknown) {
@@ -614,10 +625,8 @@ async function viewMarkdownFile(filePath: string): Promise<void> {
     const errMsg = err instanceof Error ? err.message : String(err);
     console.log(chalk.gray(`  ${trans.docs.errorHint}: ${errMsg}`));
 
-    setVimKeysActive(false);
-    const openBrowser = await confirm({ message: trans.docs.openBrowserPrompt });
-    setVimKeysActive(true);
-    if (!isCancel(openBrowser) && openBrowser) {
+    const openBrowser = await runConfirm({ message: trans.docs.openBrowserPrompt });
+    if (openBrowser === true) {
       await openDocsInBrowser(filePath);
     }
   }
@@ -645,14 +654,12 @@ export async function openDocsInBrowser(path?: string): Promise<void> {
 
 async function searchDocs(): Promise<void> {
   const trans = t();
-  setVimKeysActive(false);
-  const query = await text({
+  const query = await runTextInput({
     message: trans.docs.searchPrompt,
     placeholder: trans.docs.searchPlaceholder,
   });
-  setVimKeysActive(true);
 
-  if (isCancel(query) || !query.trim()) return;
+  if (query === null || !query.trim()) return;
 
   const keyword = query.trim().toLowerCase();
   const s = createSpinner(trans.docs.searching);
@@ -670,8 +677,8 @@ async function searchDocs(): Promise<void> {
       return;
     }
 
-    const selected = await select({
-      message: trans.docs.chooseDoc,
+    const selected = await runMenu({
+      title: trans.docs.chooseDoc,
       options: [
         ...results.map(r => ({
           value: r.path,
@@ -680,10 +687,11 @@ async function searchDocs(): Promise<void> {
         })),
         { value: '__back__', label: chalk.dim(trans.docs.returnToMenu) },
       ],
+      footer: menuFooter(),
     });
 
-    if (isCancel(selected) || selected === '__back__') return;
-    await viewMarkdownFile(selected as string);
+    if (selected === null || selected === '__back__') return;
+    await viewMarkdownFile(selected);
   } catch {
     s.error(trans.docs.loadError);
   }
@@ -697,16 +705,17 @@ export async function showDocsMenu(): Promise<void> {
 
   while (true) {
     const trans = t();
-    const action = await select({
-      message: trans.docs.chooseCategory,
+    const action = await runMenu({
+      title: trans.docs.chooseCategory,
       options: [
         ...sections.map(sec => ({ value: sec.key, label: sec.label })),
         { value: 'search',  label: chalk.dim(trans.docs.searchPrompt.replace(':', '')) },
         { value: 'browser', label: chalk.dim(trans.docs.openBrowser) },
       ],
+      footer: menuFooter(),
     });
 
-    if (isCancel(action)) return;
+    if (action === null) return;
 
     if (action === 'search') {
       await searchDocs();
