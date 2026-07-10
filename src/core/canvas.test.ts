@@ -20,7 +20,13 @@ describe('ansi builders', () => {
 });
 
 describe('ensureCursorRestored', () => {
-  it('is idempotent (safe to call twice)', () => {
-    expect(() => { ensureCursorRestored(); ensureCursorRestored(); }).not.toThrow();
+  it('registers at most one exit listener across repeated calls', () => {
+    const before = process.listenerCount('exit');
+    ensureCursorRestored();
+    const afterFirst = process.listenerCount('exit');
+    ensureCursorRestored();
+    const afterSecond = process.listenerCount('exit');
+    expect(afterFirst - before).toBeLessThanOrEqual(1);
+    expect(afterSecond).toBe(afterFirst);
   });
 });

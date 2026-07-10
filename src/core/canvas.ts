@@ -17,8 +17,4 @@ export function ensureCursorRestored(): void {
     if (process.stdout.isTTY) process.stdout.write(ansi.showCursor);
   };
   process.on('exit', restore);
-  process.on('SIGINT', () => {
-    restore();
-    process.exit(0);
-  });
 }
