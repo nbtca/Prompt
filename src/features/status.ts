@@ -6,6 +6,7 @@ import { pickIcon } from '../core/icons.js';
 import { padEndV, visualWidth } from '../core/text.js';
 import { c } from '../core/theme.js';
 import { createSpinner } from '../core/ui.js';
+import { enterScreen, breadcrumb } from '../core/transitions.js';
 import { t } from '../i18n/index.js';
 
 type ServiceGroup = 'nbtca' | 'external' | 'intranet';
@@ -183,6 +184,7 @@ export function renderServiceStatusTable(items: ServiceStatus[], options?: { col
 
 export async function showServiceStatus(): Promise<ServiceStatus[]> {
   const trans = t();
+  await enterScreen(breadcrumb(trans.menu.status));
   const targets = getServiceTargets();
 
   if (getCapabilities().reducedMotion) {
