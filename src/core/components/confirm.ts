@@ -1,7 +1,7 @@
 import { startRawInput } from './input-session.js';
-import { ansi } from '../canvas.js';
 import { setVimKeysActive } from '../vim-keys.js';
 import { glyph, type, space } from '../theme.js';
+import { createPainter } from './painter.js';
 
 export type ConfirmEvent = 'yes' | 'no' | 'toggle' | 'submit' | 'cancel' | 'none';
 
@@ -34,19 +34,10 @@ export interface RunConfirmConfig {
 export function runConfirm(config: RunConfirmConfig): Promise<boolean | null> {
   return new Promise((resolve) => {
     let value = config.initial ?? true;
-    let painted = 0;
 
     const frame = () => renderConfirm({ message: config.message, value });
 
-    const paint = () => {
-      const f = frame();
-      const lineCount = f.split('\n').length;
-      if (painted > 0) {
-        process.stdout.write(ansi.cursorUp(painted - 1) + ansi.cursorToCol0 + ansi.eraseDown);
-      }
-      process.stdout.write(f);
-      painted = lineCount;
-    };
+    const paint = createPainter(frame);
 
     const finish = (result: boolean | null) => {
       handle?.stop();

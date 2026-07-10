@@ -1,7 +1,7 @@
 import { glyph, type, space } from '../theme.js';
 import { startRawInput } from './input-session.js';
-import { ansi } from '../canvas.js';
 import { setVimKeysActive } from '../vim-keys.js';
+import { createPainter } from './painter.js';
 
 export type InputEvent =
   | { type: 'char'; ch: string }
@@ -13,11 +13,13 @@ export type InputEvent =
 export function parseInputData(data: Buffer | string): InputEvent {
   const s = data.toString();
   if (s === '\r' || s === '\n') return { type: 'enter' };
-  if (s === '\x03' || s === '\x1b') return { type: 'cancel' };
+  if (s === '\x03') return { type: 'cancel' };          // ctrl-c
+  if (s === '\x1b') return { type: 'cancel' };           // bare esc
   if (s === '\x7f' || s === '\b') return { type: 'backspace' };
-  // Single printable character (not a control byte, not a multi-byte escape seq)
-  if ([...s].length === 1 && s >= ' ') return { type: 'char', ch: s };
-  return { type: 'none' };
+  if (s.startsWith('\x1b')) return { type: 'none' };     // escape sequence (arrows, etc.)
+  // printable run: drop control chars, keep the rest (supports paste / batched keys)
+  const text = [...s].filter((ch) => ch >= ' ' && ch !== '\x7f').join('');
+  return text.length > 0 ? { type: 'char', ch: text } : { type: 'none' };
 }
 
 export function applyInputEvent(value: string, ev: InputEvent): string {
@@ -44,19 +46,10 @@ export interface RunTextInputConfig {
 export function runTextInput(config: RunTextInputConfig): Promise<string | null> {
   return new Promise((resolve) => {
     let value = '';
-    let painted = 0;
 
     const frame = () => renderInput({ message: config.message, value, placeholder: config.placeholder });
 
-    const paint = () => {
-      const f = frame();
-      const lineCount = f.split('\n').length;
-      if (painted > 0) {
-        process.stdout.write(ansi.cursorUp(painted - 1) + ansi.cursorToCol0 + ansi.eraseDown);
-      }
-      process.stdout.write(f);
-      painted = lineCount;
-    };
+    const paint = createPainter(frame);
 
     const onData = (data: Buffer) => {
       const ev = parseInputData(data);

@@ -19,6 +19,12 @@ describe('parseInputData', () => {
   it('ignores other control/escape sequences as none', () => {
     expect(parseInputData('\x1b[A').type).toBe('none');
   });
+  it('classifies a multi-char run (paste / batched keys) as one char event', () => {
+    expect(parseInputData('hello')).toEqual({ type: 'char', ch: 'hello' });
+  });
+  it('drops embedded control chars from a batched chunk but keeps the printables', () => {
+    expect(parseInputData('ab\x01cd')).toEqual({ type: 'char', ch: 'abcd' });
+  });
 });
 
 describe('applyInputEvent', () => {

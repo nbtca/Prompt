@@ -1,6 +1,7 @@
 import { glyph, type, space } from '../theme.js';
 import { visualWidth, padEndV } from '../text.js';
 import { ansi, ensureCursorRestored } from '../canvas.js';
+import { createPainter } from './painter.js';
 
 export type MenuKey = 'up' | 'down' | 'home' | 'end' | 'enter' | 'cancel' | 'none';
 
@@ -85,25 +86,15 @@ export function runMenu(config: RunMenuConfig): Promise<string | null> {
     }
 
     let index = config.initialIndex ?? 0;
-    let painted = 0;
 
-    const frame = () =>
+    const paint = createPainter(() =>
       renderMenu({
         title: config.title,
         options: config.options,
         selectedIndex: index,
         footer: config.footer,
-      });
-
-    const paint = () => {
-      const f = frame();
-      const lineCount = f.split('\n').length;
-      if (painted > 0) {
-        process.stdout.write(ansi.cursorUp(painted - 1) + ansi.cursorToCol0 + ansi.eraseDown);
-      }
-      process.stdout.write(f);
-      painted = lineCount;
-    };
+      }),
+    );
 
     const cleanup = () => {
       stdin.removeListener('data', onData);
