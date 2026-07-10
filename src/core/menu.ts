@@ -26,8 +26,10 @@ function getMainMenuOptions(): MenuOption[] {
 }
 
 export async function showMainMenu(): Promise<void> {
+  let first = true;
   while (true) {
-    clearScreen();
+    if (!first) clearScreen();
+    first = false;
     const trans = t();
     const footer = `${glyph.updown()} ${trans.menu.hintMove}   ${glyph.enter()} ${trans.menu.hintOpen}   q ${trans.menu.hintQuit}`;
     const action = await runMenu({

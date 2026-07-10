@@ -162,7 +162,7 @@ export function renderServiceStatusTable(items: ServiceStatus[], options?: { col
 
     let statusLabel: string;
     if (item.pending) {
-      statusLabel = applyDim(`${pickIcon('…', '.')} ${trans.status.checking}`);
+      statusLabel = applyDim(pickIcon('…', '.'));
     } else if (item.ok) {
       statusLabel = applyGreen(`${onIcon} ${trans.status.up}`);
     } else if (item.intranet) {
@@ -202,7 +202,7 @@ export async function showServiceStatus(): Promise<ServiceStatus[]> {
   const items: ServiceStatus[] = targets.map((tg) => ({
     name: tg.name, url: tg.url, ok: false, group: tg.group, intranet: tg.intranet, pending: true,
   }));
-  const paint = createPainter(() => renderServiceStatusTable(items, { color: true }));
+  const paint = createPainter(() => renderServiceStatusTable(items, { color: getCapabilities().color }));
   console.log();
   paint();
   await Promise.all(targets.map(async (target, i) => {
