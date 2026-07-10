@@ -1,4 +1,4 @@
-import { printLogo } from './core/logo.js';
+import { runStartup } from './core/logo.js';
 import { clearScreen, handleGracefulExit } from './core/ui.js';
 import { showMainMenu } from './core/menu.js';
 import { c } from './core/theme.js';
@@ -19,7 +19,7 @@ export async function main(options: MainOptions = {}): Promise<void> {
     }
 
     if (!options.skipLogo) {
-      printLogo();
+      await runStartup();
     }
 
     // Fire update check in background; events fetch provides natural wait time

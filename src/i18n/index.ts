@@ -41,6 +41,9 @@ export interface Translations {
     settings: string;
     settingsDesc: string;
     chooseAction: string;
+    hintMove: string;
+    hintOpen: string;
+    hintQuit: string;
   };
   about: {
     title: string;

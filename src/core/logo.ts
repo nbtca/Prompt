@@ -61,17 +61,3 @@ export async function runStartup(): Promise<void> {
   if (!process.stdout.isTTY) return;
   await typeReveal(buildLogoLines());
 }
-
-export function printLogo(): void {
-  if (!process.stdout.isTTY) return;
-
-  const color = !process.env['NO_COLOR'];
-  const art = useUnicodeIcons() ? readArt('ca-dotmatrix.txt') : readArt('ascii-logo.txt');
-
-  console.log();
-  console.log(paint(art ?? 'NBTCA', color));
-  console.log();
-  console.log(color ? brand(TAGLINE) : TAGLINE);
-  console.log(chalk.dim(`@nbtca/prompt  v${APP_INFO.version}`));
-  console.log();
-}

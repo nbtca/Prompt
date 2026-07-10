@@ -21,7 +21,10 @@
     "linksDesc": "website · GitHub · roadmap",
     "settings": "Settings",
     "settingsDesc": "language · theme · about",
-    "chooseAction": "nbtca"
+    "chooseAction": "nbtca",
+    "hintMove": "↑↓ move",
+    "hintOpen": "⏎ open",
+    "hintQuit": "q quit"
   },
   "about": {
     "title": "About",

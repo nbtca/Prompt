@@ -2,8 +2,8 @@
  * Minimalist menu system
  */
 
-import { select, isCancel, outro } from '@clack/prompts';
-import chalk from 'chalk';
+import { runMenu, type MenuOption } from './components/menu.js';
+import { type, space } from './theme.js';
 import { showCalendar } from '../features/calendar.js';
 import { showDocsMenu } from '../features/docs.js';
 import { showServiceStatus } from '../features/status.js';
@@ -13,7 +13,7 @@ import { t } from '../i18n/index.js';
 
 export type MenuAction = 'events' | 'docs' | 'status' | 'links' | 'settings';
 
-function getMainMenuOptions() {
+function getMainMenuOptions(): MenuOption[] {
   const trans = t();
   return [
     { value: 'events',   label: trans.menu.events,   hint: trans.menu.eventsDesc   || undefined },
@@ -26,13 +26,16 @@ function getMainMenuOptions() {
 
 export async function showMainMenu(): Promise<void> {
   while (true) {
-    const action = await select({
-      message: 'nbtca',
+    const trans = t();
+    const footer = `${trans.menu.hintMove}   ${trans.menu.hintOpen}   ${trans.menu.hintQuit}`;
+    const action = await runMenu({
+      title: trans.menu.chooseAction,
       options: getMainMenuOptions(),
+      footer,
     });
 
-    if (isCancel(action)) {
-      outro(chalk.dim(t().common.goodbye));
+    if (action === null) {
+      console.log(space.indent + type.hint(t().common.goodbye));
       process.exit(0);
     }
 

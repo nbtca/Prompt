@@ -21,7 +21,10 @@
     "linksDesc": "官网 · GitHub · 路线图",
     "settings": "设置",
     "settingsDesc": "语言 · 主题 · 关于",
-    "chooseAction": "nbtca"
+    "chooseAction": "nbtca",
+    "hintMove": "↑↓ 移动",
+    "hintOpen": "⏎ 打开",
+    "hintQuit": "q 退出"
   },
   "about": {
     "title": "关于",
