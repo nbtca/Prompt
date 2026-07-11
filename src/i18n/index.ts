@@ -237,6 +237,9 @@ export interface Translations {
     flagOpen: string;
     flagJson: string;
     flagToday: string;
+    flagWeek: string;
+    flagMonth: string;
+    flagSearch: string;
     flagNext: string;
     flagWatch: string;
     flagInterval: string;

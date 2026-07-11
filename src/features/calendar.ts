@@ -83,6 +83,10 @@ export async function fetchEvents(): Promise<Event[]> {
   return (await loadCalendarOrThrow()).upcoming({ days: 30 }).map(toDisplayEvent);
 }
 
+export async function fetchInRange(start: Date, end: Date): Promise<Event[]> {
+  return (await loadCalendarOrThrow()).inRange(start, end).map(toDisplayEvent);
+}
+
 export async function fetchHeatmapBuckets(): Promise<HeatmapBucket[]> {
   const now = new Date();
   const start = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);

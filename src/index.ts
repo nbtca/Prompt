@@ -5,7 +5,7 @@
 import chalk from 'chalk';
 import open from 'open';
 import { main } from './main.js';
-import { fetchEvents, fetchHeatmapBuckets, renderEventsTable, serializeEvents } from './features/calendar.js';
+import { fetchEvents, fetchHeatmapBuckets, renderEventsTable, serializeEvents, type Event } from './features/calendar.js';
 import { renderHeatmap } from './features/calendar-heatmap.js';
 import { checkServices, countServiceHealth, hasServiceFailures, renderServiceStatusTable, serializeServiceStatus } from './features/status.js';
 import { pickIcon } from './core/icons.js';
@@ -48,8 +48,8 @@ interface ParsedArgs {
   flags: Set<string>;
 }
 
-const KNOWN_FLAGS = new Set(['--help', '--version', '--open', '--json', '--plain', '--no-logo', '--watch', '--today', '--heatmap']);
-const KNOWN_FLAG_PREFIXES = ['--interval=', '--timeout=', '--retries=', '--next='];
+const KNOWN_FLAGS = new Set(['--help', '--version', '--open', '--json', '--plain', '--no-logo', '--watch', '--today', '--heatmap', '--week', '--month']);
+const KNOWN_FLAG_PREFIXES = ['--interval=', '--timeout=', '--retries=', '--next=', '--search='];
 const STATUS_WATCH_INTERVAL_MIN = 3;
 const STATUS_WATCH_INTERVAL_MAX = 300;
 const STATUS_TIMEOUT_MIN = 1000;
@@ -100,6 +100,8 @@ function getAllowedFlagsFor(command?: string): Set<string> {
       allowed.add('--json');
       allowed.add('--today');
       allowed.add('--heatmap');
+      allowed.add('--week');
+      allowed.add('--month');
       return allowed;
     case 'status':
       allowed.add('--json');
@@ -121,7 +123,7 @@ function getAllowedFlagsFor(command?: string): Set<string> {
 function getAllowedFlagPrefixesFor(command?: string): string[] {
   if (!command) return [];
   const action = ACTION_ALIASES[command];
-  if (action === 'events') return ['--next='];
+  if (action === 'events') return ['--next=', '--search='];
   if (action === 'status') return ['--interval=', '--timeout=', '--retries='];
   return [];
 }
@@ -180,6 +182,9 @@ function printHelp(): void {
   console.log(`  --json             ${c.flagJson}`);
   console.log(`  --heatmap          ${c.flagHeatmap}`);
   console.log(`  --today            ${c.flagToday}`);
+  console.log(`  --week             ${c.flagWeek}`);
+  console.log(`  --month            ${c.flagMonth}`);
+  console.log(`  --search=<q>       ${c.flagSearch}`);
   console.log(`  --next=<n>         ${c.flagNext}`);
   console.log(`  --watch            ${c.flagWatch}`);
   console.log(`  --interval=<s>     ${c.flagInterval}`);
@@ -201,7 +206,25 @@ async function runEventsCommand(flags: Set<string>): Promise<void> {
     return;
   }
 
-  let events = await fetchEvents();
+  const { weekRange, monthRange } = await import('./features/calendar-query.js');
+  const { fetchInRange } = await import('./features/calendar.js');
+  const now0 = new Date();
+  let events: Event[];
+  if (flags.has('--week')) {
+    const r = weekRange(now0);
+    events = await fetchInRange(r.start, r.end);
+  } else if (flags.has('--month')) {
+    const r = monthRange(now0);
+    events = await fetchInRange(r.start, r.end);
+  } else {
+    events = await fetchEvents();
+  }
+
+  const searchFlag = Array.from(flags).find(f => f.startsWith('--search='));
+  if (searchFlag) {
+    const q = searchFlag.slice('--search='.length).toLowerCase();
+    events = events.filter(e => `${e.title} ${e.location}`.toLowerCase().includes(q));
+  }
 
   if (flags.has('--today')) {
     const now = new Date();
