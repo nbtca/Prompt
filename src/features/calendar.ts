@@ -1,16 +1,17 @@
 import { loadCalendar, FeedFetchError, FeedParseError, eventToICS } from '@nbtca/nbtcal';
 import type { Calendar, CalendarEvent, HeatmapBucket } from '@nbtca/nbtcal';
 import chalk from 'chalk';
-import { createSpinner } from '../core/ui.js';
+import { createSpinner, success, error } from '../core/ui.js';
 import { c, type, space, glyph } from '../core/theme.js';
 import { runMenu, menuFooter } from '../core/components/menu.js';
+import { runTextInput } from '../core/components/text-input.js';
 import { pickIcon } from '../core/icons.js';
 import { padEndV, truncate } from '../core/text.js';
 import { t } from '../i18n/index.js';
 import { enterScreen, breadcrumb } from '../core/transitions.js';
 import { URLS } from '../config/data.js';
 import { renderHeatmap } from './calendar-heatmap.js';
-import { countdownParts, buildExportFilename } from './calendar-query.js';
+import { countdownParts, buildExportFilename, weekRange, monthRange, filterEvents } from './calendar-query.js';
 import { writeFileSync } from 'fs';
 import { join } from 'path';
 
@@ -164,22 +165,6 @@ function renderSubscribeHint(): void {
   console.log(c.muted(`  ${icon} ${t().calendar.subscribeHint}: ${URLS.calendar}`));
 }
 
-async function showEventDetail(event: Event): Promise<void> {
-  const trans = t();
-  console.log();
-  console.log(chalk.bold.cyan(`  ${event.title}`));
-  console.log(c.muted(`  ${event.date}${event.time ? ' ' + event.time : ''}  ${pickIcon('·', '|')}  ${event.location}`));
-  if (event.description) {
-    console.log();
-    for (const line of event.description.trim().split('\n')) {
-      console.log(`  ${line}`);
-    }
-  } else {
-    console.log(c.muted(`  ${trans.calendar.noDescription}`));
-  }
-  console.log();
-}
-
 /** Startup preview: auto-loads and displays upcoming events, then returns. */
 export async function showEventsPreview(): Promise<void> {
   const trans = t();
@@ -206,101 +191,112 @@ export async function showEventsPreview(): Promise<void> {
   }
 }
 
-/** Past events: shows historical events from the last 30 days with detail selection. */
-async function showPastEvents(): Promise<void> {
-  const trans = t();
-  const s = createSpinner(trans.calendar.pastLoading);
-  try {
-    const cal = await loadCalendarOrThrow();
-    const events = cal.past({ days: 30 }).reverse().map(toDisplayEvent);
-
-    if (events.length === 0) {
-      s.stop(trans.calendar.noPastEvents);
-      console.log();
-      return;
-    }
-
-    s.stop(`${events.length} ${trans.calendar.eventsFound}`);
-    console.log();
-    console.log(renderEventsTable(events, { color: true }));
-    console.log();
-
-    const options = [
-      ...events.map((e, i) => ({
-        value: String(i),
-        label: `${e.date}${e.time ? ' ' + e.time : ''}  ${e.title}`,
-        hint: e.location,
-      })),
-      { value: '__back__', label: c.muted(trans.common.back) },
-    ];
-
-    const footer = menuFooter();
-    const selected = await runMenu({ title: trans.calendar.viewPastDetail, options, footer });
-    if (selected !== null && selected !== '__back__') {
-      const event = events[Number.parseInt(selected, 10)];
-      if (event) await showEventDetail(event);
-    }
-  } catch {
-    s.error(trans.calendar.error);
-    console.log(c.muted('  ' + trans.calendar.errorHint));
-    console.log();
-  }
-}
-
-/** Full interactive calendar: heatmap + event list + detail selection. */
+/** Full interactive calendar hub: countdown + heatmap + a menu of range/search/past views. */
 export async function showCalendar(): Promise<void> {
   const trans = t();
   await enterScreen(breadcrumb(trans.menu.events));
-  const s = createSpinner(trans.calendar.loading);
+  const spinner = createSpinner(trans.calendar.loading);
+  let cal: Calendar;
   try {
-    const cal = await loadCalendarOrThrow();
-    const events = cal.upcoming({ days: 30 }).map(toDisplayEvent);
-
-    const now = new Date();
-    const heatmapBuckets = cal.heatmap({
-      start: new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000),
-      end: now,
-      bucket: 'day',
-    });
-
-    if (events.length === 0) {
-      s.stop(trans.calendar.noEvents);
-      console.log();
-      console.log(renderHeatmap(heatmapBuckets, now, { color: true }));
-      console.log();
-      return;
-    }
-
-    s.stop(`${events.length} ${trans.calendar.eventsFound}`);
-    console.log();
-    console.log(renderHeatmap(heatmapBuckets, now, { color: true }));
-    console.log();
-    console.log(renderEventsTable(events, { color: true }));
-    console.log();
-    renderSubscribeHint();
-    console.log();
-
-    const options = [
-      ...events.map((e, i) => ({
-        value: String(i),
-        label: `${e.date}${e.time ? ' ' + e.time : ''}  ${e.title}`,
-        hint: e.location,
-      })),
-      { value: '__past__', label: chalk.dim(trans.calendar.pastEvents) },
-      { value: '__back__', label: c.muted(trans.common.back) },
-    ];
-
-    const footer = menuFooter();
-    const selected = await runMenu({ title: trans.calendar.viewDetail, options, footer });
-    if (selected === null || selected === '__back__') return;
-    if (selected === '__past__') { await showPastEvents(); return; }
-    const event = events[Number.parseInt(selected, 10)];
-    if (event) await showEventDetail(event);
+    cal = await loadCalendarOrThrow();
+    spinner.stop();
   } catch {
-    s.error(trans.calendar.error);
+    spinner.error(trans.calendar.error);
     console.log(c.muted('  ' + trans.calendar.errorHint));
     console.log();
+    return;
   }
+
+  const now = new Date();
+  const upcoming = cal.upcoming({ days: 30 });
+  console.log();
+  console.log(renderCountdownBanner(upcoming[0] ? toDisplayEvent(upcoming[0]) : undefined, now));
+  console.log();
+  console.log(renderHeatmap(cal.heatmap({ start: new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000), end: now, bucket: 'day' }), now, { color: true }));
+  console.log();
+
+  while (true) {
+    const action = await runMenu({
+      title: trans.calendar.viewDetail,
+      options: [
+        { value: 'upcoming', label: trans.menu.events, hint: String(upcoming.length) },
+        { value: 'week',     label: trans.calendar.thisWeek },
+        { value: 'month',    label: trans.calendar.thisMonth },
+        { value: 'search',   label: trans.calendar.search },
+        { value: 'past',     label: trans.calendar.pastEvents },
+      ],
+      footer: menuFooter(),
+    });
+    if (action === null) return;
+    if (action === 'upcoming') await showEventList(upcoming, trans.menu.events);
+    else if (action === 'week')  { const r = weekRange(now);  await showEventList(cal.inRange(r.start, r.end), trans.calendar.thisWeek); }
+    else if (action === 'month') { const r = monthRange(now); await showEventList(cal.inRange(r.start, r.end), trans.calendar.thisMonth); }
+    else if (action === 'search') await showSearch(cal);
+    else if (action === 'past')  await showEventList(cal.past({ days: 30 }).reverse(), trans.calendar.pastEvents);
+  }
+}
+
+async function showEventList(events: CalendarEvent[], title: string): Promise<void> {
+  const trans = t();
+  if (events.length === 0) {
+    console.log(`${space.indent}${type.hint(trans.calendar.noEvents)}`);
+    console.log();
+    return;
+  }
+  const display = events.map(toDisplayEvent);
+  console.log();
+  console.log(renderEventsTable(display, { color: true }));
+  console.log();
+  const selected = await runMenu({
+    title,
+    options: events.map((_e, i) => ({
+      value: String(i),
+      label: `${display[i]!.date}${display[i]!.time ? ' ' + display[i]!.time : ''}  ${display[i]!.title}`,
+      hint: display[i]!.location,
+    })),
+    footer: menuFooter(),
+  });
+  if (selected === null) return;
+  const raw = events[Number.parseInt(selected, 10)];
+  if (raw) await showEventDetailRaw(raw);
+}
+
+async function showEventDetailRaw(raw: CalendarEvent): Promise<void> {
+  const trans = t();
+  const e = toDisplayEvent(raw);
+  console.log();
+  console.log(chalk.bold.cyan(`  ${e.title}`));
+  console.log(c.muted(`  ${e.date}${e.time ? ' ' + e.time : ''}  ${pickIcon('·', '|')}  ${e.location}`));
+  if (raw.recurring) console.log(c.muted(`  ${pickIcon('↻', '~')} ${trans.calendar.recurringLabel}`));
+  if (e.description) { console.log(); for (const line of e.description.trim().split('\n')) console.log(`  ${line}`); }
+  else console.log(c.muted(`  ${trans.calendar.noDescription}`));
+  console.log();
+
+  const action = await runMenu({
+    title: e.title,
+    options: [{ value: 'export', label: trans.calendar.exportIcs }],
+    footer: menuFooter(),
+  });
+  if (action === 'export') {
+    const res = exportEventIcs(raw);
+    if (res.ok) success(`${trans.calendar.exportSuccess}: ${res.path}`);
+    else error(`${trans.calendar.exportError}: ${res.error ?? ''}`);
+  }
+}
+
+async function showSearch(cal: Calendar): Promise<void> {
+  const trans = t();
+  const query = await runTextInput({ message: trans.calendar.searchPrompt, placeholder: trans.calendar.searchPlaceholder });
+  if (query === null || !query.trim()) return;
+  const now = new Date();
+  const pool = cal.inRange(now, new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000));
+  const results = filterEvents(pool, query);
+  if (results.length === 0) {
+    console.log(`${space.indent}${type.hint(trans.calendar.searchNoResults)}`);
+    console.log();
+    return;
+  }
+  await showEventList(results, `${trans.calendar.search}: ${query.trim()}`);
 }
 
 export function exportEventIcs(event: CalendarEvent, dir: string = process.cwd()): { ok: boolean; path: string; error?: string } {
