@@ -4,8 +4,10 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import type { CalendarEvent } from '@nbtca/nbtcal';
-import { toDisplayEvent } from './calendar.js';
+import { toDisplayEvent, renderEventsTable } from './calendar.js';
 import { setLanguage } from '../i18n/index.js';
+import { stripAnsi } from '../core/text.js';
+import { resetIconCache } from '../core/icons.js';
 
 beforeAll(() => {
   setLanguage('en');
@@ -97,5 +99,23 @@ describe('toDisplayEvent recurring/uid', () => {
     const result = toDisplayEvent(e);
     expect(result.recurring).toBe(true);
     expect(result.uid).toBe('abc-123');
+  });
+});
+
+describe('renderEventsTable recurring marker', () => {
+  it('prefixes recurring events with the ascii recurring marker', () => {
+    process.env['NBTCA_ICON_MODE'] = 'ascii'; resetIconCache();
+    const events = [toDisplayEvent(makeEvent({ title: 'Weekly Sync', recurring: true }))];
+    const out = stripAnsi(renderEventsTable(events, { color: false }));
+    process.env['NBTCA_ICON_MODE'] = 'unicode'; resetIconCache();
+    expect(out).toContain('~ Weekly Sync');
+  });
+  it('does not mark non-recurring events', () => {
+    process.env['NBTCA_ICON_MODE'] = 'ascii'; resetIconCache();
+    const events = [toDisplayEvent(makeEvent({ title: 'One Off', recurring: false }))];
+    const out = stripAnsi(renderEventsTable(events, { color: false }));
+    process.env['NBTCA_ICON_MODE'] = 'unicode'; resetIconCache();
+    expect(out).not.toContain('~ One Off');
+    expect(out).toContain('One Off');
   });
 });

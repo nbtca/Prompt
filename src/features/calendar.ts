@@ -130,7 +130,9 @@ export function renderEventsTable(events: Event[], options?: { color?: boolean }
   for (const event of events) {
     const dateTime = event.time ? `${event.date} ${event.time}` : event.date;
     const dateCol  = padEndV(applyCyan(dateTime),                          dateWidth);
-    const titleCol = padEndV(applyBold(truncate(event.title, titleWidth)), titleWidth);
+    const marker = event.recurring ? `${pickIcon('↻', '~')} ` : '';
+    const titleText = truncate(`${marker}${event.title}`, titleWidth);
+    const titleCol = padEndV(applyBold(titleText), titleWidth);
     const locCol   = applyGray(truncate(event.location, locWidth));
     lines.push(`  ${dateCol}  ${titleCol}  ${locCol}`);
   }
