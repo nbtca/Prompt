@@ -4,10 +4,13 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import type { CalendarEvent } from '@nbtca/nbtcal';
-import { toDisplayEvent, renderEventsTable, renderCountdownBanner } from './calendar.js';
+import { toDisplayEvent, renderEventsTable, renderCountdownBanner, exportEventIcs } from './calendar.js';
 import { setLanguage } from '../i18n/index.js';
 import { stripAnsi } from '../core/text.js';
 import { resetIconCache } from '../core/icons.js';
+import { mkdtempSync, readFileSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 beforeAll(() => {
   setLanguage('en');
@@ -133,5 +136,29 @@ describe('renderCountdownBanner', () => {
   });
   it('returns empty string when there is no event', () => {
     expect(renderCountdownBanner(undefined, new Date())).toBe('');
+  });
+});
+
+describe('exportEventIcs', () => {
+  it('writes a valid .ics file and returns its path', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ics-'));
+    try {
+      const event = { uid: 'u1', title: 'Hack Night', start: new Date('2026-03-25T12:00:00Z'), end: new Date('2026-03-25T14:00:00Z'), isAllDay: false, location: 'Lab', description: null, recurring: false };
+      const res = exportEventIcs(event, dir);
+      expect(res.ok).toBe(true);
+      expect(res.path).toBe(join(dir, 'Hack-Night.ics'));
+      const contents = readFileSync(res.path, 'utf-8');
+      expect(contents).toContain('BEGIN:VCALENDAR');
+      expect(contents).toContain('SUMMARY:Hack Night');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('returns ok:false on an unwritable directory instead of throwing', () => {
+    const event = { uid: 'u1', title: 'X', start: new Date(), end: null, isAllDay: false, location: null, description: null, recurring: false };
+    const res = exportEventIcs(event, '/nonexistent-dir-xyz-123');
+    expect(res.ok).toBe(false);
+    expect(res.error).toBeTruthy();
   });
 });

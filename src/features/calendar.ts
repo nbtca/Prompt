@@ -1,4 +1,4 @@
-import { loadCalendar, FeedFetchError, FeedParseError } from '@nbtca/nbtcal';
+import { loadCalendar, FeedFetchError, FeedParseError, eventToICS } from '@nbtca/nbtcal';
 import type { Calendar, CalendarEvent, HeatmapBucket } from '@nbtca/nbtcal';
 import chalk from 'chalk';
 import { createSpinner } from '../core/ui.js';
@@ -10,7 +10,9 @@ import { t } from '../i18n/index.js';
 import { enterScreen, breadcrumb } from '../core/transitions.js';
 import { URLS } from '../config/data.js';
 import { renderHeatmap } from './calendar-heatmap.js';
-import { countdownParts } from './calendar-query.js';
+import { countdownParts, buildExportFilename } from './calendar-query.js';
+import { writeFileSync } from 'fs';
+import { join } from 'path';
 
 export interface Event {
   date: string;
@@ -298,5 +300,15 @@ export async function showCalendar(): Promise<void> {
     s.error(trans.calendar.error);
     console.log(c.muted('  ' + trans.calendar.errorHint));
     console.log();
+  }
+}
+
+export function exportEventIcs(event: CalendarEvent, dir: string = process.cwd()): { ok: boolean; path: string; error?: string } {
+  const path = join(dir, buildExportFilename(event));
+  try {
+    writeFileSync(path, eventToICS(event), 'utf-8');
+    return { ok: true, path };
+  } catch (err) {
+    return { ok: false, path, error: err instanceof Error ? err.message : String(err) };
   }
 }
