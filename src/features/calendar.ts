@@ -12,7 +12,7 @@ import { enterScreen, breadcrumb } from '../core/transitions.js';
 import { URLS } from '../config/data.js';
 import { renderHeatmap } from './calendar-heatmap.js';
 import { countdownParts, buildExportFilename, weekRange, monthRange, filterEvents } from './calendar-query.js';
-import { writeFileSync } from 'fs';
+import { writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 
 export interface Event {
@@ -304,8 +304,14 @@ async function showSearch(cal: Calendar): Promise<void> {
 }
 
 export function exportEventIcs(event: CalendarEvent, dir: string = process.cwd()): { ok: boolean; path: string; error?: string } {
-  const path = join(dir, buildExportFilename(event));
+  const base = buildExportFilename(event);
+  let path = join(dir, base);
   try {
+    let n = 1;
+    while (existsSync(path)) {
+      path = join(dir, base.replace(/\.ics$/, `-${n}.ics`));
+      n++;
+    }
     writeFileSync(path, eventToICS(event), 'utf-8');
     return { ok: true, path };
   } catch (err) {

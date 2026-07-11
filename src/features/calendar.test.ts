@@ -161,4 +161,18 @@ describe('exportEventIcs', () => {
     expect(res.ok).toBe(false);
     expect(res.error).toBeTruthy();
   });
+
+  it('does not overwrite an existing file — uses a -N suffix', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ics-'));
+    try {
+      const event = { uid: 'u1', title: 'Hack Night', start: new Date('2026-03-25T12:00:00Z'), end: null, isAllDay: false, location: null, description: null, recurring: false };
+      const first = exportEventIcs(event, dir);
+      const second = exportEventIcs(event, dir);
+      expect(first.path).toBe(join(dir, 'Hack-Night.ics'));
+      expect(second.path).toBe(join(dir, 'Hack-Night-1.ics'));
+      expect(second.ok).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
