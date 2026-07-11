@@ -90,3 +90,12 @@ describe('toDisplayEvent', () => {
     expect(result.date).toMatch(/^\d{2}-\d{2}$/);
   });
 });
+
+describe('toDisplayEvent recurring/uid', () => {
+  it('carries recurring and uid from the source event', () => {
+    const e = makeEvent({ recurring: true, uid: 'abc-123' });
+    const result = toDisplayEvent(e);
+    expect(result.recurring).toBe(true);
+    expect(result.uid).toBe('abc-123');
+  });
+});

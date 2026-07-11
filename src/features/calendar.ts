@@ -18,6 +18,8 @@ export interface Event {
   location: string;
   description: string;
   startDate: Date;
+  recurring: boolean;
+  uid: string;
 }
 
 export interface EventOutputItem {
@@ -27,6 +29,8 @@ export interface EventOutputItem {
   location: string;
   description: string;
   startDateISO: string;
+  recurring: boolean;
+  uid: string;
 }
 
 function formatDate(date: Date): string {
@@ -66,6 +70,8 @@ export function toDisplayEvent(e: CalendarEvent): Event {
     location: e.location ?? trans.calendar.tbdLocation,
     description: e.description ?? '',
     startDate: e.start,
+    recurring: e.recurring,
+    uid: e.uid,
   };
 }
 
@@ -87,6 +93,8 @@ export function serializeEvents(events: Event[]): EventOutputItem[] {
     location: event.location,
     description: event.description,
     startDateISO: event.startDate.toISOString(),
+    recurring: event.recurring,
+    uid: event.uid,
   }));
 }
 
