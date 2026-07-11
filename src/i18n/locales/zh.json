@@ -61,7 +61,20 @@
     "pastEvents": "历史活动",
     "pastEventsDesc": "近期活动记录",
     "noPastEvents": "最近 30 天内暂无历史活动",
-    "viewPastDetail": "选择活动查看详情:"
+    "viewPastDetail": "选择活动查看详情:",
+    "next": "下一场",
+    "inPrefix": "还有",
+    "startingNow": "即将开始",
+    "thisWeek": "本周",
+    "thisMonth": "本月",
+    "search": "搜索",
+    "searchPrompt": "搜索活动",
+    "searchPlaceholder": "关键词…",
+    "searchNoResults": "没有匹配的活动",
+    "exportIcs": "导出 .ics",
+    "exportSuccess": "已保存",
+    "exportError": "无法写入 .ics 文件",
+    "recurringLabel": "循环"
   },
   "docs": {
     "loading": "正在加载文档列表...",

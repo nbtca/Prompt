@@ -61,7 +61,20 @@
     "pastEvents": "Past Events",
     "pastEventsDesc": "Recent activity history",
     "noPastEvents": "No past events in the last 30 days",
-    "viewPastDetail": "Select an event for details:"
+    "viewPastDetail": "Select an event for details:",
+    "next": "Next",
+    "inPrefix": "in",
+    "startingNow": "starting now",
+    "thisWeek": "This Week",
+    "thisMonth": "This Month",
+    "search": "Search",
+    "searchPrompt": "Search events",
+    "searchPlaceholder": "keyword…",
+    "searchNoResults": "No matching events",
+    "exportIcs": "Export .ics",
+    "exportSuccess": "Saved",
+    "exportError": "Could not write the .ics file",
+    "recurringLabel": "recurring"
   },
   "docs": {
     "loading": "Loading documentation list...",

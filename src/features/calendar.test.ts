@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import type { CalendarEvent } from '@nbtca/nbtcal';
-import { toDisplayEvent, renderEventsTable } from './calendar.js';
+import { toDisplayEvent, renderEventsTable, renderCountdownBanner } from './calendar.js';
 import { setLanguage } from '../i18n/index.js';
 import { stripAnsi } from '../core/text.js';
 import { resetIconCache } from '../core/icons.js';
@@ -117,5 +117,21 @@ describe('renderEventsTable recurring marker', () => {
     process.env['NBTCA_ICON_MODE'] = 'unicode'; resetIconCache();
     expect(out).not.toContain('~ One Off');
     expect(out).toContain('One Off');
+  });
+});
+
+describe('renderCountdownBanner', () => {
+  it('shows the next event title and a d/h countdown', () => {
+    process.env['NBTCA_ICON_MODE'] = 'ascii'; resetIconCache();
+    const now = new Date('2026-03-25T12:00:00');
+    const e = toDisplayEvent(makeEvent({ title: 'Hack Night', start: new Date('2026-03-28T16:00:00'), end: new Date('2026-03-28T18:00:00') }));
+    const out = stripAnsi(renderCountdownBanner(e, now));
+    process.env['NBTCA_ICON_MODE'] = 'unicode'; resetIconCache();
+    expect(out).toContain('Next');
+    expect(out).toContain('Hack Night');
+    expect(out).toMatch(/3d/);
+  });
+  it('returns empty string when there is no event', () => {
+    expect(renderCountdownBanner(undefined, new Date())).toBe('');
   });
 });

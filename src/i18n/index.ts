@@ -81,6 +81,19 @@ export interface Translations {
     pastEventsDesc: string;
     noPastEvents: string;
     viewPastDetail: string;
+    next: string;
+    startingNow: string;
+    thisWeek: string;
+    thisMonth: string;
+    search: string;
+    searchPrompt: string;
+    searchPlaceholder: string;
+    searchNoResults: string;
+    exportIcs: string;
+    exportSuccess: string;
+    exportError: string;
+    recurringLabel: string;
+    inPrefix: string;
   };
   docs: {
     loading: string;

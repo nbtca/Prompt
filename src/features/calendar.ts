@@ -2,7 +2,7 @@ import { loadCalendar, FeedFetchError, FeedParseError } from '@nbtca/nbtcal';
 import type { Calendar, CalendarEvent, HeatmapBucket } from '@nbtca/nbtcal';
 import chalk from 'chalk';
 import { createSpinner } from '../core/ui.js';
-import { c, type, space } from '../core/theme.js';
+import { c, type, space, glyph } from '../core/theme.js';
 import { runMenu, menuFooter } from '../core/components/menu.js';
 import { pickIcon } from '../core/icons.js';
 import { padEndV, truncate } from '../core/text.js';
@@ -10,6 +10,7 @@ import { t } from '../i18n/index.js';
 import { enterScreen, breadcrumb } from '../core/transitions.js';
 import { URLS } from '../config/data.js';
 import { renderHeatmap } from './calendar-heatmap.js';
+import { countdownParts } from './calendar-query.js';
 
 export interface Event {
   date: string;
@@ -138,6 +139,22 @@ export function renderEventsTable(events: Event[], options?: { color?: boolean }
   }
 
   return lines.join('\n');
+}
+
+export function renderCountdownBanner(event: Event | undefined, now: Date): string {
+  if (!event) return '';
+  const trans = t();
+  const p = countdownParts(event.startDate, now);
+  const inp = trans.calendar.inPrefix;
+  const when = p.past
+    ? trans.calendar.startingNow
+    : p.days > 0
+      ? `${inp} ${p.days}d ${p.hours}h`
+      : p.hours > 0
+        ? `${inp} ${p.hours}h ${p.minutes}m`
+        : `${inp} ${p.minutes}m`;
+  const dot = pickIcon('·', '-');
+  return `${space.indent}${type.heading(glyph.cursor())} ${type.label(trans.calendar.next)}  ${dot}  ${type.body(event.title)}  ${dot}  ${type.hint(when)}`;
 }
 
 function renderSubscribeHint(): void {
