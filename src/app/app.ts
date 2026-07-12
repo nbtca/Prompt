@@ -66,7 +66,7 @@ export async function runApp(): Promise<void> {
     const header = renderHeader(tabs, view, cols);
     const footer = renderFooter(view, cols);
     const body = view === 'home' ? homeView.render(ctx) : [];
-    process.stdout.write(ansi.home + composeFrame(header, body, footer, rows, cols, scroll));
+    process.stdout.write(ansi.home + composeFrame(header, body, footer, rows, cols, scroll) + ansi.eraseDown);
   }
 
   function onKey(data: Buffer): void {
@@ -78,7 +78,7 @@ export async function runApp(): Promise<void> {
     }
     if (g.back) {
       view = 'home';
-      void homeView.load?.(ctx);
+      void homeView.load?.(ctx)?.catch(() => {});
       render();
       return;
     }
@@ -106,16 +106,16 @@ export async function runApp(): Promise<void> {
   }
 
   async function switchTo(id: ViewId): Promise<void> {
-    view = id;
     scroll = 0;
     const classic = classicFor[id];
     if (classic) {
       await runClassic(classic);
       view = 'home';
-      void homeView.load?.(ctx);
+      void homeView.load?.(ctx)?.catch(() => {});
       render();
     } else {
-      void homeView.load?.(ctx);
+      view = id;
+      void homeView.load?.(ctx)?.catch(() => {});
       render();
     }
   }
@@ -127,8 +127,11 @@ export async function runApp(): Promise<void> {
     leave();
     try {
       await fn();
-    } catch {
-      // Classic surfaces are responsible for surfacing their own errors.
+    } catch (err) {
+      // Classic surfaces are expected to surface their own errors, but if
+      // one throws anyway, don't swallow it silently: leave() has already
+      // restored cooked mode, so writing to stderr here is visible.
+      process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
     }
     enter();
     render();
@@ -155,11 +158,14 @@ export async function runApp(): Promise<void> {
   function quit(): void {
     if (!running) return;
     running = false;
-    process.stdout.removeListener('resize', onResize);
-    process.removeListener('exit', onExit);
-    process.removeListener('SIGINT', onSigint);
-    leave();
-    resolveRun();
+    try {
+      leave();
+    } finally {
+      process.stdout.removeListener('resize', onResize);
+      process.removeListener('exit', onExit);
+      process.removeListener('SIGINT', onSigint);
+      resolveRun();
+    }
   }
 
   process.on('exit', onExit);
@@ -168,7 +174,7 @@ export async function runApp(): Promise<void> {
 
   try {
     enter();
-    void homeView.load?.(ctx);
+    void homeView.load?.(ctx)?.catch(() => {});
     render();
     await done;
   } finally {
