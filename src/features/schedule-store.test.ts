@@ -4,7 +4,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import {
   termKey, saveWeekOne, loadWeekOne, saveTimetableCache, loadTimetableCache,
-  saveCurrentPointer, loadCurrentPointer,
+  saveCurrentPointer, loadCurrentPointer, clearScheduleCache,
 } from './schedule-store.js';
 
 describe('schedule-store', () => {
@@ -34,4 +34,16 @@ describe('schedule-store', () => {
       expect(loadCurrentPointer(dir)).toEqual({ termKey: '2026-3', weekOneMonday: '2026-09-07' });
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });
+
+  it('clearScheduleCache removes cached timetables and the current pointer', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'sched-'));
+    try {
+      saveTimetableCache('2026-3', { meetings: [] }, dir);
+      saveCurrentPointer('2026-3', '2026-09-07', dir);
+      clearScheduleCache(dir);
+      expect(loadTimetableCache('2026-3', dir)).toBeNull();
+      expect(loadCurrentPointer(dir)).toBeNull();
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+
 });

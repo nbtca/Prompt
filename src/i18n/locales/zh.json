@@ -222,7 +222,6 @@
     "genericError": "课表操作失败。",
     "hubToday": "今日",
     "hubWeek": "本周",
-    "hubAll": "全部课程",
     "hubSwitchTerm": "切换学期",
     "hubExport": "导出 .ics",
     "hubLogout": "退出登录",

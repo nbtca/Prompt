@@ -54,3 +54,15 @@ export function loadCurrentPointer(dir?: string): CurrentPointer | null {
   if (!value || typeof value.termKey !== 'string' || typeof value.weekOneMonday !== 'string') return null;
   return { termKey: value.termKey, weekOneMonday: value.weekOneMonday };
 }
+
+/** Remove the cached timetables and the current-term pointer (e.g. on logout). Best-effort. */
+export function clearScheduleCache(dir?: string): void {
+  const stateDir = dir ?? getStateDir();
+  try {
+    for (const f of fs.readdirSync(stateDir)) {
+      if (f === 'current-term.json' || (f.startsWith('timetable-') && f.endsWith('.json'))) {
+        try { fs.unlinkSync(path.join(stateDir, f)); } catch { /* best effort */ }
+      }
+    }
+  } catch { /* best effort: dir may not exist */ }
+}

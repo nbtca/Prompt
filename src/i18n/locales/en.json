@@ -222,7 +222,6 @@
     "genericError": "The timetable operation failed.",
     "hubToday": "Today",
     "hubWeek": "This week",
-    "hubAll": "All courses",
     "hubSwitchTerm": "Switch term",
     "hubExport": "Export .ics",
     "hubLogout": "Log out",

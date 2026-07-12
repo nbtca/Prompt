@@ -14,6 +14,7 @@ import { glyph } from '../core/theme.js';
 import { AuthError } from '../auth/errors.js';
 import { loginWithStudentPassword, restoreNbtSession, type AuthenticatedNbtSession } from '../auth/nbt-auth.js';
 import { createSessionStore, type SessionStore } from '../auth/session-store.js';
+import { clearScheduleCache } from './schedule-store.js';
 import { fmt, t } from '../i18n/index.js';
 
 export const JWXT_ORIGIN = 'https://jwxt-443.webvpn.nbt.edu.cn';
@@ -280,6 +281,7 @@ export async function runStudentTimetableCommand(
   try {
     if (subcommand === 'logout') {
       store.clear();
+      clearScheduleCache();
       stdout.write(`${trans.loggedOut}\n`);
       return 0;
     }

@@ -60,7 +60,7 @@ export function renderWeekGrid(meetings: readonly TimetableMeeting[], periods: r
   const header = padEndV('', rowHeadW) + WEEKDAY_KEYS.map((d) => padEndV(type.hint(d), cellW)).join('');
   lines.push(space.indent + header);
   for (const p of periods) {
-    const rowHead = type.hint(padEndV(`P${p.period}`, rowHeadW));
+    const rowHead = type.hint(padEndV(`${t().timetable.periodShort}${p.period}`, rowHeadW));
     const cells = [1, 2, 3, 4, 5, 6, 7].map((wd) => {
       const v = at(wd, p.period);
       return padEndV(v ? type.body(v) : type.hint(pickIcon('·', '.')), cellW);

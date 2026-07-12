@@ -241,7 +241,6 @@ export interface Translations {
     genericError: string;
     hubToday: string;
     hubWeek: string;
-    hubAll: string;
     hubSwitchTerm: string;
     hubExport: string;
     hubLogout: string;

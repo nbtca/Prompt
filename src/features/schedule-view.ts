@@ -28,7 +28,7 @@ import { currentWeekNumber, campusWeekday, meetingsOnDay, nextMeeting } from './
 import { renderNextClassBanner, renderTodayClasses, renderWeekGrid } from './schedule-render.js';
 import {
   termKey, loadWeekOne, saveWeekOne, saveTimetableCache,
-  saveCurrentPointer, loadCurrentPointer, loadTimetableCache,
+  saveCurrentPointer, loadCurrentPointer, loadTimetableCache, clearScheduleCache,
 } from './schedule-store.js';
 
 /** Local, non-exported mirror of student-timetable.ts's error mapping: kept in this
@@ -83,6 +83,7 @@ async function ensureWeekOne(key: string): Promise<string | null> {
   if (value === null) return null;
   const trimmed = value.trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return null;
+  if (Number.isNaN(new Date(`${trimmed}T00:00:00`).getTime())) return null;
   saveWeekOne(key, trimmed);
   return trimmed;
 }
@@ -194,6 +195,7 @@ export async function showSchedule(): Promise<void> {
             { value: 'week', label: trans.timetable.hubWeek },
             { value: 'term', label: trans.timetable.hubSwitchTerm, hint: term.academicYearLabel },
             { value: 'export', label: trans.timetable.hubExport },
+            { value: 'logout', label: trans.timetable.hubLogout },
           ],
           footer: menuFooter(),
         });
@@ -219,6 +221,12 @@ export async function showSchedule(): Promise<void> {
         }
         if (action === 'export') {
           exportTimetable(tt, term, key, weekOne);
+          continue;
+        }
+        if (action === 'logout') {
+          createSessionStore().clear();
+          clearScheduleCache();
+          return 0;
         }
       }
     }, {
