@@ -86,7 +86,7 @@ function displaySemesterLabel(term: AcademicTerm): string {
     : term.semesterLabel;
 }
 
-function isSessionExpired(error: unknown): boolean {
+export function isSessionExpired(error: unknown): boolean {
   return (
     error instanceof AuthError && error.code === 'SESSION_EXPIRED'
   ) || (

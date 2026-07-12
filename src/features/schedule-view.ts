@@ -21,6 +21,7 @@ import {
   resolveTerm,
   relevantTerms,
   writePrivateIcs,
+  isSessionExpired,
   JWXT_ORIGIN,
 } from './student-timetable.js';
 import { currentWeekNumber, campusWeekday, meetingsOnDay, nextMeeting } from './schedule-query.js';
@@ -97,7 +98,8 @@ async function fetchTimetableWithSpinner(
     spinner.stop();
     saveTimetableCache(key, tt);
     return tt;
-  } catch {
+  } catch (err) {
+    if (isSessionExpired(err)) { spinner.stop(); throw err; }
     spinner.error(trans.timetable.genericError);
     return null;
   }
