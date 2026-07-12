@@ -219,7 +219,21 @@
     "unknownTerm": "未知学期；请先运行 `nbtca schedule terms`。",
     "noTerms": "教务系统没有返回可用学期。",
     "currentTermUnknown": "教务没有标出唯一的当前学期；请用 --term=学年:代码 指定。",
-    "genericError": "课表操作失败。"
+    "genericError": "课表操作失败。",
+    "hubToday": "今日",
+    "hubWeek": "本周",
+    "hubAll": "全部课程",
+    "hubSwitchTerm": "切换学期",
+    "hubExport": "导出 .ics",
+    "hubLogout": "退出登录",
+    "nextClass": "下一节",
+    "noClassToday": "今天没有课",
+    "noNextClass": "没有即将开始的课",
+    "nowLabel": "进行中",
+    "weekLabel": "第",
+    "periodShort": "第",
+    "promptWeekOne": "第一周周一 (YYYY-MM-DD)",
+    "menuEntry": "课表"
   },
   "theme": {
     "current": "当前主题设置",

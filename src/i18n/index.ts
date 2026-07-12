@@ -239,6 +239,20 @@ export interface Translations {
     noTerms: string;
     currentTermUnknown: string;
     genericError: string;
+    hubToday: string;
+    hubWeek: string;
+    hubAll: string;
+    hubSwitchTerm: string;
+    hubExport: string;
+    hubLogout: string;
+    nextClass: string;
+    noClassToday: string;
+    noNextClass: string;
+    nowLabel: string;
+    weekLabel: string;
+    periodShort: string;
+    promptWeekOne: string;
+    menuEntry: string;
   };
   theme: {
     current: string;

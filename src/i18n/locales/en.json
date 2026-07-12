@@ -219,7 +219,21 @@
     "unknownTerm": "Unknown term. Run `nbtca schedule terms` first.",
     "noTerms": "JWXT returned no available terms.",
     "currentTermUnknown": "JWXT did not identify one current term. Choose one with --term=year:code.",
-    "genericError": "The timetable operation failed."
+    "genericError": "The timetable operation failed.",
+    "hubToday": "Today",
+    "hubWeek": "This week",
+    "hubAll": "All courses",
+    "hubSwitchTerm": "Switch term",
+    "hubExport": "Export .ics",
+    "hubLogout": "Log out",
+    "nextClass": "Next",
+    "noClassToday": "No classes today",
+    "noNextClass": "No upcoming classes",
+    "nowLabel": "now",
+    "weekLabel": "Week",
+    "periodShort": "P",
+    "promptWeekOne": "First-week Monday (YYYY-MM-DD)",
+    "menuEntry": "Schedule"
   },
   "theme": {
     "current": "Current theme settings",
