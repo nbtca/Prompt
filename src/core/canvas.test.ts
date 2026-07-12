@@ -30,3 +30,12 @@ describe('ensureCursorRestored', () => {
     expect(afterSecond).toBe(afterFirst);
   });
 });
+
+describe('alt-screen ansi', () => {
+  it('exposes enter/leave alt, home, clearAll', () => {
+    expect(ansi.enterAlt).toBe('\x1b[?1049h');
+    expect(ansi.leaveAlt).toBe('\x1b[?1049l');
+    expect(ansi.home).toBe('\x1b[H');
+    expect(ansi.clearAll).toBe('\x1b[2J');
+  });
+});

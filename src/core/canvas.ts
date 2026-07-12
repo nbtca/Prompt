@@ -6,6 +6,10 @@ export const ansi = {
   eraseDown: `${CSI}0J`,
   cursorToCol0: '\r',
   cursorUp: (n: number): string => (n > 0 ? `${CSI}${n}A` : ''),
+  enterAlt: `${CSI}?1049h`,
+  leaveAlt: `${CSI}?1049l`,
+  home: `${CSI}H`,
+  clearAll: `${CSI}2J`,
 };
 
 let registered = false;
