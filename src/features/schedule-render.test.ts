@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import type { TimetableMeeting, TimetablePeriod } from '@nbtca/nbtcal/timetable';
-import { renderNextClassBanner, renderTodayClasses } from './schedule-render.js';
+import { renderNextClassBanner, renderTodayClasses, renderWeekGrid } from './schedule-render.js';
 import { setLanguage } from '../i18n/index.js';
 import { resetIconCache } from '../core/icons.js';
 import { stripAnsi } from '../core/text.js';
@@ -37,6 +37,15 @@ describe('renderTodayClasses', () => {
     // period 1 is 08:00–08:45; now = 08:10 is inside it
     const out = stripAnsi(renderTodayClasses([mk({ startPeriod: 1, endPeriod: 1 })], periods, new Date('2026-09-07T08:10:00')));
     expect(out).toContain('> ');   // ascii in-progress marker
+    done();
+  });
+});
+
+describe('renderWeekGrid', () => {
+  it('renders weekday headers and places a course in its cell', () => {
+    const out = stripAnsi(renderWeekGrid([mk({ courseName: 'Math', weekday: 1, startPeriod: 1, weeks: [1] })], periods, 1, new Date('2026-09-07T09:00:00')));
+    expect(out).toMatch(/Mon/);         // weekday header
+    expect(out).toContain('Math');      // placed in Mon / period 1
     done();
   });
 });
