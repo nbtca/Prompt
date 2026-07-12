@@ -11,14 +11,16 @@ import { showServiceStatus } from '../features/status.js';
 import { showLinksMenu } from '../features/links.js';
 import { showSettingsMenu } from '../features/settings.js';
 import { showStudentTimetableMenu } from '../features/student-timetable.js';
+import { showSchedule } from '../features/schedule-view.js';
 import { t } from '../i18n/index.js';
 
-export type MenuAction = 'events' | 'timetable' | 'docs' | 'status' | 'links' | 'settings';
+export type MenuAction = 'events' | 'schedule' | 'timetable' | 'docs' | 'status' | 'links' | 'settings';
 
 function getMainMenuOptions(): MenuOption[] {
   const trans = t();
   return [
     { value: 'events',   label: trans.menu.events,   hint: trans.menu.eventsDesc   || undefined },
+    { value: 'schedule', label: t().timetable.menuEntry },
     { value: 'timetable', label: trans.menu.timetable, hint: trans.menu.timetableDesc || undefined },
     { value: 'docs',     label: trans.menu.docs,     hint: trans.menu.docsDesc     || undefined },
     { value: 'status',   label: trans.menu.status,   hint: trans.menu.statusDesc   || undefined },
@@ -52,6 +54,7 @@ export async function showMainMenu(): Promise<void> {
 export async function runMenuAction(action: MenuAction): Promise<void> {
   switch (action) {
     case 'events':   await showCalendar();        break;
+    case 'schedule': await showSchedule();       break;
     case 'timetable': await showStudentTimetableMenu(); break;
     case 'docs':     await showDocsMenu();       break;
     case 'status':   await showServiceStatus();  break;
