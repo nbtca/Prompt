@@ -25,21 +25,28 @@ export async function main(options: MainOptions = {}): Promise<void> {
     // Fire update check in background; events fetch provides natural wait time
     const updatePromise = checkForUpdate();
 
-    await showEventsPreview();
+    if (process.stdin.isTTY && process.stdout.isTTY) {
+      // Launch app shell for interactive terminals
+      const { runApp } = await import('./app/app.js');
+      await runApp();
+    } else {
+      // Classic path for non-TTY (CI, pipes, redirects)
+      await showEventsPreview();
 
-    try {
-      const line = (await import('./features/schedule-view.js')).peekNextClassLine();
-      if (line) console.log(line);
-    } catch { /* best effort */ }
+      try {
+        const line = (await import('./features/schedule-view.js')).peekNextClassLine();
+        if (line) console.log(line);
+      } catch { /* best effort */ }
 
-    // Update check is very likely done by now; give it a short window if not
-    const updateMsg = await Promise.race([
-      updatePromise,
-      new Promise<null>(r => setTimeout(r, 100, null)),
-    ]);
-    if (updateMsg) console.log(c.warn(updateMsg));
+      // Update check is very likely done by now; give it a short window if not
+      const updateMsg = await Promise.race([
+        updatePromise,
+        new Promise<null>(r => setTimeout(r, 100, null)),
+      ]);
+      if (updateMsg) console.log(c.warn(updateMsg));
 
-    await showMainMenu();
+      await showMainMenu();
+    }
 
   } catch (err: unknown) {
     handleGracefulExit(err);
