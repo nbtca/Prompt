@@ -8,7 +8,7 @@ import { t } from '../i18n/index.js';
 function span(m: TimetableMeeting, periods: readonly TimetablePeriod[]): string {
   const s = periods.find((p) => p.period === m.startPeriod)?.start ?? '';
   const e = periods.find((p) => p.period === m.endPeriod)?.end ?? '';
-  return e ? `${s}–${e}` : s;
+  return e ? `${s}${pickIcon('–', '-')}${e}` : s;
 }
 
 export function renderNextClassBanner(next: NextClass | null, now: Date): string {

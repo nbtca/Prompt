@@ -33,4 +33,10 @@ describe('renderTodayClasses', () => {
   it('shows an empty-state line when there are none', () => {
     expect(stripAnsi(renderTodayClasses([], periods, new Date()))).toContain('No classes today'); done();
   });
+  it('marks the in-progress class', () => {
+    // period 1 is 08:00–08:45; now = 08:10 is inside it
+    const out = stripAnsi(renderTodayClasses([mk({ startPeriod: 1, endPeriod: 1 })], periods, new Date('2026-09-07T08:10:00')));
+    expect(out).toContain('> ');   // ascii in-progress marker
+    done();
+  });
 });
