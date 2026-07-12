@@ -26,7 +26,10 @@ import {
 } from './student-timetable.js';
 import { currentWeekNumber, campusWeekday, meetingsOnDay, nextMeeting } from './schedule-query.js';
 import { renderNextClassBanner, renderTodayClasses, renderWeekGrid } from './schedule-render.js';
-import { termKey, loadWeekOne, saveWeekOne, saveTimetableCache } from './schedule-store.js';
+import {
+  termKey, loadWeekOne, saveWeekOne, saveTimetableCache,
+  saveCurrentPointer, loadCurrentPointer, loadTimetableCache,
+} from './schedule-store.js';
 
 /** Local, non-exported mirror of student-timetable.ts's error mapping: kept in this
  * module so the hub can report a friendly message without widening that file's
@@ -90,6 +93,7 @@ async function fetchTimetableWithSpinner(
   client: NbtTimetableClient,
   term: AcademicTermRef,
   key: string,
+  weekOne: string,
 ): Promise<Timetable | null> {
   const trans = t();
   const spinner = createSpinner(trans.calendar.loading);
@@ -97,6 +101,7 @@ async function fetchTimetableWithSpinner(
     const tt = await client.fetchTerm(term);
     spinner.stop();
     saveTimetableCache(key, tt);
+    saveCurrentPointer(key, weekOne);
     return tt;
   } catch (err) {
     if (isSessionExpired(err)) { spinner.stop(); throw err; }
@@ -140,7 +145,7 @@ async function switchTerm(
   const key = termKey(term);
   const weekOne = await ensureWeekOne(key);
   if (!weekOne) return null;
-  const tt = await fetchTimetableWithSpinner(client, term as AcademicTermRef, key);
+  const tt = await fetchTimetableWithSpinner(client, term as AcademicTermRef, key, weekOne);
   if (!tt) return null;
   return { term, key, weekOne, tt };
 }
@@ -174,7 +179,7 @@ export async function showSchedule(): Promise<void> {
       let weekOne = await ensureWeekOne(key);
       if (!weekOne) return 0;
 
-      const initial = await fetchTimetableWithSpinner(client, term as AcademicTermRef, key);
+      const initial = await fetchTimetableWithSpinner(client, term as AcademicTermRef, key, weekOne);
       if (!initial) return 1;
       let tt = initial;
 
@@ -225,4 +230,20 @@ export async function showSchedule(): Promise<void> {
   } catch (err) {
     error(safeErrorMessage(err));
   }
+}
+
+/** Best-effort, cache-only startup line: reads the last-used term pointer and its
+ * cached timetable (no network) and renders the next-class banner, or '' if the
+ * student isn't "set up" yet or anything about the cache is missing/corrupt. */
+export function peekNextClassLine(now: Date = new Date()): string {
+  try {
+    const ptr = loadCurrentPointer();
+    if (!ptr) return '';
+    const cached = loadTimetableCache(ptr.termKey) as { meetings?: unknown; periods?: unknown } | null;
+    if (!cached || !Array.isArray(cached.meetings) || !Array.isArray(cached.periods)) return '';
+    const next = nextMeeting(
+      cached.meetings as Timetable['meetings'], cached.periods as Timetable['periods'], ptr.weekOneMonday, now,
+    );
+    return renderNextClassBanner(next, now);
+  } catch { return ''; }
 }

@@ -2,7 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { termKey, saveWeekOne, loadWeekOne, saveTimetableCache, loadTimetableCache } from './schedule-store.js';
+import {
+  termKey, saveWeekOne, loadWeekOne, saveTimetableCache, loadTimetableCache,
+  saveCurrentPointer, loadCurrentPointer,
+} from './schedule-store.js';
 
 describe('schedule-store', () => {
   it('termKey composes year-semester', () => {
@@ -21,6 +24,14 @@ describe('schedule-store', () => {
     try {
       saveTimetableCache('2026-3', { meetings: [1, 2] }, dir);
       expect(loadTimetableCache('2026-3', dir)).toEqual({ meetings: [1, 2] });
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  it('current-term pointer round-trips', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'sched-'));
+    try {
+      expect(loadCurrentPointer(dir)).toBeNull();
+      saveCurrentPointer('2026-3', '2026-09-07', dir);
+      expect(loadCurrentPointer(dir)).toEqual({ termKey: '2026-3', weekOneMonday: '2026-09-07' });
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });
 });

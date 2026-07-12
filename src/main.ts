@@ -27,6 +27,11 @@ export async function main(options: MainOptions = {}): Promise<void> {
 
     await showEventsPreview();
 
+    try {
+      const line = (await import('./features/schedule-view.js')).peekNextClassLine();
+      if (line) console.log(line);
+    } catch { /* best effort */ }
+
     // Update check is very likely done by now; give it a short window if not
     const updateMsg = await Promise.race([
       updatePromise,

@@ -39,3 +39,18 @@ export function loadTimetableCache(termKey: string, dir?: string): unknown | nul
   const file = path.join(dir ?? getStateDir(), `timetable-${termKey}.json`);
   return readJson(file);
 }
+
+interface CurrentPointer { termKey: string; weekOneMonday: string; }
+
+function currentPointerPath(dir?: string): string {
+  return path.join(dir ?? getWritableStateDir(), 'current-term.json');
+}
+export function saveCurrentPointer(termKey: string, weekOneMonday: string, dir?: string): void {
+  writeJson(currentPointerPath(dir), { termKey, weekOneMonday });
+}
+export function loadCurrentPointer(dir?: string): CurrentPointer | null {
+  const file = path.join(dir ?? getStateDir(), 'current-term.json');
+  const value = readJson(file) as Partial<CurrentPointer> | null;
+  if (!value || typeof value.termKey !== 'string' || typeof value.weekOneMonday !== 'string') return null;
+  return { termKey: value.termKey, weekOneMonday: value.weekOneMonday };
+}
