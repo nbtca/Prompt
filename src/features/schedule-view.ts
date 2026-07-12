@@ -1,0 +1,226 @@
+import path from 'node:path';
+import {
+  createNbtTimetableClient,
+  timetableToIcs,
+  TimetableError,
+  type AcademicTerm,
+  type AcademicTermRef,
+  type NbtTimetableClient,
+  type Timetable,
+} from '@nbtca/nbtcal/timetable';
+import { runMenu, menuFooter } from '../core/components/menu.js';
+import { runTextInput } from '../core/components/text-input.js';
+import { enterScreen, breadcrumb } from '../core/transitions.js';
+import { createSpinner, success, error } from '../core/ui.js';
+import { c, type, space } from '../core/theme.js';
+import { t, fmt } from '../i18n/index.js';
+import { AuthError } from '../auth/errors.js';
+import { createSessionStore } from '../auth/session-store.js';
+import {
+  withAuthenticatedSession,
+  resolveTerm,
+  relevantTerms,
+  writePrivateIcs,
+  JWXT_ORIGIN,
+} from './student-timetable.js';
+import { currentWeekNumber, campusWeekday, meetingsOnDay, nextMeeting } from './schedule-query.js';
+import { renderNextClassBanner, renderTodayClasses, renderWeekGrid } from './schedule-render.js';
+import { termKey, loadWeekOne, saveWeekOne, saveTimetableCache } from './schedule-store.js';
+
+/** Local, non-exported mirror of student-timetable.ts's error mapping: kept in this
+ * module so the hub can report a friendly message without widening that file's
+ * public surface beyond the JWXT_ORIGIN export this task requires. */
+function safeErrorMessage(err: unknown): string {
+  const trans = t().timetable;
+  if (err instanceof AuthError) {
+    switch (err.code) {
+      case 'INVALID_CREDENTIALS': return trans.invalidCredentials;
+      case 'ACCOUNT_LOCKED': return trans.accountLocked;
+      case 'ACCOUNT_INACTIVE': return trans.accountInactive;
+      case 'INTERACTIVE_CHALLENGE': return trans.challenge;
+      case 'SESSION_EXPIRED': return trans.sessionExpired;
+      case 'TIMEOUT': return trans.timeout;
+      case 'NETWORK': return trans.network;
+      case 'UNTRUSTED_URL': return trans.untrustedUrl;
+      case 'HTTP_ERROR': return trans.httpError;
+      case 'LOGIN_PAGE_CHANGED': return trans.loginChanged;
+      case 'UNEXPECTED_RESPONSE': return trans.unexpectedResponse;
+      default: return trans.genericError;
+    }
+  }
+  if (err instanceof TimetableError) {
+    switch (err.code) {
+      case 'MISSING_CALENDAR_DATES': return trans.missingDates;
+      case 'MISSING_PERIOD_TIME': return trans.missingPeriod;
+      case 'TERM_MISMATCH': return trans.termMismatch;
+      case 'SESSION_EXPIRED': return trans.sessionExpired;
+      default: return trans.invalidData;
+    }
+  }
+  if (err instanceof Error && err.message === 'Unknown academic term. Run `nbtca schedule terms` first.') {
+    return trans.unknownTerm;
+  }
+  if (err instanceof Error && err.message === 'No academic terms are available.') return trans.noTerms;
+  if (err instanceof Error && err.message === 'The current academic term could not be determined.') {
+    return trans.currentTermUnknown;
+  }
+  return trans.genericError;
+}
+
+/** Loads a saved week-one Monday for `key`, or prompts for and persists a new one.
+ * Returns null when the user cancels or enters an unparsable date (caller aborts). */
+async function ensureWeekOne(key: string): Promise<string | null> {
+  const saved = loadWeekOne(key);
+  if (saved) return saved;
+  const value = await runTextInput({
+    message: t().timetable.promptWeekOne,
+    placeholder: 'YYYY-MM-DD',
+  });
+  if (value === null) return null;
+  const trimmed = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return null;
+  saveWeekOne(key, trimmed);
+  return trimmed;
+}
+
+/** Fetches a term's timetable behind a spinner, caching it on success. Returns null
+ * (after reporting the error) on failure so callers can keep the previous state. */
+async function fetchTimetableWithSpinner(
+  client: NbtTimetableClient,
+  term: AcademicTermRef,
+  key: string,
+): Promise<Timetable | null> {
+  const trans = t();
+  const spinner = createSpinner(trans.calendar.loading);
+  try {
+    const tt = await client.fetchTerm(term);
+    spinner.stop();
+    saveTimetableCache(key, tt);
+    return tt;
+  } catch {
+    spinner.error(trans.timetable.genericError);
+    return null;
+  }
+}
+
+function renderHub(tt: Timetable, weekOne: string, now: Date): { week: number; today: Timetable['meetings'][number][] } {
+  const week = currentWeekNumber(weekOne, now);
+  const today = meetingsOnDay(tt.meetings, campusWeekday(now), week);
+  const trans = t();
+
+  console.log();
+  const banner = renderNextClassBanner(nextMeeting(tt.meetings, tt.periods, weekOne, now), now);
+  console.log(banner || `${space.indent}${type.hint(trans.timetable.noNextClass)}`);
+  console.log();
+  console.log(renderTodayClasses(today, tt.periods, now));
+  console.log();
+
+  return { week, today };
+}
+
+async function switchTerm(
+  client: NbtTimetableClient,
+  catalog: readonly AcademicTerm[],
+): Promise<{ term: AcademicTerm; key: string; weekOne: string; tt: Timetable } | null> {
+  const trans = t();
+  const picked = await runMenu({
+    title: trans.timetable.hubSwitchTerm,
+    options: relevantTerms(catalog).map((tm) => ({
+      value: `${tm.academicYear}:${tm.semester}`,
+      label: tm.academicYearLabel,
+      hint: tm.current ? trans.common.current : undefined,
+    })),
+    footer: menuFooter(),
+  });
+  if (picked === null) return null;
+
+  const term = resolveTerm(catalog, picked);
+  const key = termKey(term);
+  const weekOne = await ensureWeekOne(key);
+  if (!weekOne) return null;
+  const tt = await fetchTimetableWithSpinner(client, term as AcademicTermRef, key);
+  if (!tt) return null;
+  return { term, key, weekOne, tt };
+}
+
+function exportTimetable(tt: Timetable, term: AcademicTerm, key: string, weekOne: string): void {
+  const trans = t();
+  const ics = timetableToIcs(tt, { weekOneMonday: weekOne, calendarName: `NBT ${term.academicYearLabel}` });
+  const out = `timetable-${key}.ics`;
+  try {
+    writePrivateIcs(out, ics);
+    success(fmt(trans.timetable.exported, { count: tt.meetings.length, file: path.resolve(out) }));
+  } catch {
+    error(trans.timetable.genericError);
+  }
+}
+
+/** Interactive schedule hub: login/restore, resolve the current term, load or prompt
+ * for the week-one Monday, fetch the timetable, then loop a menu of today / week-grid /
+ * switch-term / export actions until the user cancels. */
+export async function showSchedule(): Promise<void> {
+  const trans = t();
+  await enterScreen(breadcrumb(trans.timetable.menuEntry));
+
+  try {
+    await withAuthenticatedSession(async (session) => {
+      const client = createNbtTimetableClient(session.timetableTransport, { baseUrl: JWXT_ORIGIN });
+
+      const catalog = await client.listTerms();
+      let term = resolveTerm(catalog);
+      let key = termKey(term);
+      let weekOne = await ensureWeekOne(key);
+      if (!weekOne) return 0;
+
+      const initial = await fetchTimetableWithSpinner(client, term as AcademicTermRef, key);
+      if (!initial) return 1;
+      let tt = initial;
+
+      while (true) {
+        const now = new Date();
+        const { week, today } = renderHub(tt, weekOne, now);
+
+        const action = await runMenu({
+          title: `${trans.timetable.menuEntry}  ${c.muted(term.academicYearLabel)}  ${c.muted(trans.timetable.weekLabel + String(week))}`,
+          options: [
+            { value: 'today', label: trans.timetable.hubToday, hint: String(today.length) },
+            { value: 'week', label: trans.timetable.hubWeek },
+            { value: 'term', label: trans.timetable.hubSwitchTerm, hint: term.academicYearLabel },
+            { value: 'export', label: trans.timetable.hubExport },
+          ],
+          footer: menuFooter(),
+        });
+        if (action === null) return 0;
+
+        if (action === 'today') {
+          continue; // The next loop iteration repaints today's classes.
+        }
+        if (action === 'week') {
+          console.log();
+          console.log(renderWeekGrid(tt.meetings, tt.periods, week, now));
+          console.log();
+          continue;
+        }
+        if (action === 'term') {
+          const switched = await switchTerm(client, catalog);
+          if (!switched) continue;
+          term = switched.term;
+          key = switched.key;
+          weekOne = switched.weekOne;
+          tt = switched.tt;
+          continue;
+        }
+        if (action === 'export') {
+          exportTimetable(tt, term, key, weekOne);
+        }
+      }
+    }, {
+      oneShot: false,
+      isInteractive: true,
+      store: createSessionStore(),
+      stderr: process.stderr,
+    });
+  } catch (err) {
+    error(safeErrorMessage(err));
+  }
+}

@@ -16,7 +16,7 @@ import { loginWithStudentPassword, restoreNbtSession, type AuthenticatedNbtSessi
 import { createSessionStore, type SessionStore } from '../auth/session-store.js';
 import { fmt, t } from '../i18n/index.js';
 
-const JWXT_ORIGIN = 'https://jwxt-443.webvpn.nbt.edu.cn';
+export const JWXT_ORIGIN = 'https://jwxt-443.webvpn.nbt.edu.cn';
 
 export type StudentTimetableSubcommand = 'login' | 'logout' | 'status' | 'terms' | 'export';
 
