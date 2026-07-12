@@ -1,4 +1,4 @@
-import { ansi } from '../core/canvas.js';
+import { ansi, ensureCursorRestored } from '../core/canvas.js';
 import { composeFrame } from './frame.js';
 import { routeGlobalKey, type ViewId } from './keys.js';
 import { renderHeader, renderFooter } from './chrome.js';
@@ -27,6 +27,7 @@ export async function runApp(): Promise<void> {
   let view: ViewId = 'home';
   let scroll = 0;
   let running = true;
+  let suspended = false;
 
   const tabs: { id: ViewId; title: string }[] = [
     { id: 'home', title: 'Home' },
@@ -62,6 +63,7 @@ export async function runApp(): Promise<void> {
   };
 
   function render(): void {
+    if (suspended || !running) return;
     const { rows, cols } = size();
     const header = renderHeader(tabs, view, cols);
     const footer = renderFooter(view, cols);
@@ -93,6 +95,7 @@ export async function runApp(): Promise<void> {
   }
 
   function enter(): void {
+    ensureCursorRestored();
     process.stdout.write(ansi.enterAlt + ansi.hideCursor);
     if (process.stdin.isTTY) process.stdin.setRawMode(true);
     process.stdin.resume();
@@ -124,6 +127,7 @@ export async function runApp(): Promise<void> {
   // their own raw-mode + rendering, so the app must fully leave() the
   // alt-screen before invoking them and re-enter() after they return.
   async function runClassic(fn: () => Promise<void>): Promise<void> {
+    suspended = true;
     leave();
     try {
       await fn();
@@ -134,6 +138,7 @@ export async function runApp(): Promise<void> {
       process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
     }
     enter();
+    suspended = false;
     render();
   }
 
