@@ -1,17 +1,16 @@
 import { type, space } from '../../core/theme.js';
 import { pickIcon } from '../../core/icons.js';
 import { t } from '../../i18n/index.js';
-import { peekNextClassLine } from '../../features/schedule-view.js';
+import { peekNextClassLine, peekTodayLines } from '../../features/schedule-view.js';
 import { fetchEvents } from '../../features/calendar.js';
-import { checkServices, countServiceHealth } from '../../features/status.js';
 import type { View, AppContext } from '../view.js';
 
 /** Data consumed by the pure `renderHome`; populated best-effort by `homeView.load`. */
 export interface HomeData {
   loading?: boolean;
   nextClassLine?: string;
-  eventsSummary?: string;
-  health?: { up: number; down: number };
+  todayLines?: string[];
+  eventLines?: string[];
 }
 
 function panelHeading(label: string): string {
@@ -22,48 +21,35 @@ function loadingLine(): string {
   return `${space.indent}${type.hint(t().common.loading)}`;
 }
 
-function placeholderLine(): string {
-  return `${space.indent}${type.hint(pickIcon('—', '-'))}`;
-}
-
-/**
- * Each panel shows its own value once that field has landed, regardless of the
- * other two fetches; falling back to a dim "loading…" while `data.loading` is
- * still true, or a dim placeholder once loading has finished with no value.
- */
-function fieldLine(loading: boolean | undefined, value: string | undefined, fallback: string): string {
-  if (typeof value === 'string') return value;
-  return loading ? loadingLine() : fallback;
-}
-
-/** Pure: renders the Home dashboard's labelled panels from already-fetched data. No I/O. */
+/** Pure: renders the schedule-first dashboard from already-fetched data. No I/O. */
 export function renderHome(data: HomeData): string[] {
   const trans = t();
   const lines: string[] = [];
 
-  const nextClassFallback = `${space.indent}${type.hint(trans.timetable.noNextClass)}`;
-  const nextClassLine = data.nextClassLine !== undefined && data.nextClassLine.trim().length === 0
-    ? nextClassFallback
-    : fieldLine(data.loading, data.nextClassLine, nextClassFallback);
-
+  // Next class (cache-only, instant).
+  const nextClass = data.nextClassLine !== undefined && data.nextClassLine.trim().length > 0
+    ? data.nextClassLine
+    : `${space.indent}${type.hint(trans.timetable.noNextClass)}`;
   lines.push(panelHeading(trans.timetable.nextClass));
-  lines.push(nextClassLine);
+  lines.push(nextClass);
   lines.push('');
 
+  // Today's classes (cache-only, instant).
+  lines.push(panelHeading(trans.timetable.hubToday));
+  if (data.todayLines && data.todayLines.length > 0) {
+    for (const l of data.todayLines) lines.push(l);
+  } else {
+    lines.push(`${space.indent}${type.hint(trans.timetable.noClassToday)}`);
+  }
+  lines.push('');
+
+  // Upcoming events (network, best-effort).
   lines.push(panelHeading(trans.menu.events));
-  lines.push(fieldLine(
-    data.loading,
-    data.eventsSummary !== undefined ? `${space.indent}${type.body(data.eventsSummary)}` : undefined,
-    placeholderLine(),
-  ));
-  lines.push('');
-
-  lines.push(panelHeading(trans.menu.status));
-  lines.push(fieldLine(
-    data.loading,
-    data.health ? `${space.indent}${type.body(`${data.health.up} ${trans.status.up}, ${data.health.down} ${trans.status.down}`)}` : undefined,
-    placeholderLine(),
-  ));
+  if (data.eventLines && data.eventLines.length > 0) {
+    for (const l of data.eventLines) lines.push(l);
+  } else {
+    lines.push(data.loading ? loadingLine() : `${space.indent}${type.hint(pickIcon('—', '-'))}`);
+  }
 
   return lines;
 }
@@ -75,43 +61,28 @@ export const homeView: View = {
   title: 'Home',
 
   async load(ctx: AppContext): Promise<void> {
-    data = { loading: true };
-
-    const nextClass = (async () => {
-      try {
-        data = { ...data, nextClassLine: peekNextClassLine() };
-      } catch {
-        // best-effort: leave nextClassLine unset, panel falls back to a placeholder
-      } finally {
-        ctx.rerender();
-      }
-    })();
-
-    const events = (async () => {
-      try {
-        const items = await fetchEvents();
-        data = { ...data, eventsSummary: `${items.length} ${t().menu.events.toLowerCase()}` };
-      } catch {
-        // best-effort: leave eventsSummary unset, panel falls back to a placeholder
-      } finally {
-        ctx.rerender();
-      }
-    })();
-
-    const health = (async () => {
-      try {
-        const items = await checkServices();
-        data = { ...data, health: countServiceHealth(items) };
-      } catch {
-        // best-effort: leave health unset, panel falls back to a placeholder
-      } finally {
-        ctx.rerender();
-      }
-    })();
-
-    await Promise.all([nextClass, events, health]);
-    data = { ...data, loading: false };
+    // Schedule panels are cache-only and instant — populate them synchronously first.
+    try {
+      data = { loading: true, nextClassLine: peekNextClassLine(), todayLines: peekTodayLines() };
+    } catch {
+      data = { loading: true };
+    }
     ctx.rerender();
+
+    // Events is the only networked panel; best-effort.
+    try {
+      const items = await fetchEvents();
+      const dot = pickIcon('·', '-');
+      const eventLines = items.slice(0, 4).map(
+        (e) => `${space.indent}${type.hint(`${e.date}${e.time ? ' ' + e.time : ''}`)}  ${dot}  ${type.body(e.title)}`,
+      );
+      data = { ...data, eventLines };
+    } catch {
+      // best-effort: leave eventLines unset, panel shows a placeholder
+    } finally {
+      data = { ...data, loading: false };
+      ctx.rerender();
+    }
   },
 
   render(_ctx: AppContext): string[] {

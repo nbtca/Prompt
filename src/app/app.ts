@@ -7,9 +7,7 @@ import { homeView } from './views/home.js';
 import { t } from '../i18n/index.js';
 import { showCalendar } from '../features/calendar.js';
 import { showSchedule } from '../features/schedule-view.js';
-import { showServiceStatus } from '../features/status.js';
 import { showDocsMenu } from '../features/docs.js';
-import { showLinksMenu } from '../features/links.js';
 import { showSettingsMenu } from '../features/settings.js';
 
 /**
@@ -29,13 +27,12 @@ export async function runApp(): Promise<void> {
   let running = true;
   let suspended = false;
 
+  // A focused student companion: schedule-first, no infra-status/links noise.
   const tabs: { id: ViewId; title: string }[] = [
     { id: 'home', title: 'Home' },
-    { id: 'events', title: t().menu.events },
     { id: 'schedule', title: t().timetable.menuEntry },
+    { id: 'events', title: t().menu.events },
     { id: 'docs', title: t().menu.docs },
-    { id: 'status', title: t().menu.status },
-    { id: 'links', title: t().menu.links },
     { id: 'settings', title: t().menu.settings },
   ];
   const viewIds = tabs.map((tab) => tab.id);
@@ -43,11 +40,9 @@ export async function runApp(): Promise<void> {
   // Only `home` is a native View; the rest suspend the app and run the
   // existing classic (non-alt-screen) surface, then return to home.
   const classicFor: Partial<Record<ViewId, () => Promise<void>>> = {
-    events: showCalendar,
     schedule: showSchedule,
-    status: async () => { await showServiceStatus(); },
+    events: showCalendar,
     docs: showDocsMenu,
-    links: showLinksMenu,
     settings: showSettingsMenu,
   };
 

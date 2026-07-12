@@ -255,3 +255,16 @@ export function peekNextClassLine(now: Date = new Date()): string {
     return renderNextClassBanner(next, now);
   } catch { return ''; }
 }
+
+/** Cache-only (no network) render of today's classes for the current term, or [] if not set up. */
+export function peekTodayLines(now: Date = new Date()): string[] {
+  try {
+    const ptr = loadCurrentPointer();
+    if (!ptr) return [];
+    const cached = loadTimetableCache(ptr.termKey) as { meetings?: unknown; periods?: unknown } | null;
+    if (!cached || !Array.isArray(cached.meetings) || !Array.isArray(cached.periods)) return [];
+    const week = currentWeekNumber(ptr.weekOneMonday, now);
+    const today = meetingsOnDay(cached.meetings as Timetable['meetings'], campusWeekday(now), week);
+    return renderTodayClasses(today, cached.periods as Timetable['periods'], now).split('\n');
+  } catch { return []; }
+}

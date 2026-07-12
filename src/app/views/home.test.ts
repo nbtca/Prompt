@@ -10,31 +10,31 @@ beforeAll(() => {
   resetIconCache();
 });
 
-describe('renderHome', () => {
-  it('shows section titles + the next-class line + an events summary + health', () => {
+describe('renderHome (schedule-first dashboard)', () => {
+  it('shows next class, today classes, and upcoming events', () => {
     const out = stripAnsi(renderHome({
       nextClassLine: '  Next class in 2h',
-      eventsSummary: '  3 upcoming',
-      health: { up: 6, down: 0 },
+      todayLines: ['  08:00 Math', '  10:00 Physics'],
+      eventLines: ['  03-25 Hackathon', '  03-28 Study group'],
       loading: false,
     }).join('\n'));
     expect(out).toContain('Next class in 2h');
-    expect(out).toContain('3 upcoming');
-    expect(out).toMatch(/6/); // up count
+    expect(out).toContain('08:00 Math');
+    expect(out).toContain('Hackathon');
   });
 
-  it('renders a loading state before data lands', () => {
+  it('falls back to "no class today" and "no upcoming class" when schedule is empty', () => {
+    const out = stripAnsi(renderHome({ nextClassLine: '', todayLines: [], eventLines: [], loading: false }).join('\n'));
+    expect(out).toContain('No classes today');
+    expect(out).toContain('No upcoming classes');
+  });
+
+  it('shows a loading state for events before they land', () => {
     const out = stripAnsi(renderHome({ loading: true }).join('\n'));
-    expect(out.length).toBeGreaterThan(0);
+    expect(out).toContain('Loading');
   });
 
-  it('falls back to a "no upcoming class" hint when nextClassLine is empty and not loading', () => {
-    const out = stripAnsi(renderHome({ nextClassLine: '', eventsSummary: '0 upcoming', health: { up: 0, down: 0 }, loading: false }).join('\n'));
-    expect(out).not.toBe('');
-    expect(out.length).toBeGreaterThan(0);
-  });
-
-  it('never contains bare ANSI-stripped weirdness and always returns a non-empty array', () => {
+  it('always returns a non-empty array', () => {
     const out = renderHome({});
     expect(Array.isArray(out)).toBe(true);
     expect(out.length).toBeGreaterThan(0);
