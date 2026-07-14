@@ -30,6 +30,11 @@ let client: NbtTimetableClient | null = null;
 let catalog: AcademicTerm[] = [];
 let pendingId = '';
 
+function captureFooterHint(): string {
+  const trans = t();
+  return `Ctrl+C ${trans.common.exit}  ·  Esc ${trans.common.back}  ·  Enter ${trans.common.confirm}`;
+}
+
 function isTimetableLike(value: unknown): value is Timetable {
   return !!value && typeof value === 'object'
     && Array.isArray((value as Timetable).meetings)
@@ -161,6 +166,11 @@ export const scheduleView: View = {
 
   capturesInput(): boolean {
     return state.mode === 'needsLoginId' || state.mode === 'needsLoginPassword' || state.mode === 'needsWeekOne';
+  },
+
+  footerHint(): string | undefined {
+    const capturing = state.mode === 'needsLoginId' || state.mode === 'needsLoginPassword' || state.mode === 'needsWeekOne';
+    return capturing ? captureFooterHint() : undefined;
   },
 
   handleBack(): boolean {

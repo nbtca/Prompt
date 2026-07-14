@@ -63,9 +63,10 @@ export async function runApp(): Promise<void> {
   function render(): void {
     if (suspended || !running) return;
     const { rows, cols } = size();
+    const active = nativeViews[view];
     const header = renderHeader(tabs, view, cols);
-    const footer = renderFooter(view, cols);
-    const body = nativeViews[view]?.render(ctx) ?? [];
+    const footer = renderFooter(view, cols, active?.footerHint?.());
+    const body = active?.render(ctx) ?? [];
     process.stdout.write(ansi.home + composeFrame(header, body, footer, rows, cols, scroll) + ansi.eraseDown);
   }
 

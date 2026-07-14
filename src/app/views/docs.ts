@@ -21,6 +21,11 @@ function backLabel(): string {
   return t().common.back;
 }
 
+function captureFooterHint(): string {
+  const trans = t();
+  return `Ctrl+C ${trans.common.exit}  ·  Esc ${trans.common.back}  ·  Enter ${trans.common.confirm}`;
+}
+
 function buildSectionsField(): ListField {
   const trans = t();
   const options = [
@@ -102,6 +107,10 @@ export const docsView: View = {
 
   capturesInput(): boolean {
     return state.mode === 'search';
+  },
+
+  footerHint(): string | undefined {
+    return state.mode === 'search' ? captureFooterHint() : undefined;
   },
 
   handleBack(): boolean {

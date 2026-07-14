@@ -33,4 +33,9 @@ export interface View {
    * false/omit if the view has nothing to step back from (already at its own
    * top level), so the app falls through to its default: back to Home. */
   handleBack?(): boolean;
+  /** Overrides the chrome's generic footer hint. Return a string while the
+   * generic "1-7/Tab switch · q quit" hint would be false (e.g. a focused
+   * text field, where those keys type characters instead) — omit or return
+   * undefined otherwise to use the generic hint. */
+  footerHint?(): string | undefined;
 }
