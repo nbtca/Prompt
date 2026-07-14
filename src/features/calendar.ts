@@ -53,7 +53,7 @@ function formatTime(date: Date): string {
   return `${hours}:${minutes}`;
 }
 
-async function loadCalendarOrThrow(): Promise<Calendar> {
+export async function loadCalendarOrThrow(): Promise<Calendar> {
   try {
     return await loadCalendar({ timeoutMs: 15000 });
   } catch (err) {
