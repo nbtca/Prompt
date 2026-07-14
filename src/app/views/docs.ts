@@ -104,6 +104,23 @@ export const docsView: View = {
     return state.mode === 'search';
   },
 
+  handleBack(): boolean {
+    if (state.mode === 'archivedFiles') {
+      state = { mode: 'archivedGroups', archivedGroupsField: buildArchivedGroupsField(archivedGroups) };
+      return true;
+    }
+    if (state.mode === 'search') {
+      setVimKeysActive(true);
+      goToSections();
+      return true;
+    }
+    if (state.mode === 'files' || state.mode === 'archivedGroups' || state.mode === 'searchResults') {
+      goToSections();
+      return true;
+    }
+    return false;
+  },
+
   handleKey(key: string, ctx: AppContext): void {
     switch (state.mode) {
       case 'sections': {

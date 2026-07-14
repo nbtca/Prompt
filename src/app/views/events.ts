@@ -106,6 +106,15 @@ export const eventsView: View = {
     return state.mode === 'search';
   },
 
+  handleBack(): boolean {
+    if (state.mode === 'list' || state.mode === 'detail' || state.mode === 'search') {
+      if (state.mode === 'search') setVimKeysActive(true);
+      goToHub();
+      return true;
+    }
+    return false;
+  },
+
   handleKey(key: string, _ctx: AppContext): void {
     if (!calendar) return;
     switch (state.mode) {

@@ -50,6 +50,17 @@ function buildHubField(tt: Timetable): ListField {
   return new ListField({ title: trans.timetable.menuEntry, options, footer: trans.menu.hintMove });
 }
 
+function returnToHub(): boolean {
+  const tt = state.timetable;
+  const backKey = state.key;
+  const backWeekOne = state.weekOne;
+  if (tt && backKey && backWeekOne) {
+    state = { mode: 'hub', key: backKey, term: state.term, weekOne: backWeekOne, timetable: tt, hubField: buildHubField(tt) };
+    return true;
+  }
+  return false;
+}
+
 function goToLoginId(errorMessage?: string): void {
   pendingId = '';
   setVimKeysActive(false);
@@ -152,6 +163,13 @@ export const scheduleView: View = {
     return state.mode === 'needsLoginId' || state.mode === 'needsLoginPassword' || state.mode === 'needsWeekOne';
   },
 
+  handleBack(): boolean {
+    if (state.mode === 'week' || state.mode === 'unresolved' || state.mode === 'termPicker') {
+      return returnToHub();
+    }
+    return false;
+  },
+
   handleKey(key: string, ctx: AppContext): void {
     switch (state.mode) {
       case 'needsLoginId': {
@@ -245,24 +263,14 @@ export const scheduleView: View = {
       }
       case 'week':
       case 'unresolved': {
-        const tt = state.timetable;
-        const backKey = state.key;
-        const backWeekOne = state.weekOne;
-        if (tt && backKey && backWeekOne) {
-          state = { mode: 'hub', key: backKey, term: state.term, weekOne: backWeekOne, timetable: tt, hubField: buildHubField(tt) };
-        }
+        returnToHub();
         return;
       }
       case 'termPicker': {
         const result = state.termField?.handleKey(key);
         if (!result?.selected) return;
         if (result.selected === '__back__') {
-          const tt = state.timetable;
-          const backKey = state.key;
-          const backWeekOne = state.weekOne;
-          if (tt && backKey && backWeekOne) {
-            state = { mode: 'hub', key: backKey, term: state.term, weekOne: backWeekOne, timetable: tt, hubField: buildHubField(tt) };
-          }
+          returnToHub();
           return;
         }
         const term = resolveTerm(catalog, result.selected);

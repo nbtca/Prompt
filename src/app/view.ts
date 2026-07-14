@@ -27,4 +27,10 @@ export interface View {
    * global Tab/digit/Esc routing is skipped and every key goes straight to
    * handleKey. Ctrl-C still quits regardless. Defaults to false when absent. */
   capturesInput?(): boolean;
+  /** Called when Esc is pressed and the view isn't capturing input. Return
+   * true if the view stepped back one level internally (e.g. a sub-screen
+   * back to its own hub) — the app re-renders and stays on this tab. Return
+   * false/omit if the view has nothing to step back from (already at its own
+   * top level), so the app falls through to its default: back to Home. */
+  handleBack?(): boolean;
 }

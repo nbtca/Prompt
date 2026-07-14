@@ -45,6 +45,14 @@ export const settingsView: View = {
     return false;
   },
 
+  handleBack(): boolean {
+    if (state.mode !== 'menu') {
+      goToMenu();
+      return true;
+    }
+    return false;
+  },
+
   handleKey(key: string, _ctx: AppContext): void {
     const trans = t();
     switch (state.mode) {

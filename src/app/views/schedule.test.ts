@@ -41,4 +41,11 @@ describe('scheduleView', () => {
   it('capturesInput() returns a boolean and does not throw', () => {
     expect(typeof scheduleView.capturesInput?.()).toBe('boolean');
   });
+
+  it('handleBack() returns false when there is nothing to step back from', () => {
+    // Fresh module state (no load() has run): not in a week/unresolved/termPicker
+    // sub-mode, so there is nothing for the view to step back to internally —
+    // it must defer to the app's default (leave the tab for Home).
+    expect(scheduleView.handleBack?.()).toBe(false);
+  });
 });

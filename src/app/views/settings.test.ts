@@ -42,4 +42,18 @@ describe('settingsView', () => {
   it('capturesInput is false or absent (no text fields in this view)', () => {
     expect(settingsView.capturesInput?.() ?? false).toBe(false);
   });
+
+  it('handleBack() is false at the top-level menu, true after entering a sub-list, and returns you to the menu', async () => {
+    const ctx = fakeCtx();
+    await settingsView.load?.(ctx);
+    expect(settingsView.handleBack?.()).toBe(false);
+
+    settingsView.handleKey?.('\r', ctx); // Enter on the first menu item (Language)
+    const subListOut = stripAnsi(settingsView.render(ctx).join('\n'));
+    expect(subListOut).toContain('English');
+
+    expect(settingsView.handleBack?.()).toBe(true);
+    const menuOut = stripAnsi(settingsView.render(ctx).join('\n'));
+    expect(menuOut).toContain('Icon mode');
+  });
 });

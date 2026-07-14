@@ -90,6 +90,14 @@ export async function runApp(): Promise<void> {
       return;
     }
     if (g.back) {
+      // Esc steps back one level within the view first (e.g. its week grid
+      // back to its own hub) — only once the view has nowhere left to step
+      // back to does Esc leave the tab for Home. Matches how k9s/lazygit
+      // treat Esc: back one level, not straight to the root.
+      if (active?.handleBack?.()) {
+        render();
+        return;
+      }
       view = 'home';
       void nativeViews['home']?.load?.(ctx)?.catch(() => {});
       render();

@@ -41,4 +41,10 @@ describe('docsView', () => {
   it('capturesInput() returns a boolean and does not throw', () => {
     expect(typeof docsView.capturesInput?.()).toBe('boolean');
   });
+
+  it('handleBack() returns false when there is nothing to step back from', () => {
+    // Fresh module state (no load() has run): not in a files/archived/search
+    // sub-mode, so there is nothing for the view to step back to internally.
+    expect(docsView.handleBack?.()).toBe(false);
+  });
 });
