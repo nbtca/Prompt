@@ -12,8 +12,10 @@ import { t } from '../i18n/index.js';
 
 /**
  * Event-driven full-screen app loop. Owns the alt-screen + raw-mode lifecycle
- * and composes the native `home` view with a "classic bridge" that suspends
- * the app to run the pre-existing menu-driven surfaces for the other tabs.
+ * and composes every tab as a native `View` rendered in place. `ctx.runClassic`
+ * remains as a scoped escape hatch a view can call itself when a single action
+ * genuinely needs the real terminal (e.g. Docs handing off to glow/less to
+ * read a file) — the app loop no longer dispatches whole tabs through it.
  *
  * Resolves once the user quits (q / Ctrl+C / Esc from home). Terminal state
  * (alt-screen, raw mode, cursor) is always restored before this resolves,
@@ -37,9 +39,7 @@ export async function runApp(): Promise<void> {
   ];
   const viewIds = tabs.map((tab) => tab.id);
 
-  // Views rendered natively inside the alt-screen frame. Anything not listed
-  // here but present in `classicFor` still suspends the app and runs the old
-  // menu-driven surface.
+  // Every tab is a native View rendered in place inside the alt-screen frame.
   const nativeViews: Partial<Record<ViewId, View>> = {
     home: homeView,
     schedule: scheduleView,
@@ -47,8 +47,6 @@ export async function runApp(): Promise<void> {
     events: eventsView,
     settings: settingsView,
   };
-
-  const classicFor: Partial<Record<ViewId, () => Promise<void>>> = {};
 
   function size(): AppSize {
     return { rows: process.stdout.rows || 24, cols: process.stdout.columns || 80 };
@@ -92,7 +90,7 @@ export async function runApp(): Promise<void> {
       return;
     }
     if (g.switchTo) {
-      void switchTo(g.switchTo);
+      switchTo(g.switchTo);
       return;
     }
     active?.handleKey?.(key, ctx);
@@ -119,24 +117,16 @@ export async function runApp(): Promise<void> {
     process.stdin.pause();
   }
 
-  async function switchTo(id: ViewId): Promise<void> {
+  function switchTo(id: ViewId): void {
     scroll = 0;
-    const classic = classicFor[id];
-    if (classic) {
-      await runClassic(classic);
-      view = 'home';
-      void nativeViews['home']?.load?.(ctx)?.catch(() => {});
-      render();
-    } else {
-      view = id;
-      void nativeViews[id]?.load?.(ctx)?.catch(() => {});
-      render();
-    }
+    view = id;
+    void nativeViews[id]?.load?.(ctx)?.catch(() => {});
+    render();
   }
 
-  // Classic surfaces (calendar, schedule, status, docs, links, settings) own
-  // their own raw-mode + rendering, so the app must fully leave() the
-  // alt-screen before invoking them and re-enter() after they return.
+  // A classic surface (currently only Docs' glow/less pager) owns its own
+  // raw-mode + rendering, so the app must fully leave() the alt-screen
+  // before invoking it and re-enter() after it returns.
   async function runClassic(fn: () => Promise<void>): Promise<void> {
     suspended = true;
     leave();
