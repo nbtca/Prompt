@@ -337,7 +337,7 @@ function hasMermaidBlock(content: string): boolean {
 const TOP_SECTION_ORDER = ['tutorial', 'process', 'repair', 'archived'];
 const TOP_SECTION_SKIP = new Set(['docs', 'index.md', 'README.md']);
 
-interface DocSection {
+export interface DocSection {
   key: string;
   label: string;
   count: number;
@@ -348,7 +348,7 @@ interface DocSection {
  * Convert a kebab-case filename to a display-friendly title.
  * Preserves Chinese characters and date prefixes.
  */
-function cleanFileName(name: string): string {
+export function cleanFileName(name: string): string {
   const base = name.replace(/\.md$/, '');
   if (/^[\d.]/.test(base)) return base;
   return base
@@ -357,7 +357,7 @@ function cleanFileName(name: string): string {
 }
 
 /** Group flat DocItem list into top-level sections. */
-function buildSections(all: DocItem[]): DocSection[] {
+export function buildSections(all: DocItem[]): DocSection[] {
   const trans = t();
   const labelMap: Record<string, string> = {
     tutorial: trans.docs.categoryTutorial,
@@ -388,7 +388,7 @@ function buildSections(all: DocItem[]): DocSection[] {
 }
 
 /** Group archived files by their second path component (year / manual / etc.). */
-function getArchivedGroups(files: DocItem[]): Map<string, DocItem[]> {
+export function getArchivedGroups(files: DocItem[]): Map<string, DocItem[]> {
   const groups = new Map<string, DocItem[]>();
   for (const item of files) {
     const group = item.path.split('/')[1] ?? 'other';
@@ -398,12 +398,21 @@ function getArchivedGroups(files: DocItem[]): Map<string, DocItem[]> {
   return groups;
 }
 
+/** Raw fetch, no spinner/UI — throws on failure. Shared by the classic and
+ * native-view loaders. */
+export async function fetchAllDocs(): Promise<DocItem[]> {
+  return docsClient.listAll();
+}
+
+export async function fetchSections(): Promise<DocSection[]> {
+  return buildSections(await fetchAllDocs());
+}
+
 async function loadSections(): Promise<DocSection[] | null> {
   const trans = t();
   const s = createSpinner(trans.docs.loading);
   try {
-    const all = await docsClient.listAll();
-    const sections = buildSections(all);
+    const sections = await fetchSections();
     s.stop();
     return sections;
   } catch {
@@ -570,7 +579,7 @@ async function showArchivedSection(files: DocItem[]): Promise<void> {
 
 // ─── Document viewer ──────────────────────────────────────────────────────────
 
-async function viewMarkdownFile(filePath: string): Promise<void> {
+export async function viewMarkdownFile(filePath: string): Promise<void> {
   const trans = t();
   ensureMarkedConfigured();
   const s = createSpinner(`${trans.docs.loadingFile}: ${filePath}`);
