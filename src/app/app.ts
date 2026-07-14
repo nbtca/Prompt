@@ -73,7 +73,13 @@ export async function runApp(): Promise<void> {
     const key = data.toString();
     if (key === '\x03') { quit(); return; } // Ctrl-C always quits, even mid-capture.
     const active = nativeViews[view];
-    if (active?.capturesInput?.()) {
+    // Esc always reaches global routing, even while a view "captures" input
+    // for a focused field (login/search text entry). Without this carve-out,
+    // a view whose own Esc-handling doesn't escape its captured mode would
+    // trap the user on that tab with no way out except Ctrl-C (quitting the
+    // whole app). Esc must never be swallowed silently — it's the universal
+    // way out of anything.
+    if (active?.capturesInput?.() && key !== '\x1b') {
       active.handleKey?.(key, ctx);
       render();
       return;
