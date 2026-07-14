@@ -7,8 +7,8 @@ import { homeView } from './views/home.js';
 import { scheduleView } from './views/schedule.js';
 import { docsView } from './views/docs.js';
 import { eventsView } from './views/events.js';
+import { settingsView } from './views/settings.js';
 import { t } from '../i18n/index.js';
-import { showSettingsMenu } from '../features/settings.js';
 
 /**
  * Event-driven full-screen app loop. Owns the alt-screen + raw-mode lifecycle
@@ -45,11 +45,10 @@ export async function runApp(): Promise<void> {
     schedule: scheduleView,
     docs: docsView,
     events: eventsView,
+    settings: settingsView,
   };
 
-  const classicFor: Partial<Record<ViewId, () => Promise<void>>> = {
-    settings: showSettingsMenu,
-  };
+  const classicFor: Partial<Record<ViewId, () => Promise<void>>> = {};
 
   function size(): AppSize {
     return { rows: process.stdout.rows || 24, cols: process.stdout.columns || 80 };
