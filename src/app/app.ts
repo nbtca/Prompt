@@ -5,9 +5,9 @@ import { renderHeader, renderFooter, HEADER_LINES, FOOTER_LINES } from './chrome
 import type { AppContext, AppSize, View } from './view.js';
 import { homeView } from './views/home.js';
 import { scheduleView } from './views/schedule.js';
+import { docsView } from './views/docs.js';
 import { t } from '../i18n/index.js';
 import { showCalendar } from '../features/calendar.js';
-import { showDocsMenu } from '../features/docs.js';
 import { showSettingsMenu } from '../features/settings.js';
 
 /**
@@ -43,11 +43,11 @@ export async function runApp(): Promise<void> {
   const nativeViews: Partial<Record<ViewId, View>> = {
     home: homeView,
     schedule: scheduleView,
+    docs: docsView,
   };
 
   const classicFor: Partial<Record<ViewId, () => Promise<void>>> = {
     events: showCalendar,
-    docs: showDocsMenu,
     settings: showSettingsMenu,
   };
 
