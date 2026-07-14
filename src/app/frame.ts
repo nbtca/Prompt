@@ -40,3 +40,7 @@ export function composeFrame(
   const b = fitBody(body, bodyH, scroll, cols);
   return [...h, ...b, ...f].slice(0, rows).join('\n');
 }
+
+export function computeBodyRows(rows: number, headerLines: number, footerLines: number): number {
+  return Math.max(0, rows - headerLines - footerLines);
+}

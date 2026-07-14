@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { fitLine, fitBody, composeFrame } from './frame.js';
+import { fitLine, fitBody, composeFrame, computeBodyRows } from './frame.js';
 import { visualWidth } from '../core/text.js';
 
 describe('fitLine', () => {
@@ -30,5 +30,14 @@ describe('composeFrame', () => {
     expect(f).toHaveLength(5);
     for (const line of f) expect(visualWidth(line)).toBe(3);
     expect(f[0]!.trim()).toBe('H'); expect(f[4]!.trim()).toBe('F');
+  });
+});
+
+describe('computeBodyRows', () => {
+  it('subtracts header and footer line counts from total rows', () => {
+    expect(computeBodyRows(24, 3, 2)).toBe(19);
+  });
+  it('floors at 0 when header+footer exceed total rows', () => {
+    expect(computeBodyRows(4, 3, 2)).toBe(0);
   });
 });

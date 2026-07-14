@@ -3,6 +3,11 @@ import { pickIcon } from '../core/icons.js';
 import { t } from '../i18n/index.js';
 import type { ViewId } from './keys.js';
 
+/** `renderHeader` always returns exactly this many lines (brand, tabs, rule). */
+export const HEADER_LINES = 3;
+/** `renderFooter` always returns exactly this many lines (rule, keyhints). */
+export const FOOTER_LINES = 2;
+
 export function renderHeader(views: { id: ViewId; title: string }[], active: ViewId, cols: number): string[] {
   const brand = `${space.indent}${type.heading('nbtca')}`;
   const sep = `  ${pickIcon('·', '-')}  `;

@@ -1,8 +1,8 @@
 import { ansi, ensureCursorRestored } from '../core/canvas.js';
-import { composeFrame } from './frame.js';
+import { composeFrame, computeBodyRows } from './frame.js';
 import { routeGlobalKey, type ViewId } from './keys.js';
-import { renderHeader, renderFooter } from './chrome.js';
-import type { AppContext, AppSize } from './view.js';
+import { renderHeader, renderFooter, HEADER_LINES, FOOTER_LINES } from './chrome.js';
+import type { AppContext, AppSize, View } from './view.js';
 import { homeView } from './views/home.js';
 import { t } from '../i18n/index.js';
 import { showCalendar } from '../features/calendar.js';
@@ -37,8 +37,13 @@ export async function runApp(): Promise<void> {
   ];
   const viewIds = tabs.map((tab) => tab.id);
 
-  // Only `home` is a native View; the rest suspend the app and run the
-  // existing classic (non-alt-screen) surface, then return to home.
+  // Views rendered natively inside the alt-screen frame. Anything not listed
+  // here but present in `classicFor` still suspends the app and runs the old
+  // menu-driven surface.
+  const nativeViews: Partial<Record<ViewId, View>> = {
+    home: homeView,
+  };
+
   const classicFor: Partial<Record<ViewId, () => Promise<void>>> = {
     schedule: showSchedule,
     events: showCalendar,
@@ -52,6 +57,7 @@ export async function runApp(): Promise<void> {
 
   const ctx: AppContext = {
     get size(): AppSize { return size(); },
+    get bodyRows(): number { return computeBodyRows(size().rows, HEADER_LINES, FOOTER_LINES); },
     rerender(): void { render(); },
     runClassic(fn: () => Promise<void>): Promise<void> { return runClassic(fn); },
     quit(): void { quit(); },
@@ -62,12 +68,19 @@ export async function runApp(): Promise<void> {
     const { rows, cols } = size();
     const header = renderHeader(tabs, view, cols);
     const footer = renderFooter(view, cols);
-    const body = view === 'home' ? homeView.render(ctx) : [];
+    const body = nativeViews[view]?.render(ctx) ?? [];
     process.stdout.write(ansi.home + composeFrame(header, body, footer, rows, cols, scroll) + ansi.eraseDown);
   }
 
   function onKey(data: Buffer): void {
     const key = data.toString();
+    if (key === '\x03') { quit(); return; } // Ctrl-C always quits, even mid-capture.
+    const active = nativeViews[view];
+    if (active?.capturesInput?.()) {
+      active.handleKey?.(key, ctx);
+      render();
+      return;
+    }
     const g = routeGlobalKey(key, viewIds, view);
     if (g.quit) {
       quit();
@@ -75,7 +88,7 @@ export async function runApp(): Promise<void> {
     }
     if (g.back) {
       view = 'home';
-      void homeView.load?.(ctx)?.catch(() => {});
+      void nativeViews['home']?.load?.(ctx)?.catch(() => {});
       render();
       return;
     }
@@ -83,10 +96,8 @@ export async function runApp(): Promise<void> {
       void switchTo(g.switchTo);
       return;
     }
-    if (view === 'home') {
-      homeView.handleKey?.(key, ctx);
-      render();
-    }
+    active?.handleKey?.(key, ctx);
+    render();
   }
 
   function enter(): void {
@@ -109,11 +120,11 @@ export async function runApp(): Promise<void> {
     if (classic) {
       await runClassic(classic);
       view = 'home';
-      void homeView.load?.(ctx)?.catch(() => {});
+      void nativeViews['home']?.load?.(ctx)?.catch(() => {});
       render();
     } else {
       view = id;
-      void homeView.load?.(ctx)?.catch(() => {});
+      void nativeViews[id]?.load?.(ctx)?.catch(() => {});
       render();
     }
   }
@@ -174,7 +185,7 @@ export async function runApp(): Promise<void> {
 
   try {
     enter();
-    void homeView.load?.(ctx)?.catch(() => {});
+    void nativeViews['home']?.load?.(ctx)?.catch(() => {});
     render();
     await done;
   } finally {
