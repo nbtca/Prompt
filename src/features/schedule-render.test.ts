@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
-import type { TimetableMeeting, TimetablePeriod } from '@nbtca/nbtcal/timetable';
-import { renderNextClassBanner, renderTodayClasses, renderWeekGrid } from './schedule-render.js';
+import type { TimetableMeeting, TimetablePeriod, TimetableUnresolvedItem } from '@nbtca/nbtcal/timetable';
+import { renderNextClassBanner, renderTodayClasses, renderWeekGrid, renderUnresolvedItems } from './schedule-render.js';
 import { setLanguage } from '../i18n/index.js';
 import { resetIconCache } from '../core/icons.js';
 import { stripAnsi } from '../core/text.js';
@@ -46,6 +46,47 @@ describe('renderWeekGrid', () => {
     const out = stripAnsi(renderWeekGrid([mk({ courseName: 'Math', weekday: 1, startPeriod: 1, weeks: [1] })], periods, 1, new Date('2026-09-07T09:00:00')));
     expect(out).toMatch(/Mon/);         // weekday header
     expect(out).toContain('Math');      // placed in Mon / period 1
+    done();
+  });
+});
+
+const periodsWithGap: TimetablePeriod[] = [
+  ...periods,
+  { period: 3, label: null, start: '13:30', end: '14:15' }, // 09:40 -> 13:30 is a 3h50m gap
+];
+
+describe('renderWeekGrid gap marker', () => {
+  it('inserts a separator line when the gap to the next period exceeds 30 minutes', () => {
+    const out = stripAnsi(renderWeekGrid([], periodsWithGap, 1, new Date('2026-09-07T09:00:00')));
+    const lines = out.split('\n');
+    const p2Index = lines.findIndex((l) => l.includes('P2'));
+    const p3Index = lines.findIndex((l) => l.includes('P3'));
+    expect(p2Index).toBeGreaterThan(-1);
+    expect(p3Index).toBeGreaterThan(p2Index + 1); // at least one separator line between them
+    done();
+  });
+  it('does not insert a separator between adjacent periods', () => {
+    const out = stripAnsi(renderWeekGrid([], periods, 1, new Date('2026-09-07T09:00:00')));
+    const lines = out.split('\n').filter((l) => l.trim().length > 0);
+    expect(lines.length).toBe(1 + periods.length); // header + one row per period, no extra rows
+    done();
+  });
+});
+
+describe('renderUnresolvedItems', () => {
+  const items: TimetableUnresolvedItem[] = [
+    { kind: 'practice', itemIndex: 0, sourceFields: { kcmc: 'Fitness test', sjkcgs: 'Fitness test / week 16' } },
+  ];
+
+  it('lists each item by its course name and detail', () => {
+    const out = stripAnsi(renderUnresolvedItems(items));
+    expect(out).toContain('Fitness test');
+    done();
+  });
+
+  it('shows a non-empty empty-state for no items', () => {
+    const out = stripAnsi(renderUnresolvedItems([]));
+    expect(out.trim().length).toBeGreaterThan(0);
     done();
   });
 });

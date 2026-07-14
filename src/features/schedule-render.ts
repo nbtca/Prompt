@@ -1,4 +1,4 @@
-import type { TimetableMeeting, TimetablePeriod } from '@nbtca/nbtcal/timetable';
+import type { TimetableMeeting, TimetablePeriod, TimetableUnresolvedItem } from '@nbtca/nbtcal/timetable';
 import { countdownParts } from './calendar-query.js';
 import type { NextClass } from './schedule-query.js';
 import { meetingsInWeek } from './schedule-query.js';
@@ -46,11 +46,18 @@ export function renderTodayClasses(meetings: readonly TimetableMeeting[], period
 }
 
 const WEEKDAY_KEYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const GAP_THRESHOLD_MINUTES = 30;
+
+function minutesOf(hhmm: string): number {
+  const [h, m] = hhmm.split(':').map((x) => Number.parseInt(x, 10));
+  return (h || 0) * 60 + (m || 0);
+}
 
 export function renderWeekGrid(meetings: readonly TimetableMeeting[], periods: readonly TimetablePeriod[], weekNumber: number, _now: Date): string {
   const week = meetingsInWeek(meetings, weekNumber);
   const cellW = 10;
   const rowHeadW = 4;
+  const totalW = rowHeadW + cellW * 7;
   // cell lookup: weekday(1..7) × period → course
   const at = (wd: number, period: number): string => {
     const m = week.find((x) => x.weekday === wd && period >= x.startPeriod && period <= x.endPeriod);
@@ -59,13 +66,31 @@ export function renderWeekGrid(meetings: readonly TimetableMeeting[], periods: r
   const lines: string[] = [];
   const header = padEndV('', rowHeadW) + WEEKDAY_KEYS.map((d) => padEndV(type.hint(d), cellW)).join('');
   lines.push(space.indent + header);
-  for (const p of periods) {
+  const sorted = [...periods].sort((a, b) => a.period - b.period);
+  sorted.forEach((p, i) => {
     const rowHead = type.hint(padEndV(`${t().timetable.periodShort}${p.period}`, rowHeadW));
     const cells = [1, 2, 3, 4, 5, 6, 7].map((wd) => {
       const v = at(wd, p.period);
       return padEndV(v ? type.body(v) : type.hint(pickIcon('·', '.')), cellW);
     }).join('');
     lines.push(space.indent + rowHead + cells);
-  }
+
+    const next = sorted[i + 1];
+    if (next && minutesOf(next.start) - minutesOf(p.end) > GAP_THRESHOLD_MINUTES) {
+      lines.push(space.indent + type.hint(pickIcon('╌', '-').repeat(totalW)));
+    }
+  });
+  return lines.join('\n');
+}
+
+export function renderUnresolvedItems(items: readonly TimetableUnresolvedItem[]): string {
+  const trans = t();
+  if (items.length === 0) return `${space.indent}${type.hint(trans.timetable.unresolvedEmpty)}`;
+  const dot = pickIcon('·', '-');
+  const lines = items.map((item) => {
+    const name = item.sourceFields.kcmc ?? trans.timetable.unresolvedUnknownItem;
+    const detail = item.sourceFields.sjkcgs ?? item.sourceFields.qsjsz ?? '';
+    return `${space.indent}${type.body(name)}${detail ? `  ${dot}  ${type.hint(detail)}` : ''}`;
+  });
   return lines.join('\n');
 }

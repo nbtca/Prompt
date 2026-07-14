@@ -244,6 +244,10 @@ export interface Translations {
     hubSwitchTerm: string;
     hubExport: string;
     hubLogout: string;
+    hubUnresolved: string;
+    unresolvedTitle: string;
+    unresolvedEmpty: string;
+    unresolvedUnknownItem: string;
     nextClass: string;
     noClassToday: string;
     noNextClass: string;
