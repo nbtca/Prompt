@@ -4,9 +4,9 @@ import { routeGlobalKey, type ViewId } from './keys.js';
 import { renderHeader, renderFooter, HEADER_LINES, FOOTER_LINES } from './chrome.js';
 import type { AppContext, AppSize, View } from './view.js';
 import { homeView } from './views/home.js';
+import { scheduleView } from './views/schedule.js';
 import { t } from '../i18n/index.js';
 import { showCalendar } from '../features/calendar.js';
-import { showSchedule } from '../features/schedule-view.js';
 import { showDocsMenu } from '../features/docs.js';
 import { showSettingsMenu } from '../features/settings.js';
 
@@ -42,10 +42,10 @@ export async function runApp(): Promise<void> {
   // menu-driven surface.
   const nativeViews: Partial<Record<ViewId, View>> = {
     home: homeView,
+    schedule: scheduleView,
   };
 
   const classicFor: Partial<Record<ViewId, () => Promise<void>>> = {
-    schedule: showSchedule,
     events: showCalendar,
     docs: showDocsMenu,
     settings: showSettingsMenu,
