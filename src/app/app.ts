@@ -6,8 +6,8 @@ import type { AppContext, AppSize, View } from './view.js';
 import { homeView } from './views/home.js';
 import { scheduleView } from './views/schedule.js';
 import { docsView } from './views/docs.js';
+import { eventsView } from './views/events.js';
 import { t } from '../i18n/index.js';
-import { showCalendar } from '../features/calendar.js';
 import { showSettingsMenu } from '../features/settings.js';
 
 /**
@@ -44,10 +44,10 @@ export async function runApp(): Promise<void> {
     home: homeView,
     schedule: scheduleView,
     docs: docsView,
+    events: eventsView,
   };
 
   const classicFor: Partial<Record<ViewId, () => Promise<void>>> = {
-    events: showCalendar,
     settings: showSettingsMenu,
   };
 
