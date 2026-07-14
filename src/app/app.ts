@@ -111,6 +111,12 @@ export async function runApp(): Promise<void> {
     process.stdin.removeListener('data', onKey);
     if (process.stdin.isTTY) process.stdin.setRawMode(false);
     process.stdout.write(ansi.showCursor + ansi.leaveAlt);
+    // `enter()` calls `stdin.resume()`; a resumed stdin stream keeps the
+    // Node event loop alive by design even with no listeners attached. The
+    // classic bridge calls `enter()` again right after, so pausing here is
+    // always safe — either it's about to be resumed, or the app is quitting
+    // for good and this is what lets the process actually exit.
+    process.stdin.pause();
   }
 
   async function switchTo(id: ViewId): Promise<void> {

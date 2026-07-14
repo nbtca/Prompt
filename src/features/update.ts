@@ -15,22 +15,27 @@ interface NpmLatest {
 
 /**
  * Fetch latest version from npm registry.
- * Returns null on any failure (network, timeout, parse).
+ * Returns null on any failure (network, timeout, parse, or `signal` aborting
+ * the request — e.g. the caller quit before this settled).
  */
-async function fetchLatestVersion(): Promise<string | null> {
+async function fetchLatestVersion(signal?: AbortSignal): Promise<string | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 3000);
+  const onExternalAbort = () => controller.abort();
+  signal?.addEventListener('abort', onExternalAbort);
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3000);
     const res = await fetch(NPM_REGISTRY_URL, {
       signal: controller.signal,
       headers: { 'Accept': 'application/json' },
     });
-    clearTimeout(timeout);
     if (!res.ok) return null;
     const data = (await res.json()) as NpmLatest;
     return data.version ?? null;
   } catch {
     return null;
+  } finally {
+    clearTimeout(timeout);
+    signal?.removeEventListener('abort', onExternalAbort);
   }
 }
 
@@ -50,10 +55,12 @@ function isNewer(local: string, remote: string): boolean {
 
 /**
  * Non-blocking update check for TUI startup.
- * Resolves to a notification string or null.
+ * Resolves to a notification string or null. Pass `signal` so a caller that
+ * quits before this settles can cancel the in-flight request instead of
+ * leaving it to hold the process open.
  */
-export async function checkForUpdate(): Promise<string | null> {
-  const latest = await fetchLatestVersion();
+export async function checkForUpdate(signal?: AbortSignal): Promise<string | null> {
+  const latest = await fetchLatestVersion(signal);
   if (!latest || !isNewer(APP_INFO.version, latest)) return null;
   const trans = t();
   return `${fmt(trans.update.available, { latest, current: APP_INFO.version })}  ${chalk.dim(trans.update.command)}`;

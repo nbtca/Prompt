@@ -22,13 +22,18 @@ export async function main(options: MainOptions = {}): Promise<void> {
       await runStartup();
     }
 
-    // Fire update check in background; events fetch provides natural wait time
-    const updatePromise = checkForUpdate();
+    // Fire update check in background; events fetch provides natural wait time.
+    // Its own AbortController is tied to whichever path finishes first, so a
+    // still-in-flight request never keeps the process alive after we're done
+    // with (or have stopped caring about) its result.
+    const updateAbort = new AbortController();
+    const updatePromise = checkForUpdate(updateAbort.signal);
 
     if (process.stdin.isTTY && process.stdout.isTTY) {
       // Launch app shell for interactive terminals
       const { runApp } = await import('./app/app.js');
       await runApp();
+      updateAbort.abort();
     } else {
       // Classic path for non-TTY (CI, pipes, redirects)
       await showEventsPreview();
@@ -43,6 +48,7 @@ export async function main(options: MainOptions = {}): Promise<void> {
         updatePromise,
         new Promise<null>(r => setTimeout(r, 100, null)),
       ]);
+      updateAbort.abort();
       if (updateMsg) console.log(c.warn(updateMsg));
 
       await showMainMenu();
