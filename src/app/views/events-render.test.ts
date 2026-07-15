@@ -24,6 +24,28 @@ describe('renderEvents', () => {
     expect(out).toContain('Events');
   });
 
+  it('hub mode with real heatmap data expands each grid row into its own array entry', () => {
+    // Regression test: renderHeatmap() returns one multi-line string (the
+    // whole grid joined by '\n'), and renderHubBody used to push that
+    // directly into the body-lines array as a single entry instead of
+    // splitting it. Every downstream consumer (fitBody/fitLine/composeFrame)
+    // assumes one array entry == one terminal row, so a smuggled-in '\n'
+    // corrupts the whole frame's row-count accounting — this was the actual
+    // cause of a real bug where the heatmap rendered as one truncated row
+    // and the header was scrolled out of view above it.
+    const hubField = new ListField({ title: 'Events', options: [{ value: 'upcoming', label: 'Events' }] });
+    const heatmapBuckets = [{ date: '2026-07-14', count: 1 }, { date: '2026-07-15', count: 0 }];
+    const lines = renderEvents({ mode: 'hub', hubField, heatmapBuckets }, new Date('2026-07-15'));
+    for (const line of lines) {
+      expect(line).not.toContain('\n');
+    }
+    // The heatmap grid alone is a title + blank + month-label + 7 grid rows
+    // + blank + legend = 11 lines; a collapsed-to-one-entry regression would
+    // make this assertion fail even though `lines.length` is technically
+    // non-zero.
+    expect(lines.length).toBeGreaterThan(10);
+  });
+
   it('list mode shows the list field', () => {
     const listField = new ListField({ title: 'Events', options: [{ value: '0', label: 'Hackathon' }] });
     const out = stripAnsi(renderEvents({ mode: 'list', listField }, new Date()).join('\n'));

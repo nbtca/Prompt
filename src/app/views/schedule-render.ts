@@ -52,7 +52,7 @@ function renderHubBody(state: ScheduleViewState, now: Date): string[] {
     lines.push(banner || hint(trans.timetable.noNextClass));
     lines.push('');
     lines.push(heading(trans.timetable.hubToday));
-    lines.push(renderTodayClasses(today, tt.periods, now));
+    lines.push(...renderTodayClasses(today, tt.periods, now).split('\n'));
     lines.push('');
   }
   if (state.statusMessage) {
@@ -89,7 +89,7 @@ export function renderSchedule(state: ScheduleViewState, now: Date): string[] {
         ? [
           heading(trans.timetable.hubWeek),
           '',
-          renderWeekGrid(state.timetable.meetings, state.timetable.periods, currentWeekNumber(state.weekOne, now), now),
+          ...renderWeekGrid(state.timetable.meetings, state.timetable.periods, currentWeekNumber(state.weekOne, now), now).split('\n'),
         ]
         : [hint(trans.timetable.genericError)];
     case 'termPicker':
@@ -98,7 +98,7 @@ export function renderSchedule(state: ScheduleViewState, now: Date): string[] {
       return [
         heading(trans.timetable.unresolvedTitle),
         '',
-        renderUnresolvedItems(state.timetable?.unresolvedItems ?? []),
+        ...renderUnresolvedItems(state.timetable?.unresolvedItems ?? []).split('\n'),
       ];
     case 'error':
       return [hint(state.errorMessage ?? trans.timetable.genericError)];

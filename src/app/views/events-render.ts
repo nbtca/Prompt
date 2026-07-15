@@ -36,7 +36,7 @@ function renderHubBody(state: EventsViewState, now: Date): string[] {
   const banner = renderCountdownBanner(state.nextEvent, now);
   if (banner) { lines.push(banner); lines.push(''); }
   if (state.heatmapBuckets && state.heatmapBuckets.length > 0) {
-    lines.push(renderHeatmap(state.heatmapBuckets, now, { color: true }));
+    lines.push(...renderHeatmap(state.heatmapBuckets, now, { color: true }).split('\n'));
     lines.push('');
   }
   if (state.hubField) lines.push(...state.hubField.render());
