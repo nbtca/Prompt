@@ -1,8 +1,8 @@
 import type { TimetableMeeting, TimetablePeriod, TimetableUnresolvedItem } from '@nbtca/nbtcal/timetable';
-import { countdownParts } from './calendar-query.js';
+import { countdownParts, isCountdownUrgent } from './calendar-query.js';
 import type { NextClass } from './schedule-query.js';
 import { meetingsInWeek, campusWeekday } from './schedule-query.js';
-import { type, space, glyph } from '../core/theme.js';
+import { c, type, space, glyph } from '../core/theme.js';
 import { pickIcon } from '../core/icons.js';
 import { padEndV, truncate } from '../core/text.js';
 import { t } from '../i18n/index.js';
@@ -21,9 +21,10 @@ export function renderNextClassBanner(next: NextClass | null, now: Date): string
     : p.days > 0 ? `${p.days}d ${p.hours}h`
     : p.hours > 0 ? `${p.hours}h ${p.minutes}m`
     : `${p.minutes}m`;
+  const whenStyled = isCountdownUrgent(p) ? c.warn(when) : type.hint(when);
   const dot = pickIcon('·', '-');
   const loc = next.meeting.location ? `  ${dot}  ${next.meeting.location}` : '';
-  return `${space.indent}${type.heading(glyph.cursor())} ${type.label(trans.timetable.nextClass)}  ${dot}  ${type.body(next.meeting.courseName)}${loc}  ${dot}  ${type.hint(when)}`;
+  return `${space.indent}${type.heading(glyph.cursor())} ${type.label(trans.timetable.nextClass)}  ${dot}  ${type.body(next.meeting.courseName)}${loc}  ${dot}  ${whenStyled}`;
 }
 
 export function renderTodayClasses(meetings: readonly TimetableMeeting[], periods: readonly TimetablePeriod[], now: Date): string {

@@ -45,6 +45,15 @@ export function countdownParts(target: Date, now: Date): Countdown {
   };
 }
 
+/** True once a countdown is close enough to call out visually (default: 15
+ * minutes or less). A `past` countdown is never urgent — there's nothing
+ * left to hurry for. */
+export function isCountdownUrgent(p: Countdown, thresholdMinutes = 15): boolean {
+  if (p.past) return false;
+  const totalMinutes = p.days * 1440 + p.hours * 60 + p.minutes;
+  return totalMinutes <= thresholdMinutes;
+}
+
 export function buildExportFilename(event: CalendarEvent): string {
   const cleaned = (event.title ?? '')
     .replace(/[^\p{L}\p{N}\-_ ]/gu, '')

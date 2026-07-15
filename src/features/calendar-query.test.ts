@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { CalendarEvent } from '@nbtca/nbtcal';
-import { weekRange, monthRange, filterEvents, countdownParts, buildExportFilename } from './calendar-query.js';
+import { weekRange, monthRange, filterEvents, countdownParts, isCountdownUrgent, buildExportFilename } from './calendar-query.js';
 
 function ev(o: Partial<CalendarEvent>): CalendarEvent {
   return { uid: 'u', title: 'T', start: new Date(), end: null, isAllDay: false, location: null, description: null, recurring: false, ...o };
@@ -47,6 +47,28 @@ describe('countdownParts', () => {
   });
   it('marks a non-future target as past', () => {
     expect(countdownParts(new Date('2026-03-25T11:00:00Z'), now).past).toBe(true);
+  });
+});
+
+describe('isCountdownUrgent', () => {
+  it('is urgent at exactly the 15-minute threshold', () => {
+    expect(isCountdownUrgent({ past: false, days: 0, hours: 0, minutes: 15 })).toBe(true);
+  });
+  it('is not urgent one minute past the threshold', () => {
+    expect(isCountdownUrgent({ past: false, days: 0, hours: 0, minutes: 16 })).toBe(false);
+  });
+  it('is urgent with any minutes when 0 hours/days', () => {
+    expect(isCountdownUrgent({ past: false, days: 0, hours: 0, minutes: 1 })).toBe(true);
+  });
+  it('is never urgent once hours or days are involved', () => {
+    expect(isCountdownUrgent({ past: false, days: 0, hours: 1, minutes: 0 })).toBe(false);
+    expect(isCountdownUrgent({ past: false, days: 1, hours: 0, minutes: 0 })).toBe(false);
+  });
+  it('a past countdown is never urgent (nothing to hurry for)', () => {
+    expect(isCountdownUrgent({ past: true, days: 0, hours: 0, minutes: 0 })).toBe(false);
+  });
+  it('respects a custom threshold', () => {
+    expect(isCountdownUrgent({ past: false, days: 0, hours: 0, minutes: 20 }, 30)).toBe(true);
   });
 });
 

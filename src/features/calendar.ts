@@ -11,7 +11,7 @@ import { t } from '../i18n/index.js';
 import { enterScreen, breadcrumb } from '../core/transitions.js';
 import { URLS } from '../config/data.js';
 import { renderHeatmap } from './calendar-heatmap.js';
-import { countdownParts, buildExportFilename, weekRange, monthRange, filterEvents } from './calendar-query.js';
+import { countdownParts, isCountdownUrgent, buildExportFilename, weekRange, monthRange, filterEvents } from './calendar-query.js';
 import { writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 
@@ -160,8 +160,9 @@ export function renderCountdownBanner(event: Event | undefined, now: Date): stri
       : p.hours > 0
         ? `${inp} ${p.hours}h ${p.minutes}m`
         : `${inp} ${p.minutes}m`;
+  const whenStyled = isCountdownUrgent(p) ? c.warn(when) : type.hint(when);
   const dot = pickIcon('·', '-');
-  return `${space.indent}${type.heading(glyph.cursor())} ${type.label(trans.calendar.next)}  ${dot}  ${type.body(event.title)}  ${dot}  ${type.hint(when)}`;
+  return `${space.indent}${type.heading(glyph.cursor())} ${type.label(trans.calendar.next)}  ${dot}  ${type.body(event.title)}  ${dot}  ${whenStyled}`;
 }
 
 function renderSubscribeHint(): void {
