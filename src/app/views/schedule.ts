@@ -12,6 +12,8 @@ import { ListField } from '../fields/list-field.js';
 import { TextField } from '../fields/text-field.js';
 import { renderSchedule, type ScheduleViewState } from './schedule-render.js';
 import { setVimKeysActive } from '../../core/vim-keys.js';
+import { c } from '../../core/theme.js';
+import { pickIcon } from '../../core/icons.js';
 import { t } from '../../i18n/index.js';
 import { AuthError } from '../../auth/errors.js';
 import { loginWithStudentPassword, restoreNbtSession, type AuthenticatedNbtSession } from '../../auth/nbt-auth.js';
@@ -41,14 +43,22 @@ function isTimetableLike(value: unknown): value is Timetable {
     && Array.isArray((value as Timetable).periods);
 }
 
-function buildHubField(tt: Timetable): ListField {
+/** Exported for direct unit testing — pure given a Timetable, no module state. */
+export function buildHubField(tt: Timetable): ListField {
   const trans = t();
   const options = [
     { value: 'week', label: trans.timetable.hubWeek },
     { value: 'term', label: trans.timetable.hubSwitchTerm },
     { value: 'export', label: trans.timetable.hubExport },
     ...(tt.unresolvedItems.length > 0
-      ? [{ value: 'unresolved', label: trans.timetable.hubUnresolved, hint: String(tt.unresolvedItems.length) }]
+      ? [{
+        value: 'unresolved',
+        // Warn-colored so it stands out even when not the selected row —
+        // this is the one thing on the hub that genuinely needs the
+        // student's attention, unlike the routine actions around it.
+        label: c.warn(`${pickIcon('⚠', '!')} ${trans.timetable.hubUnresolved}`),
+        hint: String(tt.unresolvedItems.length),
+      }]
       : []),
     { value: 'logout', label: trans.timetable.hubLogout },
   ];

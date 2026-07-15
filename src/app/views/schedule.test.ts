@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest';
-import { scheduleView } from './schedule.js';
+import { scheduleView, buildHubField } from './schedule.js';
 import { setLanguage } from '../../i18n/index.js';
 import { resetIconCache } from '../../core/icons.js';
 import { stripAnsi } from '../../core/text.js';
 import type { AppContext } from '../view.js';
+import type { Timetable } from '@nbtca/nbtcal/timetable';
 
 beforeAll(() => {
   setLanguage('en');
@@ -47,5 +48,32 @@ describe('scheduleView', () => {
     // sub-mode, so there is nothing for the view to step back to internally —
     // it must defer to the app's default (leave the tab for Home).
     expect(scheduleView.handleBack?.()).toBe(false);
+  });
+});
+
+describe('buildHubField', () => {
+  const baseTimetable: Omit<Timetable, 'unresolvedItems'> = {
+    term: { academicYear: '2026', semester: '3' },
+    meetings: [],
+    periods: [],
+    calendarDays: [],
+    warnings: [],
+    fetchedAt: new Date('2026-09-07T00:00:00Z'),
+  };
+
+  it('does not show a "needs attention" row when there are no unresolved items', () => {
+    const field = buildHubField({ ...baseTimetable, unresolvedItems: [] });
+    const text = field.render().join('\n');
+    expect(text).not.toContain('Needs attention');
+  });
+
+  it('surfaces a "needs attention" row with a count when there are unresolved items', () => {
+    const field = buildHubField({
+      ...baseTimetable,
+      unresolvedItems: [{ kind: 'practice', itemIndex: 0, sourceFields: { kcmc: 'Fitness test' } }],
+    });
+    const text = field.render().join('\n');
+    expect(text).toContain('Needs attention');
+    expect(text).toContain('1');
   });
 });
