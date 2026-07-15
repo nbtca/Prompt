@@ -1,7 +1,7 @@
 import type { TimetableMeeting, TimetablePeriod, TimetableUnresolvedItem } from '@nbtca/nbtcal/timetable';
 import { countdownParts } from './calendar-query.js';
 import type { NextClass } from './schedule-query.js';
-import { meetingsInWeek } from './schedule-query.js';
+import { meetingsInWeek, campusWeekday } from './schedule-query.js';
 import { type, space, glyph } from '../core/theme.js';
 import { pickIcon } from '../core/icons.js';
 import { padEndV, truncate } from '../core/text.js';
@@ -53,8 +53,9 @@ function minutesOf(hhmm: string): number {
   return (h || 0) * 60 + (m || 0);
 }
 
-export function renderWeekGrid(meetings: readonly TimetableMeeting[], periods: readonly TimetablePeriod[], weekNumber: number, _now: Date): string {
+export function renderWeekGrid(meetings: readonly TimetableMeeting[], periods: readonly TimetablePeriod[], weekNumber: number, now: Date): string {
   const week = meetingsInWeek(meetings, weekNumber);
+  const todayWd = campusWeekday(now);
   const cellW = 10;
   const rowHeadW = 4;
   const totalW = rowHeadW + cellW * 7;
@@ -64,14 +65,21 @@ export function renderWeekGrid(meetings: readonly TimetableMeeting[], periods: r
     return m ? truncate(m.courseName, cellW) : '';
   };
   const lines: string[] = [];
-  const header = padEndV('', rowHeadW) + WEEKDAY_KEYS.map((d) => padEndV(type.hint(d), cellW)).join('');
-  lines.push(space.indent + header);
+  const todayMark = pickIcon('•', '*');
+  const headerCells = WEEKDAY_KEYS.map((d, i) => {
+    const wd = i + 1;
+    const label = wd === todayWd ? `${d}${todayMark}` : d;
+    return padEndV(wd === todayWd ? type.heading(label) : type.hint(label), cellW);
+  }).join('');
+  lines.push(space.indent + padEndV('', rowHeadW) + headerCells);
   const sorted = [...periods].sort((a, b) => a.period - b.period);
   sorted.forEach((p, i) => {
     const rowHead = type.hint(padEndV(`${t().timetable.periodShort}${p.period}`, rowHeadW));
     const cells = [1, 2, 3, 4, 5, 6, 7].map((wd) => {
       const v = at(wd, p.period);
-      return padEndV(v ? type.body(v) : type.hint(pickIcon('·', '.')), cellW);
+      const isToday = wd === todayWd;
+      const text = v ? (isToday ? type.heading(v) : type.body(v)) : type.hint(pickIcon('·', '.'));
+      return padEndV(text, cellW);
     }).join('');
     lines.push(space.indent + rowHead + cells);
 

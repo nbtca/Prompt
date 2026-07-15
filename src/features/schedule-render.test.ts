@@ -48,6 +48,15 @@ describe('renderWeekGrid', () => {
     expect(out).toContain('Math');      // placed in Mon / period 1
     done();
   });
+
+  it('marks the header of the current weekday and no other', () => {
+    // 2026-09-07 is a Monday.
+    const out = stripAnsi(renderWeekGrid([], periods, 1, new Date('2026-09-07T09:00:00')));
+    const headerLine = out.split('\n')[0]!;
+    expect(headerLine).toMatch(/Mon\*/);
+    expect(headerLine).not.toMatch(/Tue\*/);
+    done();
+  });
 });
 
 const periodsWithGap: TimetablePeriod[] = [
