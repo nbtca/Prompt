@@ -25,6 +25,10 @@ import {
   termKey, loadWeekOne, saveWeekOne, saveTimetableCache,
   saveCurrentPointer, loadCurrentPointer, loadTimetableCache, clearScheduleCache,
 } from '../../features/schedule-store.js';
+import { loadCalendarOrThrow, toDisplayEvent } from '../../features/calendar.js';
+import type { Event } from '../../features/calendar.js';
+import { currentAcademicWindow, inferWeekOneMonday, isAcademicBreakEvent } from '../../features/academic-calendar.js';
+import type { AcademicWindow, OnBreak } from '../../features/academic-calendar.js';
 
 let state: ScheduleViewState = { mode: 'loading' };
 let session: AuthenticatedNbtSession | null = null;
@@ -86,6 +90,54 @@ function goToLoginId(errorMessage?: string): void {
   };
 }
 
+function buildPublicField(): ListField {
+  const trans = t();
+  return new ListField({
+    title: trans.timetable.menuEntry,
+    options: [{ value: 'login', label: trans.timetable.publicLoginAction }],
+    footer: trans.menu.hintMove,
+  });
+}
+
+/** The default, no-login Schedule view: public term/week status sourced from
+ * the same public calendar feed Events already uses. Login is now something
+ * the student opts into from here, not a gate they hit immediately. */
+async function goToPublic(ctx: AppContext): Promise<void> {
+  setVimKeysActive(true);
+  state = { mode: 'public', publicField: buildPublicField() };
+  ctx.rerender();
+  try {
+    const cal = await loadCalendarOrThrow();
+    const now = new Date();
+    const windowEvents = cal.inRange(
+      new Date(now.getTime() - 400 * 86400000), new Date(now.getTime() + 400 * 86400000),
+    );
+    const publicWindow: AcademicWindow | OnBreak | null = currentAcademicWindow(windowEvents, now);
+    const publicUpcoming: Event[] = cal.upcoming({ days: 30 })
+      .filter((e) => !isAcademicBreakEvent(e))
+      .slice(0, 5)
+      .map(toDisplayEvent);
+    state = { ...state, publicWindow, publicUpcoming };
+  } catch {
+    state = { ...state, publicWindow: null };
+  }
+  ctx.rerender();
+}
+
+/** Best-effort: try to auto-fill "week one Monday" from the same public
+ * calendar feed before falling back to the manual prompt. Never throws —
+ * any failure here just means the student sees today's existing prompt. */
+async function tryInferWeekOne(): Promise<string | null> {
+  try {
+    const cal = await loadCalendarOrThrow();
+    const now = new Date();
+    const events = cal.inRange(new Date(now.getTime() - 400 * 86400000), new Date(now.getTime() + 30 * 86400000));
+    return inferWeekOneMonday(events, now);
+  } catch {
+    return null;
+  }
+}
+
 async function afterAuthenticated(ctx: AppContext, s: AuthenticatedNbtSession): Promise<void> {
   // Captured before any state mutation below, so it reflects whether a
   // cached hub was already on screen when this call started (e.g. a
@@ -98,13 +150,18 @@ async function afterAuthenticated(ctx: AppContext, s: AuthenticatedNbtSession): 
     catalog = await client.listTerms();
     const term = resolveTerm(catalog);
     const key = termKey(term);
-    const weekOne = loadWeekOne(key);
+    let weekOne = loadWeekOne(key);
+    if (!weekOne) {
+      weekOne = await tryInferWeekOne();
+      if (weekOne) saveWeekOne(key, weekOne);
+    }
     if (!weekOne) {
       setVimKeysActive(false);
       state = {
         mode: 'needsWeekOne',
         key,
         term,
+        errorMessage: t().timetable.weekOneAutoFailed,
         weekOneField: new TextField({ message: t().timetable.weekOne, placeholder: t().timetable.weekOneHint }),
       };
       ctx.rerender();
@@ -157,7 +214,7 @@ async function refreshFromNetwork(ctx: AppContext): Promise<void> {
     const store = createSessionStore();
     const persisted = store.load();
     if (!persisted) {
-      if (!hadCache) goToLoginId();
+      if (!hadCache) await goToPublic(ctx);
       return;
     }
     const restored = await restoreNbtSession(persisted);
@@ -167,7 +224,7 @@ async function refreshFromNetwork(ctx: AppContext): Promise<void> {
       if (err instanceof AuthError && isSessionExpired(err)) {
         createSessionStore().clear();
       }
-      goToLoginId();
+      await goToPublic(ctx);
     }
     // best-effort: a cached hub already showed, keep it as-is on refresh failure.
   }
@@ -215,9 +272,14 @@ export const scheduleView: View = {
 
   handleKey(key: string, ctx: AppContext): void {
     switch (state.mode) {
+      case 'public': {
+        const result = state.publicField?.handleKey(key);
+        if (result?.selected === 'login') goToLoginId();
+        return;
+      }
       case 'needsLoginId': {
         const result = state.idField?.handleKey(key);
-        if (result?.cancelled) { goToLoginId(); return; }
+        if (result?.cancelled) { void goToPublic(ctx); return; }
         if (result?.submitted !== undefined) {
           pendingId = result.submitted;
           state = {
@@ -304,7 +366,7 @@ export const scheduleView: View = {
           void session?.close();
           session = null;
           client = null;
-          goToLoginId();
+          void goToPublic(ctx);
         }
         return;
       }

@@ -39,6 +39,20 @@ vi.mock('../../features/schedule-store.js', async (importOriginal) => {
   return { ...actual, loadCurrentPointer: vi.fn().mockReturnValue(null), loadTimetableCache: vi.fn().mockReturnValue(null) };
 });
 
+const calendarUpcoming = vi.fn().mockReturnValue([]);
+const calendarInRange = vi.fn().mockReturnValue([]);
+vi.mock('../../features/calendar.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../features/calendar.js')>();
+  return {
+    ...actual,
+    loadCalendarOrThrow: vi.fn().mockResolvedValue({
+      upcoming: calendarUpcoming, past: vi.fn().mockReturnValue([]),
+      next: vi.fn().mockReturnValue([]), inRange: calendarInRange,
+      heatmap: vi.fn().mockReturnValue([]),
+    }),
+  };
+});
+
 const { scheduleView, buildHubField } = await import('./schedule.js');
 const { setLanguage } = await import('../../i18n/index.js');
 const { resetIconCache } = await import('../../core/icons.js');
@@ -175,5 +189,27 @@ describe('scheduleView.load() with an expired session', () => {
     expect(scheduleView.capturesInput?.()).toBe(false);
     const out = stripAnsi(scheduleView.render(ctx).join('\n'));
     expect(out).toContain(t().timetable.menuEntry);
+  });
+});
+
+describe('scheduleView.load() with no session — public view', () => {
+  function fakeCtx(): AppContext {
+    return {
+      size: { rows: 24, cols: 80 }, bodyRows: 19, rerender: vi.fn(),
+      runClassic: vi.fn(async (fn: () => Promise<void>) => { await fn(); }), quit: vi.fn(),
+    };
+  }
+
+  it('shows the public view (not a login prompt) when there is no persisted session', async () => {
+    vi.mocked(loadCurrentPointer).mockReturnValue(null);
+    sessionStoreLoad.mockReturnValue(null); // no persisted session at all
+
+    const ctx = fakeCtx();
+    await scheduleView.load(ctx);
+
+    expect(scheduleView.capturesInput?.()).toBe(false); // public hub is a ListField, not a text field
+    const out = stripAnsi(scheduleView.render(ctx).join('\n'));
+    expect(out).toContain(t().timetable.publicLoginAction);
+    expect(out).not.toContain(t().timetable.studentId);
   });
 });
