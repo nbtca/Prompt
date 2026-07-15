@@ -48,6 +48,22 @@ describe('design tokens', () => {
     resetIconCache();
   });
 
+  it('barFilled/barEmpty are the shared block-bar glyphs in unicode mode', () => {
+    process.env['NBTCA_ICON_MODE'] = 'unicode';
+    resetIconCache();
+    expect(glyph.barFilled()).toBe('█');
+    expect(glyph.barEmpty()).toBe('░');
+  });
+
+  it('barFilled/barEmpty fall back to #/- in ascii mode', () => {
+    process.env['NBTCA_ICON_MODE'] = 'ascii';
+    resetIconCache();
+    expect(glyph.barFilled()).toBe('#');
+    expect(glyph.barEmpty()).toBe('-');
+    process.env['NBTCA_ICON_MODE'] = 'unicode';
+    resetIconCache();
+  });
+
   it('indent is three spaces', () => {
     expect(space.indent).toBe('   ');
   });

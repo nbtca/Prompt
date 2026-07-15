@@ -1,7 +1,6 @@
 import type { AcademicTerm, Timetable } from '@nbtca/nbtcal/timetable';
-import { type, space } from '../../core/theme.js';
+import { type, space, glyph } from '../../core/theme.js';
 import { t, fmt } from '../../i18n/index.js';
-import { pickIcon } from '../../core/icons.js';
 import { ListField } from '../fields/list-field.js';
 import { TextField } from '../fields/text-field.js';
 import { currentWeekNumber, campusWeekday, meetingsOnDay, nextMeeting } from '../../features/schedule-query.js';
@@ -116,8 +115,8 @@ function renderTermProgressBar(w: AcademicWindow, now: Date): string | null {
   const filledCols = Math.max(0, Math.min(
     TERM_PROGRESS_WIDTH, Math.round((currentWeek / totalWeeks) * TERM_PROGRESS_WIDTH),
   ));
-  const filledChar = pickIcon('█', '#');
-  const emptyChar = pickIcon('░', '-');
+  const filledChar = glyph.barFilled();
+  const emptyChar = glyph.barEmpty();
   const bar = filledChar.repeat(filledCols) + emptyChar.repeat(TERM_PROGRESS_WIDTH - filledCols);
   return `${space.indent}${type.body(bar)}  ${type.hint(`${currentWeek}/${totalWeeks}${t().timetable.weekLabel2.replace('{week}', '').trim()}`)}`;
 }

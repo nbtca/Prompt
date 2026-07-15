@@ -1,5 +1,4 @@
-import { type, space } from '../../core/theme.js';
-import { pickIcon } from '../../core/icons.js';
+import { type, space, glyph } from '../../core/theme.js';
 import { t } from '../../i18n/index.js';
 import { peekNextClassLine, peekTodayLines } from '../../features/schedule-view.js';
 import { fetchEvents, renderEventBrief } from '../../features/calendar.js';
@@ -32,8 +31,8 @@ function renderDayProgress(now: Date): string {
   const minutesElapsed = now.getHours() * 60 + now.getMinutes();
   const fraction = Math.min(1, Math.max(0, minutesElapsed / 1440));
   const filled = Math.round(fraction * DAY_PROGRESS_WIDTH);
-  const filledChar = pickIcon('█', '#');
-  const emptyChar = pickIcon('░', '-');
+  const filledChar = glyph.barFilled();
+  const emptyChar = glyph.barEmpty();
   const bar = filledChar.repeat(filled) + emptyChar.repeat(DAY_PROGRESS_WIDTH - filled);
   const pct = Math.round(fraction * 100);
   return `${space.indent}${type.body(bar)}  ${type.hint(`${pct}%`)}`;

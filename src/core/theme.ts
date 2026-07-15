@@ -32,6 +32,13 @@ export const glyph = {
   dot:    () => pickIcon('●', '*'),
   updown: () => pickIcon('↑↓', 'up/down'),
   enter:  () => pickIcon('⏎', 'enter'),
+  // Two-level "how full" bar cell (Home's day-progress, Schedule's
+  // term-progress) — a single source of truth so every such bar in the
+  // app reads as the same visual language. Not the same vocabulary as
+  // calendar-heatmap's 5-level intensity scale, which is a deliberately
+  // finer-grained density visualization, not a binary fill/empty bar.
+  barFilled: () => pickIcon('█', '#'),
+  barEmpty:  () => pickIcon('░', '-'),
 };
 
 export const space = {

@@ -6,6 +6,7 @@
 import chalk from 'chalk';
 import type { HeatmapBucket } from '@nbtca/nbtcal';
 import { pickIcon } from '../core/icons.js';
+import { space } from '../core/theme.js';
 import { t, getCurrentLanguage } from '../i18n/index.js';
 
 /** Parse a 'YYYY-MM-DD' date string into a UTC proxy Date (host-timezone-independent). */
@@ -112,7 +113,7 @@ export function renderHeatmap(
   // character buffer starting at the column where that month begins, letting it
   // overflow rightward into the spacing of the following columns (months are
   // ~4-5 columns apart, so labels never collide).
-  const weekdayLabel = '   '; // 3-char prefix, matches the grid rows' "Mo " prefix
+  const weekdayLabel = space.indent; // matches the grid rows' "Mo " prefix width
   const monthFmt = new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: 'UTC' });
   const cellsWidth = numCols * 2;
   const monthChars = new Array<string>(cellsWidth).fill(' ');
