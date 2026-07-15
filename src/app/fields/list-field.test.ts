@@ -1,5 +1,8 @@
-import { describe, it, expect } from 'vitest';
-import { ListField } from './list-field.js';
+import { describe, it, expect, beforeAll } from 'vitest';
+import { ListField, computeMaxVisible } from './list-field.js';
+import { setLanguage } from '../../i18n/index.js';
+
+beforeAll(() => setLanguage('en'));
 
 describe('ListField', () => {
   const options = [
@@ -51,5 +54,63 @@ describe('ListField', () => {
     expect(text).toContain('Alpha');
     expect(text).toContain('Beta');
     expect(text).toContain('Gamma');
+  });
+});
+
+describe('ListField scrolling (maxVisible)', () => {
+  const manyOptions = Array.from({ length: 20 }, (_, i) => ({ value: String(i), label: `Item ${i}` }));
+
+  it('shows every option when maxVisible is not set, however many there are', () => {
+    const field = new ListField({ title: 'List', options: manyOptions });
+    const text = field.render().join('\n');
+    expect(text).toContain('Item 0');
+    expect(text).toContain('Item 19');
+  });
+
+  it('shows only maxVisible options and a below-count at rest', () => {
+    const field = new ListField({ title: 'List', options: manyOptions, maxVisible: 5 });
+    const text = field.render().join('\n');
+    expect(text).toContain('Item 0');
+    expect(text).toContain('Item 4');
+    expect(text).not.toContain('Item 5');
+    expect(text).toMatch(/15/); // 15 more below
+  });
+
+  it('scrolls to keep the selection visible when moving down past the window', () => {
+    const field = new ListField({ title: 'List', options: manyOptions, maxVisible: 5 });
+    for (let i = 0; i < 7; i++) field.handleKey('\x1b[B'); // -> index 7
+    const text = field.render().join('\n');
+    expect(text).toContain('Item 7');
+  });
+
+  it('keeps the selection visible when jumping straight to the end', () => {
+    const field = new ListField({ title: 'List', options: manyOptions, maxVisible: 5 });
+    field.handleKey('\x1b[F'); // End -> last item
+    const text = field.render().join('\n');
+    expect(text).toContain('Item 19');
+  });
+
+  it('scrolls back to the top when the selection wraps from last to first', () => {
+    const field = new ListField({ title: 'List', options: manyOptions, maxVisible: 5 });
+    field.handleKey('\x1b[F'); // jump to end
+    field.handleKey('\x1b[B'); // down wraps to index 0
+    const text = field.render().join('\n');
+    expect(text).toContain('Item 0');
+  });
+
+  it('never scrolls when options already fit within maxVisible', () => {
+    const shortOptions = manyOptions.slice(0, 3);
+    const field = new ListField({ title: 'List', options: shortOptions, maxVisible: 5 });
+    const text = field.render().join('\n');
+    expect(text).not.toMatch(/more/i);
+  });
+});
+
+describe('computeMaxVisible', () => {
+  it('reserves headroom for title/blank/indicator/footer chrome', () => {
+    expect(computeMaxVisible(19)).toBe(15);
+  });
+  it('floors at 3 so a tiny terminal never gets a degenerate window', () => {
+    expect(computeMaxVisible(2)).toBe(3);
   });
 });

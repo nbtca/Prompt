@@ -8,7 +8,9 @@
     "error": "错误",
     "success": "成功",
     "goodbye": "再见！",
-    "current": "当前"
+    "current": "当前",
+    "moreAbove": "上方还有 {count} 项",
+    "moreBelow": "下方还有 {count} 项"
   },
   "menu": {
     "events": "活动",

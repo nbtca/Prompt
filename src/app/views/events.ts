@@ -1,6 +1,6 @@
 import type { Calendar, CalendarEvent } from '@nbtca/nbtcal';
 import type { AppContext, View } from '../view.js';
-import { ListField } from '../fields/list-field.js';
+import { ListField, computeMaxVisible } from '../fields/list-field.js';
 import { TextField } from '../fields/text-field.js';
 import { renderEvents, type EventsViewState } from './events-render.js';
 import { setVimKeysActive } from '../../core/vim-keys.js';
@@ -34,7 +34,7 @@ function buildHubField(): ListField {
   return new ListField({ title: trans.menu.events, options });
 }
 
-function buildListField(title: string, events: CalendarEvent[]): ListField {
+function buildListField(title: string, events: CalendarEvent[], maxVisible: number): ListField {
   const trans = t();
   const display = events.map(toDisplayEvent);
   const options = [
@@ -48,12 +48,13 @@ function buildListField(title: string, events: CalendarEvent[]): ListField {
   return new ListField({
     title: title || trans.menu.events,
     options: options.length > 1 ? options : [{ value: '__back__', label: `${trans.calendar.noEvents} — ${backLabel()}` }],
+    maxVisible,
   });
 }
 
-function showList(title: string, events: CalendarEvent[]): void {
+function showList(title: string, events: CalendarEvent[], ctx: AppContext): void {
   currentList = events;
-  state = { mode: 'list', listField: buildListField(title, events) };
+  state = { mode: 'list', listField: buildListField(title, events, computeMaxVisible(ctx.bodyRows)) };
 }
 
 function goToHub(): void {
@@ -124,17 +125,17 @@ export const eventsView: View = {
     return false;
   },
 
-  handleKey(key: string, _ctx: AppContext): void {
+  handleKey(key: string, ctx: AppContext): void {
     if (!calendar) return;
     switch (state.mode) {
       case 'hub': {
         const result = state.hubField?.handleKey(key);
         if (!result?.selected) return;
         const now = new Date();
-        if (result.selected === 'upcoming') { showList(t().menu.events, calendar.upcoming({ days: 30 })); return; }
-        if (result.selected === 'week') { const r = weekRange(now); showList(t().calendar.thisWeek, calendar.inRange(r.start, r.end)); return; }
-        if (result.selected === 'month') { const r = monthRange(now); showList(t().calendar.thisMonth, calendar.inRange(r.start, r.end)); return; }
-        if (result.selected === 'past') { showList(t().calendar.pastEvents, calendar.past({ days: 30 }).reverse()); return; }
+        if (result.selected === 'upcoming') { showList(t().menu.events, calendar.upcoming({ days: 30 }), ctx); return; }
+        if (result.selected === 'week') { const r = weekRange(now); showList(t().calendar.thisWeek, calendar.inRange(r.start, r.end), ctx); return; }
+        if (result.selected === 'month') { const r = monthRange(now); showList(t().calendar.thisMonth, calendar.inRange(r.start, r.end), ctx); return; }
+        if (result.selected === 'past') { showList(t().calendar.pastEvents, calendar.past({ days: 30 }).reverse(), ctx); return; }
         if (result.selected === 'search') {
           setVimKeysActive(false);
           state = { mode: 'search', searchField: new TextField({ message: t().calendar.searchPrompt, placeholder: t().calendar.searchPlaceholder, allowEmpty: true }) };
@@ -152,7 +153,7 @@ export const eventsView: View = {
       case 'detail': {
         const result = state.detailField?.handleKey(key);
         if (!result?.selected) return;
-        if (result.selected === '__back__') { showList('', currentList); return; }
+        if (result.selected === '__back__') { showList('', currentList, ctx); return; }
         if (result.selected === 'export' && state.detailTitle) {
           const raw = currentList.find((e) => toDisplayEvent(e).title === state.detailTitle);
           if (raw) {
@@ -172,7 +173,7 @@ export const eventsView: View = {
           const now = new Date();
           const pool = calendar.inRange(now, new Date(now.getTime() + 365 * 86400000));
           const results = filterEvents(pool, query);
-          showList(`${t().calendar.search}: ${query}`, results);
+          showList(`${t().calendar.search}: ${query}`, results, ctx);
         }
         return;
       }

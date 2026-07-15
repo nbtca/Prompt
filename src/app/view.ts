@@ -32,7 +32,7 @@ export interface View {
    * back to its own hub) — the app re-renders and stays on this tab. Return
    * false/omit if the view has nothing to step back from (already at its own
    * top level), so the app falls through to its default: back to Home. */
-  handleBack?(): boolean;
+  handleBack?(ctx: AppContext): boolean;
   /** Overrides the chrome's generic footer hint. Return a string while the
    * generic "1-7/Tab switch · q quit" hint would be false (e.g. a focused
    * text field, where those keys type characters instead) — omit or return

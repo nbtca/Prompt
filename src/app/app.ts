@@ -95,7 +95,7 @@ export async function runApp(): Promise<void> {
       // back to its own hub) — only once the view has nowhere left to step
       // back to does Esc leave the tab for Home. Matches how k9s/lazygit
       // treat Esc: back one level, not straight to the root.
-      if (active?.handleBack?.()) {
+      if (active?.handleBack?.(ctx)) {
         render();
         return;
       }

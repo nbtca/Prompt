@@ -8,7 +8,9 @@
     "error": "Error",
     "success": "Success",
     "goodbye": "Goodbye!",
-    "current": "current"
+    "current": "current",
+    "moreAbove": "{count} more above",
+    "moreBelow": "{count} more below"
   },
   "menu": {
     "events": "Events",

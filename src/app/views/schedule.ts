@@ -8,7 +8,7 @@ import {
   type Timetable,
 } from '@nbtca/nbtcal/timetable';
 import type { AppContext, View } from '../view.js';
-import { ListField } from '../fields/list-field.js';
+import { ListField, computeMaxVisible } from '../fields/list-field.js';
 import { TextField } from '../fields/text-field.js';
 import { renderSchedule, type ScheduleViewState } from './schedule-render.js';
 import { setVimKeysActive } from '../../core/vim-keys.js';
@@ -257,7 +257,11 @@ export const scheduleView: View = {
             hint: tm.current ? t().common.current : undefined,
           }));
           options.push({ value: '__back__', label: t().common.back, hint: undefined });
-          state = { ...state, mode: 'termPicker', termField: new ListField({ title: t().timetable.hubSwitchTerm, options }) };
+          state = {
+            ...state,
+            mode: 'termPicker',
+            termField: new ListField({ title: t().timetable.hubSwitchTerm, options, maxVisible: computeMaxVisible(ctx.bodyRows) }),
+          };
           return;
         }
         if (result.selected === 'export') {

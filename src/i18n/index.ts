@@ -28,6 +28,8 @@ export interface Translations {
     success: string;
     goodbye: string;
     current: string;
+    moreAbove: string;
+    moreBelow: string;
   };
   menu: {
     events: string;

@@ -1,6 +1,6 @@
 import type { DocItem } from '@nbtca/docs';
 import type { AppContext, View } from '../view.js';
-import { ListField } from '../fields/list-field.js';
+import { ListField, computeMaxVisible } from '../fields/list-field.js';
 import { TextField } from '../fields/text-field.js';
 import { renderDocs, type DocsViewState } from './docs-render.js';
 import { setVimKeysActive } from '../../core/vim-keys.js';
@@ -36,16 +36,16 @@ function buildSectionsField(): ListField {
   return new ListField({ title: trans.docs.chooseCategory, options });
 }
 
-function buildFilesField(section: DocSection): ListField {
+function buildFilesField(section: DocSection, maxVisible: number): ListField {
   const files = section.files.filter((f) => f.name !== 'index.md' && !f.name.startsWith('index.'));
   const options = [
     ...files.map((f) => ({ value: f.path, label: cleanFileName(f.name) })),
     { value: '__back__', label: backLabel() },
   ];
-  return new ListField({ title: section.label, options });
+  return new ListField({ title: section.label, options, maxVisible });
 }
 
-function buildArchivedGroupsField(groups: Map<string, DocItem[]>): ListField {
+function buildArchivedGroupsField(groups: Map<string, DocItem[]>, maxVisible: number): ListField {
   const trans = t();
   const sortedKeys = [...groups.keys()].sort((a, b) => {
     const aYear = /^\d{4}$/.test(a);
@@ -59,10 +59,10 @@ function buildArchivedGroupsField(groups: Map<string, DocItem[]>): ListField {
     ...sortedKeys.map((k) => ({ value: k, label: k, hint: String(groups.get(k)!.length) })),
     { value: '__back__', label: backLabel() },
   ];
-  return new ListField({ title: trans.docs.categoryArchived, options });
+  return new ListField({ title: trans.docs.categoryArchived, options, maxVisible });
 }
 
-function buildArchivedFilesField(groupKey: string, groupFiles: DocItem[]): ListField {
+function buildArchivedFilesField(groupKey: string, groupFiles: DocItem[], maxVisible: number): ListField {
   const trans = t();
   const subDirs = new Set(groupFiles.map((f) => f.path.split('/')[2]).filter(Boolean));
   const options = [
@@ -72,7 +72,7 @@ function buildArchivedFilesField(groupKey: string, groupFiles: DocItem[]): ListF
     }),
     { value: '__back__', label: backLabel() },
   ];
-  return new ListField({ title: `${trans.docs.categoryArchived} · ${groupKey}`, options });
+  return new ListField({ title: `${trans.docs.categoryArchived} · ${groupKey}`, options, maxVisible });
 }
 
 function goToSections(): void {
@@ -113,9 +113,9 @@ export const docsView: View = {
     return state.mode === 'search' ? captureFooterHint() : undefined;
   },
 
-  handleBack(): boolean {
+  handleBack(ctx: AppContext): boolean {
     if (state.mode === 'archivedFiles') {
-      state = { mode: 'archivedGroups', archivedGroupsField: buildArchivedGroupsField(archivedGroups) };
+      state = { mode: 'archivedGroups', archivedGroupsField: buildArchivedGroupsField(archivedGroups, computeMaxVisible(ctx.bodyRows)) };
       return true;
     }
     if (state.mode === 'search') {
@@ -149,9 +149,9 @@ export const docsView: View = {
         activeSection = section;
         if (section.key === 'archived') {
           archivedGroups = getArchivedGroups(section.files);
-          state = { mode: 'archivedGroups', archivedGroupsField: buildArchivedGroupsField(archivedGroups) };
+          state = { mode: 'archivedGroups', archivedGroupsField: buildArchivedGroupsField(archivedGroups, computeMaxVisible(ctx.bodyRows)) };
         } else {
-          state = { mode: 'files', filesField: buildFilesField(section) };
+          state = { mode: 'files', filesField: buildFilesField(section, computeMaxVisible(ctx.bodyRows)) };
         }
         return;
       }
@@ -160,7 +160,7 @@ export const docsView: View = {
         if (!result?.selected) return;
         if (result.selected === '__back__') { goToSections(); return; }
         void openFile(ctx, result.selected).then(() => {
-          if (activeSection) state = { mode: 'files', filesField: buildFilesField(activeSection) };
+          if (activeSection) state = { mode: 'files', filesField: buildFilesField(activeSection, computeMaxVisible(ctx.bodyRows)) };
           ctx.rerender();
         });
         return;
@@ -171,19 +171,19 @@ export const docsView: View = {
         if (result.selected === '__back__') { goToSections(); return; }
         activeGroupKey = result.selected;
         const groupFiles = archivedGroups.get(result.selected) ?? [];
-        state = { mode: 'archivedFiles', archivedFilesField: buildArchivedFilesField(result.selected, groupFiles) };
+        state = { mode: 'archivedFiles', archivedFilesField: buildArchivedFilesField(result.selected, groupFiles, computeMaxVisible(ctx.bodyRows)) };
         return;
       }
       case 'archivedFiles': {
         const result = state.archivedFilesField?.handleKey(key);
         if (!result?.selected) return;
         if (result.selected === '__back__') {
-          state = { mode: 'archivedGroups', archivedGroupsField: buildArchivedGroupsField(archivedGroups) };
+          state = { mode: 'archivedGroups', archivedGroupsField: buildArchivedGroupsField(archivedGroups, computeMaxVisible(ctx.bodyRows)) };
           return;
         }
         const groupKey = activeGroupKey;
         void openFile(ctx, result.selected).then(() => {
-          if (groupKey) state = { mode: 'archivedFiles', archivedFilesField: buildArchivedFilesField(groupKey, archivedGroups.get(groupKey) ?? []) };
+          if (groupKey) state = { mode: 'archivedFiles', archivedFilesField: buildArchivedFilesField(groupKey, archivedGroups.get(groupKey) ?? [], computeMaxVisible(ctx.bodyRows)) };
           ctx.rerender();
         });
         return;
@@ -209,7 +209,7 @@ export const docsView: View = {
             state = {
               mode: 'searchResults',
               searchResultsEmpty: matches.length === 0,
-              searchResultsField: new ListField({ title: trans.docs.chooseDoc, options }),
+              searchResultsField: new ListField({ title: trans.docs.chooseDoc, options, maxVisible: computeMaxVisible(ctx.bodyRows) }),
             };
             ctx.rerender();
           }).catch(() => {
