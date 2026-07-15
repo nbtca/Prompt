@@ -249,7 +249,22 @@
     "daysUntilBreak": "{days} days until {title}",
     "publicLoginAction": "Log in to see my timetable",
     "publicLoginHint": "Log in to export your timetable (.ics)",
-    "weekOneAutoFailed": "Couldn't infer the term's first week automatically — please confirm it once"
+    "weekOneAutoFailed": "Couldn't infer the term's first week automatically — please confirm it once",
+    "weekdayMon": "Mon",
+    "weekdayTue": "Tue",
+    "weekdayWed": "Wed",
+    "weekdayThu": "Thu",
+    "weekdayFri": "Fri",
+    "weekdaySat": "Sat",
+    "weekdaySun": "Sun",
+    "todayHeading": "Today · {weekday} · Week {week}",
+    "classDone": "Done",
+    "classLive": "In progress",
+    "minutesRemaining": "{minutes}m left",
+    "timelineEnd": "—",
+    "weekStripHasClass": "has class",
+    "weekStripFree": "free",
+    "weekStripWeekend": "weekend"
   },
   "theme": {
     "current": "Current theme settings",

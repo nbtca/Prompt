@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import type { TimetableMeeting, TimetablePeriod, TimetableUnresolvedItem } from '@nbtca/nbtcal/timetable';
-import { renderNextClassBanner, renderTodayClasses, renderWeekGrid, renderUnresolvedItems } from './schedule-render.js';
+import {
+  renderNextClassBanner, renderTodayClasses, renderWeekGrid, renderUnresolvedItems,
+  renderTodayTimeline, renderWeekStrip,
+} from './schedule-render.js';
 import { setLanguage } from '../i18n/index.js';
 import { resetIconCache } from '../core/icons.js';
 import { stripAnsi } from '../core/text.js';
@@ -79,6 +82,81 @@ describe('renderWeekGrid gap marker', () => {
     const lines = out.split('\n').filter((l) => l.trim().length > 0);
     expect(lines.length).toBe(1 + periods.length); // header + one row per period, no extra rows
     done();
+  });
+});
+
+const dayPeriods: TimetablePeriod[] = [
+  { period: 1, label: null, start: '08:00', end: '09:40' },
+  { period: 2, label: null, start: '09:50', end: '11:30' },
+  { period: 3, label: null, start: '13:30', end: '15:20' },
+];
+
+describe('renderTodayTimeline', () => {
+  it('shows the empty-state line when there are no classes today', () => {
+    expect(stripAnsi(renderTodayTimeline([], dayPeriods, new Date()))).toContain('No classes today');
+    done();
+  });
+
+  it('marks finished classes as done and lists their start time', () => {
+    const meetings = [mk({ courseName: 'Math', startPeriod: 1, endPeriod: 1 })];
+    const out = stripAnsi(renderTodayTimeline(meetings, dayPeriods, new Date('2026-09-07T12:00:00')));
+    expect(out).toContain('08:00');
+    expect(out).toContain('Math');
+    expect(out).toContain('Done');
+    done();
+  });
+
+  it('marks the in-progress class with a remaining-minutes countdown and its location', () => {
+    // period 3 is 13:30-15:20; now = 14:55 -> 25 minutes left
+    const meetings = [mk({ courseName: 'Data Structures', location: 'Bldg 1-302', startPeriod: 3, endPeriod: 3 })];
+    const out = stripAnsi(renderTodayTimeline(meetings, dayPeriods, new Date('2026-09-07T14:55:00')));
+    expect(out).toContain('Data Structures');
+    expect(out).toContain('In progress');
+    expect(out).toContain('25m left');
+    expect(out).toContain('Bldg 1-302');
+    done();
+  });
+
+  it('leaves an upcoming class unmarked (no Done/In progress status)', () => {
+    const meetings = [mk({ courseName: 'Physics', startPeriod: 2, endPeriod: 2 })];
+    const out = stripAnsi(renderTodayTimeline(meetings, dayPeriods, new Date('2026-09-07T07:00:00')));
+    expect(out).toContain('Physics');
+    expect(out).not.toContain('Done');
+    expect(out).not.toContain('In progress');
+    done();
+  });
+
+  it('closes the timeline with the last class end time', () => {
+    const meetings = [mk({ startPeriod: 1, endPeriod: 1 })];
+    const out = stripAnsi(renderTodayTimeline(meetings, dayPeriods, new Date('2026-09-07T07:00:00')));
+    expect(out).toContain('09:40'); // period 1's end time closes the timeline
+  });
+
+  it('never returns a value containing a literal newline per rendered row (single joined string by design)', () => {
+    // renderTodayTimeline follows this module's convention of returning one
+    // '\n'-joined string; callers must split it, never push it whole.
+    const meetings = [mk({ startPeriod: 1, endPeriod: 1 }), mk({ courseName: 'Physics', startPeriod: 2, endPeriod: 2 })];
+    const out = renderTodayTimeline(meetings, dayPeriods, new Date('2026-09-07T07:00:00'));
+    expect(out.split('\n').length).toBeGreaterThan(1);
+  });
+});
+
+describe('renderWeekStrip', () => {
+  it('marks a weekday with a class differently from a free weekday', () => {
+    const meetings = [mk({ weekday: 3, weeks: [1] })]; // Wednesday
+    const out = stripAnsi(renderWeekStrip(meetings, 1, 3));
+    expect(out).toContain('has class');
+    expect(out).toContain('free');
+  });
+
+  it('marks Saturday/Sunday as weekend regardless of meetings', () => {
+    const out = stripAnsi(renderWeekStrip([], 1, 1));
+    expect(out).toContain('weekend');
+  });
+
+  it('never collapses into a single-line string (module convention: split on \\n)', () => {
+    const out = renderWeekStrip([], 1, 1);
+    expect(out.split('\n').length).toBeGreaterThan(1);
   });
 });
 

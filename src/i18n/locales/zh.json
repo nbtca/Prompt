@@ -249,7 +249,22 @@
     "daysUntilBreak": "距离{title}还有 {days} 天",
     "publicLoginAction": "登录查看我的课表",
     "publicLoginHint": "登录后可导出课表 (.ics)",
-    "weekOneAutoFailed": "未能从校历自动推算学期第一周，请手动确认一次"
+    "weekOneAutoFailed": "未能从校历自动推算学期第一周，请手动确认一次",
+    "weekdayMon": "一",
+    "weekdayTue": "二",
+    "weekdayWed": "三",
+    "weekdayThu": "四",
+    "weekdayFri": "五",
+    "weekdaySat": "六",
+    "weekdaySun": "日",
+    "todayHeading": "今日 · 周{weekday} · 第{week}教学周",
+    "classDone": "已结束",
+    "classLive": "进行中",
+    "minutesRemaining": "还剩 {minutes} 分钟",
+    "timelineEnd": "无",
+    "weekStripHasClass": "有课",
+    "weekStripFree": "空",
+    "weekStripWeekend": "周末"
   },
   "theme": {
     "current": "当前主题设置",

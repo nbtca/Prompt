@@ -269,6 +269,21 @@ export interface Translations {
     publicLoginAction: string;
     publicLoginHint: string;
     weekOneAutoFailed: string;
+    weekdayMon: string;
+    weekdayTue: string;
+    weekdayWed: string;
+    weekdayThu: string;
+    weekdayFri: string;
+    weekdaySat: string;
+    weekdaySun: string;
+    todayHeading: string;
+    classDone: string;
+    classLive: string;
+    minutesRemaining: string;
+    timelineEnd: string;
+    weekStripHasClass: string;
+    weekStripFree: string;
+    weekStripWeekend: string;
   };
   theme: {
     current: string;
