@@ -62,10 +62,12 @@ function renderHubBody(state: ScheduleViewState, now: Date, bodyRows: number): s
     const banner = renderNextClassBanner(nextMeeting(tt.meetings, tt.periods, state.weekOne, now), now);
     lines.push(banner || hint(trans.timetable.noNextClass));
     lines.push('');
+    // Deliberately no blank line between each heading and its own content
+    // below (today-heading -> timeline, week-heading -> strip) — tighter
+    // grouping saves real rows against bodyRows on short terminals, where
+    // this section's height is otherwise dynamic (0..N+1 timeline rows).
     lines.push(heading(fmt(trans.timetable.todayHeading, { weekday: weekdayShortLabel(todayWd), week: String(week) })));
-    lines.push('');
     lines.push(...renderTodayTimeline(today, tt.periods, now).split('\n'));
-    lines.push('');
     lines.push(heading(trans.timetable.hubWeek));
     lines.push(...renderWeekStrip(tt.meetings, week, todayWd).split('\n'));
     lines.push('');
