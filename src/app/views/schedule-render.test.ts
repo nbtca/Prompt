@@ -153,6 +153,26 @@ describe('renderSchedule — public mode', () => {
     expect(out).toContain('days until');
   });
 
+  it('groups the term heading, progress bar, and countdown as one block with no blank lines inside it', () => {
+    // Regression: this cluster used to push a blank line *before* the bar
+    // and *before* the countdown line, inverting the app's dominant
+    // "content, then blank" rhythm (every other hub — Home, Events —
+    // never puts a blank before a block's own content).
+    const state: ScheduleViewState = {
+      mode: 'public',
+      publicWindow: {
+        status: 'inTerm', academicYear: '2026-2027', semester: '1',
+        weekOneMonday: '2026-09-14', currentWeek: 3,
+        nextBreakStart: '2027-01-13', nextBreakTitle: '寒假',
+      },
+    };
+    const lines = renderSchedule(state, new Date('2026-10-01')).map((l) => stripAnsi(l));
+    const headingIndex = lines.findIndex((l) => l.includes('2026-2027'));
+    const barIndex = lines.findIndex((l) => /\d+\/\d+/.test(l));
+    expect(lines[headingIndex + 1]?.trim()).not.toBe(''); // no blank right after the heading
+    expect(barIndex).toBeGreaterThan(headingIndex);
+  });
+
   it('shows term/week without a progress bar when nextBreakStart is unknown', () => {
     const state = {
       mode: 'public' as const,

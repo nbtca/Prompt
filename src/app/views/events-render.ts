@@ -36,7 +36,7 @@ function hint(label: string): string {
   return `${space.indent}${type.hint(label)}`;
 }
 
-function renderHubBody(state: EventsViewState, now: Date): string[] {
+function renderHubBody(state: EventsViewState, now: Date, bodyRows: number): string[] {
   const trans = t();
   const lines: string[] = [];
   const banner = renderCountdownBanner(state.nextEvent, now);
@@ -50,17 +50,25 @@ function renderHubBody(state: EventsViewState, now: Date): string[] {
     for (const e of state.recentEvents) lines.push(renderEventBrief(e, now));
     lines.push('');
   }
-  if (state.hubField) lines.push(...state.hubField.render());
+  if (state.hubField) {
+    // The heatmap + recent-activity briefing above are already tall enough
+    // to exceed a short terminal's body budget on their own — window the
+    // menu against what this render actually already used, or the bottom
+    // rows (search, past events) get silently cut with no scroll
+    // indicator. Mirrors the same fix already shipped for Schedule's hub.
+    state.hubField.setMaxVisible(Math.max(3, bodyRows - lines.length - 4));
+    lines.push(...state.hubField.render());
+  }
   return lines;
 }
 
-export function renderEvents(state: EventsViewState, now: Date): string[] {
+export function renderEvents(state: EventsViewState, now: Date, bodyRows = 100): string[] {
   const trans = t();
   switch (state.mode) {
     case 'loading':
       return [hint(trans.calendar.loading)];
     case 'hub':
-      return renderHubBody(state, now);
+      return renderHubBody(state, now, bodyRows);
     case 'list':
       return state.listField?.render() ?? [];
     case 'detail':

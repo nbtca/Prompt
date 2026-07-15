@@ -21,4 +21,8 @@ describe('routeGlobalKey', () => {
   it('other keys are not handled (delegated to the view)', () => {
     expect(routeGlobalKey('j', ids, 'events')).toEqual({ handled: false });
   });
+  it('PageUp/PageDown scroll the body by one page', () => {
+    expect(routeGlobalKey('\x1b[5~', ids, 'events')).toEqual({ scrollBy: -1, handled: true });
+    expect(routeGlobalKey('\x1b[6~', ids, 'events')).toEqual({ scrollBy: 1, handled: true });
+  });
 });

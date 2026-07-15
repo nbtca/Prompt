@@ -141,10 +141,13 @@ function renderPublicBody(state: ScheduleViewState, now: Date): string[] {
     lines.push(heading(
       `${fmt(trans.timetable.academicYearSuffix, { year: w.academicYear })} · ${semesterLabel} · ${fmt(trans.timetable.weekLabel2, { week: String(w.currentWeek) })}`,
     ));
+    // Heading + bar + countdown are one cohesive info cluster — no blank
+    // lines within it — followed by a single trailing blank, matching the
+    // app's dominant "content, then blank" rhythm (Home/Events push a
+    // block's content, then '', never the reverse).
     const bar = renderTermProgressBar(w, now);
-    if (bar) { lines.push(''); lines.push(bar); }
+    if (bar) lines.push(bar);
     if (w.nextBreakStart && w.nextBreakTitle) {
-      lines.push('');
       lines.push(hint(fmt(trans.timetable.daysUntilBreak, {
         title: w.nextBreakTitle,
         days: String(daysBetween(now, new Date(`${w.nextBreakStart}T00:00:00`))),

@@ -63,6 +63,29 @@ describe('renderEvents', () => {
     expect(out).not.toContain('Recent');
   });
 
+  it('hub mode windows the menu against actual content height instead of overflowing', () => {
+    // Regression: the heatmap (11 lines) + a full recent-activity briefing
+    // (up to 5 events) already exceeds a 24-row terminal's body budget
+    // before the menu even starts — hubField never had maxVisible set at
+    // all, so on a short terminal the menu (including items a student
+    // needs, like search/past-events) was silently cut off with no
+    // scroll indicator. Mirrors the same fix already shipped for
+    // Schedule's hub.
+    const manyOptions = Array.from({ length: 8 }, (_, i) => ({ value: String(i), label: `MenuOption${i}` }));
+    const hubField = new ListField({ title: 'Events', options: manyOptions });
+    const heatmapBuckets = Array.from({ length: 30 }, (_, i) => ({ date: `2026-07-${String(i + 1).padStart(2, '0')}`, count: 1 }));
+    const recentEvents = Array.from({ length: 5 }, (_, i) => ({
+      date: `07-${17 + i}`, time: '20:30', title: `Event${i}`, location: 'TBD', description: '',
+      startDate: new Date('2026-07-17T20:30:00'), recurring: false, uid: `e-${i}`,
+    }));
+    const out = stripAnsi(renderEvents({
+      mode: 'hub', hubField, heatmapBuckets, recentEvents,
+    }, new Date('2026-07-15'), 19).join('\n'));
+    const visibleCount = manyOptions.filter((o) => out.includes(o.label)).length;
+    expect(visibleCount).toBeLessThan(manyOptions.length);
+    expect(visibleCount).toBeGreaterThan(0);
+  });
+
   it('list mode shows the list field', () => {
     const listField = new ListField({ title: 'Events', options: [{ value: '0', label: 'Hackathon' }] });
     const out = stripAnsi(renderEvents({ mode: 'list', listField }, new Date()).join('\n'));

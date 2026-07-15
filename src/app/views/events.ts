@@ -108,7 +108,7 @@ export const eventsView: View = {
     // frame (not just construction time) — this is what keeps a long list
     // correctly windowed across a live resize.
     state.listField?.setMaxVisible(computeMaxVisible(ctx.bodyRows));
-    return renderEvents(state, new Date());
+    return renderEvents(state, new Date(), ctx.bodyRows);
   },
 
   capturesInput(): boolean {

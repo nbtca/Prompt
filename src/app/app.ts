@@ -96,6 +96,7 @@ export async function runApp(): Promise<void> {
       // back to does Esc leave the tab for Home. Matches how k9s/lazygit
       // treat Esc: back one level, not straight to the root.
       if (active?.handleBack?.(ctx)) {
+        scroll = 0; // the new sub-view's content height has nothing to do with the old one's
         render();
         return;
       }
@@ -106,6 +107,15 @@ export async function runApp(): Promise<void> {
     }
     if (g.switchTo) {
       switchTo(g.switchTo);
+      return;
+    }
+    if (g.scrollBy) {
+      // fitBody (frame.ts) clamps this to [0, content.length - bodyRows]
+      // on every render regardless of what's requested here, so this never
+      // needs to know the current body's height to stay in bounds.
+      const page = Math.max(1, ctx.bodyRows - 2);
+      scroll = Math.max(0, scroll + g.scrollBy * page);
+      render();
       return;
     }
     active?.handleKey?.(key, ctx);
