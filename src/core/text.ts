@@ -1,4 +1,15 @@
-/** Width of a single Unicode character: 2 for CJK/fullwidth, 1 otherwise. */
+/** Codepoints that occupy zero terminal columns: combining modifiers that
+ * merge into the glyph immediately before them, rather than rendering as
+ * their own character (zero-width joiner, variation selectors). Emoji
+ * sequences like a ZWJ family emoji or "❤️" (heart + VS-16) render as one
+ * glyph — counting the modifier itself would overcount by a full column. */
+function isZeroWidth(cp: number): boolean {
+  return cp === 0x200D // zero-width joiner
+    || cp === 0xFE0E    // variation selector-15 (text presentation)
+    || cp === 0xFE0F;   // variation selector-16 (emoji presentation)
+}
+
+/** Width of a single Unicode character: 2 for CJK/fullwidth/emoji, 1 otherwise. */
 function charWidth(ch: string): 1 | 2 {
   const cp = ch.codePointAt(0) ?? 0;
   return (
@@ -15,7 +26,15 @@ function charWidth(ch: string): 1 | 2 {
     (cp >= 0x20000 && cp <= 0x2A6DF) ||
     (cp >= 0x2A700 && cp <= 0x2CEAF) ||
     (cp >= 0x2CEB0 && cp <= 0x2EBEF) ||
-    (cp >= 0x30000 && cp <= 0x323AF)
+    (cp >= 0x30000 && cp <= 0x323AF) ||
+    // Emoji block (Misc Symbols & Pictographs, Emoticons, Transport, Chess
+    // Symbols, Supplemental Symbols & Pictographs, Extended-A). Real
+    // terminals render these as double-width glyphs; undercounting even one
+    // emoji is enough to push a line one column past the terminal width and
+    // trigger an unwanted auto-wrap — this is a real bug that was found: an
+    // emoji-titled event line loading in scrolled the app's header out of
+    // view because of exactly this miscount.
+    (cp >= 0x1F300 && cp <= 0x1FAFF)
   ) ? 2 : 1;
 }
 
@@ -26,11 +45,16 @@ export function stripAnsi(str: string): string {
   return str.replace(ANSI_RE, '');
 }
 
-/** Total visual width of a string (CJK characters count as 2, ANSI codes ignored). */
+/** Total visual width of a string (CJK/emoji count as 2, zero-width
+ * modifiers count as 0, ANSI codes ignored). */
 export function visualWidth(str: string): number {
   const plain = stripAnsi(str);
   let w = 0;
-  for (const ch of plain) w += charWidth(ch);
+  for (const ch of plain) {
+    const cp = ch.codePointAt(0) ?? 0;
+    if (isZeroWidth(cp)) continue;
+    w += charWidth(ch);
+  }
   return w;
 }
 
@@ -46,7 +70,8 @@ export function truncate(str: string, maxWidth: number): string {
   let w = 0;
   let i = 0;
   for (const ch of str) {
-    const cw = charWidth(ch);
+    const cp = ch.codePointAt(0) ?? 0;
+    const cw = isZeroWidth(cp) ? 0 : charWidth(ch);
     if (w + cw > maxWidth - 3) break;
     w += cw;
     i += ch.length;
