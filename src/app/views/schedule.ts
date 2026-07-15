@@ -131,7 +131,12 @@ async function tryInferWeekOne(): Promise<string | null> {
   try {
     const cal = await loadCalendarOrThrow();
     const now = new Date();
-    const events = cal.inRange(new Date(now.getTime() - 400 * 86400000), new Date(now.getTime() + 30 * 86400000));
+    // Symmetric window (matches goToPublic's): inferWeekOneMonday can look
+    // forward to an *upcoming* semester-start marker while on break (e.g. a
+    // student logging in mid-summer, months before the next term's own
+    // start date) — a narrow forward window would silently miss exactly the
+    // event this is meant to find.
+    const events = cal.inRange(new Date(now.getTime() - 400 * 86400000), new Date(now.getTime() + 400 * 86400000));
     return inferWeekOneMonday(events, now);
   } catch {
     return null;
