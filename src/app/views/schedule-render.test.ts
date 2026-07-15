@@ -54,6 +54,22 @@ describe('renderSchedule', () => {
     expect(out).toContain('Needs attention');
   });
 
+  it('hub mode shows a "term not started" state instead of a negative week when weekOne is in the future', () => {
+    // Regression: weekOne can be auto-inferred *ahead* of `now` while on
+    // break (it deliberately points at the upcoming term so it's ready
+    // once classes start — see academic-calendar.ts). Rendering the
+    // today/timeline/week-strip section anyway against a future weekOne
+    // produced a nonsensical negative week number and an empty class grid
+    // that read as "there are classes right now."
+    const hubField = new ListField({ title: 'Schedule', options: [{ value: 'week', label: 'This week' }] });
+    const out = stripAnsi(renderSchedule({
+      mode: 'hub', key: '2026-3', weekOne: '2099-01-05', timetable, hubField,
+    }, new Date('2026-09-07T07:00:00')).join('\n'));
+    expect(out).toContain("Term hasn't started yet");
+    expect(out).toContain('2099-01-05');
+    expect(out).not.toMatch(/Week -?\d/);
+  });
+
   it('hub mode windows the menu instead of overflowing when the timeline pushes it past bodyRows', () => {
     // Regression guard: the timeline/week-strip above the menu have dynamic
     // height, and hubField previously had no maxVisible at all — a short

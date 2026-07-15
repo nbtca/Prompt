@@ -264,7 +264,9 @@
     "timelineEnd": "—",
     "weekStripHasClass": "has class",
     "weekStripFree": "free",
-    "weekStripWeekend": "weekend"
+    "weekStripWeekend": "weekend",
+    "termNotStarted": "Term hasn't started yet",
+    "termStartsIn": "Classes begin {date} · {days} days to go"
   },
   "theme": {
     "current": "Current theme settings",

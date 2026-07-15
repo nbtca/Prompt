@@ -284,6 +284,8 @@ export interface Translations {
     weekStripHasClass: string;
     weekStripFree: string;
     weekStripWeekend: string;
+    termNotStarted: string;
+    termStartsIn: string;
   };
   theme: {
     current: string;

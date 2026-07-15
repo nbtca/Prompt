@@ -264,7 +264,9 @@
     "timelineEnd": "无",
     "weekStripHasClass": "有课",
     "weekStripFree": "空",
-    "weekStripWeekend": "周末"
+    "weekStripWeekend": "周末",
+    "termNotStarted": "本学期尚未开始",
+    "termStartsIn": "{date} 开学 · 还有 {days} 天"
   },
   "theme": {
     "current": "当前主题设置",

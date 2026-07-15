@@ -57,20 +57,35 @@ function renderHubBody(state: ScheduleViewState, now: Date, bodyRows: number): s
   const tt = state.timetable;
   if (tt && state.weekOne) {
     const week = currentWeekNumber(state.weekOne, now);
-    const todayWd = campusWeekday(now);
-    const today = meetingsOnDay(tt.meetings, todayWd, week);
     const banner = renderNextClassBanner(nextMeeting(tt.meetings, tt.periods, state.weekOne, now), now);
     lines.push(banner || hint(trans.timetable.noNextClass));
     lines.push('');
-    // Deliberately no blank line between each heading and its own content
-    // below (today-heading -> timeline, week-heading -> strip) — tighter
-    // grouping saves real rows against bodyRows on short terminals, where
-    // this section's height is otherwise dynamic (0..N+1 timeline rows).
-    lines.push(heading(fmt(trans.timetable.todayHeading, { weekday: weekdayShortLabel(todayWd), week: String(week) })));
-    lines.push(...renderTodayTimeline(today, tt.periods, now).split('\n'));
-    lines.push(heading(trans.timetable.hubWeek));
-    lines.push(...renderWeekStrip(tt.meetings, week, todayWd).split('\n'));
-    lines.push('');
+    if (week < 1) {
+      // weekOne can be a *future* date — auto-inferred while on break, it
+      // deliberately points at the upcoming term (see academic-calendar.ts)
+      // so it's ready the moment classes start. Until then there is no
+      // "today"/"this week" to show; rendering the timeline/strip anyway
+      // produced a nonsensical negative week number and an empty-but-
+      // present class grid, which read as "there are classes right now."
+      lines.push(heading(trans.timetable.termNotStarted));
+      lines.push(hint(fmt(trans.timetable.termStartsIn, {
+        date: state.weekOne,
+        days: String(daysBetween(now, new Date(`${state.weekOne}T00:00:00`))),
+      })));
+      lines.push('');
+    } else {
+      const todayWd = campusWeekday(now);
+      const today = meetingsOnDay(tt.meetings, todayWd, week);
+      // Deliberately no blank line between each heading and its own content
+      // below (today-heading -> timeline, week-heading -> strip) — tighter
+      // grouping saves real rows against bodyRows on short terminals, where
+      // this section's height is otherwise dynamic (0..N+1 timeline rows).
+      lines.push(heading(fmt(trans.timetable.todayHeading, { weekday: weekdayShortLabel(todayWd), week: String(week) })));
+      lines.push(...renderTodayTimeline(today, tt.periods, now).split('\n'));
+      lines.push(heading(trans.timetable.hubWeek));
+      lines.push(...renderWeekStrip(tt.meetings, week, todayWd).split('\n'));
+      lines.push('');
+    }
   }
   if (state.statusMessage) {
     lines.push(hint(state.statusMessage));
