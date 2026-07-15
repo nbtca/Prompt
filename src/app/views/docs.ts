@@ -101,7 +101,15 @@ export const docsView: View = {
     ctx.rerender();
   },
 
-  render(_ctx: AppContext): string[] {
+  render(ctx: AppContext): string[] {
+    // Sync every visible field's scroll window to the *current* terminal
+    // size on every frame (not just construction time) — this is what
+    // keeps a long list correctly windowed across a live resize.
+    const maxVisible = computeMaxVisible(ctx.bodyRows);
+    state.filesField?.setMaxVisible(maxVisible);
+    state.archivedGroupsField?.setMaxVisible(maxVisible);
+    state.archivedFilesField?.setMaxVisible(maxVisible);
+    state.searchResultsField?.setMaxVisible(maxVisible);
     return renderDocs(state);
   },
 

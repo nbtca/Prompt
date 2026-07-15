@@ -104,7 +104,11 @@ export const eventsView: View = {
     ctx.rerender();
   },
 
-  render(_ctx: AppContext): string[] {
+  render(ctx: AppContext): string[] {
+    // Sync the list's scroll window to the *current* terminal size on every
+    // frame (not just construction time) — this is what keeps a long list
+    // correctly windowed across a live resize.
+    state.listField?.setMaxVisible(computeMaxVisible(ctx.bodyRows));
     return renderEvents(state, new Date());
   },
 

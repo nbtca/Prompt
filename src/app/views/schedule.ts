@@ -170,7 +170,11 @@ export const scheduleView: View = {
     await refreshFromNetwork(ctx);
   },
 
-  render(_ctx: AppContext): string[] {
+  render(ctx: AppContext): string[] {
+    // Sync every visible field's scroll window to the *current* terminal
+    // size on every frame (not just construction time) — this is what
+    // keeps a long list correctly windowed across a live resize.
+    state.termField?.setMaxVisible(computeMaxVisible(ctx.bodyRows));
     return renderSchedule(state, new Date());
   },
 

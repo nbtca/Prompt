@@ -106,6 +106,37 @@ describe('ListField scrolling (maxVisible)', () => {
   });
 });
 
+describe('ListField.setMaxVisible (live resize)', () => {
+  const manyOptions = Array.from({ length: 20 }, (_, i) => ({ value: String(i), label: `Item ${i}` }));
+
+  it('re-clamps the scroll window when the selection would fall outside a shrunk window', () => {
+    const field = new ListField({ title: 'List', options: manyOptions, maxVisible: 10 });
+    for (let i = 0; i < 9; i++) field.handleKey('\x1b[B'); // -> index 9, still within [0,10)
+    expect(field.render().join('\n')).toContain('Item 9');
+
+    field.setMaxVisible(5); // terminal shrank; index 9 no longer fits the window
+    const text = field.render().join('\n');
+    expect(text).toContain('Item 9'); // must still be visible after re-clamping
+  });
+
+  it('shows more options again after the terminal grows back', () => {
+    const field = new ListField({ title: 'List', options: manyOptions, maxVisible: 5 });
+    let text = field.render().join('\n');
+    expect(text).not.toContain('Item 10');
+
+    field.setMaxVisible(15);
+    text = field.render().join('\n');
+    expect(text).toContain('Item 10'); // now fits in the larger window
+  });
+
+  it('turning maxVisible off shows every option again', () => {
+    const field = new ListField({ title: 'List', options: manyOptions, maxVisible: 5 });
+    field.setMaxVisible(undefined);
+    const text = field.render().join('\n');
+    expect(text).toContain('Item 19');
+  });
+});
+
 describe('computeMaxVisible', () => {
   it('reserves headroom for title/blank/indicator/footer chrome', () => {
     expect(computeMaxVisible(19)).toBe(15);

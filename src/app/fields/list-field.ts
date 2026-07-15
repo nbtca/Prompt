@@ -34,9 +34,11 @@ export function computeMaxVisible(bodyRows: number): number {
 export class ListField {
   private index: number;
   private scrollTop = 0;
+  private maxVisible: number | undefined;
 
   constructor(private readonly config: ListFieldConfig) {
     this.index = config.initialIndex ?? 0;
+    this.maxVisible = config.maxVisible;
     this.clampScroll();
   }
 
@@ -44,8 +46,20 @@ export class ListField {
     return this.index;
   }
 
+  /** Updates the visible-row budget in place (re-clamping the scroll window
+   * so the selection stays visible) instead of losing the field's current
+   * selection/scroll by rebuilding it. Views call this from their own
+   * `render(ctx)` on every frame — cheap, and it's what keeps a field's
+   * window in sync with the *current* terminal size even though the field
+   * itself was constructed against whatever size was current at the time. */
+  setMaxVisible(maxVisible: number | undefined): void {
+    this.maxVisible = maxVisible;
+    this.clampScroll();
+  }
+
   render(): string[] {
-    const { title, options, footer, maxVisible } = this.config;
+    const { title, options, footer } = this.config;
+    const maxVisible = this.maxVisible;
     if (!maxVisible || options.length <= maxVisible) {
       return renderMenu({ title, options, selectedIndex: this.index, footer }).split('\n');
     }
@@ -83,11 +97,15 @@ export class ListField {
     return {};
   }
 
-  /** Keeps `index` within [scrollTop, scrollTop + maxVisible) after any move. */
+  /** Keeps `index` within [scrollTop, scrollTop + maxVisible) after any move
+   * or after maxVisible itself changes (e.g. a terminal resize). */
   private clampScroll(): void {
-    const maxVisible = this.config.maxVisible;
-    if (!maxVisible) return;
+    const maxVisible = this.maxVisible;
+    if (!maxVisible) { this.scrollTop = 0; return; }
     if (this.index < this.scrollTop) this.scrollTop = this.index;
     else if (this.index >= this.scrollTop + maxVisible) this.scrollTop = this.index - maxVisible + 1;
+    // The window may also need to slide backward if it shrank enough that
+    // scrollTop..scrollTop+maxVisible now runs past the end of the list.
+    this.scrollTop = Math.max(0, Math.min(this.scrollTop, Math.max(0, this.config.options.length - maxVisible)));
   }
 }
