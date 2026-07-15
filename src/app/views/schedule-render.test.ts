@@ -6,6 +6,7 @@ import { setLanguage } from '../../i18n/index.js';
 import { resetIconCache } from '../../core/icons.js';
 import { stripAnsi } from '../../core/text.js';
 import type { Timetable } from '@nbtca/nbtcal/timetable';
+import type { Event } from '../../features/calendar.js';
 
 beforeAll(() => {
   setLanguage('en');
@@ -70,5 +71,87 @@ describe('renderSchedule', () => {
   it('error mode shows the error message', () => {
     const out = stripAnsi(renderSchedule({ mode: 'error', errorMessage: 'Something broke' }, new Date()).join('\n'));
     expect(out).toContain('Something broke');
+  });
+});
+
+describe('renderSchedule — public mode', () => {
+  it('shows a loading hint while publicWindow is undefined', () => {
+    const out = stripAnsi(renderSchedule({ mode: 'public' }, new Date()).join('\n'));
+    expect(out.trim().length).toBeGreaterThan(0);
+  });
+
+  it('shows the unavailable hint when publicWindow is null', () => {
+    const out = stripAnsi(renderSchedule({ mode: 'public', publicWindow: null }, new Date()).join('\n'));
+    expect(out).toContain('Academic calendar not available yet');
+  });
+
+  it('shows the on-break state', () => {
+    const state = { mode: 'public' as const, publicWindow: { status: 'onBreak' as const, breakTitle: '暑假' } };
+    const out = stripAnsi(renderSchedule(state, new Date()).join('\n'));
+    expect(out).toContain('On break');
+    expect(out).toContain('暑假');
+  });
+
+  it('shows term/week and a progress bar when nextBreakStart is known', () => {
+    const state = {
+      mode: 'public' as const,
+      publicWindow: {
+        status: 'inTerm' as const, academicYear: '2026-2027', semester: '1' as const,
+        weekOneMonday: '2026-09-14', currentWeek: 3,
+        nextBreakStart: '2027-01-13', nextBreakTitle: '寒假',
+      },
+    };
+    const out = stripAnsi(renderSchedule(state, new Date('2026-10-01')).join('\n'));
+    expect(out).toContain('2026-2027');
+    expect(out).toContain('Term 1');
+    expect(out).toContain('Week 3');
+    expect(out).toContain('days until');
+  });
+
+  it('shows term/week without a progress bar when nextBreakStart is unknown', () => {
+    const state = {
+      mode: 'public' as const,
+      publicWindow: {
+        status: 'inTerm' as const, academicYear: '2026-2027', semester: '1' as const,
+        weekOneMonday: '2026-09-14', currentWeek: 3,
+      },
+    };
+    expect(() => renderSchedule(state, new Date('2026-10-01'))).not.toThrow();
+  });
+
+  it('renders upcoming public events via the shared briefing format', () => {
+    const upcoming: Event[] = [{
+      date: '10-01', time: '', title: 'National Day', location: 'TBD', description: '',
+      startDate: new Date('2026-10-01'), recurring: true, uid: 'nd-1',
+    }];
+    const state = { mode: 'public' as const, publicWindow: null, publicUpcoming: upcoming };
+    const out = stripAnsi(renderSchedule(state, new Date()).join('\n'));
+    expect(out).toContain('National Day');
+  });
+
+  it('renders the login action field', () => {
+    const publicField = new ListField({ title: 'x', options: [{ value: 'login', label: 'Log in' }] });
+    const out = stripAnsi(renderSchedule({ mode: 'public', publicField }, new Date()).join('\n'));
+    expect(out).toContain('Log in');
+  });
+
+  it('never collapses a multi-line renderer output into one array entry', () => {
+    const publicField = new ListField({ title: 'x', options: [{ value: 'login', label: 'Log in' }] });
+    const state = {
+      mode: 'public' as const,
+      publicWindow: {
+        status: 'inTerm' as const, academicYear: '2026-2027', semester: '1' as const,
+        weekOneMonday: '2026-09-14', currentWeek: 3,
+        nextBreakStart: '2027-01-13', nextBreakTitle: '寒假',
+      },
+      publicUpcoming: [{
+        date: '10-01', time: '', title: 'National Day', location: 'TBD', description: '',
+        startDate: new Date('2026-10-01'), recurring: true, uid: 'nd-1',
+      }] as Event[],
+      publicField,
+    };
+    for (const line of renderSchedule(state, new Date('2026-10-01'))) {
+      expect(line).not.toContain('\n');
+    }
   });
 });

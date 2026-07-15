@@ -1,13 +1,17 @@
 import type { AcademicTerm, Timetable } from '@nbtca/nbtcal/timetable';
 import { type, space } from '../../core/theme.js';
-import { t } from '../../i18n/index.js';
+import { t, fmt } from '../../i18n/index.js';
+import { pickIcon } from '../../core/icons.js';
 import { ListField } from '../fields/list-field.js';
 import { TextField } from '../fields/text-field.js';
 import { currentWeekNumber, campusWeekday, meetingsOnDay, nextMeeting } from '../../features/schedule-query.js';
 import { renderNextClassBanner, renderTodayClasses, renderWeekGrid, renderUnresolvedItems } from '../../features/schedule-render.js';
+import type { AcademicWindow, OnBreak } from '../../features/academic-calendar.js';
+import { renderEventBrief, type Event } from '../../features/calendar.js';
 
 export type ScheduleMode =
   | 'loading'
+  | 'public'
   | 'needsLoginId'
   | 'needsLoginPassword'
   | 'authenticating'
@@ -31,6 +35,9 @@ export interface ScheduleViewState {
   term?: AcademicTerm;
   weekOne?: string;
   timetable?: Timetable;
+  publicField?: ListField;
+  publicWindow?: AcademicWindow | OnBreak | null;
+  publicUpcoming?: Event[];
 }
 
 function heading(label: string): string {
@@ -63,11 +70,74 @@ function renderHubBody(state: ScheduleViewState, now: Date): string[] {
   return lines;
 }
 
+const TERM_PROGRESS_WIDTH = 20;
+
+function renderTermProgressBar(w: AcademicWindow, now: Date): string | null {
+  if (!w.nextBreakStart) return null;
+  const weekOneMs = new Date(`${w.weekOneMonday}T00:00:00`).getTime();
+  const nextBreakMs = new Date(`${w.nextBreakStart}T00:00:00`).getTime();
+  const totalWeeks = Math.max(1, Math.round((nextBreakMs - weekOneMs) / (7 * 86400000)));
+  const currentWeek = currentWeekNumber(w.weekOneMonday, now);
+  const filledCols = Math.max(0, Math.min(
+    TERM_PROGRESS_WIDTH, Math.round((currentWeek / totalWeeks) * TERM_PROGRESS_WIDTH),
+  ));
+  const filledChar = pickIcon('█', '#');
+  const emptyChar = pickIcon('░', '-');
+  const bar = filledChar.repeat(filledCols) + emptyChar.repeat(TERM_PROGRESS_WIDTH - filledCols);
+  return `${space.indent}${type.body(bar)}  ${type.hint(`${currentWeek}/${totalWeeks}${t().timetable.weekLabel2.replace('{week}', '').trim()}`)}`;
+}
+
+function daysBetween(a: Date, b: Date): number {
+  return Math.max(0, Math.ceil((b.getTime() - a.getTime()) / 86400000));
+}
+
+function renderPublicBody(state: ScheduleViewState, now: Date): string[] {
+  const trans = t();
+  const lines: string[] = [];
+  const w = state.publicWindow;
+
+  if (w === undefined) {
+    lines.push(hint(trans.common.loading));
+  } else if (w === null) {
+    lines.push(hint(trans.timetable.publicUnavailable));
+  } else if (w.status === 'onBreak') {
+    lines.push(heading(fmt(trans.timetable.onBreak, { title: w.breakTitle })));
+  } else {
+    const semesterLabel = w.semester === '1' ? trans.timetable.semester1 : trans.timetable.semester2;
+    lines.push(heading(
+      `${fmt(trans.timetable.academicYearSuffix, { year: w.academicYear })} · ${semesterLabel} · ${fmt(trans.timetable.weekLabel2, { week: String(w.currentWeek) })}`,
+    ));
+    const bar = renderTermProgressBar(w, now);
+    if (bar) { lines.push(''); lines.push(bar); }
+    if (w.nextBreakStart && w.nextBreakTitle) {
+      lines.push('');
+      lines.push(hint(fmt(trans.timetable.daysUntilBreak, {
+        title: w.nextBreakTitle,
+        days: String(daysBetween(now, new Date(`${w.nextBreakStart}T00:00:00`))),
+      })));
+    }
+  }
+  lines.push('');
+
+  if (state.publicUpcoming && state.publicUpcoming.length > 0) {
+    lines.push(heading(trans.calendar.recentActivity));
+    for (const e of state.publicUpcoming) lines.push(renderEventBrief(e, now));
+    lines.push('');
+  }
+
+  lines.push(hint(trans.timetable.publicLoginHint));
+  lines.push('');
+  if (state.publicField) lines.push(...state.publicField.render());
+  return lines;
+}
+
 export function renderSchedule(state: ScheduleViewState, now: Date): string[] {
   const trans = t();
   switch (state.mode) {
     case 'loading':
       return [hint(trans.common.loading)];
+    case 'public':
+      return renderPublicBody(state, now);
     case 'needsLoginId':
       return [
         ...(state.errorMessage ? [hint(state.errorMessage), ''] : []),
