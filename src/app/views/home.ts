@@ -21,8 +21,22 @@ function loadingLine(): string {
   return `${space.indent}${type.hint(t().common.loading)}`;
 }
 
+const DAY_PROGRESS_WIDTH = 20;
+
+/** Pure: a block-character bar for how far into the calendar day `now` is. */
+function renderDayProgress(now: Date): string {
+  const minutesElapsed = now.getHours() * 60 + now.getMinutes();
+  const fraction = Math.min(1, Math.max(0, minutesElapsed / 1440));
+  const filled = Math.round(fraction * DAY_PROGRESS_WIDTH);
+  const filledChar = pickIcon('█', '#');
+  const emptyChar = pickIcon('░', '-');
+  const bar = filledChar.repeat(filled) + emptyChar.repeat(DAY_PROGRESS_WIDTH - filled);
+  const pct = Math.round(fraction * 100);
+  return `${space.indent}${type.body(bar)}  ${type.hint(`${pct}%`)}`;
+}
+
 /** Pure: renders the schedule-first dashboard from already-fetched data. No I/O. */
-export function renderHome(data: HomeData): string[] {
+export function renderHome(data: HomeData, now: Date): string[] {
   const trans = t();
   const lines: string[] = [];
 
@@ -36,6 +50,7 @@ export function renderHome(data: HomeData): string[] {
 
   // Today's classes (cache-only, instant).
   lines.push(panelHeading(trans.timetable.hubToday));
+  lines.push(renderDayProgress(now));
   if (data.todayLines && data.todayLines.length > 0) {
     for (const l of data.todayLines) lines.push(l);
   } else {
@@ -86,6 +101,6 @@ export const homeView: View = {
   },
 
   render(_ctx: AppContext): string[] {
-    return renderHome(data);
+    return renderHome(data, new Date());
   },
 };
