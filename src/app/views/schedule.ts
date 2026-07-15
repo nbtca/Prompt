@@ -87,6 +87,11 @@ function goToLoginId(errorMessage?: string): void {
 }
 
 async function afterAuthenticated(ctx: AppContext, s: AuthenticatedNbtSession): Promise<void> {
+  // Captured before any state mutation below, so it reflects whether a
+  // cached hub was already on screen when this call started (e.g. a
+  // background session restore on launch) as opposed to a fresh login
+  // (where state is 'authenticating', so hadCache is false).
+  const hadCache = state.mode === 'hub';
   session = s;
   client = createNbtTimetableClient(s.timetableTransport, { baseUrl: JWXT_ORIGIN });
   try {
@@ -107,7 +112,21 @@ async function afterAuthenticated(ctx: AppContext, s: AuthenticatedNbtSession): 
     }
     await fetchAndShowHub(ctx, term, key, weekOne);
   } catch (err) {
-    state = { mode: 'error', errorMessage: safeMessage(err) };
+    if (isSessionExpired(err)) {
+      // A dead session must be cleared and routed back to the login
+      // field — leaving it as a bare error message here was a dead end:
+      // the stale session would keep failing the same way on every
+      // future launch/tab-switch, and there was no way back into the
+      // login form short of quitting the app.
+      createSessionStore().clear();
+      if (!hadCache) goToLoginId(t().timetable.expiredRelogin);
+    } else if (!hadCache) {
+      // Only replace the screen with an error if there was nothing
+      // useful showing already — a background refresh failure must not
+      // blow away a working cached timetable (matches the same
+      // best-effort contract refreshFromNetwork documents below).
+      state = { mode: 'error', errorMessage: safeMessage(err) };
+    }
     ctx.rerender();
   }
 }
