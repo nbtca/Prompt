@@ -11,6 +11,10 @@ export interface HomeData {
   nextClassLine?: string;
   todayLines?: string[];
   eventLines?: string[];
+  /** Set when the events fetch itself failed — distinct from "fetch
+   * succeeded, there's just nothing upcoming" (`eventLines: []`), which
+   * every other view in the app already distinguishes. */
+  eventsError?: boolean;
 }
 
 function panelHeading(label: string): string {
@@ -62,8 +66,12 @@ export function renderHome(data: HomeData, now: Date): string[] {
   lines.push(panelHeading(trans.menu.events));
   if (data.eventLines && data.eventLines.length > 0) {
     for (const l of data.eventLines) lines.push(l);
+  } else if (data.loading) {
+    lines.push(loadingLine());
+  } else if (data.eventsError) {
+    lines.push(`${space.indent}${type.hint(trans.calendar.error)}`);
   } else {
-    lines.push(data.loading ? loadingLine() : `${space.indent}${type.hint(pickIcon('—', '-'))}`);
+    lines.push(`${space.indent}${type.hint(trans.calendar.noEvents)}`);
   }
 
   return lines;
@@ -91,7 +99,7 @@ export const homeView: View = {
       const eventLines = items.slice(0, 4).map((e) => renderEventBrief(e, now));
       data = { ...data, eventLines };
     } catch {
-      // best-effort: leave eventLines unset, panel shows a placeholder
+      data = { ...data, eventsError: true };
     } finally {
       data = { ...data, loading: false };
       ctx.rerender();

@@ -41,6 +41,24 @@ describe('renderHome (schedule-first dashboard)', () => {
     expect(Array.isArray(out)).toBe(true);
     expect(out.length).toBeGreaterThan(0);
   });
+
+  it('shows real "no upcoming events" copy when the fetch succeeded but returned nothing, not a bare glyph', () => {
+    // Regression: this used to render a lone "-" with no words at all —
+    // every other empty state in the app (and every other panel on this
+    // same screen) uses actual translated copy.
+    const out = stripAnsi(renderHome({ eventLines: [], loading: false }, noon).join('\n'));
+    expect(out).toContain('No upcoming events');
+  });
+
+  it('shows an error state when the events fetch failed, distinct from "no events"', () => {
+    // Regression: Events/Docs/Schedule all show a real error line on fetch
+    // failure; Home silently fell back to the same empty-state placeholder
+    // used for "genuinely nothing happening," so a network failure and a
+    // quiet week looked identical.
+    const out = stripAnsi(renderHome({ eventsError: true, loading: false }, noon).join('\n'));
+    expect(out).toContain('Failed to load event calendar');
+    expect(out).not.toContain('No upcoming events');
+  });
 });
 
 describe('renderHome day-progress bar', () => {
