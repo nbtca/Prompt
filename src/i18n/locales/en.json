@@ -239,7 +239,17 @@
     "weekLabel": "Week",
     "periodShort": "P",
     "promptWeekOne": "First-week Monday (YYYY-MM-DD)",
-    "menuEntry": "Schedule"
+    "menuEntry": "Schedule",
+    "semester1": "Term 1",
+    "semester2": "Term 2",
+    "weekLabel2": "Week {week}",
+    "academicYearSuffix": "{year}",
+    "onBreak": "On break · {title}",
+    "publicUnavailable": "Academic calendar not available yet",
+    "daysUntilBreak": "{days} days until {title}",
+    "publicLoginAction": "Log in to see my timetable",
+    "publicLoginHint": "Log in to export your timetable (.ics)",
+    "weekOneAutoFailed": "Couldn't infer the term's first week automatically — please confirm it once"
   },
   "theme": {
     "current": "Current theme settings",

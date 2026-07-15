@@ -259,6 +259,16 @@ export interface Translations {
     periodShort: string;
     promptWeekOne: string;
     menuEntry: string;
+    semester1: string;
+    semester2: string;
+    weekLabel2: string;
+    academicYearSuffix: string;
+    onBreak: string;
+    publicUnavailable: string;
+    daysUntilBreak: string;
+    publicLoginAction: string;
+    publicLoginHint: string;
+    weekOneAutoFailed: string;
   };
   theme: {
     current: string;

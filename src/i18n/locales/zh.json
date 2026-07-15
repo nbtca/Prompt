@@ -239,7 +239,17 @@
     "weekLabel": "第",
     "periodShort": "第",
     "promptWeekOne": "第一周周一 (YYYY-MM-DD)",
-    "menuEntry": "课表"
+    "menuEntry": "课表",
+    "semester1": "第一学期",
+    "semester2": "第二学期",
+    "weekLabel2": "第 {week} 周",
+    "academicYearSuffix": "{year}学年",
+    "onBreak": "假期中 · {title}",
+    "publicUnavailable": "校历数据暂不可用",
+    "daysUntilBreak": "距离{title}还有 {days} 天",
+    "publicLoginAction": "登录查看我的课表",
+    "publicLoginHint": "登录后可导出课表 (.ics)",
+    "weekOneAutoFailed": "未能从校历自动推算学期第一周，请手动确认一次"
   },
   "theme": {
     "current": "当前主题设置",
