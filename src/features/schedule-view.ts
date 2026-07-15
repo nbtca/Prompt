@@ -2,7 +2,6 @@ import path from 'node:path';
 import {
   createNbtTimetableClient,
   timetableToIcs,
-  TimetableError,
   type AcademicTerm,
   type AcademicTermRef,
   type NbtTimetableClient,
@@ -14,7 +13,6 @@ import { enterScreen, breadcrumb } from '../core/transitions.js';
 import { createSpinner, success, error } from '../core/ui.js';
 import { c, type, space } from '../core/theme.js';
 import { t, fmt } from '../i18n/index.js';
-import { AuthError } from '../auth/errors.js';
 import { createSessionStore } from '../auth/session-store.js';
 import {
   withAuthenticatedSession,
@@ -22,6 +20,7 @@ import {
   relevantTerms,
   writePrivateIcs,
   isSessionExpired,
+  safeMessage,
   JWXT_ORIGIN,
 } from './student-timetable.js';
 import { currentWeekNumber, campusWeekday, meetingsOnDay, nextMeeting } from './schedule-query.js';
@@ -30,46 +29,6 @@ import {
   termKey, loadWeekOne, saveWeekOne, saveTimetableCache,
   saveCurrentPointer, loadCurrentPointer, loadTimetableCache, clearScheduleCache,
 } from './schedule-store.js';
-
-/** Local, non-exported mirror of student-timetable.ts's error mapping: kept in this
- * module so the hub can report a friendly message without widening that file's
- * public surface beyond the JWXT_ORIGIN export this task requires. */
-function safeErrorMessage(err: unknown): string {
-  const trans = t().timetable;
-  if (err instanceof AuthError) {
-    switch (err.code) {
-      case 'INVALID_CREDENTIALS': return trans.invalidCredentials;
-      case 'ACCOUNT_LOCKED': return trans.accountLocked;
-      case 'ACCOUNT_INACTIVE': return trans.accountInactive;
-      case 'INTERACTIVE_CHALLENGE': return trans.challenge;
-      case 'SESSION_EXPIRED': return trans.sessionExpired;
-      case 'TIMEOUT': return trans.timeout;
-      case 'NETWORK': return trans.network;
-      case 'UNTRUSTED_URL': return trans.untrustedUrl;
-      case 'HTTP_ERROR': return trans.httpError;
-      case 'LOGIN_PAGE_CHANGED': return trans.loginChanged;
-      case 'UNEXPECTED_RESPONSE': return trans.unexpectedResponse;
-      default: return trans.genericError;
-    }
-  }
-  if (err instanceof TimetableError) {
-    switch (err.code) {
-      case 'MISSING_CALENDAR_DATES': return trans.missingDates;
-      case 'MISSING_PERIOD_TIME': return trans.missingPeriod;
-      case 'TERM_MISMATCH': return trans.termMismatch;
-      case 'SESSION_EXPIRED': return trans.sessionExpired;
-      default: return trans.invalidData;
-    }
-  }
-  if (err instanceof Error && err.message === 'Unknown academic term. Run `nbtca schedule terms` first.') {
-    return trans.unknownTerm;
-  }
-  if (err instanceof Error && err.message === 'No academic terms are available.') return trans.noTerms;
-  if (err instanceof Error && err.message === 'The current academic term could not be determined.') {
-    return trans.currentTermUnknown;
-  }
-  return trans.genericError;
-}
 
 /** Loads a saved week-one Monday for `key`, or prompts for and persists a new one.
  * Returns null when the user cancels or enters an unparsable date (caller aborts). */
@@ -236,7 +195,7 @@ export async function showSchedule(): Promise<void> {
       stderr: process.stderr,
     });
   } catch (err) {
-    error(safeErrorMessage(err));
+    error(safeMessage(err));
   }
 }
 

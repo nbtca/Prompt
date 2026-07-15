@@ -95,7 +95,7 @@ export function isSessionExpired(error: unknown): boolean {
   );
 }
 
-function safeMessage(error: unknown): string {
+export function safeMessage(error: unknown): string {
   const trans = t().timetable;
   if (error instanceof AuthError) {
     switch (error.code) {

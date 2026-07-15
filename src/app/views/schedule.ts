@@ -19,7 +19,7 @@ import { AuthError } from '../../auth/errors.js';
 import { loginWithStudentPassword, restoreNbtSession, type AuthenticatedNbtSession } from '../../auth/nbt-auth.js';
 import { createSessionStore } from '../../auth/session-store.js';
 import {
-  resolveTerm, relevantTerms, writePrivateIcs, isSessionExpired, JWXT_ORIGIN,
+  resolveTerm, relevantTerms, writePrivateIcs, isSessionExpired, JWXT_ORIGIN, safeMessage,
 } from '../../features/student-timetable.js';
 import {
   termKey, loadWeekOne, saveWeekOne, saveTimetableCache,
@@ -106,8 +106,8 @@ async function afterAuthenticated(ctx: AppContext, s: AuthenticatedNbtSession): 
       return;
     }
     await fetchAndShowHub(ctx, term, key, weekOne);
-  } catch {
-    state = { mode: 'error', errorMessage: t().timetable.genericError };
+  } catch (err) {
+    state = { mode: 'error', errorMessage: safeMessage(err) };
     ctx.rerender();
   }
 }
@@ -126,7 +126,7 @@ async function fetchAndShowHub(ctx: AppContext, term: AcademicTerm, key: string,
       createSessionStore().clear();
       goToLoginId(t().timetable.expiredRelogin);
     } else {
-      state = { mode: 'error', errorMessage: t().timetable.genericError };
+      state = { mode: 'error', errorMessage: safeMessage(err) };
     }
   }
   ctx.rerender();
@@ -221,8 +221,8 @@ export const scheduleView: View = {
               createSessionStore().save(await s.snapshot());
               await afterAuthenticated(ctx, s);
             })
-            .catch(() => {
-              goToLoginId(t().timetable.invalidCredentials);
+            .catch((err) => {
+              goToLoginId(safeMessage(err));
               ctx.rerender();
             });
         }
