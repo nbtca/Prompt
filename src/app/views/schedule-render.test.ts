@@ -54,6 +54,20 @@ describe('renderSchedule', () => {
     expect(out).toContain('Needs attention');
   });
 
+  it('hub mode never collapses a multi-line renderer output into one array entry', () => {
+    // Regression guard for the renderTodayTimeline/renderWeekStrip wiring:
+    // both return one '\n'-joined string by this module's convention, and a
+    // missed .split('\n') at the call site corrupts the frame compositor's
+    // row count (the exact bug that previously pushed the header off-screen).
+    const hubField = new ListField({ title: 'Schedule', options: [{ value: 'week', label: 'This week' }] });
+    const lines = renderSchedule({
+      mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable, hubField,
+    }, new Date('2026-09-07T07:00:00'));
+    for (const line of lines) {
+      expect(line).not.toContain('\n');
+    }
+  });
+
   it('week mode renders the grid', () => {
     const out = stripAnsi(renderSchedule({
       mode: 'week', key: '2026-3', weekOne: '2026-09-07', timetable,

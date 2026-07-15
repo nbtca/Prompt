@@ -5,7 +5,10 @@ import { pickIcon } from '../../core/icons.js';
 import { ListField } from '../fields/list-field.js';
 import { TextField } from '../fields/text-field.js';
 import { currentWeekNumber, campusWeekday, meetingsOnDay, nextMeeting } from '../../features/schedule-query.js';
-import { renderNextClassBanner, renderTodayClasses, renderWeekGrid, renderUnresolvedItems } from '../../features/schedule-render.js';
+import {
+  renderNextClassBanner, renderWeekGrid, renderUnresolvedItems, renderTodayTimeline, renderWeekStrip,
+  weekdayShortLabel,
+} from '../../features/schedule-render.js';
 import type { AcademicWindow, OnBreak } from '../../features/academic-calendar.js';
 import { renderEventBrief, type Event } from '../../features/calendar.js';
 
@@ -54,12 +57,17 @@ function renderHubBody(state: ScheduleViewState, now: Date): string[] {
   const tt = state.timetable;
   if (tt && state.weekOne) {
     const week = currentWeekNumber(state.weekOne, now);
-    const today = meetingsOnDay(tt.meetings, campusWeekday(now), week);
+    const todayWd = campusWeekday(now);
+    const today = meetingsOnDay(tt.meetings, todayWd, week);
     const banner = renderNextClassBanner(nextMeeting(tt.meetings, tt.periods, state.weekOne, now), now);
     lines.push(banner || hint(trans.timetable.noNextClass));
     lines.push('');
-    lines.push(heading(trans.timetable.hubToday));
-    lines.push(...renderTodayClasses(today, tt.periods, now).split('\n'));
+    lines.push(heading(fmt(trans.timetable.todayHeading, { weekday: weekdayShortLabel(todayWd), week: String(week) })));
+    lines.push('');
+    lines.push(...renderTodayTimeline(today, tt.periods, now).split('\n'));
+    lines.push('');
+    lines.push(heading(trans.timetable.hubWeek));
+    lines.push(...renderWeekStrip(tt.meetings, week, todayWd).split('\n'));
     lines.push('');
   }
   if (state.statusMessage) {

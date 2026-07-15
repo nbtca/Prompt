@@ -46,7 +46,7 @@ export function renderTodayClasses(meetings: readonly TimetableMeeting[], period
   return lines.join('\n');
 }
 
-function weekdayShortLabel(wd: number): string {
+export function weekdayShortLabel(wd: number): string {
   const trans = t();
   const labels = [
     trans.timetable.weekdayMon, trans.timetable.weekdayTue, trans.timetable.weekdayWed,
