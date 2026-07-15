@@ -57,15 +57,18 @@ function showList(title: string, events: CalendarEvent[], ctx: AppContext): void
   state = { mode: 'list', listField: buildListField(title, events, computeMaxVisible(ctx.bodyRows)) };
 }
 
+const RECENT_ACTIVITY_COUNT = 5;
+
 function goToHub(): void {
-  const nextEvent = calendar ? calendar.upcoming({ days: 30 })[0] : undefined;
+  const upcoming = calendar ? calendar.upcoming({ days: 30 }) : [];
   state = {
     mode: 'hub',
     hubField: buildHubField(),
-    nextEvent: nextEvent ? toDisplayEvent(nextEvent) : undefined,
+    nextEvent: upcoming[0] ? toDisplayEvent(upcoming[0]) : undefined,
     heatmapBuckets: calendar
       ? calendar.heatmap({ start: new Date(Date.now() - 365 * 86400000), end: new Date(), bucket: 'day' })
       : [],
+    recentEvents: upcoming.slice(0, RECENT_ACTIVITY_COUNT).map(toDisplayEvent),
   };
 }
 

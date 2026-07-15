@@ -86,6 +86,7 @@ export interface Translations {
     noPastEvents: string;
     viewPastDetail: string;
     next: string;
+    recentActivity: string;
     startingNow: string;
     thisWeek: string;
     thisMonth: string;

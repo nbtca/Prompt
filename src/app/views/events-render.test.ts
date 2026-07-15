@@ -46,6 +46,23 @@ describe('renderEvents', () => {
     expect(lines.length).toBeGreaterThan(10);
   });
 
+  it('hub mode shows a recent-activity briefing under the heatmap when present', () => {
+    const hubField = new ListField({ title: 'Events', options: [{ value: 'upcoming', label: 'Events' }] });
+    const recentEvents = [{
+      date: '07-17', time: '20:30', title: 'NWDC', location: 'TBD', description: '',
+      startDate: new Date('2026-07-17T20:30:00'), recurring: true, uid: 'nwdc-1',
+    }];
+    const out = stripAnsi(renderEvents({ mode: 'hub', hubField, heatmapBuckets: [], recentEvents }, new Date('2026-07-15')).join('\n'));
+    expect(out).toContain('Recent');
+    expect(out).toContain('NWDC');
+  });
+
+  it('hub mode omits the recent-activity heading when there are no recent events', () => {
+    const hubField = new ListField({ title: 'Events', options: [{ value: 'upcoming', label: 'Events' }] });
+    const out = stripAnsi(renderEvents({ mode: 'hub', hubField, heatmapBuckets: [], recentEvents: [] }, new Date()).join('\n'));
+    expect(out).not.toContain('Recent');
+  });
+
   it('list mode shows the list field', () => {
     const listField = new ListField({ title: 'Events', options: [{ value: '0', label: 'Hackathon' }] });
     const out = stripAnsi(renderEvents({ mode: 'list', listField }, new Date()).join('\n'));

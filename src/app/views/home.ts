@@ -2,7 +2,7 @@ import { type, space } from '../../core/theme.js';
 import { pickIcon } from '../../core/icons.js';
 import { t } from '../../i18n/index.js';
 import { peekNextClassLine, peekTodayLines } from '../../features/schedule-view.js';
-import { fetchEvents } from '../../features/calendar.js';
+import { fetchEvents, renderEventBrief } from '../../features/calendar.js';
 import type { View, AppContext } from '../view.js';
 
 /** Data consumed by the pure `renderHome`; populated best-effort by `homeView.load`. */
@@ -87,10 +87,8 @@ export const homeView: View = {
     // Events is the only networked panel; best-effort.
     try {
       const items = await fetchEvents();
-      const dot = pickIcon('·', '-');
-      const eventLines = items.slice(0, 4).map(
-        (e) => `${space.indent}${type.hint(`${e.date}${e.time ? ' ' + e.time : ''}`)}  ${dot}  ${type.body(e.title)}`,
-      );
+      const now = new Date();
+      const eventLines = items.slice(0, 4).map((e) => renderEventBrief(e, now));
       data = { ...data, eventLines };
     } catch {
       // best-effort: leave eventLines unset, panel shows a placeholder

@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import type { CalendarEvent } from '@nbtca/nbtcal';
-import { toDisplayEvent, renderEventsTable, renderCountdownBanner, exportEventIcs } from './calendar.js';
+import { toDisplayEvent, renderEventsTable, renderCountdownBanner, renderEventBrief, exportEventIcs } from './calendar.js';
 import { setLanguage } from '../i18n/index.js';
 import { stripAnsi } from '../core/text.js';
 import { resetIconCache } from '../core/icons.js';
@@ -120,6 +120,27 @@ describe('renderEventsTable recurring marker', () => {
     process.env['NBTCA_ICON_MODE'] = 'unicode'; resetIconCache();
     expect(out).not.toContain('~ One Off');
     expect(out).toContain('One Off');
+  });
+});
+
+describe('renderEventBrief', () => {
+  const e = toDisplayEvent(makeEvent({ title: 'Hack Night', start: new Date('2026-07-15T20:00:00') }));
+
+  it('includes the date/time and title', () => {
+    const out = stripAnsi(renderEventBrief(e, new Date('2026-07-15T09:00:00')));
+    expect(out).toContain('Hack Night');
+    expect(out).toMatch(/20:00/);
+  });
+
+  it('marks a recurring event', () => {
+    const recurring = toDisplayEvent(makeEvent({ title: 'Weekly Sync', recurring: true, start: new Date('2026-07-15T20:00:00') }));
+    const out = stripAnsi(renderEventBrief(recurring, new Date('2026-07-15T09:00:00')));
+    expect(out).toContain('Weekly Sync');
+  });
+
+  it('does not throw for an event on a different day than now', () => {
+    const future = toDisplayEvent(makeEvent({ title: 'Next Week', start: new Date('2026-07-22T20:00:00') }));
+    expect(() => renderEventBrief(future, new Date('2026-07-15T09:00:00'))).not.toThrow();
   });
 });
 
