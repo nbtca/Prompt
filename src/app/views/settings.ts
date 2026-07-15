@@ -5,7 +5,7 @@ import {
   applyColorModePreference, loadPreferences, resetPreferences, setColorMode, setIconMode,
   type ColorMode, type IconMode,
 } from '../../config/preferences.js';
-import { resetIconCache } from '../../core/icons.js';
+import { resetIconCache, pickIcon } from '../../core/icons.js';
 import { APP_INFO, URLS } from '../../config/data.js';
 import { t, getCurrentLanguage, setLanguage, clearTranslationCache, type Language } from '../../i18n/index.js';
 
@@ -111,7 +111,7 @@ export const settingsView: View = {
               row(trans.about.website, URLS.homepage),
               row(trans.about.email, URLS.email),
               '',
-              row(trans.about.license, `MIT  ·  ${trans.about.author}: m1ngsama`),
+              row(trans.about.license, `MIT  ${pickIcon('·', '-')}  ${trans.about.author}: m1ngsama`),
             ],
             backField: new ListField({ title: trans.about.title, options: [{ value: '__back__', label: trans.common.back }] }),
           };

@@ -1,5 +1,6 @@
 import type { DocItem } from '@nbtca/docs';
 import type { AppContext, View } from '../view.js';
+import { captureFooterHint } from '../chrome.js';
 import { ListField, computeMaxVisible } from '../fields/list-field.js';
 import { TextField } from '../fields/text-field.js';
 import { renderDocs, type DocsViewState } from './docs-render.js';
@@ -19,11 +20,6 @@ let loaded = false;
 
 function backLabel(): string {
   return t().common.back;
-}
-
-function captureFooterHint(): string {
-  const trans = t();
-  return `Ctrl+C ${trans.common.exit}  ·  Esc ${trans.common.back}  ·  Enter ${trans.common.confirm}`;
 }
 
 function buildSectionsField(): ListField {

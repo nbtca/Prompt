@@ -8,6 +8,7 @@ import {
   type Timetable,
 } from '@nbtca/nbtcal/timetable';
 import type { AppContext, View } from '../view.js';
+import { captureFooterHint } from '../chrome.js';
 import { ListField, computeMaxVisible } from '../fields/list-field.js';
 import { TextField } from '../fields/text-field.js';
 import { renderSchedule, type ScheduleViewState } from './schedule-render.js';
@@ -35,11 +36,6 @@ let session: AuthenticatedNbtSession | null = null;
 let client: NbtTimetableClient | null = null;
 let catalog: AcademicTerm[] = [];
 let pendingId = '';
-
-function captureFooterHint(): string {
-  const trans = t();
-  return `Ctrl+C ${trans.common.exit}  ·  Esc ${trans.common.back}  ·  Enter ${trans.common.confirm}`;
-}
 
 function isTimetableLike(value: unknown): value is Timetable {
   return !!value && typeof value === 'object'

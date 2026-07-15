@@ -18,17 +18,30 @@ export function renderHeader(views: { id: ViewId; title: string }[], active: Vie
   return [brand, tabs, rule];
 }
 
+/** Shared footer hint for any view mode that captures all input (a focused
+ * text field or a modal-like list) — the only keys that still do something
+ * are Ctrl-C/Esc/Enter, so this is what every such view's `footerHint()`
+ * should return instead of each re-declaring an identical string. */
+export function captureFooterHint(): string {
+  const trans = t();
+  const dot = pickIcon('·', '-');
+  return `Ctrl+C ${trans.common.exit}  ${dot}  Esc ${trans.common.back}  ${dot}  Enter ${trans.common.confirm}`;
+}
+
 /** `overrideHint`: a view supplies this (via `View.footerHint()`) when the
  * generic tab-switching hint would be false — e.g. while a text field has
  * focus, digits/Tab/q are typed characters, not shortcuts, and only Ctrl-C/
  * Esc/Enter actually do anything. The footer must never promise a key that
  * doesn't work. */
-export function renderFooter(_active: ViewId, cols: number, overrideHint?: string): string[] {
+export function renderFooter(_active: ViewId, cols: number, tabCount: number, overrideHint?: string): string[] {
   const trans = t();
   const dot = pickIcon('·', '-');
   const rule = space.indent + type.hint(glyph.rule().repeat(Math.max(1, cols - 6)));
+  // The digit-range must track the real tab count — a stale hardcoded
+  // range promises keys (e.g. "1-7" with only 5 tabs) that do nothing.
+  const digitHint = tabCount > 1 ? `1-${tabCount} / Tab ${dot} ` : '';
   const hintText = overrideHint ?? (
-    `1-7 / Tab ${dot} ${trans.menu.hintMove} ${dot} ${trans.menu.hintOpen} ${dot} Esc ${dot} q ${trans.menu.hintQuit}`
+    `${digitHint}${trans.menu.hintMove} ${dot} ${trans.menu.hintOpen} ${dot} Esc ${dot} q ${trans.menu.hintQuit}`
   );
   const hint = space.indent + type.hint(hintText);
   return [rule, hint];

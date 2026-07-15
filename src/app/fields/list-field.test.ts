@@ -76,6 +76,21 @@ describe('ListField scrolling (maxVisible)', () => {
     expect(text).toMatch(/15/); // 15 more below
   });
 
+  it('the more-indicator separator degrades in ASCII icon mode instead of leaking a raw Unicode dot', async () => {
+    // Regression: the "N more below" separator used to hardcode "·"
+    // directly instead of routing through pickIcon, so ASCII fallback mode
+    // (NBTCA_ICON_MODE=ascii, used on terminals without Unicode support)
+    // never degraded it like every other separator dot in the app.
+    process.env['NBTCA_ICON_MODE'] = 'ascii';
+    const { resetIconCache } = await import('../../core/icons.js');
+    resetIconCache();
+    const field = new ListField({ title: 'List', options: manyOptions, maxVisible: 5 });
+    const text = field.render().join('\n');
+    expect(text).not.toContain('·');
+    delete process.env['NBTCA_ICON_MODE'];
+    resetIconCache();
+  });
+
   it('scrolls to keep the selection visible when moving down past the window', () => {
     const field = new ListField({ title: 'List', options: manyOptions, maxVisible: 5 });
     for (let i = 0; i < 7; i++) field.handleKey('\x1b[B'); // -> index 7

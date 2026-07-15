@@ -1,5 +1,6 @@
 import { renderMenu, nextIndex, parseKey, type MenuOption } from '../../core/components/menu.js';
 import { space, type } from '../../core/theme.js';
+import { pickIcon } from '../../core/icons.js';
 import { t, fmt } from '../../i18n/index.js';
 
 export interface ListFieldConfig {
@@ -79,7 +80,7 @@ export class ListField {
         above > 0 ? fmt(trans.common.moreAbove, { count: above }) : null,
         below > 0 ? fmt(trans.common.moreBelow, { count: below }) : null,
       ].filter((part): part is string => part !== null);
-      lines.push(`${space.indent}${type.hint(parts.join('  ·  '))}`);
+      lines.push(`${space.indent}${type.hint(parts.join(`  ${pickIcon('·', '-')}  `))}`);
     }
     if (footer) lines.push('', `${space.indent}${type.hint(footer)}`);
     return lines;

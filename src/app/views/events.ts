@@ -1,5 +1,6 @@
 import type { Calendar, CalendarEvent } from '@nbtca/nbtcal';
 import type { AppContext, View } from '../view.js';
+import { captureFooterHint } from '../chrome.js';
 import { ListField, computeMaxVisible } from '../fields/list-field.js';
 import { TextField } from '../fields/text-field.js';
 import { renderEvents, type EventsViewState } from './events-render.js';
@@ -15,11 +16,6 @@ let currentList: CalendarEvent[] = [];
 
 function backLabel(): string {
   return t().common.back;
-}
-
-function captureFooterHint(): string {
-  const trans = t();
-  return `Ctrl+C ${trans.common.exit}  ·  Esc ${trans.common.back}  ·  Enter ${trans.common.confirm}`;
 }
 
 function buildHubField(): ListField {
