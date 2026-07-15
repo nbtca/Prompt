@@ -51,7 +51,7 @@ function hint(label: string): string {
   return `${space.indent}${type.hint(label)}`;
 }
 
-function renderHubBody(state: ScheduleViewState, now: Date): string[] {
+function renderHubBody(state: ScheduleViewState, now: Date, bodyRows: number): string[] {
   const trans = t();
   const lines: string[] = [];
   const tt = state.timetable;
@@ -74,7 +74,17 @@ function renderHubBody(state: ScheduleViewState, now: Date): string[] {
     lines.push(hint(state.statusMessage));
     lines.push('');
   }
-  if (state.hubField) lines.push(...state.hubField.render());
+  if (state.hubField) {
+    // The timeline/week-strip above are dynamic height (0..N+1 rows
+    // depending on today's class count) and precede the menu in the same
+    // body — computeMaxVisible's flat "bodyRows - 4" assumption only holds
+    // for a field that owns nearly the whole body. Reserve what this
+    // render actually already used before windowing the menu itself, or a
+    // tall today (or a short terminal) silently truncates the bottom rows
+    // (the unresolved-items warning, log out) with no scroll indicator.
+    state.hubField.setMaxVisible(Math.max(3, bodyRows - lines.length - 4));
+    lines.push(...state.hubField.render());
+  }
   return lines;
 }
 
@@ -139,7 +149,7 @@ function renderPublicBody(state: ScheduleViewState, now: Date): string[] {
   return lines;
 }
 
-export function renderSchedule(state: ScheduleViewState, now: Date): string[] {
+export function renderSchedule(state: ScheduleViewState, now: Date, bodyRows = 100): string[] {
   const trans = t();
   switch (state.mode) {
     case 'loading':
@@ -161,7 +171,7 @@ export function renderSchedule(state: ScheduleViewState, now: Date): string[] {
         ...(state.weekOneField?.render() ?? []),
       ];
     case 'hub':
-      return renderHubBody(state, now);
+      return renderHubBody(state, now, bodyRows);
     case 'week':
       return state.timetable && state.weekOne
         ? [

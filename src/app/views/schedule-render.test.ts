@@ -54,6 +54,21 @@ describe('renderSchedule', () => {
     expect(out).toContain('Needs attention');
   });
 
+  it('hub mode windows the menu instead of overflowing when the timeline pushes it past bodyRows', () => {
+    // Regression guard: the timeline/week-strip above the menu have dynamic
+    // height, and hubField previously had no maxVisible at all — a short
+    // terminal (or a busy today) silently dropped the menu's bottom rows
+    // (the unresolved-items warning, log out) with no scroll indicator.
+    const manyOptions = Array.from({ length: 8 }, (_, i) => ({ value: String(i), label: `MenuOption${i}` }));
+    const hubField = new ListField({ title: 'Schedule', options: manyOptions });
+    const out = stripAnsi(renderSchedule({
+      mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable, hubField,
+    }, new Date('2026-09-07T07:00:00'), 15).join('\n'));
+    const visibleCount = manyOptions.filter((o) => out.includes(o.label)).length;
+    expect(visibleCount).toBeLessThan(manyOptions.length);
+    expect(visibleCount).toBeGreaterThan(0);
+  });
+
   it('hub mode never collapses a multi-line renderer output into one array entry', () => {
     // Regression guard for the renderTodayTimeline/renderWeekStrip wiring:
     // both return one '\n'-joined string by this module's convention, and a
