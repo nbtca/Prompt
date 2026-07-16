@@ -356,6 +356,55 @@ export function cleanFileName(name: string): string {
     .replace(/\b([a-z])/g, (_, c: string) => c.toUpperCase());
 }
 
+/**
+ * Real titles (each document's own top-level `# heading`) for the
+ * curated tutorial/process/repair sections, keyed by repo-relative path.
+ * These are hand-authored English-filename docs with Chinese content —
+ * mechanically title-casing the filename ("Clean Drive C") reads as a
+ * different, lower-quality product than the document's own title ("C盘
+ * 清理标准化流程"). Deliberately scoped to these three sections only:
+ * `archived/`'s meeting notes are informal and often share the same
+ * generic real heading across many different dates (e.g. five different
+ * files all titled just "维修日") — there, the current filename-derived,
+ * date-prefixed label is more useful for telling entries apart than the
+ * real heading would be, so it is intentionally left as-is.
+ *
+ * Pulled from a live audit of the actual nbtca/documents content
+ * (2026-07-16). A doc added later without an entry here simply falls
+ * back to `cleanFileName` — never an error, never a blank label.
+ */
+const KNOWN_DOC_TITLES: Readonly<Record<string, string>> = {
+  'tutorial/2025/clean-drive-c.md': 'C盘清理标准化流程',
+  'tutorial/2025/edu-email.md': '教育邮箱用途',
+  'tutorial/2025/github-education-verification.md': 'Github Education 认证指南',
+  'tutorial/2025/github-workflow.md': '快速上手社团目前的Github工作流',
+  'tutorial/2025/google-calendar.md': '谷歌日历使用指南',
+  'tutorial/2025/nginx-usage.md': '快速上手你的nginx',
+  'tutorial/2025/tailscale-usage.md': '社团自建 Tailscale 使用指南',
+  'tutorial/manual/hardware-establish.md': '计算机硬件系统的搭建与维护',
+  'tutorial/manual/net-usage.md': '国际互联网的使用',
+  'tutorial/manual/os-skills.md': '基础操作系统的使用技术',
+  'tutorial/manual/windows-from-scratch.md': '从零开始安装 Windows',
+  'process/2025/apply-for-credits.md': '申请第二课堂学分',
+  'process/2025/borrow-classroom.md': '借教室',
+  'process/2025/event-organization.md': '活动举办文档(待完善)',
+  'process/2025/nbtca-post.md': '撰写并发布你的第一篇NBTCA博客',
+  'process/2025/reimbursement-process.md': '报销流程',
+  'repair/checklist.md': '维修日检查单',
+  'repair/guide.md': '维修操作指南',
+  'repair/repair-day.md': '维修日',
+  'repair/tools.md': '软件仓库（校内镜像站）',
+  'repair/weekend.md': '维修工单系统 (weekend)',
+};
+
+/** Display title for a tutorial/process/repair doc: the real, known title
+ * when we have one, otherwise the same filename-derived fallback used
+ * everywhere else (including for every archived/ doc, which never has a
+ * known-title entry by design). */
+export function displayDocTitle(path: string, name: string): string {
+  return KNOWN_DOC_TITLES[path] ?? cleanFileName(name);
+}
+
 /** Group flat DocItem list into top-level sections. */
 export function buildSections(all: DocItem[]): DocSection[] {
   const trans = t();

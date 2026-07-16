@@ -7,7 +7,7 @@ import { renderDocs, type DocsViewState } from './docs-render.js';
 import { setVimKeysActive } from '../../core/vim-keys.js';
 import { t } from '../../i18n/index.js';
 import {
-  fetchSections, fetchAllDocs, getArchivedGroups, cleanFileName, viewMarkdownFile, openDocsInBrowser,
+  fetchSections, fetchAllDocs, getArchivedGroups, cleanFileName, displayDocTitle, viewMarkdownFile, openDocsInBrowser,
   type DocSection,
 } from '../../features/docs.js';
 
@@ -35,7 +35,7 @@ function buildSectionsField(): ListField {
 function buildFilesField(section: DocSection, maxVisible: number): ListField {
   const files = section.files.filter((f) => f.name !== 'index.md' && !f.name.startsWith('index.'));
   const options = [
-    ...files.map((f) => ({ value: f.path, label: cleanFileName(f.name) })),
+    ...files.map((f) => ({ value: f.path, label: displayDocTitle(f.path, f.name) })),
     { value: '__back__', label: backLabel() },
   ];
   return new ListField({ title: section.label, options, maxVisible });
@@ -205,7 +205,7 @@ export const docsView: View = {
             const options = [
               ...matches.map((r) => ({
                 value: r.path,
-                label: cleanFileName(r.name),
+                label: displayDocTitle(r.path, r.name),
                 hint: r.path.includes('/') ? r.path.split('/').slice(0, -1).join('/') : undefined,
               })),
               { value: '__back__', label: backLabel() },
