@@ -99,3 +99,83 @@ describe('renderHome day-progress bar', () => {
     expect(lateOut).toContain('100%');
   });
 });
+
+describe('renderHome — week overview panel (Part D)', () => {
+  it('does not show the week overview panel at all when weekAhead is absent', () => {
+    const out = stripAnsi(renderHome({ loading: false }, noon).join('\n'));
+    expect(out).not.toContain('Week overview');
+  });
+
+  it('shows the panel with class/event row labels and a legend when weekAhead data is present', () => {
+    const lines = renderHome({
+      loading: false,
+      weekAhead: { classDays: [true, false, true, false, false, false, false], eventDays: [false, true, false, false, true, false, false] },
+    }, noon).map((l) => stripAnsi(l));
+    const titleIdx = lines.findIndex((l) => l.includes('Week overview'));
+    expect(titleIdx).toBeGreaterThanOrEqual(0);
+    expect(lines[titleIdx + 2]).toContain('Classes');
+    expect(lines[titleIdx + 3]).toContain('Events');
+    expect(lines[titleIdx + 4]).toContain('Busy');
+    expect(lines[titleIdx + 4]).toContain('Free');
+    expect(lines[titleIdx + 4]).toContain('N/A');
+  });
+
+  it('hardcodes weekend cells on the class row regardless of classDays data', () => {
+    process.env['NBTCA_ICON_MODE'] = 'unicode';
+    resetIconCache();
+    try {
+      const lines = renderHome({
+        loading: false,
+        // classDays[5]/[6] (Sat/Sun) are true on purpose -- the render
+        // layer must still show them as weekend/N-A, not "busy".
+        weekAhead: { classDays: [false, false, false, false, false, true, true] },
+      }, noon).map((l) => stripAnsi(l));
+      const titleIdx = lines.findIndex((l) => l.includes('Week overview'));
+      const classCells = lines[titleIdx + 2]!.trim().split(/\s+/).slice(1);
+      expect(classCells[5]).toBe('··');
+      expect(classCells[6]).toBe('··');
+    } finally {
+      process.env['NBTCA_ICON_MODE'] = 'ascii';
+      resetIconCache();
+    }
+  });
+
+  it('does NOT hardcode weekend cells on the event row -- a real weekend event shows as busy', () => {
+    process.env['NBTCA_ICON_MODE'] = 'unicode';
+    resetIconCache();
+    try {
+      const lines = renderHome({
+        loading: false,
+        weekAhead: {
+          classDays: [false, false, false, false, false, false, false],
+          eventDays: [false, false, false, false, false, true, false], // Saturday has an event
+        },
+      }, noon).map((l) => stripAnsi(l));
+      const titleIdx = lines.findIndex((l) => l.includes('Week overview'));
+      const eventCells = lines[titleIdx + 3]!.trim().split(/\s+/).slice(1);
+      expect(eventCells[5]).toBe('▓▓'); // Saturday: busy, not weekend/N-A
+      expect(eventCells[6]).toBe('░░'); // Sunday: free, not weekend/N-A
+    } finally {
+      process.env['NBTCA_ICON_MODE'] = 'ascii';
+      resetIconCache();
+    }
+  });
+
+  it('renders the event row with no glyphs at all when eventDays is not yet known', () => {
+    const lines = renderHome({
+      loading: false,
+      weekAhead: { classDays: [true, false, false, false, false, false, false] }, // no eventDays
+    }, noon).map((l) => stripAnsi(l));
+    const titleIdx = lines.findIndex((l) => l.includes('Week overview'));
+    const eventLine = lines[titleIdx + 3]!;
+    expect(eventLine).not.toMatch(/[▓░]/);
+  });
+
+  it('never collapses the grid into one array entry', () => {
+    const lines = renderHome({
+      loading: false,
+      weekAhead: { classDays: [true, false, false, false, false, false, false], eventDays: [false, true, false, false, false, false, false] },
+    }, noon);
+    for (const l of lines) expect(l).not.toContain('\n');
+  });
+});
