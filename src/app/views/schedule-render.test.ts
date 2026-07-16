@@ -266,4 +266,30 @@ describe('renderSchedule — public mode', () => {
       expect(line).not.toContain('\n');
     }
   });
+
+  describe('adaptive public-upcoming count', () => {
+    const manyUpcoming: Event[] = Array.from({ length: 12 }, (_, i) => ({
+      date: `07-${17 + i}`, time: '', title: `Event${i}`, location: 'TBD', description: '',
+      startDate: new Date('2026-07-17'), recurring: false, uid: `e-${i}`,
+    }));
+
+    it('shows only as many public-upcoming events as fit, reserving room for the login field, on a normal terminal', () => {
+      const publicField = new ListField({ title: 'x', options: [{ value: 'login', label: 'Log in' }] });
+      const out = stripAnsi(renderSchedule({
+        mode: 'public', publicWindow: null, publicUpcoming: manyUpcoming, publicField,
+      }, new Date(), 15).join('\n'));
+      const visibleCount = manyUpcoming.filter((e) => out.includes(e.title)).length;
+      expect(visibleCount).toBeLessThan(manyUpcoming.length);
+      expect(visibleCount).toBeGreaterThan(0);
+      expect(out).toContain('Log in'); // login field still present, not starved out
+    });
+
+    it('shows more public-upcoming events on a tall terminal', () => {
+      const publicField = new ListField({ title: 'x', options: [{ value: 'login', label: 'Log in' }] });
+      const out = stripAnsi(renderSchedule({
+        mode: 'public', publicWindow: null, publicUpcoming: manyUpcoming, publicField,
+      }, new Date(), 45).join('\n'));
+      for (const e of manyUpcoming) expect(out).toContain(e.title);
+    });
+  });
 });

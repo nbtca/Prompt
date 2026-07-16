@@ -138,7 +138,7 @@ function daysBetween(a: Date, b: Date): number {
   return Math.max(0, Math.ceil((b.getTime() - a.getTime()) / 86400000));
 }
 
-function renderPublicBody(state: ScheduleViewState, now: Date): string[] {
+function renderPublicBody(state: ScheduleViewState, now: Date, bodyRows: number): string[] {
   const trans = t();
   const lines: string[] = [];
   const w = state.publicWindow;
@@ -171,7 +171,12 @@ function renderPublicBody(state: ScheduleViewState, now: Date): string[] {
 
   if (state.publicUpcoming && state.publicUpcoming.length > 0) {
     lines.push(heading(trans.calendar.recentActivity));
-    for (const e of state.publicUpcoming) lines.push(renderEventBrief(e, now));
+    // Same reserved-floor idea used for Events' recent-activity briefing:
+    // the login hint + the (small, fixed) public menu below must never be
+    // the ones that silently lose the remaining-space budget.
+    const floorForRest = 5; // loginHint + blank + field title + blank + 1 option
+    const remaining = Math.max(1, bodyRows - lines.length - 1 - floorForRest);
+    for (const e of state.publicUpcoming.slice(0, remaining)) lines.push(renderEventBrief(e, now));
     lines.push('');
   }
 
@@ -187,7 +192,7 @@ export function renderSchedule(state: ScheduleViewState, now: Date, bodyRows = 1
     case 'loading':
       return [hint(trans.common.loading)];
     case 'public':
-      return renderPublicBody(state, now);
+      return renderPublicBody(state, now, bodyRows);
     case 'needsLoginId':
       return [
         ...(state.errorMessage ? [hint(state.errorMessage), ''] : []),

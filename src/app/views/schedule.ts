@@ -109,9 +109,11 @@ async function goToPublic(ctx: AppContext): Promise<void> {
       new Date(now.getTime() - 400 * 86400000), new Date(now.getTime() + 400 * 86400000),
     );
     const publicWindow: AcademicWindow | OnBreak | null = currentAcademicWindow(windowEvents, now);
+    // A glance-panel ceiling, not "browse everything" — renderPublicBody
+    // trims further based on the real ctx.bodyRows.
     const publicUpcoming: Event[] = cal.upcoming({ days: 30 })
       .filter((e) => !isAcademicBreakEvent(e))
-      .slice(0, 5)
+      .slice(0, 15)
       .map(toDisplayEvent);
     state = { ...state, publicWindow, publicUpcoming };
   } catch {
