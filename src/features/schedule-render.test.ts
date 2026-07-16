@@ -60,6 +60,31 @@ describe('renderWeekGrid', () => {
     expect(headerLine).not.toMatch(/Tue\*/);
     done();
   });
+
+  it('leaves a real gap after a two-digit Chinese period label ("第10"), not glued to the next column', () => {
+    // Regression: rowHeadW=4 exactly fits "第10" (CJK 第=2 cols + "10"=2
+    // cols) with zero room for padEndV to add a separating space, unlike
+    // single-digit periods ("第1" = 3 cols, leaving 1). Only shows up with
+    // real >9-period data, which nothing exercised until the adaptive
+    // hub started rendering the full grid inline with a real 12-period
+    // campus period table.
+    setLanguage('zh');
+    resetIconCache();
+    try {
+      const twelvePeriods: TimetablePeriod[] = Array.from({ length: 12 }, (_, i) => ({
+        period: i + 1, label: null, start: `${String(8 + i).padStart(2, '0')}:00`, end: `${String(8 + i).padStart(2, '0')}:45`,
+      }));
+      const out = renderWeekGrid([], twelvePeriods, 1, new Date('2026-09-07T09:00:00'));
+      const lines = stripAnsi(out).split('\n');
+      const row10 = lines.find((l) => l.startsWith('   第10'));
+      expect(row10).toBeDefined();
+      expect(row10).not.toMatch(/第10[^\s]/); // must not run straight into the next cell
+    } finally {
+      setLanguage('en');
+      resetIconCache();
+      done();
+    }
+  });
 });
 
 const periodsWithGap: TimetablePeriod[] = [

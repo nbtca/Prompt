@@ -151,7 +151,11 @@ export function renderWeekGrid(meetings: readonly TimetableMeeting[], periods: r
   const week = meetingsInWeek(meetings, weekNumber);
   const todayWd = campusWeekday(now);
   const cellW = 10;
-  const rowHeadW = 4;
+  // 5, not 4: a two-digit period under the Chinese "第" label ("第10")
+  // already fills 4 display columns on its own (CJK 第=2 + "10"=2), which
+  // left zero room for padEndV's own padding to separate it from the next
+  // column — real campus period tables go up to 12.
+  const rowHeadW = 5;
   const totalW = rowHeadW + cellW * 7;
   // cell lookup: weekday(1..7) × period → course
   const at = (wd: number, period: number): string => {

@@ -82,7 +82,20 @@ function renderHubBody(state: ScheduleViewState, now: Date, bodyRows: number): s
       lines.push(heading(fmt(trans.timetable.todayHeading, { weekday: weekdayShortLabel(todayWd), week: String(week) })));
       lines.push(...renderTodayTimeline(today, tt.periods, now).split('\n'));
       lines.push(heading(trans.timetable.hubWeek));
-      lines.push(...renderWeekStrip(tt.meetings, week, todayWd).split('\n'));
+
+      // The full weekday x period grid's height depends on how many
+      // periods the school's own period table defines (a real campus can
+      // define up to 12) — unlike the heatmap's fixed 11 lines, this can't
+      // be a single hardcoded threshold. Measure it for real: render it,
+      // and use it only if it (plus a floor reserved for the menu) still
+      // fits, otherwise fall back to the fixed-height compact strip.
+      const gridLines = renderWeekGrid(tt.meetings, tt.periods, week, now).split('\n');
+      const roomForMenu = 8; // title + blank + a handful of hub options
+      if (lines.length + gridLines.length <= bodyRows - roomForMenu) {
+        lines.push(...gridLines);
+      } else {
+        lines.push(...renderWeekStrip(tt.meetings, week, todayWd).split('\n'));
+      }
       lines.push('');
     }
   }

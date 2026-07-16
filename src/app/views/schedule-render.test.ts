@@ -27,6 +27,22 @@ const timetable: Timetable = {
   fetchedAt: new Date('2026-09-07T00:00:00Z'),
 };
 
+// A realistic full-day period table (matches the real campus period system,
+// which defines up to 12 periods/day) — the single-period `timetable`
+// fixture above is too small to ever exercise the "doesn't fit, fall back
+// to the strip" branch of the adaptive hub.
+const busyTimetable: Timetable = {
+  ...timetable,
+  meetings: [
+    { sourceId: null, courseName: 'Math', teacherNames: ['Dr Li'], location: 'Room 201', weekday: 1, startPeriod: 1, endPeriod: 1, weeks: [1], kind: 'regular' },
+    { sourceId: null, courseName: 'Physics', teacherNames: ['Dr Wu'], location: 'Room 105', weekday: 1, startPeriod: 3, endPeriod: 3, weeks: [1], kind: 'regular' },
+  ],
+  periods: Array.from({ length: 12 }, (_, i) => ({
+    period: i + 1, label: null,
+    start: `${String(8 + i).padStart(2, '0')}:00`, end: `${String(8 + i).padStart(2, '0')}:45`,
+  })),
+};
+
 describe('renderSchedule', () => {
   it('loading mode shows a loading hint', () => {
     const out = stripAnsi(renderSchedule({ mode: 'loading' }, new Date()).join('\n'));
@@ -97,6 +113,37 @@ describe('renderSchedule', () => {
     for (const line of lines) {
       expect(line).not.toContain('\n');
     }
+  });
+
+  describe('adaptive week section', () => {
+    it('shows the full week grid inline on a tall terminal, with the menu still reachable', () => {
+      const hubField = new ListField({ title: 'Schedule', options: [{ value: 'week', label: 'This week' }, { value: 'logout', label: 'Log out' }] });
+      const out = stripAnsi(renderSchedule({
+        mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: busyTimetable, hubField,
+      }, new Date('2026-09-07T07:00:00'), 45).join('\n'));
+      expect(out).toContain('Physics'); // only the full grid places period-3 courses distinctly
+      expect(out).toContain('P12'); // the full grid's row for the 12th period
+      expect(out).toContain('Log out'); // menu still rendered underneath
+    });
+
+    it('stays with the compact week strip on a normal-size terminal', () => {
+      const hubField = new ListField({ title: 'Schedule', options: [{ value: 'week', label: 'This week' }] });
+      const out = stripAnsi(renderSchedule({
+        mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: busyTimetable, hubField,
+      }, new Date('2026-09-07T07:00:00'), 19).join('\n'));
+      expect(out).not.toContain('P12');
+      expect(out).toContain('has class'); // the strip's own legend text
+    });
+
+    it('never collapses the inline grid into one array entry', () => {
+      const hubField = new ListField({ title: 'Schedule', options: [{ value: 'week', label: 'This week' }] });
+      const lines = renderSchedule({
+        mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: busyTimetable, hubField,
+      }, new Date('2026-09-07T07:00:00'), 45);
+      for (const line of lines) {
+        expect(line).not.toContain('\n');
+      }
+    });
   });
 
   it('week mode renders the grid', () => {
