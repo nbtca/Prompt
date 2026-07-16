@@ -95,4 +95,46 @@ describe('renderHeatmap', () => {
     // Title + blank + month header + 7 rows + blank + legend = 12 lines minimum
     expect(lines.length).toBeGreaterThanOrEqual(7 + 3);
   });
+
+  it('title and legend lines share the app-wide 3-space left margin, not flush against the terminal edge', () => {
+    // Regression: the title and legend lines used to push straight from the
+    // string with no leading space at all, while the month-label row and
+    // every grid row already had an effective 3-column margin baked into
+    // their own weekday-label width — so the title/legend visibly sat
+    // flush-left while everything else (including the grid directly below
+    // them) lined up 3 columns in.
+    const output = renderHeatmap(buckets, today, { color: false });
+    const lines = output.split('\n');
+    const titleLine = lines[0]!;
+    const legendLine = lines[lines.length - 1]!;
+    expect(titleLine.startsWith('   ')).toBe(true);
+    expect(legendLine.startsWith('   ')).toBe(true);
+  });
+
+  it('every row shares the same left margin, and the grid data columns (not the row labels) stay aligned with the month row', () => {
+    const output = renderHeatmap(buckets, today, { color: false });
+    const lines = output.split('\n');
+    const monthLine = lines[2]!; // title, blank, month-label
+    const firstGridRow = lines[3]!; // "Mo ..." — has a real weekday-label prefix
+    const secondGridRow = lines[4]!; // blank weekday-label slot (same width as "Mo")
+
+    // All rows carry the app-wide 3-space margin.
+    expect(monthLine.startsWith('   ')).toBe(true);
+    expect(firstGridRow.startsWith('   ')).toBe(true);
+
+    // Past the margin, the month row and every grid row also reserve the
+    // same 3-column weekday-label slot (2-char label + 1 separator) before
+    // their actual data — so a grid row's data (the "·"/glyph grid) and
+    // the month row's data (the month-name characters) both start at
+    // column 6, whether or not that particular row happens to have a
+    // visible "Mo"/"We" label in its slot. This is the exact alignment a
+    // margin-only fix applied to one but not the other would have broken.
+    const firstNonSpace = (s: string) => s.search(/\S/);
+    expect(firstNonSpace(monthLine)).toBe(6);
+    expect(firstNonSpace(secondGridRow)).toBe(6);
+    // The labeled row's first non-space is its own label ("Mo"), 3 columns
+    // earlier than the data zone — confirms the label sits *in* the
+    // reserved slot rather than the slot being skipped for labeled rows.
+    expect(firstNonSpace(firstGridRow)).toBe(3);
+  });
 });

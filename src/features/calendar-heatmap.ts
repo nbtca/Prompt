@@ -6,7 +6,7 @@
 import chalk from 'chalk';
 import type { HeatmapBucket } from '@nbtca/nbtcal';
 import { pickIcon } from '../core/icons.js';
-import { space } from '../core/theme.js';
+import { space, type } from '../core/theme.js';
 import { t, getCurrentLanguage } from '../i18n/index.js';
 
 /** Parse a 'YYYY-MM-DD' date string into a UTC proxy Date (host-timezone-independent). */
@@ -138,7 +138,7 @@ export function renderHeatmap(
       }
     }
   }
-  const monthLabelLine = weekdayLabel + monthChars.join('');
+  const monthLabelLine = space.indent + weekdayLabel + monthChars.join('');
 
   // Weekday labels (Mon/Wed/Fri only, index 0/2/4 in Mon-indexed scheme)
   const lang = getCurrentLanguage();
@@ -149,8 +149,10 @@ export function renderHeatmap(
   // Build output lines
   const lines: string[] = [];
 
-  // Title line
-  lines.push(trans.calendar.heatmap.title);
+  // Title line — same space.indent + type.heading treatment every other
+  // section heading in the app uses (this one was bare, so it sat flush
+  // against the terminal edge instead of matching the app's 3-space margin).
+  lines.push(space.indent + type.heading(trans.calendar.heatmap.title));
   lines.push('');
 
   // Month labels line
@@ -165,7 +167,7 @@ export function renderHeatmap(
       const glyph = countToGlyph(cell.count);
       return applyColor(glyph, cell.count, useColor);
     });
-    lines.push(`${wdLabel} ${cells.join(' ')}`);
+    lines.push(`${space.indent}${wdLabel} ${cells.join(' ')}`);
   }
 
   // Legend line
@@ -188,7 +190,7 @@ export function renderHeatmap(
 
   lines.push('');
   lines.push(
-    `${trans.calendar.heatmap.legendLess} ${legendColored.join('')} ${trans.calendar.heatmap.legendMore}`
+    `${space.indent}${type.hint(trans.calendar.heatmap.legendLess)} ${legendColored.join('')} ${type.hint(trans.calendar.heatmap.legendMore)}`
   );
 
   return lines.join('\n');
