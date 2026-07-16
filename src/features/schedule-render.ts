@@ -345,8 +345,8 @@ export function renderMeetingsByLocation(meetings: readonly TimetableMeeting[], 
     byLocation.set(loc, list);
   }
   // Plain string sort (not a locale-aware collation) so ordering is
-  // deterministic across environments — matches the design mockup's own
-  // "教1-302, 教3-201, 操场" ordering exactly under simple codepoint compare.
+  // deterministic across environments and installs, independent of the
+  // host's configured locale.
   const locations = [...byLocation.keys()].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
   const dot = pickIcon('·', '-');
