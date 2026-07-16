@@ -36,11 +36,23 @@ function hint(label: string): string {
   return `${space.indent}${type.hint(label)}`;
 }
 
+// Lines a fully-expanded hub needs: banner+blank (2) + heatmap+blank (12) +
+// recent-activity heading+up to 5 events+blank (7) + hubField
+// (title+blank+6 options, 8) = 29. Below this, a terminal can't fit the
+// heatmap without pushing the menu into scroll territory — better to keep
+// it as the existing drill-down destination than show a truncated grid.
+const EXPANDED_HUB_MIN_BODY_ROWS = 29;
+
 function renderHubBody(state: EventsViewState, now: Date, bodyRows: number): string[] {
   const trans = t();
   const lines: string[] = [];
   const banner = renderCountdownBanner(state.nextEvent, now);
   if (banner) { lines.push(banner); lines.push(''); }
+  const buckets = state.heatmapBuckets;
+  if (bodyRows >= EXPANDED_HUB_MIN_BODY_ROWS && buckets && buckets.length > 0) {
+    lines.push(...renderHeatmap(buckets, now, { color: true }).split('\n'));
+    lines.push('');
+  }
   if (state.recentEvents && state.recentEvents.length > 0) {
     lines.push(heading(trans.calendar.recentActivity));
     for (const e of state.recentEvents) lines.push(renderEventBrief(e, now));

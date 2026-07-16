@@ -24,15 +24,17 @@ describe('renderEvents', () => {
     expect(out).toContain('Events');
   });
 
-  it('hub mode does not render the heatmap grid, even when heatmapBuckets is populated', () => {
+  it('hub mode does not render the heatmap grid on a normal-size terminal, even when heatmapBuckets is populated', () => {
     // The full-year heatmap moved out of the glanceable hub and into its
     // own drill-down destination (mirrors Schedule: the hub shows a
     // compact week strip, not the full weekday x period grid) — a student
     // scanning the hub for "what's next" shouldn't have to look past 11
-    // lines of a mostly-empty contribution grid to reach the menu.
+    // lines of a mostly-empty contribution grid to reach the menu. This is
+    // the small/default-terminal case; a tall terminal gets the heatmap
+    // back inline (see the "adaptive density" describe block below).
     const hubField = new ListField({ title: 'Events', options: [{ value: 'upcoming', label: 'Events' }] });
     const heatmapBuckets = [{ date: '2026-07-14', count: 1 }, { date: '2026-07-15', count: 0 }];
-    const out = stripAnsi(renderEvents({ mode: 'hub', hubField, heatmapBuckets }, new Date('2026-07-15')).join('\n'));
+    const out = stripAnsi(renderEvents({ mode: 'hub', hubField, heatmapBuckets }, new Date('2026-07-15'), 19).join('\n'));
     expect(out).not.toContain('Activity (last 12 months)');
     expect(out).not.toContain('Less');
   });
@@ -75,6 +77,47 @@ describe('renderEvents', () => {
     expect(visibleCount).toBeGreaterThan(0);
   });
 
+});
+
+describe('renderEvents — adaptive hub density', () => {
+  const heatmapBuckets = [{ date: '2026-07-14', count: 1 }, { date: '2026-07-15', count: 0 }];
+
+  it('shows the heatmap inline on a tall terminal, with everything else still reachable', () => {
+    const hubField = new ListField({ title: 'Events', options: [{ value: 'upcoming', label: 'Events' }] });
+    const recentEvents = [{
+      date: '07-17', time: '20:30', title: 'NWDC', location: 'TBD', description: '',
+      startDate: new Date('2026-07-17T20:30:00'), recurring: true, uid: 'nwdc-1',
+    }];
+    const out = stripAnsi(renderEvents({
+      mode: 'hub', hubField, heatmapBuckets, recentEvents,
+    }, new Date('2026-07-15'), 45).join('\n'));
+    expect(out).toContain('Activity (last 12 months)');
+    expect(out).toContain('Less');
+    expect(out).toContain('NWDC');
+    expect(out).toContain('Events'); // the hub menu itself
+  });
+
+  it('stays compact (no inline heatmap) right below the threshold, matching the existing small-terminal behavior', () => {
+    const hubField = new ListField({ title: 'Events', options: [{ value: 'upcoming', label: 'Events' }] });
+    const out = stripAnsi(renderEvents({
+      mode: 'hub', hubField, heatmapBuckets,
+    }, new Date('2026-07-15'), 20).join('\n'));
+    expect(out).not.toContain('Activity (last 12 months)');
+  });
+
+  it('never collapses a multi-line renderer output into one array entry, even in the expanded layout', () => {
+    // Same regression class as the collapsed-heatmap bug fixed earlier in
+    // this codebase's history — must hold in the new inline-heatmap path
+    // too, not just the drill-down 'heatmap' mode.
+    const hubField = new ListField({ title: 'Events', options: [{ value: 'upcoming', label: 'Events' }] });
+    const lines = renderEvents({ mode: 'hub', hubField, heatmapBuckets }, new Date('2026-07-15'), 45);
+    for (const line of lines) {
+      expect(line).not.toContain('\n');
+    }
+  });
+});
+
+describe('renderEvents — list/detail/search/error modes', () => {
   it('list mode shows the list field', () => {
     const listField = new ListField({ title: 'Events', options: [{ value: '0', label: 'Hackathon' }] });
     const out = stripAnsi(renderEvents({ mode: 'list', listField }, new Date()).join('\n'));
