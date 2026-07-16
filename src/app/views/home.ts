@@ -2,9 +2,10 @@ import { c, type, space, glyph } from '../../core/theme.js';
 import { t } from '../../i18n/index.js';
 import { pickIcon } from '../../core/icons.js';
 import { padEndV, visualWidth } from '../../core/text.js';
-import { peekNextClassLine, peekTodayLines } from '../../features/schedule-view.js';
-import { fetchEvents, renderEventBrief } from '../../features/calendar.js';
+import { peekNextClassLine, peekTodayLines, peekWeekAheadInfo, peekUnresolvedCount } from '../../features/schedule-view.js';
+import { loadCalendarOrThrow, toDisplayEvent, renderEventBrief } from '../../features/calendar.js';
 import { weekdayShortLabel } from '../../features/schedule-render.js';
+import { campusWeekday } from '../../features/schedule-query.js';
 import type { View, AppContext } from '../view.js';
 
 /** Data consumed by the pure `renderHome`; populated best-effort by `homeView.load`. */
@@ -158,26 +159,44 @@ export const homeView: View = {
   title: 'Home',
 
   async load(ctx: AppContext): Promise<void> {
-    // Schedule panels are cache-only and instant — populate them synchronously first.
+    // Schedule panels are cache-only and instant — populate them
+    // synchronously first. weekAheadSync is computed once here and reused
+    // below (peekWeekAheadInfo is itself cache-only/cheap, but capturing
+    // its result avoids a second, redundant cache read for weekStartDate).
+    const weekAheadSync = peekWeekAheadInfo();
     try {
-      data = { loading: true, nextClassLine: peekNextClassLine(), todayLines: peekTodayLines() };
+      data = {
+        loading: true,
+        nextClassLine: peekNextClassLine(),
+        todayLines: peekTodayLines(),
+        unresolvedCount: peekUnresolvedCount(),
+        weekAhead: weekAheadSync ? { classDays: weekAheadSync.classDays } : undefined,
+      };
     } catch {
       data = { loading: true };
     }
     ctx.rerender();
 
-    // Events is the only networked panel; best-effort. Fetches more than a
-    // small terminal could ever show — renderHome trims to what actually
-    // fits at render time based on real bodyRows. 15 is a glance-panel
-    // ceiling, not a "full list" (Events' own tab is where you browse
-    // everything); it just needs to be at least as many as the tallest
-    // reasonable terminal could fit.
+    // Events is the only networked panel; best-effort. Fetches the calendar
+    // exactly once and reuses that same Calendar instance for both the
+    // upcoming-events list below and the week-ahead event row (when there's
+    // a personal timetable to correlate it against) — not two separate
+    // network round-trips for what both come from the same public feed.
     const HOME_EVENT_FETCH_CAP = 15;
     try {
-      const items = await fetchEvents();
+      const cal = await loadCalendarOrThrow();
       const now = new Date();
-      const eventLines = items.slice(0, HOME_EVENT_FETCH_CAP).map((e) => renderEventBrief(e, now));
-      data = { ...data, eventLines };
+      const items = cal.upcoming({ days: 30 }).slice(0, HOME_EVENT_FETCH_CAP).map(toDisplayEvent);
+      const eventLines = items.map((e) => renderEventBrief(e, now));
+
+      let weekAhead = data.weekAhead;
+      if (weekAheadSync) {
+        const weekEnd = new Date(weekAheadSync.weekStartDate.getTime() + 7 * 86400000);
+        const weekEvents = cal.inRange(weekAheadSync.weekStartDate, weekEnd);
+        const daySet = new Set(weekEvents.map((e) => campusWeekday(e.start)));
+        weekAhead = { classDays: weekAheadSync.classDays, eventDays: [1, 2, 3, 4, 5, 6, 7].map((wd) => daySet.has(wd)) };
+      }
+      data = { ...data, eventLines, weekAhead };
     } catch {
       data = { ...data, eventsError: true };
     } finally {

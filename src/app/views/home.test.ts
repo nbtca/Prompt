@@ -1,8 +1,24 @@
-import { describe, it, expect, beforeAll } from 'vitest';
-import { renderHome } from './home.js';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { setLanguage } from '../../i18n/index.js';
 import { resetIconCache } from '../../core/icons.js';
 import { stripAnsi } from '../../core/text.js';
+import type { AppContext } from '../view.js';
+
+const calendarUpcoming = vi.fn().mockReturnValue([]);
+const calendarInRange = vi.fn().mockReturnValue([]);
+const loadCalendarOrThrowMock = vi.fn().mockResolvedValue({
+  upcoming: calendarUpcoming, inRange: calendarInRange,
+  past: vi.fn().mockReturnValue([]), next: vi.fn().mockReturnValue([]), heatmap: vi.fn().mockReturnValue([]),
+});
+vi.mock('../../features/calendar.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../features/calendar.js')>();
+  return { ...actual, loadCalendarOrThrow: loadCalendarOrThrowMock };
+});
+
+const { renderHome, homeView } = await import('./home.js');
 
 beforeAll(() => {
   setLanguage('en');
@@ -202,5 +218,119 @@ describe('renderHome — unresolved items warning (Part E)', () => {
     const warnIdx = lines.findIndex((l) => l.includes('Needs attention'));
     expect(warnIdx).toBeGreaterThan(todayIdx);
     expect(warnIdx).toBeGreaterThan(weekIdx);
+  });
+});
+
+describe('homeView.load()', () => {
+  let dir: string;
+  let prevStateHome: string | undefined;
+
+  beforeEach(() => {
+    // Earlier describe blocks in this file (Part D's weekend-cell tests)
+    // leave NBTCA_ICON_MODE as 'ascii' behind them via their own
+    // try/finally. Pin it back to unicode here so this block's glyph
+    // assertions (▓/░) are deterministic regardless of run order.
+    process.env['NBTCA_ICON_MODE'] = 'unicode';
+    resetIconCache();
+    vi.clearAllMocks();
+    calendarUpcoming.mockReturnValue([]);
+    calendarInRange.mockReturnValue([]);
+    loadCalendarOrThrowMock.mockResolvedValue({
+      upcoming: calendarUpcoming, inRange: calendarInRange,
+      past: vi.fn().mockReturnValue([]), next: vi.fn().mockReturnValue([]), heatmap: vi.fn().mockReturnValue([]),
+    });
+    dir = mkdtempSync(join(tmpdir(), 'home-load-'));
+    prevStateHome = process.env['XDG_STATE_HOME'];
+    process.env['XDG_STATE_HOME'] = dir;
+  });
+
+  afterEach(() => {
+    if (prevStateHome === undefined) delete process.env['XDG_STATE_HOME'];
+    else process.env['XDG_STATE_HOME'] = prevStateHome;
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  function fakeCtx(): AppContext {
+    return {
+      size: { rows: 24, cols: 80 }, bodyRows: 19, rerender: vi.fn(),
+      runClassic: vi.fn(async (fn: () => Promise<void>) => { await fn(); }), quit: vi.fn(),
+    };
+  }
+
+  // 2020-01-06 is a real, permanently-past Monday -- safe to use as
+  // weekOneMonday in these tests regardless of when the suite actually
+  // runs (unlike a near-future date, which would eventually put the
+  // fixture's "current week" before term start and make peekWeekAheadInfo
+  // return null instead of the populated data these tests need).
+  function writeSetUpFixture(dir: string): void {
+    mkdirSync(join(dir, 'nbtca'), { recursive: true });
+    writeFileSync(join(dir, 'nbtca', 'current-term.json'), JSON.stringify({ termKey: '2020-1', weekOneMonday: '2020-01-06' }));
+    writeFileSync(join(dir, 'nbtca', 'timetable-2020-1.json'), JSON.stringify({
+      term: { academicYear: '2020', semester: '1' }, meetings: [], unresolvedItems: [],
+      periods: [], calendarDays: [], warnings: [], fetchedAt: '2020-01-06T00:00:00Z',
+    }));
+  }
+
+  it('fetches the calendar exactly once and reuses it for both upcoming events and the week-ahead event row', async () => {
+    writeSetUpFixture(dir);
+    const ctx = fakeCtx();
+    await homeView.load(ctx);
+    expect(loadCalendarOrThrowMock).toHaveBeenCalledTimes(1);
+    expect(calendarUpcoming).toHaveBeenCalledTimes(1);
+    expect(calendarInRange).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not call inRange at all when there is no set-up personal timetable', async () => {
+    const ctx = fakeCtx();
+    await homeView.load(ctx);
+    expect(loadCalendarOrThrowMock).toHaveBeenCalledTimes(1);
+    expect(calendarUpcoming).toHaveBeenCalledTimes(1);
+    expect(calendarInRange).not.toHaveBeenCalled();
+  });
+
+  it('populates unresolvedCount and weekAhead.classDays synchronously, before the network call resolves', async () => {
+    mkdirSync(join(dir, 'nbtca'), { recursive: true });
+    writeFileSync(join(dir, 'nbtca', 'current-term.json'), JSON.stringify({ termKey: '2020-1', weekOneMonday: '2020-01-06' }));
+    writeFileSync(join(dir, 'nbtca', 'timetable-2020-1.json'), JSON.stringify({
+      term: { academicYear: '2020', semester: '1' },
+      meetings: [{ sourceId: null, courseName: 'Math', teacherNames: [], location: null, weekday: 1, startPeriod: 1, endPeriod: 1, weeks: [1], kind: 'regular' }],
+      unresolvedItems: [{ kind: 'practice', itemIndex: 0, sourceFields: { kcmc: 'Fitness test' } }],
+      periods: [{ period: 1, label: null, start: '08:00', end: '08:45' }],
+      calendarDays: [], warnings: [], fetchedAt: '2020-01-06T00:00:00Z',
+    }));
+    let capturedSync = false;
+    const ctx: AppContext = {
+      size: { rows: 24, cols: 80 }, bodyRows: 19,
+      rerender: vi.fn(() => {
+        if (!capturedSync) {
+          capturedSync = true;
+          const out = stripAnsi(homeView.render(ctx).join('\n'));
+          expect(out).toContain('Needs attention');
+          expect(out).toContain('Week overview');
+        }
+      }),
+      runClassic: vi.fn(async (fn: () => Promise<void>) => { await fn(); }), quit: vi.fn(),
+    };
+    await homeView.load(ctx);
+    expect(capturedSync).toBe(true); // sanity: the sync-phase rerender actually happened and was inspected
+  });
+
+  it('fills in weekAhead.eventDays from the real week-of-events after the network call resolves', async () => {
+    writeSetUpFixture(dir);
+    // 2020-01-06 (the fixture's weekOneMonday, and thus also the Monday of
+    // "this week" for any `now` far enough in the future) has an event.
+    calendarInRange.mockReturnValue([{ start: new Date('2020-01-06T18:00:00'), title: 'Club meetup' }]);
+    const ctx = fakeCtx();
+    await homeView.load(ctx);
+    // Not a meaningful assertion about *which* week is "current" relative
+    // to whatever "now" the test happens to run at -- just that eventDays
+    // was populated at all (some cell is a real glyph, not blank), proving
+    // the inRange result actually flowed into the rendered grid.
+    const out = stripAnsi(homeView.render(ctx).join('\n'));
+    const lines = out.split('\n');
+    const titleIdx = lines.findIndex((l) => l.includes('Week overview'));
+    expect(titleIdx).toBeGreaterThanOrEqual(0);
+    const eventLine = lines[titleIdx + 3]!;
+    expect(eventLine).toMatch(/[▓░]/);
   });
 });
