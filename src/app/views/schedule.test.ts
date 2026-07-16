@@ -136,6 +136,13 @@ describe('buildHubField', () => {
     expect(text).toContain('Needs attention');
     expect(text).toContain('1');
   });
+
+  it('includes the term density and by-location options, grouped with This week', () => {
+    const field = buildHubField({ ...baseTimetable, unresolvedItems: [] });
+    const text = field.render().join('\n');
+    expect(text).toContain('Term density');
+    expect(text).toContain('By location');
+  });
 });
 
 describe('scheduleView.load() with an expired session', () => {
@@ -211,5 +218,59 @@ describe('scheduleView.load() with no session — public view', () => {
     const out = stripAnsi(scheduleView.render(ctx).join('\n'));
     expect(out).toContain(t().timetable.publicLoginAction);
     expect(out).not.toContain(t().timetable.studentId);
+  });
+});
+
+describe('scheduleView — term density / by-location navigation', () => {
+  function fakeCtx(): AppContext {
+    return {
+      size: { rows: 24, cols: 80 }, bodyRows: 40, rerender: vi.fn(),
+      runClassic: vi.fn(async (fn: () => Promise<void>) => { await fn(); }), quit: vi.fn(),
+    };
+  }
+
+  // Reuses the exact "cached hub survives a failed background refresh"
+  // setup from the describe block above — the simplest reliable way to land
+  // scheduleView in 'hub' mode with a real hubField, without also having to
+  // mock a successful client.fetchTerm() round trip.
+  async function loadIntoHub(): Promise<AppContext> {
+    vi.mocked(loadCurrentPointer).mockReturnValue({ termKey: '2026-3', weekOneMonday: '2026-09-07' });
+    vi.mocked(loadTimetableCache).mockReturnValue({
+      term: { academicYear: '2026', semester: '3' },
+      meetings: [], periods: [], calendarDays: [], warnings: [], unresolvedItems: [],
+      fetchedAt: new Date('2026-09-07T00:00:00Z'),
+    } as unknown as Timetable);
+    sessionStoreLoad.mockReturnValue({
+      version: 1, provider: 'nbt-webvpn', jar: { cookies: [] }, authenticatedAt: '2026-01-01T00:00:00Z', validatedAt: '2026-01-01T00:00:00Z',
+    });
+    listTerms.mockRejectedValue(new SessionExpiredError());
+    const ctx = fakeCtx();
+    await scheduleView.load(ctx);
+    return ctx;
+  }
+
+  it('navigates into termDensity mode and back to the hub on Esc', async () => {
+    const ctx = await loadIntoHub();
+    scheduleView.handleKey('\x1b[B', ctx); // 'week' -> 'termDensity'
+    scheduleView.handleKey('\r', ctx); // select
+    let out = stripAnsi(scheduleView.render(ctx).join('\n'));
+    expect(out).toContain(t().timetable.termDensityTitle);
+
+    expect(scheduleView.handleBack?.()).toBe(true);
+    out = stripAnsi(scheduleView.render(ctx).join('\n'));
+    expect(out).toContain(t().timetable.menuEntry);
+  });
+
+  it('navigates into byLocation mode and back to the hub on any key', async () => {
+    const ctx = await loadIntoHub();
+    scheduleView.handleKey('\x1b[B', ctx); // 'week' -> 'termDensity'
+    scheduleView.handleKey('\x1b[B', ctx); // 'termDensity' -> 'byLocation'
+    scheduleView.handleKey('\r', ctx); // select
+    let out = stripAnsi(scheduleView.render(ctx).join('\n'));
+    expect(out).toContain(t().timetable.byLocationTitle);
+
+    scheduleView.handleKey('\r', ctx); // any key returns to hub
+    out = stripAnsi(scheduleView.render(ctx).join('\n'));
+    expect(out).toContain(t().timetable.menuEntry);
   });
 });

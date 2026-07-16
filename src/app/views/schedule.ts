@@ -47,7 +47,11 @@ function isTimetableLike(value: unknown): value is Timetable {
 export function buildHubField(tt: Timetable): ListField {
   const trans = t();
   const options = [
+    // 本周/学期活跃度/按教室 are grouped first as three "zoom levels" on the
+    // same timetable data, before the existing term/export/logout actions.
     { value: 'week', label: trans.timetable.hubWeek },
+    { value: 'termDensity', label: trans.timetable.hubTermDensity },
+    { value: 'byLocation', label: trans.timetable.hubByLocation },
     { value: 'term', label: trans.timetable.hubSwitchTerm },
     { value: 'export', label: trans.timetable.hubExport },
     ...(tt.unresolvedItems.length > 0
@@ -270,7 +274,10 @@ export const scheduleView: View = {
   },
 
   handleBack(): boolean {
-    if (state.mode === 'week' || state.mode === 'unresolved' || state.mode === 'termPicker') {
+    if (
+      state.mode === 'week' || state.mode === 'unresolved' || state.mode === 'termPicker'
+      || state.mode === 'termDensity' || state.mode === 'byLocation'
+    ) {
       return returnToHub();
     }
     return false;
@@ -340,6 +347,8 @@ export const scheduleView: View = {
         const hubWeekOne = state.weekOne;
         if (!result?.selected || !tt || !hubKey || !hubWeekOne) return;
         if (result.selected === 'week') { state = { ...state, mode: 'week' }; return; }
+        if (result.selected === 'termDensity') { state = { ...state, mode: 'termDensity' }; return; }
+        if (result.selected === 'byLocation') { state = { ...state, mode: 'byLocation' }; return; }
         if (result.selected === 'unresolved') { state = { ...state, mode: 'unresolved' }; return; }
         if (result.selected === 'term') {
           const options = relevantTerms(catalog).map((tm) => ({
@@ -377,7 +386,9 @@ export const scheduleView: View = {
         return;
       }
       case 'week':
-      case 'unresolved': {
+      case 'unresolved':
+      case 'termDensity':
+      case 'byLocation': {
         returnToHub();
         return;
       }
