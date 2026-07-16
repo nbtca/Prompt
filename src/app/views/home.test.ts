@@ -179,3 +179,28 @@ describe('renderHome — week overview panel (Part D)', () => {
     for (const l of lines) expect(l).not.toContain('\n');
   });
 });
+
+describe('renderHome — unresolved items warning (Part E)', () => {
+  it('does not show a warning line when unresolvedCount is 0 or absent', () => {
+    const out = stripAnsi(renderHome({ loading: false }, noon).join('\n'));
+    expect(out).not.toContain('Needs attention');
+  });
+
+  it('shows a warning line with the real count when unresolvedCount > 0', () => {
+    const out = stripAnsi(renderHome({ loading: false, unresolvedCount: 3 }, noon).join('\n'));
+    expect(out).toContain('Needs attention');
+    expect(out).toContain('3');
+  });
+
+  it('places the warning after Today/Week overview and before Events', () => {
+    const lines = renderHome({
+      loading: false, unresolvedCount: 1,
+      weekAhead: { classDays: [false, false, false, false, false, false, false] },
+    }, noon).map((l) => stripAnsi(l));
+    const todayIdx = lines.findIndex((l) => l.includes('Today'));
+    const weekIdx = lines.findIndex((l) => l.includes('Week overview'));
+    const warnIdx = lines.findIndex((l) => l.includes('Needs attention'));
+    expect(warnIdx).toBeGreaterThan(todayIdx);
+    expect(warnIdx).toBeGreaterThan(weekIdx);
+  });
+});

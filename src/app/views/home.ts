@@ -1,4 +1,4 @@
-import { type, space, glyph } from '../../core/theme.js';
+import { c, type, space, glyph } from '../../core/theme.js';
 import { t } from '../../i18n/index.js';
 import { pickIcon } from '../../core/icons.js';
 import { padEndV, visualWidth } from '../../core/text.js';
@@ -18,6 +18,7 @@ export interface HomeData {
    * every other view in the app already distinguishes. */
   eventsError?: boolean;
   weekAhead?: { classDays: boolean[]; eventDays?: boolean[] };
+  unresolvedCount?: number;
 }
 
 function panelHeading(label: string): string {
@@ -118,6 +119,16 @@ export function renderHome(data: HomeData, now: Date, bodyRows = 100): string[] 
   if (data.weekAhead) {
     lines.push(panelHeading(trans.timetable.weekOverviewTitle));
     lines.push(...renderWeekAheadGrid(data.weekAhead.classDays, data.weekAhead.eventDays).split('\n'));
+    lines.push('');
+  }
+
+  // Unresolved schedule items (Part E): surfaced directly on Home instead
+  // of only inside Schedule's own hub menu -- same c.warn + ⚠ treatment
+  // buildHubField() (schedule.ts) already uses for this exact condition,
+  // matching the "everything that needs your attention, in one place"
+  // spirit of a gh-status-like control center.
+  if ((data.unresolvedCount ?? 0) > 0) {
+    lines.push(`${space.indent}${c.warn(`${pickIcon('⚠', '!')} ${trans.timetable.hubUnresolved} · ${data.unresolvedCount}`)}`);
     lines.push('');
   }
 
