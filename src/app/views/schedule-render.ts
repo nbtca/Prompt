@@ -1,7 +1,7 @@
 import type { AcademicTerm, Timetable } from '@nbtca/nbtcal/timetable';
 import { type, space, glyph } from '../../core/theme.js';
 import { t, fmt } from '../../i18n/index.js';
-import { ListField } from '../fields/list-field.js';
+import { ListField, computeMaxVisible } from '../fields/list-field.js';
 import { TextField } from '../fields/text-field.js';
 import { currentWeekNumber, campusWeekday, meetingsOnDay, nextMeeting } from '../../features/schedule-query.js';
 import {
@@ -90,7 +90,11 @@ function renderHubBody(state: ScheduleViewState, now: Date, bodyRows: number): s
       // and use it only if it (plus a floor reserved for the menu) still
       // fits, otherwise fall back to the fixed-height compact strip.
       const gridLines = renderWeekGrid(tt.meetings, tt.periods, week, now).split('\n');
-      const roomForMenu = 8; // title + blank + a handful of hub options
+      // Derived from the field's *real* option count rather than a guessed
+      // constant shared with Events' differently-sized hub menu: title +
+      // blank + options + blank + footer (this hub field, unlike Events',
+      // does render one — see buildHubField in schedule.ts).
+      const roomForMenu = 4 + (state.hubField?.optionCount ?? 0);
       if (lines.length + gridLines.length <= bodyRows - roomForMenu) {
         lines.push(...gridLines);
       } else {
@@ -111,7 +115,7 @@ function renderHubBody(state: ScheduleViewState, now: Date, bodyRows: number): s
     // render actually already used before windowing the menu itself, or a
     // tall today (or a short terminal) silently truncates the bottom rows
     // (the unresolved-items warning, log out) with no scroll indicator.
-    state.hubField.setMaxVisible(Math.max(3, bodyRows - lines.length - 4));
+    state.hubField.setMaxVisible(computeMaxVisible(bodyRows - lines.length));
     lines.push(...state.hubField.render());
   }
   return lines;

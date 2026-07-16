@@ -1,7 +1,7 @@
 import type { HeatmapBucket } from '@nbtca/nbtcal';
 import { type, space } from '../../core/theme.js';
 import { t } from '../../i18n/index.js';
-import { ListField } from '../fields/list-field.js';
+import { ListField, computeMaxVisible } from '../fields/list-field.js';
 import { TextField } from '../fields/text-field.js';
 import { renderCountdownBanner, renderEventBrief, type Event } from '../../features/calendar.js';
 import { renderHeatmap } from '../../features/calendar-heatmap.js';
@@ -58,8 +58,11 @@ function renderHubBody(state: EventsViewState, now: Date, bodyRows: number): str
     // Same reserved-floor idea as hubField's own windowing below, applied
     // one level up: recent-activity events and the hub menu compete for
     // the same remaining budget, and the menu must never be the one that
-    // silently loses that fight.
-    const menuFloor = 8; // title + blank + a handful of hub options
+    // silently loses that fight. Derived from the field's *real* option
+    // count (title + blank + options; this hub field has no footer) rather
+    // than a guessed constant — a menu-specific number here would silently
+    // drift from whatever buildHubField() actually renders.
+    const menuFloor = 2 + (state.hubField?.optionCount ?? 0);
     const remaining = Math.max(1, bodyRows - lines.length - 1 - menuFloor);
     for (const e of state.recentEvents.slice(0, remaining)) lines.push(renderEventBrief(e, now));
     lines.push('');
@@ -70,7 +73,7 @@ function renderHubBody(state: EventsViewState, now: Date, bodyRows: number): str
     // menu against what this render actually already used, or the bottom
     // rows (search, past events) get silently cut with no scroll
     // indicator. Mirrors the same fix already shipped for Schedule's hub.
-    state.hubField.setMaxVisible(Math.max(3, bodyRows - lines.length - 4));
+    state.hubField.setMaxVisible(computeMaxVisible(bodyRows - lines.length));
     lines.push(...state.hubField.render());
   }
   return lines;

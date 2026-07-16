@@ -95,6 +95,11 @@ function buildPublicField(): ListField {
   });
 }
 
+// A glance-panel ceiling, not "browse everything" (matches the same-purpose
+// constants in events.ts/home.ts) — renderPublicBody trims further based on
+// the real ctx.bodyRows.
+const PUBLIC_UPCOMING_FETCH_CAP = 15;
+
 /** The default, no-login Schedule view: public term/week status sourced from
  * the same public calendar feed Events already uses. Login is now something
  * the student opts into from here, not a gate they hit immediately. */
@@ -109,11 +114,9 @@ async function goToPublic(ctx: AppContext): Promise<void> {
       new Date(now.getTime() - 400 * 86400000), new Date(now.getTime() + 400 * 86400000),
     );
     const publicWindow: AcademicWindow | OnBreak | null = currentAcademicWindow(windowEvents, now);
-    // A glance-panel ceiling, not "browse everything" — renderPublicBody
-    // trims further based on the real ctx.bodyRows.
     const publicUpcoming: Event[] = cal.upcoming({ days: 30 })
       .filter((e) => !isAcademicBreakEvent(e))
-      .slice(0, 15)
+      .slice(0, PUBLIC_UPCOMING_FETCH_CAP)
       .map(toDisplayEvent);
     state = { ...state, publicWindow, publicUpcoming };
   } catch {

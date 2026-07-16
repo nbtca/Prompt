@@ -21,6 +21,13 @@ describe('ListField', () => {
     expect(field.selectedIndex).toBe(2);
   });
 
+  it('optionCount reflects how many options this specific field has', () => {
+    // Lets a caller reserve exactly enough room for *this* menu instead of
+    // guessing a constant shared with a differently-sized one elsewhere.
+    expect(new ListField({ title: 'Pick', options }).optionCount).toBe(3);
+    expect(new ListField({ title: 'Pick', options: [] }).optionCount).toBe(0);
+  });
+
   it('moves selection down/up on arrow keys', () => {
     const field = new ListField({ title: 'Pick', options });
     field.handleKey('\x1b[B');

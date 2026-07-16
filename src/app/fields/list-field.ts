@@ -47,6 +47,13 @@ export class ListField {
     return this.index;
   }
 
+  /** How many options this field actually has — lets a caller reserve
+   * exactly enough room for this specific menu instead of guessing a
+   * shared constant that's wrong for every menu of a different size. */
+  get optionCount(): number {
+    return this.config.options.length;
+  }
+
   /** Updates the visible-row budget in place (re-clamping the scroll window
    * so the selection stays visible) instead of losing the field's current
    * selection/scroll by rebuilding it. Views call this from their own
