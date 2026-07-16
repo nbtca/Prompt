@@ -230,3 +230,52 @@ export function peekTodayLines(now: Date = new Date()): string[] {
     return renderTodayTimeline(today, cached.periods as Timetable['periods'], now).split('\n');
   } catch { return []; }
 }
+
+export interface WeekAheadInfo {
+  weekStartDate: Date;
+  /** Raw per-day "has any meeting" signal, index 0 = Monday .. index 6 =
+   * Sunday. No weekend override applied here — that's a display decision
+   * made by the caller's renderer, not this cache read. */
+  classDays: boolean[];
+}
+
+/** Best-effort, cache-only (no network) computation of this week's per-day
+ * class signal, for Home's combined week-overview grid. Returns null when
+ * there's no set-up personal timetable, the cache is unusable, or the term
+ * hasn't started yet (current week < 1) — the same "before term start"
+ * guard already fixed once for Schedule's own hub (a future-dated weekOne,
+ * auto-inferred while on break, must not render a nonsensical negative
+ * week's worth of content). */
+export function peekWeekAheadInfo(now: Date = new Date()): WeekAheadInfo | null {
+  try {
+    const ptr = loadCurrentPointer();
+    if (!ptr) return null;
+    const cached = loadTimetableCache(ptr.termKey) as { meetings?: unknown } | null;
+    if (!cached || !Array.isArray(cached.meetings)) return null;
+    const week = currentWeekNumber(ptr.weekOneMonday, now);
+    if (week < 1) return null;
+    const meetings = cached.meetings as Timetable['meetings'];
+    const classDays = [1, 2, 3, 4, 5, 6, 7].map((wd) => meetingsOnDay(meetings, wd, week).length > 0);
+    const base = new Date(`${ptr.weekOneMonday}T00:00:00`);
+    const weekStartDate = new Date(base.getTime() + (week - 1) * 7 * 86400000);
+    return { weekStartDate, classDays };
+  } catch {
+    return null;
+  }
+}
+
+/** Best-effort, cache-only (no network) read of how many timetable items
+ * still need the student's attention — the same data buildHubField()
+ * (schedule.ts) already surfaces inside Schedule's own hub menu, exposed
+ * here so Home can show it too without a second source of truth. */
+export function peekUnresolvedCount(): number {
+  try {
+    const ptr = loadCurrentPointer();
+    if (!ptr) return 0;
+    const cached = loadTimetableCache(ptr.termKey) as { unresolvedItems?: unknown } | null;
+    if (!cached || !Array.isArray(cached.unresolvedItems)) return 0;
+    return cached.unresolvedItems.length;
+  } catch {
+    return 0;
+  }
+}
