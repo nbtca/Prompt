@@ -6,7 +6,7 @@ import { TextField } from '../fields/text-field.js';
 import { currentWeekNumber, campusWeekday, meetingsOnDay, nextMeeting } from '../../features/schedule-query.js';
 import {
   renderNextClassBanner, renderWeekGrid, renderUnresolvedItems, renderTodayTimeline, renderWeekStrip,
-  weekdayShortLabel,
+  weekdayShortLabel, renderTermDensity, renderMeetingsByLocation,
 } from '../../features/schedule-render.js';
 import type { AcademicWindow, OnBreak } from '../../features/academic-calendar.js';
 import { renderEventBrief, type Event } from '../../features/calendar.js';
@@ -20,6 +20,8 @@ export type ScheduleMode =
   | 'needsWeekOne'
   | 'hub'
   | 'week'
+  | 'termDensity'
+  | 'byLocation'
   | 'termPicker'
   | 'unresolved'
   | 'error';
@@ -219,6 +221,21 @@ export function renderSchedule(state: ScheduleViewState, now: Date, bodyRows = 1
           heading(trans.timetable.hubWeek),
           '',
           ...renderWeekGrid(state.timetable.meetings, state.timetable.periods, currentWeekNumber(state.weekOne, now), now).split('\n'),
+        ]
+        : [hint(trans.timetable.genericError)];
+    case 'termDensity':
+      // renderTermDensity() already prints its own title (space.indent +
+      // type.heading), matching Events' heatmap mode — this case doesn't
+      // add a second heading on top.
+      return state.timetable && state.weekOne
+        ? renderTermDensity(state.timetable.meetings, state.weekOne, currentWeekNumber(state.weekOne, now)).split('\n')
+        : [hint(trans.timetable.genericError)];
+    case 'byLocation':
+      return state.timetable && state.weekOne
+        ? [
+          heading(trans.timetable.byLocationTitle),
+          '',
+          ...renderMeetingsByLocation(state.timetable.meetings, currentWeekNumber(state.weekOne, now)).split('\n'),
         ]
         : [hint(trans.timetable.genericError)];
     case 'termPicker':

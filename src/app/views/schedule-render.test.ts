@@ -160,6 +160,21 @@ describe('renderSchedule', () => {
     expect(out).toContain('Fitness test');
   });
 
+  it('termDensity mode renders the term density strip with its own title', () => {
+    const out = stripAnsi(renderSchedule({
+      mode: 'termDensity', key: '2026-3', weekOne: '2026-09-07', timetable,
+    }, new Date('2026-09-07T09:00:00')).join('\n'));
+    expect(out).toContain('Term density');
+  });
+
+  it('byLocation mode renders the by-location list with a wrapping heading', () => {
+    const out = stripAnsi(renderSchedule({
+      mode: 'byLocation', key: '2026-3', weekOne: '2026-09-07', timetable,
+    }, new Date('2026-09-07T09:00:00')).join('\n'));
+    expect(out).toContain('This week · By location');
+    expect(out).toContain('Room 201'); // from the fixture timetable's one meeting
+  });
+
   it('error mode shows the error message', () => {
     const out = stripAnsi(renderSchedule({ mode: 'error', errorMessage: 'Something broke' }, new Date()).join('\n'));
     expect(out).toContain('Something broke');
