@@ -39,7 +39,7 @@ function renderDayProgress(now: Date): string {
 }
 
 /** Pure: renders the schedule-first dashboard from already-fetched data. No I/O. */
-export function renderHome(data: HomeData, now: Date): string[] {
+export function renderHome(data: HomeData, now: Date, bodyRows = 100): string[] {
   const trans = t();
   const lines: string[] = [];
 
@@ -61,10 +61,14 @@ export function renderHome(data: HomeData, now: Date): string[] {
   }
   lines.push('');
 
-  // Upcoming events (network, best-effort).
+  // Upcoming events (network, best-effort). How many fit is whatever room
+  // is actually left after next-class/today above — on a tall terminal
+  // that's most of `data.eventLines`; on a normal one, still just a few,
+  // same as before this was ever adaptive.
   lines.push(panelHeading(trans.menu.events));
   if (data.eventLines && data.eventLines.length > 0) {
-    for (const l of data.eventLines) lines.push(l);
+    const remaining = Math.max(1, bodyRows - lines.length);
+    for (const l of data.eventLines.slice(0, remaining)) lines.push(l);
   } else if (data.loading) {
     lines.push(loadingLine());
   } else if (data.eventsError) {
@@ -91,11 +95,17 @@ export const homeView: View = {
     }
     ctx.rerender();
 
-    // Events is the only networked panel; best-effort.
+    // Events is the only networked panel; best-effort. Fetches more than a
+    // small terminal could ever show — renderHome trims to what actually
+    // fits at render time based on real bodyRows. 15 is a glance-panel
+    // ceiling, not a "full list" (Events' own tab is where you browse
+    // everything); it just needs to be at least as many as the tallest
+    // reasonable terminal could fit.
+    const HOME_EVENT_FETCH_CAP = 15;
     try {
       const items = await fetchEvents();
       const now = new Date();
-      const eventLines = items.slice(0, 4).map((e) => renderEventBrief(e, now));
+      const eventLines = items.slice(0, HOME_EVENT_FETCH_CAP).map((e) => renderEventBrief(e, now));
       data = { ...data, eventLines };
     } catch {
       data = { ...data, eventsError: true };
@@ -105,7 +115,7 @@ export const homeView: View = {
     }
   },
 
-  render(_ctx: AppContext): string[] {
-    return renderHome(data, new Date());
+  render(ctx: AppContext): string[] {
+    return renderHome(data, new Date(), ctx.bodyRows);
   },
 };

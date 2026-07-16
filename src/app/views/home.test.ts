@@ -61,6 +61,26 @@ describe('renderHome (schedule-first dashboard)', () => {
   });
 });
 
+describe('renderHome adaptive event count', () => {
+  const manyEventLines = Array.from({ length: 12 }, (_, i) => `  07-${17 + i}  Event ${i}`);
+
+  it('shows only as many events as fit on a normal-size terminal', () => {
+    const out = stripAnsi(renderHome({
+      nextClassLine: '', todayLines: [], eventLines: manyEventLines, loading: false,
+    }, noon, 12).join('\n'));
+    const visibleCount = manyEventLines.filter((l) => out.includes(l.trim())).length;
+    expect(visibleCount).toBeLessThan(manyEventLines.length);
+    expect(visibleCount).toBeGreaterThan(0);
+  });
+
+  it('shows more events on a tall terminal, up to everything available', () => {
+    const out = stripAnsi(renderHome({
+      nextClassLine: '', todayLines: [], eventLines: manyEventLines, loading: false,
+    }, noon, 50).join('\n'));
+    for (const l of manyEventLines) expect(out).toContain(l.trim());
+  });
+});
+
 describe('renderHome day-progress bar', () => {
   it('shows a half-filled bar and 50% at noon', () => {
     process.env['NBTCA_ICON_MODE'] = 'ascii';
