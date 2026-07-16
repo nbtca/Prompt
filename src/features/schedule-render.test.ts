@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import type { TimetableMeeting, TimetablePeriod, TimetableUnresolvedItem } from '@nbtca/nbtcal/timetable';
 import {
   renderNextClassBanner, renderTodayClasses, renderWeekGrid, renderUnresolvedItems,
-  renderTodayTimeline, renderWeekStrip,
+  renderTodayTimeline, renderWeekStrip, renderTermDensity,
 } from './schedule-render.js';
 import { setLanguage } from '../i18n/index.js';
 import { resetIconCache } from '../core/icons.js';
@@ -200,5 +200,59 @@ describe('renderUnresolvedItems', () => {
     const out = stripAnsi(renderUnresolvedItems([]));
     expect(out.trim().length).toBeGreaterThan(0);
     done();
+  });
+});
+
+describe('renderTermDensity', () => {
+  it('buckets each week into the correct relative density level', () => {
+    process.env['NBTCA_ICON_MODE'] = 'unicode';
+    resetIconCache();
+    try {
+      const meetings: TimetableMeeting[] = [
+        mk({ weeks: [2], startPeriod: 1, endPeriod: 1 }), // 1 slot
+        mk({ weeks: [3], startPeriod: 1, endPeriod: 2 }), // 2 slots
+        mk({ weeks: [4], startPeriod: 1, endPeriod: 3 }), // 3 slots
+        mk({ weeks: [5], startPeriod: 1, endPeriod: 4 }), // 4 slots (max)
+      ];
+      // week 1 has no meeting at all -> 0 slots -> level 0
+      const out = stripAnsi(renderTermDensity(meetings, '2026-09-07', 1));
+      const lines = out.split('\n');
+      const glyphLine = lines[3] ?? '';
+      expect(glyphLine.trim()).toBe('· ░ ▒ ▓ █');
+    } finally {
+      process.env['NBTCA_ICON_MODE'] = 'ascii';
+      resetIconCache();
+    }
+  });
+
+  it('places the current-week marker at the correct column', () => {
+    // weeks present: 1 and 5 -> range is [1,5], 5 weeks, 2 display columns each.
+    // currentWeek=3 -> index 2 -> column 2*2=4, plus the 3-char space.indent -> 7.
+    const meetings: TimetableMeeting[] = [mk({ weeks: [1] }), mk({ weeks: [5] })];
+    const out = stripAnsi(renderTermDensity(meetings, '2026-09-07', 3));
+    const lines = out.split('\n');
+    const markerLine = lines[4] ?? '';
+    expect(markerLine.indexOf('^')).toBe(7);
+    expect(markerLine).toContain('This week');
+  });
+
+  it('renders a single all-dot week when there are no meetings at all', () => {
+    process.env['NBTCA_ICON_MODE'] = 'unicode';
+    resetIconCache();
+    try {
+      const out = stripAnsi(renderTermDensity([], '2026-09-07', 5));
+      const lines = out.split('\n');
+      expect(lines[3]?.trim()).toBe('·');
+    } finally {
+      process.env['NBTCA_ICON_MODE'] = 'ascii';
+      resetIconCache();
+    }
+  });
+
+  it('never collapses into one array entry when split on newlines', () => {
+    const out = renderTermDensity([mk({ weeks: [1] })], '2026-09-07', 1);
+    const lines = out.split('\n');
+    expect(lines.length).toBeGreaterThan(1);
+    for (const line of lines) expect(line).not.toContain('\n');
   });
 });

@@ -5,7 +5,7 @@ import { meetingsInWeek, campusWeekday } from './schedule-query.js';
 import { c, type, space, glyph } from '../core/theme.js';
 import { pickIcon } from '../core/icons.js';
 import { padEndV, truncate } from '../core/text.js';
-import { t, fmt } from '../i18n/index.js';
+import { t, fmt, getCurrentLanguage } from '../i18n/index.js';
 
 function span(m: TimetableMeeting, periods: readonly TimetablePeriod[]): string {
   const s = periods.find((p) => p.period === m.startPeriod)?.start ?? '';
@@ -199,4 +199,118 @@ export function renderUnresolvedItems(items: readonly TimetableUnresolvedItem[])
     return `${space.indent}${type.body(name)}${detail ? `  ${dot}  ${type.hint(detail)}` : ''}`;
   });
   return lines.join('\n');
+}
+
+const DENSITY_GLYPHS: Array<[string, string]> = [
+  ['·', ' '], ['░', '.'], ['▒', ':'], ['▓', '-'], ['█', '='],
+];
+
+function levelGlyph(level: number): string {
+  const pair = DENSITY_GLYPHS[Math.max(0, Math.min(4, level))] ?? DENSITY_GLYPHS[0]!;
+  return pickIcon(pair[0], pair[1]);
+}
+
+/** Level 0 reads as an ordinary "no data" cell (matches renderWeekGrid's own
+ * empty-cell treatment above); levels 1-3 use plain brand color; level 4
+ * reuses type.active's exact bold+brand composition rather than inventing a
+ * new top-tier shade — deliberately NOT the heatmap's green ramp, which
+ * specifically means "club activity," not personal class load. */
+function applyDensityColor(glyphChar: string, level: number): string {
+  if (level <= 0) return type.hint(glyphChar);
+  if (level >= 4) return type.active(glyphChar);
+  return c.brand(glyphChar);
+}
+
+function weekStartDate(weekOneMonday: string, week: number): Date {
+  const base = new Date(`${weekOneMonday}T00:00:00`);
+  return new Date(base.getTime() + (week - 1) * 7 * 86400000);
+}
+
+/** A term-length, one-glyph-per-week density strip: coarser than the daily
+ * Events heatmap (a term-scale view, not a day-scale one), bucketed relative
+ * to this term's own busiest week rather than fixed absolute thresholds — a
+ * fixed "9-16 slots = medium" guess would misclassify a light-course-load
+ * student's whole term as uniformly light, or a heavy one as uniformly busy. */
+export function renderTermDensity(
+  meetings: readonly TimetableMeeting[],
+  weekOneMonday: string,
+  currentWeek: number,
+): string {
+  const trans = t();
+  const lang = getCurrentLanguage();
+
+  let minWeek = currentWeek;
+  let maxWeek = currentWeek;
+  for (const m of meetings) {
+    for (const w of m.weeks) {
+      if (w < minWeek) minWeek = w;
+      if (w > maxWeek) maxWeek = w;
+    }
+  }
+  const numWeeks = maxWeek - minWeek + 1;
+
+  const weekSlots: number[] = [];
+  for (let w = minWeek; w <= maxWeek; w++) {
+    let slots = 0;
+    for (const m of meetings) {
+      if (m.weeks.includes(w)) slots += m.endPeriod - m.startPeriod + 1;
+    }
+    weekSlots.push(slots);
+  }
+  const max = Math.max(0, ...weekSlots);
+
+  const levels = weekSlots.map((v) => {
+    if (v === 0 || max === 0) return 0;
+    if (v <= max * 0.25) return 1;
+    if (v <= max * 0.5) return 2;
+    if (v <= max * 0.75) return 3;
+    return 4;
+  });
+
+  // Month-label row: same column-buffer-overflow technique as
+  // calendar-heatmap.ts's own month row — each week occupies exactly 2
+  // display columns (1 glyph + 1 joining space), so a month's label is
+  // written starting at column i*2 and allowed to overflow rightward into
+  // the following weeks' columns (months are always several weeks apart).
+  const monthChars = new Array<string>(numWeeks * 2).fill(' ');
+  let prevMonth = -1;
+  for (let i = 0; i < numWeeks; i++) {
+    const date = weekStartDate(weekOneMonday, minWeek + i);
+    const month = date.getMonth();
+    if (month !== prevMonth) {
+      prevMonth = month;
+      const label = lang === 'zh'
+        ? `${month + 1}月`
+        : new Intl.DateTimeFormat('en-US', { month: 'short' }).format(date);
+      const start = i * 2;
+      for (let j = 0; j < label.length && start + j < monthChars.length; j++) {
+        monthChars[start + j] = label[j] ?? ' ';
+      }
+    }
+  }
+  const monthLabelLine = `${space.indent}${monthChars.join('')}`;
+
+  const glyphLine = `${space.indent}${levels.map((lvl) => applyDensityColor(levelGlyph(lvl), lvl)).join(' ')}`;
+
+  // Current-week marker is a separate row below the strip, not a recolored
+  // glyph cell — a single recolored cell would read as "something is wrong
+  // with this week" rather than "you are here."
+  const currentWeekIndex = Math.max(0, currentWeek - minWeek);
+  const markerGlyph = pickIcon('↑', '^');
+  const markerLine = `${space.indent}${type.hint(
+    `${' '.repeat(currentWeekIndex * 2)}${markerGlyph} ${trans.timetable.termDensityThisWeek}`,
+  )}`;
+
+  const legendGlyphs = [0, 1, 2, 3, 4].map((lvl) => applyDensityColor(levelGlyph(lvl), lvl));
+  const legendLine = `${space.indent}${type.hint(trans.calendar.heatmap.legendLess)} ${legendGlyphs.join('')} ${type.hint(trans.calendar.heatmap.legendMore)}`;
+
+  return [
+    `${space.indent}${type.heading(trans.timetable.termDensityTitle)}`,
+    '',
+    monthLabelLine,
+    glyphLine,
+    markerLine,
+    '',
+    legendLine,
+  ].join('\n');
 }
