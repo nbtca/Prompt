@@ -1,9 +1,9 @@
-import { c, type, space, glyph } from '../../core/theme.js';
+import { type, space, glyph } from '../../core/theme.js';
 import { t } from '../../i18n/index.js';
 import { pickIcon } from '../../core/icons.js';
 import { padEndV, visualWidth } from '../../core/text.js';
 import { peekNextClassLine, peekTodayLines } from '../../features/schedule-view.js';
-import { renderEventBrief } from '../../features/calendar.js';
+import { fetchEvents, renderEventBrief } from '../../features/calendar.js';
 import { weekdayShortLabel } from '../../features/schedule-render.js';
 import type { View, AppContext } from '../view.js';
 
