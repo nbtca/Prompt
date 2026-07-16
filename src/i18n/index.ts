@@ -294,6 +294,11 @@ export interface Translations {
     byLocationEmpty: string;
     periodSuffix: string;
     weekdayPrefix: string;
+    weekOverviewTitle: string;
+    weekAheadClasses: string;
+    weekAheadBusy: string;
+    weekAheadFree: string;
+    weekAheadNone: string;
   };
   theme: {
     current: string;

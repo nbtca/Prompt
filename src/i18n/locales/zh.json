@@ -274,7 +274,12 @@
     "byLocationTitle": "本周 · 按教室",
     "byLocationEmpty": "本周没有可定位地点的课程",
     "periodSuffix": "节",
-    "weekdayPrefix": "周"
+    "weekdayPrefix": "周",
+    "weekOverviewTitle": "本周概览",
+    "weekAheadClasses": "课程",
+    "weekAheadBusy": "较满",
+    "weekAheadFree": "较空",
+    "weekAheadNone": "无"
   },
   "theme": {
     "current": "当前主题设置",

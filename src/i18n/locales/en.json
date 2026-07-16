@@ -274,7 +274,12 @@
     "byLocationTitle": "This week · By location",
     "byLocationEmpty": "No located classes this week",
     "periodSuffix": "",
-    "weekdayPrefix": ""
+    "weekdayPrefix": "",
+    "weekOverviewTitle": "Week overview",
+    "weekAheadClasses": "Classes",
+    "weekAheadBusy": "Busy",
+    "weekAheadFree": "Free",
+    "weekAheadNone": "N/A"
   },
   "theme": {
     "current": "Current theme settings",
