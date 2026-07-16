@@ -4,7 +4,7 @@ import type { NextClass } from './schedule-query.js';
 import { meetingsInWeek, campusWeekday } from './schedule-query.js';
 import { c, type, space, glyph } from '../core/theme.js';
 import { pickIcon } from '../core/icons.js';
-import { padEndV, truncate } from '../core/text.js';
+import { padEndV, truncate, visualWidth } from '../core/text.js';
 import { t, fmt, getCurrentLanguage } from '../i18n/index.js';
 
 function span(m: TimetableMeeting, periods: readonly TimetablePeriod[]): string {
@@ -267,12 +267,17 @@ export function renderTermDensity(
     return 4;
   });
 
-  // Month-label row: same column-buffer-overflow technique as
-  // calendar-heatmap.ts's own month row — each week occupies exactly 2
-  // display columns (1 glyph + 1 joining space), so a month's label is
-  // written starting at column i*2 and allowed to overflow rightward into
-  // the following weeks' columns (months are always several weeks apart).
-  const monthChars = new Array<string>(numWeeks * 2).fill(' ');
+  // Month-label row: each week occupies exactly 2 *terminal columns* (1
+  // glyph + 1 joining space), so a month's label targets column i*2. Unlike
+  // calendar-heatmap.ts's month row (which sidesteps this by using fixed
+  // single-width English abbreviations everywhere), this row uses real
+  // Chinese labels ("10月") in zh locale, and 月 is a CJK character that
+  // renders 2 columns wide — so "array index" and "terminal column" are not
+  // the same thing here. We build the line by tracking the running visual
+  // column and padding/appending strings, rather than writing into a
+  // fixed-size array where each slot is implicitly assumed 1 column wide.
+  let monthLabelText = '';
+  let visualCol = 0;
   let prevMonth = -1;
   for (let i = 0; i < numWeeks; i++) {
     const date = weekStartDate(weekOneMonday, minWeek + i);
@@ -282,13 +287,16 @@ export function renderTermDensity(
       const label = lang === 'zh'
         ? `${month + 1}月`
         : new Intl.DateTimeFormat('en-US', { month: 'short' }).format(date);
-      const start = i * 2;
-      for (let j = 0; j < label.length && start + j < monthChars.length; j++) {
-        monthChars[start + j] = label[j] ?? ' ';
+      const targetCol = i * 2;
+      if (targetCol > visualCol) {
+        monthLabelText += ' '.repeat(targetCol - visualCol);
+        visualCol = targetCol;
       }
+      monthLabelText += label;
+      visualCol += visualWidth(label);
     }
   }
-  const monthLabelLine = `${space.indent}${monthChars.join('')}`;
+  const monthLabelLine = `${space.indent}${monthLabelText}`;
 
   const glyphLine = `${space.indent}${levels.map((lvl) => applyDensityColor(levelGlyph(lvl), lvl)).join(' ')}`;
 

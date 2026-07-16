@@ -6,7 +6,8 @@ import {
 } from './schedule-render.js';
 import { setLanguage } from '../i18n/index.js';
 import { resetIconCache } from '../core/icons.js';
-import { stripAnsi } from '../core/text.js';
+import { stripAnsi, visualWidth } from '../core/text.js';
+import { space } from '../core/theme.js';
 
 beforeAll(() => setLanguage('en'));
 beforeEach(() => { process.env['NBTCA_ICON_MODE'] = 'ascii'; resetIconCache(); });
@@ -254,5 +255,49 @@ describe('renderTermDensity', () => {
     const lines = out.split('\n');
     expect(lines.length).toBeGreaterThan(1);
     for (const line of lines) expect(line).not.toContain('\n');
+  });
+
+  it('places a CJK month label at its real terminal column even after an earlier CJK label of different width', () => {
+    process.env['NBTCA_ICON_MODE'] = 'unicode';
+    resetIconCache();
+    setLanguage('zh');
+    resetIconCache();
+    try {
+      // A wide enough week range from a real Monday to cross two month
+      // boundaries in zh locale, producing two distinct CJK month labels
+      // with different widths (e.g. a single-digit-month label vs a
+      // double-digit one) separated by several weeks of real gap.
+      const meetings: TimetableMeeting[] = [mk({ weeks: [1, 14] })];
+      const out = stripAnsi(renderTermDensity(meetings, '2026-09-07', 1));
+      const monthLine = out.split('\n')[2] ?? '';
+
+      // Find the second month label programmatically (don't hardcode which
+      // month string it is — derive it from the same date math the
+      // implementation uses, so this test can't silently drift from reality).
+      const base = new Date('2026-09-07T00:00:00');
+      let secondLabelWeekIndex = -1;
+      let secondLabelText = '';
+      let prevMonth = new Date('2026-09-07T00:00:00').getMonth();
+      for (let i = 1; i < 14; i++) {
+        const d = new Date(base.getTime() + i * 7 * 86400000);
+        if (d.getMonth() !== prevMonth) {
+          secondLabelWeekIndex = i;
+          secondLabelText = `${d.getMonth() + 1}月`;
+          break;
+        }
+        prevMonth = d.getMonth();
+      }
+      expect(secondLabelWeekIndex).toBeGreaterThan(0); // sanity: the fixture actually crosses a month boundary
+
+      const idx = monthLine.indexOf(secondLabelText);
+      expect(idx).toBeGreaterThan(0);
+      const prefix = monthLine.slice(0, idx);
+      const targetCol = space.indent.length + secondLabelWeekIndex * 2;
+      expect(visualWidth(prefix)).toBe(targetCol);
+    } finally {
+      process.env['NBTCA_ICON_MODE'] = 'ascii';
+      setLanguage('en');
+      resetIconCache();
+    }
   });
 });
