@@ -151,7 +151,7 @@ describe('renderHome — week overview panel (Part D)', () => {
       expect(classCells[5]).toBe('··');
       expect(classCells[6]).toBe('··');
     } finally {
-      process.env['NBTCA_ICON_MODE'] = 'ascii';
+      process.env['NBTCA_ICON_MODE'] = 'unicode';
       resetIconCache();
     }
   });
@@ -172,7 +172,7 @@ describe('renderHome — week overview panel (Part D)', () => {
       expect(eventCells[5]).toBe('▓▓'); // Saturday: busy, not weekend/N-A
       expect(eventCells[6]).toBe('░░'); // Sunday: free, not weekend/N-A
     } finally {
-      process.env['NBTCA_ICON_MODE'] = 'ascii';
+      process.env['NBTCA_ICON_MODE'] = 'unicode';
       resetIconCache();
     }
   });
