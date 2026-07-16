@@ -24,7 +24,7 @@ import {
   JWXT_ORIGIN,
 } from './student-timetable.js';
 import { currentWeekNumber, campusWeekday, meetingsOnDay, nextMeeting } from './schedule-query.js';
-import { renderNextClassBanner, renderTodayClasses, renderWeekGrid } from './schedule-render.js';
+import { renderNextClassBanner, renderTodayClasses, renderTodayTimeline, renderWeekGrid } from './schedule-render.js';
 import {
   termKey, loadWeekOne, saveWeekOne, saveTimetableCache,
   saveCurrentPointer, loadCurrentPointer, loadTimetableCache, clearScheduleCache,
@@ -215,7 +215,10 @@ export function peekNextClassLine(now: Date = new Date()): string {
   } catch { return ''; }
 }
 
-/** Cache-only (no network) render of today's classes for the current term, or [] if not set up. */
+/** Cache-only (no network) render of today's classes for the current term, or
+ * [] if not set up. Uses the same renderTodayTimeline Schedule's own hub
+ * renders, so Home's preview and Schedule's detail view show the exact same
+ * visual language for the exact same data instead of drifting apart. */
 export function peekTodayLines(now: Date = new Date()): string[] {
   try {
     const ptr = loadCurrentPointer();
@@ -224,6 +227,6 @@ export function peekTodayLines(now: Date = new Date()): string[] {
     if (!cached || !Array.isArray(cached.meetings) || !Array.isArray(cached.periods)) return [];
     const week = currentWeekNumber(ptr.weekOneMonday, now);
     const today = meetingsOnDay(cached.meetings as Timetable['meetings'], campusWeekday(now), week);
-    return renderTodayClasses(today, cached.periods as Timetable['periods'], now).split('\n');
+    return renderTodayTimeline(today, cached.periods as Timetable['periods'], now).split('\n');
   } catch { return []; }
 }
