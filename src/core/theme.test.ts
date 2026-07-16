@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import chalk from 'chalk';
 import { glyph, space, type } from './theme.js';
 import { resetIconCache } from './icons.js';
 import { stripAnsi } from './text.js';
@@ -70,5 +71,19 @@ describe('design tokens', () => {
 
   it('type.hint returns its text (possibly styled)', () => {
     expect(stripAnsi(type.hint('go'))).toBe('go');
+  });
+
+  it('type.active returns its text unchanged once ANSI codes are stripped', () => {
+    expect(stripAnsi(type.active('go'))).toBe('go');
+  });
+
+  it('type.active renders in the exact brand hex (#0ea5e9 = rgb 14,165,233) on truecolor terminals', () => {
+    const level = chalk.level;
+    chalk.level = 3;
+    try {
+      expect(type.active('go')).toContain('\x1b[38;2;14;165;233m');
+    } finally {
+      chalk.level = level;
+    }
   });
 });

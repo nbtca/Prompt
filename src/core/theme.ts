@@ -50,4 +50,13 @@ export const type = {
   label:   (s: string) => chalk.white(s),
   body:    (s: string) => s,
   hint:    (s: string) => chalk.dim(s),
+  /** The one thing on this screen your eye should land on: the app's own
+   * name, the tab you're on, the row a menu's cursor sits on, the class
+   * that's happening right now. `heading` marks a section as structure;
+   * `active` marks a single point as attention — never both on the same
+   * element, and never more than one or two `active` uses per screen, or
+   * the signal stops meaning anything. Brand color (#0ea5e9) precisely
+   * because there is exactly one brand-worthy thing to say on each of
+   * these screens, and this is where it belongs. */
+  active:  (s: string) => chalk.bold(c.brand(s)),
 };

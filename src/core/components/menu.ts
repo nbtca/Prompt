@@ -56,9 +56,9 @@ export function renderMenu(state: MenuState): string {
 
   state.options.forEach((opt, i) => {
     const selected = i === state.selectedIndex;
-    const marker = selected ? type.heading(cursor) : gap;
+    const marker = selected ? type.active(cursor) : gap;
     const padded = padEndV(opt.label, labelWidth);
-    const label = selected ? type.heading(padded) : type.body(padded);
+    const label = selected ? type.active(padded) : type.body(padded);
     const hint = opt.hint ? '  ' + type.hint(opt.hint) : '';
     lines.push(`${space.indent}${marker} ${label}${hint}`);
   });

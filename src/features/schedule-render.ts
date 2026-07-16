@@ -24,7 +24,7 @@ export function renderNextClassBanner(next: NextClass | null, now: Date): string
   const whenStyled = isCountdownUrgent(p) ? c.warn(when) : type.hint(when);
   const dot = pickIcon('·', '-');
   const loc = next.meeting.location ? `  ${dot}  ${next.meeting.location}` : '';
-  return `${space.indent}${type.heading(glyph.cursor())} ${type.label(trans.timetable.nextClass)}  ${dot}  ${type.body(next.meeting.courseName)}${loc}  ${dot}  ${whenStyled}`;
+  return `${space.indent}${type.active(glyph.cursor())} ${type.label(trans.timetable.nextClass)}  ${dot}  ${type.body(next.meeting.courseName)}${loc}  ${dot}  ${whenStyled}`;
 }
 
 export function renderTodayClasses(meetings: readonly TimetableMeeting[], periods: readonly TimetablePeriod[], now: Date): string {
@@ -39,9 +39,9 @@ export function renderTodayClasses(meetings: readonly TimetableMeeting[], period
     const endStr = periods.find((p) => p.period === m.endPeriod)?.end ?? '23:59';
     const nowStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     const live = nowStr >= startStr && nowStr <= endStr;
-    const head = live ? `${type.heading(marker)} ` : '  ';
+    const head = live ? `${type.active(marker)} ` : '  ';
     const loc = m.location ? `  ${dot}  ${type.hint(m.location)}` : '';
-    return `${space.indent}${head}${type.hint(time)}  ${live ? type.heading(m.courseName) : type.body(m.courseName)}${loc}`;
+    return `${space.indent}${head}${type.hint(time)}  ${live ? type.active(m.courseName) : type.body(m.courseName)}${loc}`;
   });
   return lines.join('\n');
 }
@@ -79,9 +79,9 @@ export function renderTodayTimeline(meetings: readonly TimetableMeeting[], perio
     const isLive = nowStr >= startStr && nowStr <= endStr;
     const isDone = nowStr > endStr;
     const connector = i === 0 ? topConnector : midConnector;
-    const marker = isLive ? type.heading(pickIcon('▶', '>')) : ' ';
+    const marker = isLive ? type.active(pickIcon('▶', '>')) : ' ';
     const timeCol = `${marker}${type.hint(startStr)} ${rule}${connector}${rule}`;
-    const nameStyled = isLive ? type.heading(m.courseName) : (isDone ? type.hint(m.courseName) : type.body(m.courseName));
+    const nameStyled = isLive ? type.active(m.courseName) : (isDone ? type.hint(m.courseName) : type.body(m.courseName));
 
     let statusText = '';
     if (isDone) {
@@ -119,14 +119,14 @@ export function renderWeekStrip(meetings: readonly TimetableMeeting[], weekNumbe
   const days = [1, 2, 3, 4, 5, 6, 7];
   const dayLabels = days.map((wd) => {
     const label = weekdayShortLabel(wd);
-    return wd === todayWeekday ? type.heading(label) : type.hint(label);
+    return wd === todayWeekday ? type.active(label) : type.hint(label);
   }).join('  ');
 
   const cells = days.map((wd) => {
     const isWeekend = wd === 6 || wd === 7;
     const hasClass = week.some((m) => m.weekday === wd);
     const glyph = isWeekend ? weekendChar : (hasClass ? hasClassChar : freeChar);
-    return wd === todayWeekday ? type.heading(glyph) : type.hint(glyph);
+    return wd === todayWeekday ? type.active(glyph) : type.hint(glyph);
   }).join('  ');
 
   const legend = type.hint(
@@ -163,7 +163,7 @@ export function renderWeekGrid(meetings: readonly TimetableMeeting[], periods: r
   const headerCells = WEEKDAY_KEYS.map((d, i) => {
     const wd = i + 1;
     const label = wd === todayWd ? `${d}${todayMark}` : d;
-    return padEndV(wd === todayWd ? type.heading(label) : type.hint(label), cellW);
+    return padEndV(wd === todayWd ? type.active(label) : type.hint(label), cellW);
   }).join('');
   lines.push(space.indent + padEndV('', rowHeadW) + headerCells);
   const sorted = [...periods].sort((a, b) => a.period - b.period);
@@ -172,7 +172,7 @@ export function renderWeekGrid(meetings: readonly TimetableMeeting[], periods: r
     const cells = [1, 2, 3, 4, 5, 6, 7].map((wd) => {
       const v = at(wd, p.period);
       const isToday = wd === todayWd;
-      const text = v ? (isToday ? type.heading(v) : type.body(v)) : type.hint(pickIcon('·', '.'));
+      const text = v ? (isToday ? type.active(v) : type.body(v)) : type.hint(pickIcon('·', '.'));
       return padEndV(text, cellW);
     }).join('');
     lines.push(space.indent + rowHead + cells);

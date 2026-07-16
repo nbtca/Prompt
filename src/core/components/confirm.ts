@@ -18,8 +18,8 @@ export function parseConfirmData(data: Buffer | string): ConfirmEvent {
 export function renderConfirm(opts: { message: string; value: boolean }): string {
   const cursor = glyph.cursor();
   const gap = ' '.repeat(cursor.length);
-  const yes = opts.value ? `${type.heading(cursor)} ${type.heading('Yes')}` : `${gap} ${type.body('Yes')}`;
-  const no = opts.value ? `${gap} ${type.body('No')}` : `${type.heading(cursor)} ${type.heading('No')}`;
+  const yes = opts.value ? `${type.active(cursor)} ${type.active('Yes')}` : `${gap} ${type.body('Yes')}`;
+  const no = opts.value ? `${gap} ${type.body('No')}` : `${type.active(cursor)} ${type.active('No')}`;
   return [
     space.indent + type.label(opts.message),
     `${space.indent}${yes}   ${no}`,

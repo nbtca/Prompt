@@ -160,9 +160,13 @@ export function renderEventBrief(e: Event, now: Date): string {
     && e.startDate.getMonth() === now.getMonth()
     && e.startDate.getDate() === now.getDate();
   const dateTime = `${e.date}${e.time ? ' ' + e.time : ''}`;
-  const marker = isToday ? type.heading(pickIcon('●', '*')) : type.hint(pickIcon('·', '-'));
-  const dateStyled = isToday ? c.warn(dateTime) : type.hint(dateTime);
-  const titleStyled = isToday ? type.heading(e.title) : type.body(e.title);
+  // "Today" gets one consistent brand-colored signal across marker/date/
+  // title — c.warn (yellow) stays reserved for genuine time-pressure
+  // urgency (isCountdownUrgent below), not "happens today" alone, so the
+  // two alert levels never compete for the same color on one line.
+  const marker = isToday ? type.active(pickIcon('●', '*')) : type.hint(pickIcon('·', '-'));
+  const dateStyled = isToday ? type.active(dateTime) : type.hint(dateTime);
+  const titleStyled = isToday ? type.active(e.title) : type.body(e.title);
   const recurringMark = e.recurring ? ` ${pickIcon('↻', '~')}` : '';
   return `${space.indent}${marker} ${dateStyled}  ${dot}  ${titleStyled}${recurringMark}`;
 }
@@ -181,7 +185,7 @@ export function renderCountdownBanner(event: Event | undefined, now: Date): stri
         : `${inp} ${p.minutes}m`;
   const whenStyled = isCountdownUrgent(p) ? c.warn(when) : type.hint(when);
   const dot = pickIcon('·', '-');
-  return `${space.indent}${type.heading(glyph.cursor())} ${type.label(trans.calendar.next)}  ${dot}  ${type.body(event.title)}  ${dot}  ${whenStyled}`;
+  return `${space.indent}${type.active(glyph.cursor())} ${type.label(trans.calendar.next)}  ${dot}  ${type.body(event.title)}  ${dot}  ${whenStyled}`;
 }
 
 function renderSubscribeHint(): void {

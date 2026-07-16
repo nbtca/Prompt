@@ -9,10 +9,10 @@ export const HEADER_LINES = 3;
 export const FOOTER_LINES = 2;
 
 export function renderHeader(views: { id: ViewId; title: string }[], active: ViewId, cols: number): string[] {
-  const brand = `${space.indent}${type.heading('nbtca')}`;
+  const brand = `${space.indent}${type.active('nbtca')}`;
   const sep = `  ${pickIcon('·', '-')}  `;
   const tabs = space.indent + views
-    .map((v) => (v.id === active ? type.heading(`[${v.title}]`) : type.hint(v.title)))
+    .map((v) => (v.id === active ? type.active(`[${v.title}]`) : type.hint(v.title)))
     .join(sep);
   const rule = space.indent + type.hint(glyph.rule().repeat(Math.max(1, cols - 6)));
   return [brand, tabs, rule];

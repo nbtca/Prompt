@@ -43,7 +43,7 @@ export function renderInput(opts: {
     : type.hint(opts.placeholder ?? '');
   return [
     space.indent + type.label(opts.message),
-    `${space.indent}${type.heading(glyph.cursor())} ${shown}`,
+    `${space.indent}${type.active(glyph.cursor())} ${shown}`,
   ].join('\n');
 }
 
