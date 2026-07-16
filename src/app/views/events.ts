@@ -54,7 +54,11 @@ function showList(title: string, events: CalendarEvent[], ctx: AppContext): void
   state = { mode: 'list', listField: buildListField(title, events, computeMaxVisible(ctx.bodyRows)) };
 }
 
-const RECENT_ACTIVITY_COUNT = 5;
+// A glance-panel ceiling, not "browse everything" (this tab's own "Events"
+// list is for that) — just needs to be at least as many as the tallest
+// reasonable terminal could fit; renderHubBody trims further based on the
+// real ctx.bodyRows.
+const RECENT_ACTIVITY_FETCH_CAP = 15;
 
 function goToHub(): void {
   const upcoming = calendar ? calendar.upcoming({ days: 30 }) : [];
@@ -65,7 +69,7 @@ function goToHub(): void {
     heatmapBuckets: calendar
       ? calendar.heatmap({ start: new Date(Date.now() - 365 * 86400000), end: new Date(), bucket: 'day' })
       : [],
-    recentEvents: upcoming.slice(0, RECENT_ACTIVITY_COUNT).map(toDisplayEvent),
+    recentEvents: upcoming.slice(0, RECENT_ACTIVITY_FETCH_CAP).map(toDisplayEvent),
   };
 }
 

@@ -55,7 +55,13 @@ function renderHubBody(state: EventsViewState, now: Date, bodyRows: number): str
   }
   if (state.recentEvents && state.recentEvents.length > 0) {
     lines.push(heading(trans.calendar.recentActivity));
-    for (const e of state.recentEvents) lines.push(renderEventBrief(e, now));
+    // Same reserved-floor idea as hubField's own windowing below, applied
+    // one level up: recent-activity events and the hub menu compete for
+    // the same remaining budget, and the menu must never be the one that
+    // silently loses that fight.
+    const menuFloor = 8; // title + blank + a handful of hub options
+    const remaining = Math.max(1, bodyRows - lines.length - 1 - menuFloor);
+    for (const e of state.recentEvents.slice(0, remaining)) lines.push(renderEventBrief(e, now));
     lines.push('');
   }
   if (state.hubField) {

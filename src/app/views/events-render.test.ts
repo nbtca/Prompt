@@ -115,6 +115,29 @@ describe('renderEvents — adaptive hub density', () => {
       expect(line).not.toContain('\n');
     }
   });
+
+  it('shows only as many recent-activity events as fit, reserving room for the menu, on a normal terminal', () => {
+    const hubField = new ListField({ title: 'Events', options: [{ value: 'upcoming', label: 'Events' }] });
+    const recentEvents = Array.from({ length: 12 }, (_, i) => ({
+      date: `07-${17 + i}`, time: '20:30', title: `Event${i}`, location: 'TBD', description: '',
+      startDate: new Date('2026-07-17T20:30:00'), recurring: false, uid: `e-${i}`,
+    }));
+    const out = stripAnsi(renderEvents({ mode: 'hub', hubField, recentEvents }, new Date('2026-07-15'), 15).join('\n'));
+    const visibleCount = recentEvents.filter((e) => out.includes(e.title)).length;
+    expect(visibleCount).toBeLessThan(recentEvents.length);
+    expect(visibleCount).toBeGreaterThan(0);
+    expect(out).toContain('Events'); // hub menu still present, not starved out
+  });
+
+  it('shows more recent-activity events on a tall terminal', () => {
+    const hubField = new ListField({ title: 'Events', options: [{ value: 'upcoming', label: 'Events' }] });
+    const recentEvents = Array.from({ length: 12 }, (_, i) => ({
+      date: `07-${17 + i}`, time: '20:30', title: `Event${i}`, location: 'TBD', description: '',
+      startDate: new Date('2026-07-17T20:30:00'), recurring: false, uid: `e-${i}`,
+    }));
+    const out = stripAnsi(renderEvents({ mode: 'hub', hubField, recentEvents }, new Date('2026-07-15'), 45).join('\n'));
+    for (const e of recentEvents) expect(out).toContain(e.title);
+  });
 });
 
 describe('renderEvents — list/detail/search/error modes', () => {
