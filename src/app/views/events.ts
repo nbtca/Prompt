@@ -26,6 +26,7 @@ function buildHubField(): ListField {
     { value: 'month', label: trans.calendar.thisMonth },
     { value: 'search', label: trans.calendar.search },
     { value: 'past', label: trans.calendar.pastEvents },
+    { value: 'heatmap', label: trans.calendar.heatmap.title },
   ];
   return new ListField({ title: trans.menu.events, options });
 }
@@ -120,7 +121,7 @@ export const eventsView: View = {
   },
 
   handleBack(): boolean {
-    if (state.mode === 'list' || state.mode === 'detail' || state.mode === 'search') {
+    if (state.mode === 'list' || state.mode === 'detail' || state.mode === 'search' || state.mode === 'heatmap') {
       if (state.mode === 'search') setVimKeysActive(true);
       goToHub();
       return true;
@@ -139,10 +140,17 @@ export const eventsView: View = {
         if (result.selected === 'week') { const r = weekRange(now); showList(t().calendar.thisWeek, calendar.inRange(r.start, r.end), ctx); return; }
         if (result.selected === 'month') { const r = monthRange(now); showList(t().calendar.thisMonth, calendar.inRange(r.start, r.end), ctx); return; }
         if (result.selected === 'past') { showList(t().calendar.pastEvents, calendar.past({ days: 30 }).reverse(), ctx); return; }
+        if (result.selected === 'heatmap') { state = { ...state, mode: 'heatmap' }; return; }
         if (result.selected === 'search') {
           setVimKeysActive(false);
           state = { mode: 'search', searchField: new TextField({ message: t().calendar.searchPrompt, placeholder: t().calendar.searchPlaceholder, allowEmpty: true }) };
         }
+        return;
+      }
+      // A pure detail/drill-down view with no field of its own — any key
+      // returns to the hub, matching Schedule's 'week'/'unresolved' modes.
+      case 'heatmap': {
+        goToHub();
         return;
       }
       case 'list': {

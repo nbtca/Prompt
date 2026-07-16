@@ -6,7 +6,7 @@ import { TextField } from '../fields/text-field.js';
 import { renderCountdownBanner, renderEventBrief, type Event } from '../../features/calendar.js';
 import { renderHeatmap } from '../../features/calendar-heatmap.js';
 
-export type EventsMode = 'loading' | 'hub' | 'list' | 'detail' | 'search' | 'error';
+export type EventsMode = 'loading' | 'hub' | 'heatmap' | 'list' | 'detail' | 'search' | 'error';
 
 export interface EventsViewState {
   mode: EventsMode;
@@ -41,10 +41,6 @@ function renderHubBody(state: EventsViewState, now: Date, bodyRows: number): str
   const lines: string[] = [];
   const banner = renderCountdownBanner(state.nextEvent, now);
   if (banner) { lines.push(banner); lines.push(''); }
-  if (state.heatmapBuckets && state.heatmapBuckets.length > 0) {
-    lines.push(...renderHeatmap(state.heatmapBuckets, now, { color: true }).split('\n'));
-    lines.push('');
-  }
   if (state.recentEvents && state.recentEvents.length > 0) {
     lines.push(heading(trans.calendar.recentActivity));
     for (const e of state.recentEvents) lines.push(renderEventBrief(e, now));
@@ -69,6 +65,14 @@ export function renderEvents(state: EventsViewState, now: Date, bodyRows = 100):
       return [hint(trans.calendar.loading)];
     case 'hub':
       return renderHubBody(state, now, bodyRows);
+    case 'heatmap':
+      // renderHeatmap() already prints its own title (space.indent +
+      // type.heading), so this mode doesn't add a second heading on top —
+      // unlike Schedule's 'week'/'unresolved' modes, which wrap a
+      // title-less renderer.
+      return state.heatmapBuckets && state.heatmapBuckets.length > 0
+        ? renderHeatmap(state.heatmapBuckets, now, { color: true }).split('\n')
+        : [hint(trans.calendar.noEvents)];
     case 'list':
       return state.listField?.render() ?? [];
     case 'detail':

@@ -24,29 +24,20 @@ describe('renderEvents', () => {
     expect(out).toContain('Events');
   });
 
-  it('hub mode with real heatmap data expands each grid row into its own array entry', () => {
-    // Regression test: renderHeatmap() returns one multi-line string (the
-    // whole grid joined by '\n'), and renderHubBody used to push that
-    // directly into the body-lines array as a single entry instead of
-    // splitting it. Every downstream consumer (fitBody/fitLine/composeFrame)
-    // assumes one array entry == one terminal row, so a smuggled-in '\n'
-    // corrupts the whole frame's row-count accounting — this was the actual
-    // cause of a real bug where the heatmap rendered as one truncated row
-    // and the header was scrolled out of view above it.
+  it('hub mode does not render the heatmap grid, even when heatmapBuckets is populated', () => {
+    // The full-year heatmap moved out of the glanceable hub and into its
+    // own drill-down destination (mirrors Schedule: the hub shows a
+    // compact week strip, not the full weekday x period grid) — a student
+    // scanning the hub for "what's next" shouldn't have to look past 11
+    // lines of a mostly-empty contribution grid to reach the menu.
     const hubField = new ListField({ title: 'Events', options: [{ value: 'upcoming', label: 'Events' }] });
     const heatmapBuckets = [{ date: '2026-07-14', count: 1 }, { date: '2026-07-15', count: 0 }];
-    const lines = renderEvents({ mode: 'hub', hubField, heatmapBuckets }, new Date('2026-07-15'));
-    for (const line of lines) {
-      expect(line).not.toContain('\n');
-    }
-    // The heatmap grid alone is a title + blank + month-label + 7 grid rows
-    // + blank + legend = 11 lines; a collapsed-to-one-entry regression would
-    // make this assertion fail even though `lines.length` is technically
-    // non-zero.
-    expect(lines.length).toBeGreaterThan(10);
+    const out = stripAnsi(renderEvents({ mode: 'hub', hubField, heatmapBuckets }, new Date('2026-07-15')).join('\n'));
+    expect(out).not.toContain('Activity (last 12 months)');
+    expect(out).not.toContain('Less');
   });
 
-  it('hub mode shows a recent-activity briefing under the heatmap when present', () => {
+  it('hub mode shows a recent-activity briefing when present', () => {
     const hubField = new ListField({ title: 'Events', options: [{ value: 'upcoming', label: 'Events' }] });
     const recentEvents = [{
       date: '07-17', time: '20:30', title: 'NWDC', location: 'TBD', description: '',
@@ -64,23 +55,21 @@ describe('renderEvents', () => {
   });
 
   it('hub mode windows the menu against actual content height instead of overflowing', () => {
-    // Regression: the heatmap (11 lines) + a full recent-activity briefing
-    // (up to 5 events) already exceeds a 24-row terminal's body budget
-    // before the menu even starts — hubField never had maxVisible set at
-    // all, so on a short terminal the menu (including items a student
-    // needs, like search/past-events) was silently cut off with no
-    // scroll indicator. Mirrors the same fix already shipped for
-    // Schedule's hub.
+    // Regression: even without the heatmap, a full recent-activity
+    // briefing (up to 5 events) plus a busy menu can still exceed a short
+    // terminal's body budget — hubField never had maxVisible set at all,
+    // so the menu (including items a student needs, like search/past
+    // events) was silently cut off with no scroll indicator. Mirrors the
+    // same fix already shipped for Schedule's hub.
     const manyOptions = Array.from({ length: 8 }, (_, i) => ({ value: String(i), label: `MenuOption${i}` }));
     const hubField = new ListField({ title: 'Events', options: manyOptions });
-    const heatmapBuckets = Array.from({ length: 30 }, (_, i) => ({ date: `2026-07-${String(i + 1).padStart(2, '0')}`, count: 1 }));
     const recentEvents = Array.from({ length: 5 }, (_, i) => ({
       date: `07-${17 + i}`, time: '20:30', title: `Event${i}`, location: 'TBD', description: '',
       startDate: new Date('2026-07-17T20:30:00'), recurring: false, uid: `e-${i}`,
     }));
     const out = stripAnsi(renderEvents({
-      mode: 'hub', hubField, heatmapBuckets, recentEvents,
-    }, new Date('2026-07-15'), 19).join('\n'));
+      mode: 'hub', hubField, recentEvents,
+    }, new Date('2026-07-15'), 12).join('\n'));
     const visibleCount = manyOptions.filter((o) => out.includes(o.label)).length;
     expect(visibleCount).toBeLessThan(manyOptions.length);
     expect(visibleCount).toBeGreaterThan(0);
@@ -100,6 +89,19 @@ describe('renderEvents', () => {
     }, new Date()).join('\n'));
     expect(out).toContain('Hackathon');
     expect(out).toContain('Bring a laptop.');
+  });
+
+  it('heatmap mode shows the full-year grid, split into one array entry per row', () => {
+    // Regression guard matching the multi-line-collapse pattern already
+    // fixed elsewhere in this codebase: renderHeatmap() returns one
+    // '\n'-joined string, and this call site must split it before pushing.
+    const heatmapBuckets = [{ date: '2026-07-14', count: 1 }, { date: '2026-07-15', count: 0 }];
+    const lines = renderEvents({ mode: 'heatmap', heatmapBuckets }, new Date('2026-07-15'));
+    for (const line of lines) {
+      expect(line).not.toContain('\n');
+    }
+    expect(lines.length).toBeGreaterThan(10);
+    expect(stripAnsi(lines.join('\n'))).toContain('Activity (last 12 months)');
   });
 
   it('search mode renders the text field', () => {
