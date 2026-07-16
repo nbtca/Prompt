@@ -266,7 +266,15 @@
     "weekStripFree": "free",
     "weekStripWeekend": "weekend",
     "termNotStarted": "Term hasn't started yet",
-    "termStartsIn": "Classes begin {date} · {days} days to go"
+    "termStartsIn": "Classes begin {date} · {days} days to go",
+    "hubTermDensity": "Term density",
+    "hubByLocation": "By location",
+    "termDensityTitle": "Term density",
+    "termDensityThisWeek": "This week",
+    "byLocationTitle": "This week · By location",
+    "byLocationEmpty": "No located classes this week",
+    "periodSuffix": "",
+    "weekdayPrefix": ""
   },
   "theme": {
     "current": "Current theme settings",

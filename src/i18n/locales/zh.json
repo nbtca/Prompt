@@ -266,7 +266,15 @@
     "weekStripFree": "空",
     "weekStripWeekend": "周末",
     "termNotStarted": "本学期尚未开始",
-    "termStartsIn": "{date} 开学 · 还有 {days} 天"
+    "termStartsIn": "{date} 开学 · 还有 {days} 天",
+    "hubTermDensity": "学期活跃度",
+    "hubByLocation": "按教室",
+    "termDensityTitle": "学期活跃度",
+    "termDensityThisWeek": "本周",
+    "byLocationTitle": "本周 · 按教室",
+    "byLocationEmpty": "本周没有可定位地点的课程",
+    "periodSuffix": "节",
+    "weekdayPrefix": "周"
   },
   "theme": {
     "current": "当前主题设置",

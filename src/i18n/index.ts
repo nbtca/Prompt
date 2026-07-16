@@ -286,6 +286,14 @@ export interface Translations {
     weekStripWeekend: string;
     termNotStarted: string;
     termStartsIn: string;
+    hubTermDensity: string;
+    hubByLocation: string;
+    termDensityTitle: string;
+    termDensityThisWeek: string;
+    byLocationTitle: string;
+    byLocationEmpty: string;
+    periodSuffix: string;
+    weekdayPrefix: string;
   };
   theme: {
     current: string;
