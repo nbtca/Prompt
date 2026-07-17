@@ -62,16 +62,18 @@ describe('renderWeekGrid', () => {
     done();
   });
 
-  describe('row headers show clock time, not an abstract period number', () => {
+  describe('row headers show the real clock time range, not an abstract period number', () => {
     // Regression: row labels used to be an abstract "P1"/"P2" that told you
-    // nothing about when to actually be there without checking elsewhere —
-    // for something as practical as "what time is my class", the real
-    // clock time is what's actually useful.
-    it('shows the period\'s real start time as the row label', () => {
+    // nothing about when to actually be there, or how long the class runs,
+    // without checking elsewhere. A start-end range ("08:00-08:45") answers
+    // both "when do I need to be there" and "when am I done" at a glance --
+    // a bare start time alone still left the end (and the class's real
+    // duration) to guesswork.
+    it('shows the period\'s real start-end time range as the row label', () => {
       const out = stripAnsi(renderWeekGrid([], periods, 1, new Date('2026-09-07T09:00:00')));
       const lines = out.split('\n');
-      expect(lines.some((l) => l.trim().startsWith('08:00'))).toBe(true); // period 1
-      expect(lines.some((l) => l.trim().startsWith('08:55'))).toBe(true); // period 2
+      expect(lines.some((l) => l.trim().startsWith('08:00-08:45'))).toBe(true); // period 1
+      expect(lines.some((l) => l.trim().startsWith('08:55-09:40'))).toBe(true); // period 2
       expect(out).not.toMatch(/\bP1\b/);
       done();
     });
@@ -103,8 +105,8 @@ describe('renderWeekGrid', () => {
       // Short names shouldn't stretch the grid out to fill a 200-column
       // terminal -- growing to "whatever the terminal can hold" instead of
       // "whatever the content needs" would read as sloppy, not adaptive.
-      // Matches the exact fixed-width total: indent(3) + rowHeadW(6) + 10*7.
-      expect(visualWidth(headerLine)).toBe(3 + 6 + 10 * 7);
+      // Matches the exact fixed-width total: indent(3) + rowHeadW(12) + 10*7.
+      expect(visualWidth(headerLine)).toBe(3 + 12 + 10 * 7);
       done();
     });
 
@@ -122,7 +124,7 @@ describe('renderWeekGrid', () => {
       const longName = '习近平新时代中国特色社会主义思想概论';
       const out = stripAnsi(renderWeekGrid([mk({ courseName: longName, location: null, weekday: 1, startPeriod: 1, endPeriod: 1, weeks: [1] })], periods, 1, new Date('2026-09-07T09:00:00'), 150));
       const headerLine = out.split('\n')[0]!;
-      expect(visualWidth(headerLine)).toBeGreaterThan(3 + 6 + 10 * 7); // grew past the old fixed baseline
+      expect(visualWidth(headerLine)).toBeGreaterThan(3 + 12 + 10 * 7); // grew past the old fixed baseline
       expect(visualWidth(headerLine)).toBeLessThanOrEqual(150); // but never past the terminal's own width
       expect(out).not.toContain(longName); // still not wide enough for the full name -- truncates, doesn't overflow
       done();

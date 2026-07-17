@@ -166,13 +166,14 @@ export function renderWeekGrid(
 ): string {
   const week = meetingsInWeek(meetings, weekNumber);
   const todayWd = campusWeekday(now);
-  // Row labels are the period's real clock start time ("08:00"), always
-  // exactly 5 display columns — knowing when to actually be there is more
-  // useful than an abstract period index. 6, not 5: "08:00" alone already
-  // fills 5 columns with zero room for padEndV's own separating space
-  // before the first cell (the same class of bug the old CJK period label
-  // had, just for a uniformly-5-wide label instead of a variable one).
-  const rowHeadW = 6;
+  // Row labels are the period's real clock start-end range ("08:00-08:45"),
+  // always exactly 11 display columns — a bare start time answers "when do
+  // I need to be there" but leaves "when am I done" (and the class's real
+  // duration) to guesswork; the full range answers both. 12, not 11: one
+  // column of separating space before the first cell (the same class of
+  // bug the old CJK period label had, just for a uniformly-11-wide label
+  // instead of a variable one).
+  const rowHeadW = 12;
   // Real cell content is "{location}  {courseName}" when a location is
   // known, course-name-only otherwise (see gridCellContent). Measure the
   // widest real content this week actually needs, capped by what the given
@@ -216,7 +217,7 @@ export function renderWeekGrid(
   lines.push(space.indent + padEndV('', rowHeadW) + headerCells);
   const sorted = [...periods].sort((a, b) => a.period - b.period);
   sorted.forEach((p, i) => {
-    const rowHead = type.hint(padEndV(p.start, rowHeadW));
+    const rowHead = type.hint(padEndV(`${p.start}-${p.end}`, rowHeadW));
     const cells = [1, 2, 3, 4, 5, 6, 7].map((wd) => {
       const isToday = wd === todayWd;
       const starting = startingAt(wd, p.period);

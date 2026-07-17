@@ -225,7 +225,7 @@ describe('renderSchedule', () => {
       // location is also competing for the same cell width).
       const wideLines = renderSchedule({
         mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: longNameTimetable, hubField,
-      }, new Date('2026-09-07T07:00:00'), 45, 180).map((l) => stripAnsi(l));
+      }, new Date('2026-09-07T07:00:00'), 45, 210).map((l) => stripAnsi(l));
       // Scoped to the grid's own period-1 row specifically, searching only
       // *after* the "This week" heading -- the Today timeline above the
       // grid also has its own "08:00 ─┬─ ..." row (never truncated), so a
