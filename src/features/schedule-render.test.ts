@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import chalk from 'chalk';
 import type { TimetableMeeting, TimetablePeriod, TimetableUnresolvedItem } from '@nbtca/nbtcal/timetable';
 import {
   renderNextClassBanner, renderTodayClasses, renderWeekGrid, renderUnresolvedItems,
@@ -198,6 +199,58 @@ describe('renderWeekGrid', () => {
       const p2Cells = p2Row.slice(p2Row.indexOf('08:55') + 5).trim().split(/\s+/);
       expect(p2Cells[0]).not.toBe('.'); // ascii "no class" glyph
       done();
+    });
+
+    describe('cursor visual treatment', () => {
+      it('applies a distinct cursor style to the cursor cell, different from the same render with no cursor', () => {
+        const level = chalk.level;
+        chalk.level = 3;
+        try {
+          const meeting = mk({ courseName: 'Math', location: null, weekday: 1, startPeriod: 1, endPeriod: 1, weeks: [1] });
+          const withCursor = renderWeekGrid([meeting], periods, 1, new Date('2026-09-07T09:00:00'), 80, { weekday: 1, period: 1 });
+          const withoutCursor = renderWeekGrid([meeting], periods, 1, new Date('2026-09-07T09:00:00'), 80);
+          expect(withCursor).not.toBe(withoutCursor);
+          expect(withCursor).toContain('\x1b[48;2;14;165;233m'); // type.cursor's solid background escape
+        } finally {
+          chalk.level = level;
+        }
+        done();
+      });
+
+      it('does not style a non-cursor cell with the cursor token', () => {
+        const level = chalk.level;
+        chalk.level = 3;
+        try {
+          // cursor sits at Mon/period1, an empty cell -- Math is on Tue/period1.
+          const meeting = mk({ courseName: 'Math', location: null, weekday: 2, startPeriod: 1, endPeriod: 1, weeks: [1] });
+          const out = renderWeekGrid([meeting], periods, 1, new Date('2026-09-07T09:00:00'), 80, { weekday: 1, period: 1 });
+          const mathIndex = out.indexOf('Math');
+          const nearMath = out.slice(Math.max(0, mathIndex - 15), mathIndex);
+          expect(nearMath).not.toContain('\x1b[48;2;14;165;233m');
+        } finally {
+          chalk.level = level;
+        }
+        done();
+      });
+
+      it('does not crash when the cursor points at an empty cell', () => {
+        expect(() => renderWeekGrid([], periods, 1, new Date('2026-09-07T09:00:00'), 80, { weekday: 1, period: 1 })).not.toThrow();
+        done();
+      });
+
+      it('shows the cursor token even when the cursor lands on today\'s own column', () => {
+        const level = chalk.level;
+        chalk.level = 3;
+        try {
+          // now = 2026-09-07 is a Monday (weekday 1) -- cursor also at weekday
+          // 1, the exact "cursor on today's column" collision case.
+          const out = renderWeekGrid([], periods, 1, new Date('2026-09-07T09:00:00'), 80, { weekday: 1, period: 1 });
+          expect(out).toContain('\x1b[48;2;14;165;233m');
+        } finally {
+          chalk.level = level;
+        }
+        done();
+      });
     });
   });
 });

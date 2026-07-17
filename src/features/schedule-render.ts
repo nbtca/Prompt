@@ -163,6 +163,7 @@ function gridCellContent(m: TimetableMeeting, cellW: number): string {
 
 export function renderWeekGrid(
   meetings: readonly TimetableMeeting[], periods: readonly TimetablePeriod[], weekNumber: number, now: Date, cols = 80,
+  cursor?: { weekday: number; period: number },
 ): string {
   const week = meetingsInWeek(meetings, weekNumber);
   const todayWd = campusWeekday(now);
@@ -220,15 +221,17 @@ export function renderWeekGrid(
     const rowHead = type.hint(padEndV(`${p.start}-${p.end}`, rowHeadW));
     const cells = [1, 2, 3, 4, 5, 6, 7].map((wd) => {
       const isToday = wd === todayWd;
+      const isCursor = cursor !== undefined && cursor.weekday === wd && cursor.period === p.period;
       const starting = startingAt(wd, p.period);
       let text: string;
       if (starting) {
         const content = gridCellContent(starting, cellW);
-        text = isToday ? type.active(content) : type.body(content);
+        text = isCursor ? type.cursor(content) : (isToday ? type.active(content) : type.body(content));
       } else if (continuingAt(wd, p.period)) {
-        text = type.hint(connector);
+        text = isCursor ? type.cursor(connector) : type.hint(connector);
       } else {
-        text = type.hint(pickIcon('·', '.'));
+        const emptyGlyph = pickIcon('·', '.');
+        text = isCursor ? type.cursor(emptyGlyph) : type.hint(emptyGlyph);
       }
       return padEndV(text, cellW);
     }).join('');
