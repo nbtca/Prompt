@@ -238,6 +238,39 @@ describe('renderWeekGrid', () => {
         done();
       });
 
+      it('pads the cursor cell to the full cell width *before* applying the background style, so the highlight covers the whole cell, not just the real text', () => {
+        // Regression: padEndV appends plain, unstyled spaces *after* an
+        // already-closed ANSI sequence -- padding the styled string (style
+        // first, pad after) left the solid cursor background covering only
+        // the real content, e.g. a single highlighted glyph surrounded by
+        // unstyled blank space instead of a filled cell. The fix pads the
+        // raw content to cellW *first*, then wraps the padded result in
+        // type.cursor() -- so the background escape must span the entire
+        // cell width, not just the glyph.
+        const level = chalk.level;
+        chalk.level = 3;
+        try {
+          // Cursor on an empty cell: no meetings at all, so the raw content
+          // is just the single-character empty-cell glyph ('.' in ascii
+          // mode) -- clearly shorter than the cell's real width, making the
+          // padding gap unmistakable if it falls outside the background.
+          const out = renderWeekGrid([], periods, 1, new Date('2026-09-07T09:00:00'), 80, { weekday: 1, period: 1 });
+          const BG_OPEN = '\x1b[48;2;14;165;233m';
+          const bgStart = out.indexOf(BG_OPEN);
+          expect(bgStart).toBeGreaterThan(-1);
+          const bgClose = out.indexOf('\x1b[49m', bgStart); // chalk's background-reset code
+          expect(bgClose).toBeGreaterThan(bgStart);
+          // Everything between the background-start escape and its own
+          // reset -- stripped of any further (nested foreground) escapes --
+          // is what actually renders on a solid-color background.
+          const spanned = stripAnsi(out.slice(bgStart + BG_OPEN.length, bgClose));
+          expect(spanned.length).toBe(10); // cellW at cols=80 with no meetings (the existing flat floor)
+        } finally {
+          chalk.level = level;
+        }
+        done();
+      });
+
       it('shows the cursor token even when the cursor lands on today\'s own column', () => {
         const level = chalk.level;
         chalk.level = 3;

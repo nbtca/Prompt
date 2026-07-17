@@ -223,16 +223,18 @@ export function renderWeekGrid(
       const isToday = wd === todayWd;
       const isCursor = cursor !== undefined && cursor.weekday === wd && cursor.period === p.period;
       const starting = startingAt(wd, p.period);
-      let text: string;
-      if (starting) {
-        const content = gridCellContent(starting, cellW);
-        text = isCursor ? type.cursor(content) : (isToday ? type.active(content) : type.body(content));
-      } else if (continuingAt(wd, p.period)) {
-        text = isCursor ? type.cursor(connector) : type.hint(connector);
-      } else {
-        const emptyGlyph = pickIcon('·', '.');
-        text = isCursor ? type.cursor(emptyGlyph) : type.hint(emptyGlyph);
-      }
+      const isContinuation = !starting && continuingAt(wd, p.period);
+      const rawContent = starting
+        ? gridCellContent(starting, cellW)
+        : (isContinuation ? connector : pickIcon('·', '.'));
+      // The cursor cell's solid background must cover the whole cell, not
+      // just the real text -- so it's padded to cellW *first*, then wrapped
+      // in type.cursor(), unlike every other branch below (styled first,
+      // padded after with plain, unstyled spaces).
+      if (isCursor) return type.cursor(padEndV(rawContent, cellW));
+      const text = starting
+        ? (isToday ? type.active(rawContent) : type.body(rawContent))
+        : type.hint(rawContent);
       return padEndV(text, cellW);
     }).join('');
     lines.push(space.indent + rowHead + cells);

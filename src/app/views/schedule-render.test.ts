@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import chalk from 'chalk';
-import { renderSchedule, hubShortcuts, type ScheduleViewState } from './schedule-render.js';
+import { renderSchedule, hubShortcuts, isHubGridInline, type ScheduleViewState } from './schedule-render.js';
 import { ListField } from '../fields/list-field.js';
 import { TextField } from '../fields/text-field.js';
 import { setLanguage } from '../../i18n/index.js';
@@ -185,6 +185,34 @@ describe('renderSchedule', () => {
       const wideGridRow = wideLines.slice(wideHeadingIdx).find((l) => l.trim().startsWith('08:00'))!;
       expect(narrowGridRow).not.toContain('工业机器人系统');
       expect(wideGridRow).toContain('工业机器人系统');
+    });
+  });
+
+  describe('isHubGridInline', () => {
+    // Mirrors the exact tall-vs-short terminal fixtures already used above
+    // ("shows the full week grid inline..." / "stays with the compact week
+    // strip...") -- isHubGridInline must agree with whichever one
+    // renderSchedule actually rendered, since schedule.ts's key handler uses
+    // it to decide whether the grid cursor is currently visible at all.
+    const state: ScheduleViewState = {
+      mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: busyTimetable,
+    };
+    const now = new Date('2026-09-07T07:00:00');
+
+    it('returns true when the grid actually fits and renders inline', () => {
+      const out = stripAnsi(renderSchedule(state, now, 45).join('\n'));
+      expect(out).toContain('19:00'); // sanity: the grid, not the strip, is what rendered
+      expect(isHubGridInline(state, now, 45, 80)).toBe(true);
+    });
+
+    it('returns false when the terminal is too short and the strip renders instead', () => {
+      const out = stripAnsi(renderSchedule(state, now, 19).join('\n'));
+      expect(out).not.toContain('19:00'); // sanity: the strip, not the grid, is what rendered
+      expect(isHubGridInline(state, now, 19, 80)).toBe(false);
+    });
+
+    it('returns false when there is no timetable loaded yet', () => {
+      expect(isHubGridInline({ mode: 'hub' }, now, 45, 80)).toBe(false);
     });
   });
 

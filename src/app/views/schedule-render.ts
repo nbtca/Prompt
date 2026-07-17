@@ -98,6 +98,67 @@ function renderShortcutBar(shortcuts: readonly HubShortcut[]): string {
   return `${space.indent}${parts.join('  ')}`;
 }
 
+/** Everything renderHubBody puts on screen *before* the adaptive week
+ * grid/strip decision point -- the banner, and then either the "term hasn't
+ * started yet, preview week 1" heading block or the today-heading + timeline
+ * block, depending on which week is current. Split out from renderHubBody so
+ * both it and isHubGridInline (below) measure the exact same preceding-line
+ * count; if the two ever computed this count differently, the predicate
+ * could say "the grid is on screen" for a frame where the strip actually
+ * rendered (or vice versa). Returns null when there's nothing to show yet
+ * (no timetable/weekOne loaded). */
+function hubPreGridLines(state: ScheduleViewState, now: Date): { lines: string[]; week: number; tt: Timetable } | null {
+  const trans = t();
+  const tt = state.timetable;
+  if (!tt || !state.weekOne) return null;
+  const week = currentWeekNumber(state.weekOne, now);
+  const lines: string[] = [];
+  const banner = renderNextClassBanner(nextMeeting(tt.meetings, tt.periods, state.weekOne, now), now);
+  lines.push(banner || hint(trans.timetable.noNextClass));
+  lines.push('');
+  const todayWd = campusWeekday(now);
+  if (week < 1) {
+    // weekOne can be a *future* date -- auto-inferred while on break, it
+    // deliberately points at the upcoming term (see academic-calendar.ts)
+    // so it's ready the moment classes start. There is no "today" to show
+    // yet, but the timetable's real week-1 data is already fetched -- show
+    // it as an explicit preview rather than showing no grid at all
+    // regardless of terminal height. The "Week 1 preview" heading keeps it
+    // unambiguous that this isn't "happening right now".
+    lines.push(heading(trans.timetable.termNotStarted));
+    lines.push(hint(fmt(trans.timetable.termStartsIn, {
+      date: state.weekOne,
+      days: String(daysBetween(now, new Date(`${state.weekOne}T00:00:00`))),
+    })));
+    lines.push('');
+    lines.push(heading(trans.timetable.termPreviewWeek));
+    return { lines, week: 1, tt };
+  }
+  const today = meetingsOnDay(tt.meetings, todayWd, week);
+  lines.push(heading(fmt(trans.timetable.todayHeading, { weekday: weekdayShortLabel(todayWd), week: String(week) })));
+  lines.push(...renderTodayTimeline(today, tt.periods, now).split('\n'));
+  lines.push(heading(trans.timetable.hubWeek));
+  return { lines, week, tt };
+}
+
+/** The one place that decides "does the real week grid fit inline (plus a
+ * floor reserved for the shortcut bar), or does the hub fall back to the
+ * compact strip" -- shared by pushAdaptiveWeekGrid (which acts on the
+ * decision) and isHubGridInline (which callers outside rendering, like
+ * schedule.ts's key handler, use to ask the same question without
+ * re-deriving it). */
+function gridFitsInline(
+  precedingLineCount: number, tt: Timetable, week: number, now: Date, bodyRows: number, cols: number,
+  cursor: GridCursor | undefined,
+): boolean {
+  const gridLines = renderWeekGrid(tt.meetings, tt.periods, week, now, cols, cursor).split('\n');
+  // The hub's own menu is now a fixed one-line shortcut bar (blank + the bar
+  // itself), not a variable-height ListField -- no more "menu option count"
+  // to reserve room for.
+  const roomForShortcutBar = 2;
+  return precedingLineCount + gridLines.length <= bodyRows - roomForShortcutBar;
+}
+
 /** Renders the full weekday x period grid if it (plus a floor reserved for
  * the shortcut bar) fits within bodyRows, otherwise the fixed-height compact
  * strip. Shared by the "this week" and "term hasn't started yet, preview
@@ -107,53 +168,37 @@ function pushAdaptiveWeekGrid(
   lines: string[], tt: Timetable, week: number, todayWd: number, now: Date, bodyRows: number, cols: number,
   cursor: GridCursor | undefined,
 ): void {
-  const gridLines = renderWeekGrid(tt.meetings, tt.periods, week, now, cols, cursor).split('\n');
-  // The hub's own menu is now a fixed one-line shortcut bar (blank + the bar
-  // itself), not a variable-height ListField -- no more "menu option count"
-  // to reserve room for.
-  const roomForShortcutBar = 2;
-  if (lines.length + gridLines.length <= bodyRows - roomForShortcutBar) {
-    lines.push(...gridLines);
+  if (gridFitsInline(lines.length, tt, week, now, bodyRows, cols, cursor)) {
+    lines.push(...renderWeekGrid(tt.meetings, tt.periods, week, now, cols, cursor).split('\n'));
   } else {
     lines.push(...renderWeekStrip(tt.meetings, week, todayWd).split('\n'));
   }
 }
 
+/** Is the hub's week grid actually the interactive thing on screen right
+ * now, as opposed to the non-interactive compact strip it falls back to on a
+ * short terminal? schedule.ts's key handler must ask this before letting
+ * arrow keys/Enter act on the grid cursor -- moving/opening a cursor the
+ * student can't see would make a meeting-detail card "pop up from nowhere."
+ * This is the same fit-or-fallback decision pushAdaptiveWeekGrid makes while
+ * actually rendering, exposed as a pure predicate so the two can never
+ * drift apart (matches the existing hubShortcuts single-source-of-truth
+ * convention). */
+export function isHubGridInline(state: ScheduleViewState, now: Date, bodyRows: number, cols: number): boolean {
+  const pre = hubPreGridLines(state, now);
+  if (!pre) return false;
+  return gridFitsInline(pre.lines.length, pre.tt, pre.week, now, bodyRows, cols, state.gridCursor);
+}
+
 function renderHubBody(state: ScheduleViewState, now: Date, bodyRows: number, cols: number): string[] {
-  const trans = t();
   const lines: string[] = [];
   const tt = state.timetable;
-  if (tt && state.weekOne) {
-    const week = currentWeekNumber(state.weekOne, now);
-    const banner = renderNextClassBanner(nextMeeting(tt.meetings, tt.periods, state.weekOne, now), now);
-    lines.push(banner || hint(trans.timetable.noNextClass));
-    lines.push('');
+  const pre = hubPreGridLines(state, now);
+  if (pre) {
     const todayWd = campusWeekday(now);
-    if (week < 1) {
-      // weekOne can be a *future* date -- auto-inferred while on break, it
-      // deliberately points at the upcoming term (see academic-calendar.ts)
-      // so it's ready the moment classes start. There is no "today" to show
-      // yet, but the timetable's real week-1 data is already fetched -- show
-      // it as an explicit preview rather than showing no grid at all
-      // regardless of terminal height. The "Week 1 preview" heading keeps it
-      // unambiguous that this isn't "happening right now".
-      lines.push(heading(trans.timetable.termNotStarted));
-      lines.push(hint(fmt(trans.timetable.termStartsIn, {
-        date: state.weekOne,
-        days: String(daysBetween(now, new Date(`${state.weekOne}T00:00:00`))),
-      })));
-      lines.push('');
-      lines.push(heading(trans.timetable.termPreviewWeek));
-      pushAdaptiveWeekGrid(lines, tt, 1, todayWd, now, bodyRows, cols, state.gridCursor);
-      lines.push('');
-    } else {
-      const today = meetingsOnDay(tt.meetings, todayWd, week);
-      lines.push(heading(fmt(trans.timetable.todayHeading, { weekday: weekdayShortLabel(todayWd), week: String(week) })));
-      lines.push(...renderTodayTimeline(today, tt.periods, now).split('\n'));
-      lines.push(heading(trans.timetable.hubWeek));
-      pushAdaptiveWeekGrid(lines, tt, week, todayWd, now, bodyRows, cols, state.gridCursor);
-      lines.push('');
-    }
+    lines.push(...pre.lines);
+    pushAdaptiveWeekGrid(lines, pre.tt, pre.week, todayWd, now, bodyRows, cols, state.gridCursor);
+    lines.push('');
   }
   if (state.statusMessage) {
     lines.push(hint(state.statusMessage));
