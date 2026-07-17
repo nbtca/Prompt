@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest';
+import chalk from 'chalk';
 import { renderSchedule, hubShortcuts, type ScheduleViewState } from './schedule-render.js';
 import { ListField } from '../fields/list-field.js';
 import { TextField } from '../fields/text-field.js';
@@ -195,13 +196,19 @@ describe('renderSchedule', () => {
   });
 
   it('week mode threads the cursor into renderWeekGrid', () => {
-    const withCursor = renderSchedule({
-      mode: 'week', key: '2026-3', weekOne: '2026-09-07', timetable, gridCursor: { weekday: 1, period: 1 },
-    }, new Date('2026-09-07T09:00:00')).join('\n');
-    const without = renderSchedule({
-      mode: 'week', key: '2026-3', weekOne: '2026-09-07', timetable,
-    }, new Date('2026-09-07T09:00:00')).join('\n');
-    expect(withCursor).not.toBe(without);
+    const level = chalk.level;
+    chalk.level = 3;
+    try {
+      const withCursor = renderSchedule({
+        mode: 'week', key: '2026-3', weekOne: '2026-09-07', timetable, gridCursor: { weekday: 1, period: 1 },
+      }, new Date('2026-09-07T09:00:00')).join('\n');
+      const without = renderSchedule({
+        mode: 'week', key: '2026-3', weekOne: '2026-09-07', timetable,
+      }, new Date('2026-09-07T09:00:00')).join('\n');
+      expect(withCursor).not.toBe(without);
+    } finally {
+      chalk.level = level;
+    }
   });
 
   it('meetingDetail mode renders the full meeting detail card', () => {
