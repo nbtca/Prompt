@@ -279,7 +279,8 @@
     "weekAheadClasses": "课程",
     "weekAheadBusy": "较满",
     "weekAheadFree": "较空",
-    "weekAheadNone": "无"
+    "weekAheadNone": "无",
+    "termPreviewWeek": "第一周预览"
   },
   "theme": {
     "current": "当前主题设置",

@@ -52,6 +52,27 @@ function hint(label: string): string {
   return `${space.indent}${type.hint(label)}`;
 }
 
+/** Renders the full weekday x period grid if it (plus a floor reserved for
+ * the menu) fits within bodyRows, otherwise the fixed-height compact strip.
+ * Shared by the "this week" and "term hasn't started yet, preview week 1"
+ * branches of renderHubBody — the same measure-and-fallback decision, just
+ * against a different week number. */
+function pushAdaptiveWeekGrid(
+  lines: string[], tt: Timetable, week: number, todayWd: number, now: Date, bodyRows: number, hubField: ListField | undefined,
+): void {
+  const gridLines = renderWeekGrid(tt.meetings, tt.periods, week, now).split('\n');
+  // Derived from the field's *real* option count rather than a guessed
+  // constant shared with Events' differently-sized hub menu: title +
+  // blank + options + blank + footer (this hub field, unlike Events',
+  // does render one — see buildHubField in schedule.ts).
+  const roomForMenu = 4 + (hubField?.optionCount ?? 0);
+  if (lines.length + gridLines.length <= bodyRows - roomForMenu) {
+    lines.push(...gridLines);
+  } else {
+    lines.push(...renderWeekStrip(tt.meetings, week, todayWd).split('\n'));
+  }
+}
+
 function renderHubBody(state: ScheduleViewState, now: Date, bodyRows: number): string[] {
   const trans = t();
   const lines: string[] = [];
@@ -61,21 +82,27 @@ function renderHubBody(state: ScheduleViewState, now: Date, bodyRows: number): s
     const banner = renderNextClassBanner(nextMeeting(tt.meetings, tt.periods, state.weekOne, now), now);
     lines.push(banner || hint(trans.timetable.noNextClass));
     lines.push('');
+    const todayWd = campusWeekday(now);
     if (week < 1) {
       // weekOne can be a *future* date — auto-inferred while on break, it
       // deliberately points at the upcoming term (see academic-calendar.ts)
-      // so it's ready the moment classes start. Until then there is no
-      // "today"/"this week" to show; rendering the timeline/strip anyway
-      // produced a nonsensical negative week number and an empty-but-
-      // present class grid, which read as "there are classes right now."
+      // so it's ready the moment classes start. There is no "today" to show
+      // yet, but the timetable's real week-1 data is already fetched — show
+      // it as an explicit preview rather than showing no grid at all
+      // regardless of terminal height (that used to be gated on "is there a
+      // current week" instead of on available room, breaking this app's own
+      // adaptive-density convention). The "Week 1 preview" heading keeps it
+      // unambiguous that this isn't "happening right now".
       lines.push(heading(trans.timetable.termNotStarted));
       lines.push(hint(fmt(trans.timetable.termStartsIn, {
         date: state.weekOne,
         days: String(daysBetween(now, new Date(`${state.weekOne}T00:00:00`))),
       })));
       lines.push('');
+      lines.push(heading(trans.timetable.termPreviewWeek));
+      pushAdaptiveWeekGrid(lines, tt, 1, todayWd, now, bodyRows, state.hubField);
+      lines.push('');
     } else {
-      const todayWd = campusWeekday(now);
       const today = meetingsOnDay(tt.meetings, todayWd, week);
       // Deliberately no blank line between each heading and its own content
       // below (today-heading -> timeline, week-heading -> strip) — tighter
@@ -91,17 +118,7 @@ function renderHubBody(state: ScheduleViewState, now: Date, bodyRows: number): s
       // be a single hardcoded threshold. Measure it for real: render it,
       // and use it only if it (plus a floor reserved for the menu) still
       // fits, otherwise fall back to the fixed-height compact strip.
-      const gridLines = renderWeekGrid(tt.meetings, tt.periods, week, now).split('\n');
-      // Derived from the field's *real* option count rather than a guessed
-      // constant shared with Events' differently-sized hub menu: title +
-      // blank + options + blank + footer (this hub field, unlike Events',
-      // does render one — see buildHubField in schedule.ts).
-      const roomForMenu = 4 + (state.hubField?.optionCount ?? 0);
-      if (lines.length + gridLines.length <= bodyRows - roomForMenu) {
-        lines.push(...gridLines);
-      } else {
-        lines.push(...renderWeekStrip(tt.meetings, week, todayWd).split('\n'));
-      }
+      pushAdaptiveWeekGrid(lines, tt, week, todayWd, now, bodyRows, state.hubField);
       lines.push('');
     }
   }

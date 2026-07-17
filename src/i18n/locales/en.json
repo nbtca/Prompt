@@ -279,7 +279,8 @@
     "weekAheadClasses": "Classes",
     "weekAheadBusy": "Busy",
     "weekAheadFree": "Free",
-    "weekAheadNone": "N/A"
+    "weekAheadNone": "N/A",
+    "termPreviewWeek": "Week 1 preview"
   },
   "theme": {
     "current": "Current theme settings",

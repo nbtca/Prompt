@@ -299,6 +299,7 @@ export interface Translations {
     weekAheadBusy: string;
     weekAheadFree: string;
     weekAheadNone: string;
+    termPreviewWeek: string;
   };
   theme: {
     current: string;

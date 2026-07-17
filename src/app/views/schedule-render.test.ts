@@ -83,7 +83,65 @@ describe('renderSchedule', () => {
     }, new Date('2026-09-07T07:00:00')).join('\n'));
     expect(out).toContain("Term hasn't started yet");
     expect(out).toContain('2099-01-05');
-    expect(out).not.toMatch(/Week -?\d/);
+    // A *negative* week number specifically -- "Week 1 preview" (the
+    // deliberate week-1-preview grid added below) legitimately contains
+    // "Week 1" and must not trip this assertion.
+    expect(out).not.toMatch(/Week -\d/);
+  });
+
+  describe('term-not-started week-1 preview', () => {
+    // Regression: previously this state showed *only* "Term hasn't started
+    // yet" text, with zero grid content regardless of how tall the
+    // terminal was — "should we show a grid" was gated on there being a
+    // "current week" concept at all, not on available room, which broke
+    // this app's own adaptive-density convention (every other section
+    // shows more content on a tall terminal, never *no* content). The
+    // timetable's real week-1 data is already fetched by this point (see
+    // academic-calendar.ts's weekOne-ahead-of-now behavior), so there's no
+    // reason not to preview it.
+    it('shows a week-1 preview grid on a tall terminal even though the term has not started', () => {
+      const hubField = new ListField({ title: 'Schedule', options: [{ value: 'week', label: 'This week' }] });
+      const out = stripAnsi(renderSchedule({
+        mode: 'hub', key: '2026-3', weekOne: '2099-01-05', timetable: busyTimetable, hubField,
+      }, new Date('2026-09-07T07:00:00'), 45).join('\n'));
+      expect(out).toContain("Term hasn't started yet");
+      expect(out).toContain('Week 1 preview');
+      expect(out).toContain('Physics'); // only the full grid places period-3 courses distinctly
+      expect(out).toContain('P12');
+    });
+
+    it('falls back to the week strip on a short terminal even though the term has not started', () => {
+      const hubField = new ListField({ title: 'Schedule', options: [{ value: 'week', label: 'This week' }] });
+      const out = stripAnsi(renderSchedule({
+        mode: 'hub', key: '2026-3', weekOne: '2099-01-05', timetable: busyTimetable, hubField,
+      }, new Date('2026-09-07T07:00:00'), 19).join('\n'));
+      expect(out).toContain('Week 1 preview');
+      expect(out).not.toContain('P12');
+      expect(out).toContain('has class'); // the strip's own legend text
+    });
+
+    it('shows an empty week-1 preview without crashing when there are no meetings at all', () => {
+      const emptyTimetable: Timetable = { ...timetable, meetings: [] };
+      const hubField = new ListField({ title: 'Schedule', options: [{ value: 'week', label: 'This week' }] });
+      expect(() => renderSchedule({
+        mode: 'hub', key: '2026-3', weekOne: '2099-01-05', timetable: emptyTimetable, hubField,
+      }, new Date('2026-09-07T07:00:00'), 45)).not.toThrow();
+      const out = stripAnsi(renderSchedule({
+        mode: 'hub', key: '2026-3', weekOne: '2099-01-05', timetable: emptyTimetable, hubField,
+      }, new Date('2026-09-07T07:00:00'), 45).join('\n'));
+      expect(out).toContain('Week 1 preview');
+      expect(out).not.toContain('Math');
+    });
+
+    it('never collapses the week-1 preview into one array entry', () => {
+      const hubField = new ListField({ title: 'Schedule', options: [{ value: 'week', label: 'This week' }] });
+      const lines = renderSchedule({
+        mode: 'hub', key: '2026-3', weekOne: '2099-01-05', timetable: busyTimetable, hubField,
+      }, new Date('2026-09-07T07:00:00'), 45);
+      for (const line of lines) {
+        expect(line).not.toContain('\n');
+      }
+    });
   });
 
   it('hub mode windows the menu instead of overflowing when the timeline pushes it past bodyRows', () => {
