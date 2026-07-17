@@ -245,6 +245,43 @@ export function renderWeekGrid(
   return lines.join('\n');
 }
 
+function formatWeekRange(weeks: readonly number[]): string {
+  if (weeks.length === 0) return '';
+  const sorted = [...weeks].sort((a, b) => a - b);
+  const isContiguous = sorted.every((w, i) => i === 0 || w === sorted[i - 1]! + 1);
+  if (isContiguous) {
+    return sorted.length > 1 ? `${sorted[0]}-${sorted[sorted.length - 1]}` : `${sorted[0]}`;
+  }
+  // A genuinely non-contiguous week pattern is rare but must not crash or
+  // silently drop data -- fall back to listing every week.
+  return sorted.join(', ');
+}
+
+/** The full, untruncated detail behind one grid cell -- reached by drilling
+ * into a meeting from the interactive grid (Enter on a cursor cell). Unlike
+ * the grid's own cells, nothing here is truncated: this is the "show it all
+ * on demand" counterpart to the grid's "cram what fits, drill down for the
+ * rest" cell format. */
+export function renderMeetingDetail(meeting: TimetableMeeting, periods: readonly TimetablePeriod[]): string {
+  const trans = t();
+  const rows: Array<[string, string]> = [
+    [trans.timetable.detailTime, `${weekdayShortLabel(meeting.weekday)} ${span(meeting, periods)}`],
+  ];
+  if (meeting.location) rows.push([trans.timetable.detailLocation, meeting.location]);
+  if (meeting.teacherNames.length > 0) {
+    rows.push([trans.timetable.detailTeacher, meeting.teacherNames.join(trans.timetable.teacherSeparator)]);
+  }
+  rows.push([trans.timetable.detailWeeks, formatWeekRange(meeting.weeks)]);
+
+  const labelWidth = rows.reduce((w, [label]) => Math.max(w, visualWidth(label)), 0);
+  const lines = [
+    `${space.indent}${type.heading(meeting.courseName)}`,
+    '',
+    ...rows.map(([label, value]) => `${space.indent}${type.label(padEndV(label, labelWidth))}   ${type.body(value)}`),
+  ];
+  return lines.join('\n');
+}
+
 export function renderUnresolvedItems(items: readonly TimetableUnresolvedItem[]): string {
   const trans = t();
   if (items.length === 0) return `${space.indent}${type.hint(trans.timetable.unresolvedEmpty)}`;

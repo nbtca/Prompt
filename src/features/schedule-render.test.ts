@@ -3,7 +3,7 @@ import chalk from 'chalk';
 import type { TimetableMeeting, TimetablePeriod, TimetableUnresolvedItem } from '@nbtca/nbtcal/timetable';
 import {
   renderNextClassBanner, renderTodayClasses, renderWeekGrid, renderUnresolvedItems,
-  renderTodayTimeline, renderWeekStrip, renderTermDensity,
+  renderTodayTimeline, renderWeekStrip, renderTermDensity, renderMeetingDetail,
 } from './schedule-render.js';
 import { setLanguage } from '../i18n/index.js';
 import { resetIconCache } from '../core/icons.js';
@@ -275,6 +275,56 @@ describe('renderWeekGrid gap marker', () => {
     const lines = out.split('\n').filter((l) => l.trim().length > 0);
     expect(lines.length).toBe(1 + periods.length); // header + one row per period, no extra rows
     done();
+  });
+});
+
+describe('renderMeetingDetail', () => {
+  it('shows the full, untruncated course name as the title', () => {
+    const long = '习近平新时代中国特色社会主义思想概论';
+    const out = stripAnsi(renderMeetingDetail(mk({ courseName: long, weekday: 1, startPeriod: 1, endPeriod: 2 }), periods));
+    expect(out).toContain(long);
+  });
+
+  it('shows weekday + real clock time range', () => {
+    const out = stripAnsi(renderMeetingDetail(mk({ weekday: 3, startPeriod: 1, endPeriod: 2 }), periods));
+    expect(out).toContain('Wed');
+    expect(out).toContain('08:00-09:40');
+  });
+
+  it('shows the location when present', () => {
+    const out = stripAnsi(renderMeetingDetail(mk({ location: 'sl707' }), periods));
+    expect(out).toContain('sl707');
+  });
+
+  it('omits the location row entirely when there is none, rather than showing an empty value', () => {
+    const out = stripAnsi(renderMeetingDetail(mk({ location: null }), periods));
+    expect(out).not.toContain('Location');
+  });
+
+  it('joins multiple teachers with the locale separator', () => {
+    const out = stripAnsi(renderMeetingDetail(mk({ teacherNames: ['Dr Li', 'Dr Wu'] }), periods));
+    expect(out).toContain('Dr Li, Dr Wu');
+  });
+
+  it('omits the teacher row entirely when there are none', () => {
+    const out = stripAnsi(renderMeetingDetail(mk({ teacherNames: [] }), periods));
+    expect(out).not.toContain('Teacher');
+  });
+
+  it('formats a contiguous week span as a range', () => {
+    const out = stripAnsi(renderMeetingDetail(mk({ weeks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16] }), periods));
+    expect(out).toContain('1-16');
+  });
+
+  it('falls back to a comma list for a non-contiguous week span', () => {
+    const out = stripAnsi(renderMeetingDetail(mk({ weeks: [1, 3, 5] }), periods));
+    expect(out).toContain('1, 3, 5');
+  });
+
+  it('never collapses into one array entry when split on newlines', () => {
+    const out = renderMeetingDetail(mk({}), periods);
+    expect(out.split('\n').length).toBeGreaterThan(1);
+    for (const line of out.split('\n')) expect(line).not.toContain('\n');
   });
 });
 
