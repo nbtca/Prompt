@@ -137,11 +137,11 @@ describe('buildHubField', () => {
     expect(text).toContain('1');
   });
 
-  it('includes the term density and by-location options, grouped with This week', () => {
+  it('includes the term density option, grouped with This week', () => {
     const field = buildHubField({ ...baseTimetable, unresolvedItems: [] });
     const text = field.render().join('\n');
     expect(text).toContain('Term density');
-    expect(text).toContain('By location');
+    expect(text).not.toContain('By location'); // removed once the week grid started showing location directly
   });
 });
 
@@ -261,16 +261,4 @@ describe('scheduleView — term density / by-location navigation', () => {
     expect(out).toContain(t().timetable.menuEntry);
   });
 
-  it('navigates into byLocation mode and back to the hub on any key', async () => {
-    const ctx = await loadIntoHub();
-    scheduleView.handleKey('\x1b[B', ctx); // 'week' -> 'termDensity'
-    scheduleView.handleKey('\x1b[B', ctx); // 'termDensity' -> 'byLocation'
-    scheduleView.handleKey('\r', ctx); // select
-    let out = stripAnsi(scheduleView.render(ctx).join('\n'));
-    expect(out).toContain(t().timetable.byLocationTitle);
-
-    scheduleView.handleKey('\r', ctx); // any key returns to hub
-    out = stripAnsi(scheduleView.render(ctx).join('\n'));
-    expect(out).toContain(t().timetable.menuEntry);
-  });
 });

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import type { TimetableMeeting, TimetablePeriod, TimetableUnresolvedItem } from '@nbtca/nbtcal/timetable';
 import {
   renderNextClassBanner, renderTodayClasses, renderWeekGrid, renderUnresolvedItems,
-  renderTodayTimeline, renderWeekStrip, renderTermDensity, renderMeetingsByLocation,
+  renderTodayTimeline, renderWeekStrip, renderTermDensity,
 } from './schedule-render.js';
 import { setLanguage } from '../i18n/index.js';
 import { resetIconCache } from '../core/icons.js';
@@ -416,57 +416,3 @@ describe('renderTermDensity', () => {
   });
 });
 
-describe('renderMeetingsByLocation', () => {
-  it('groups by location (sorted) and lists each meeting sorted by weekday then period', () => {
-    const meetings: TimetableMeeting[] = [
-      mk({ courseName: 'Advanced Math', location: 'Room 3-201', weekday: 4, startPeriod: 1, endPeriod: 1, weeks: [1] }),
-      mk({ courseName: 'Advanced Math', location: 'Room 3-201', weekday: 1, startPeriod: 1, endPeriod: 1, weeks: [1] }),
-      mk({ courseName: 'Data Structures', location: 'Room 1-302', weekday: 3, startPeriod: 3, endPeriod: 3, weeks: [1] }),
-    ];
-    const out = stripAnsi(renderMeetingsByLocation(meetings, 1));
-    const lines = out.split('\n');
-    const idxRoom1 = lines.findIndex((l) => l.includes('Room 1-302'));
-    const idxRoom3 = lines.findIndex((l) => l.includes('Room 3-201'));
-    expect(idxRoom1).toBeGreaterThanOrEqual(0);
-    expect(idxRoom3).toBeGreaterThan(idxRoom1); // 'Room 1-302' sorts before 'Room 3-201'
-    const mondayLine = lines.findIndex((l) => l.includes('Mon'));
-    const thursdayLine = lines.findIndex((l) => l.includes('Thu'));
-    expect(mondayLine).toBeGreaterThan(idxRoom3);
-    expect(thursdayLine).toBeGreaterThan(mondayLine); // Mon listed before Thu within the same location
-  });
-
-  it('excludes meetings with a null location', () => {
-    const meetings: TimetableMeeting[] = [
-      mk({ location: null, weekday: 1, weeks: [1] }),
-      mk({ location: 'Room 201', weekday: 2, weeks: [1] }),
-    ];
-    const out = stripAnsi(renderMeetingsByLocation(meetings, 1));
-    expect(out).toContain('Room 201');
-    expect(out).not.toContain('null');
-  });
-
-  it('shows an empty-state line when no meetings are located this week', () => {
-    const out = stripAnsi(renderMeetingsByLocation([], 1));
-    expect(out).toContain('No located classes this week');
-  });
-
-  it('formats a multi-period meeting as a period range', () => {
-    const out = stripAnsi(renderMeetingsByLocation(
-      [mk({ location: 'Gym', weekday: 1, startPeriod: 1, endPeriod: 2, weeks: [1] })], 1,
-    ));
-    expect(out).toContain('P1-2');
-  });
-
-  it('formats a single-period meeting without a range', () => {
-    const out = stripAnsi(renderMeetingsByLocation(
-      [mk({ location: 'Room 201', weekday: 1, startPeriod: 3, endPeriod: 3, weeks: [1] })], 1,
-    ));
-    expect(out).toContain('P3');
-    expect(out).not.toContain('P3-3');
-  });
-
-  it('never collapses into one array entry when split on newlines', () => {
-    const out = renderMeetingsByLocation([mk({ location: 'Room 201', weekday: 1, weeks: [1] })], 1);
-    for (const line of out.split('\n')) expect(line).not.toContain('\n');
-  });
-});

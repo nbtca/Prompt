@@ -6,7 +6,7 @@ import { TextField } from '../fields/text-field.js';
 import { currentWeekNumber, campusWeekday, meetingsOnDay, nextMeeting } from '../../features/schedule-query.js';
 import {
   renderNextClassBanner, renderWeekGrid, renderUnresolvedItems, renderTodayTimeline, renderWeekStrip,
-  weekdayShortLabel, renderTermDensity, renderMeetingsByLocation,
+  weekdayShortLabel, renderTermDensity,
 } from '../../features/schedule-render.js';
 import type { AcademicWindow, OnBreak } from '../../features/academic-calendar.js';
 import { renderEventBrief, type Event } from '../../features/calendar.js';
@@ -21,7 +21,6 @@ export type ScheduleMode =
   | 'hub'
   | 'week'
   | 'termDensity'
-  | 'byLocation'
   | 'termPicker'
   | 'unresolved'
   | 'error';
@@ -246,14 +245,6 @@ export function renderSchedule(state: ScheduleViewState, now: Date, bodyRows = 1
       // add a second heading on top.
       return state.timetable && state.weekOne
         ? renderTermDensity(state.timetable.meetings, state.weekOne, currentWeekNumber(state.weekOne, now)).split('\n')
-        : [hint(trans.timetable.genericError)];
-    case 'byLocation':
-      return state.timetable && state.weekOne
-        ? [
-          heading(trans.timetable.byLocationTitle),
-          '',
-          ...renderMeetingsByLocation(state.timetable.meetings, currentWeekNumber(state.weekOne, now)).split('\n'),
-        ]
         : [hint(trans.timetable.genericError)];
     case 'termPicker':
       return state.termField?.render() ?? [];

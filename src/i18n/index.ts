@@ -256,7 +256,6 @@ export interface Translations {
     noNextClass: string;
     nowLabel: string;
     weekLabel: string;
-    periodShort: string;
     promptWeekOne: string;
     menuEntry: string;
     semester1: string;
@@ -287,13 +286,8 @@ export interface Translations {
     termNotStarted: string;
     termStartsIn: string;
     hubTermDensity: string;
-    hubByLocation: string;
     termDensityTitle: string;
     termDensityThisWeek: string;
-    byLocationTitle: string;
-    byLocationEmpty: string;
-    periodSuffix: string;
-    weekdayPrefix: string;
     weekOverviewTitle: string;
     weekAheadClasses: string;
     weekAheadBusy: string;

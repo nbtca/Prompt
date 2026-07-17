@@ -47,11 +47,12 @@ function isTimetableLike(value: unknown): value is Timetable {
 export function buildHubField(tt: Timetable): ListField {
   const trans = t();
   const options = [
-    // 本周/学期活跃度/按教室 are grouped first as three "zoom levels" on the
-    // same timetable data, before the existing term/export/logout actions.
+    // 本周/学期活跃度 are grouped first as two "zoom levels" on the same
+    // timetable data, before the existing term/export/logout actions.
+    // (按教室 was removed once the week grid started showing location
+    // directly in each cell, making a separate by-location view redundant.)
     { value: 'week', label: trans.timetable.hubWeek },
     { value: 'termDensity', label: trans.timetable.hubTermDensity },
-    { value: 'byLocation', label: trans.timetable.hubByLocation },
     { value: 'term', label: trans.timetable.hubSwitchTerm },
     { value: 'export', label: trans.timetable.hubExport },
     ...(tt.unresolvedItems.length > 0
@@ -276,7 +277,7 @@ export const scheduleView: View = {
   handleBack(): boolean {
     if (
       state.mode === 'week' || state.mode === 'unresolved' || state.mode === 'termPicker'
-      || state.mode === 'termDensity' || state.mode === 'byLocation'
+      || state.mode === 'termDensity'
     ) {
       return returnToHub();
     }
@@ -348,7 +349,6 @@ export const scheduleView: View = {
         if (!result?.selected || !tt || !hubKey || !hubWeekOne) return;
         if (result.selected === 'week') { state = { ...state, mode: 'week' }; return; }
         if (result.selected === 'termDensity') { state = { ...state, mode: 'termDensity' }; return; }
-        if (result.selected === 'byLocation') { state = { ...state, mode: 'byLocation' }; return; }
         if (result.selected === 'unresolved') { state = { ...state, mode: 'unresolved' }; return; }
         if (result.selected === 'term') {
           const options = relevantTerms(catalog).map((tm) => ({
@@ -387,8 +387,7 @@ export const scheduleView: View = {
       }
       case 'week':
       case 'unresolved':
-      case 'termDensity':
-      case 'byLocation': {
+      case 'termDensity': {
         returnToHub();
         return;
       }
