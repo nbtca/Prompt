@@ -59,4 +59,10 @@ export const type = {
    * because there is exactly one brand-worthy thing to say on each of
    * these screens, and this is where it belongs. */
   active:  (s: string) => chalk.bold(c.brand(s)),
+  /** The grid cursor's own visual signal: a solid brand-colored background
+   * block, deliberately distinct from `active` (bold text on the default
+   * background) so "this is today" and "this is where your cursor is" never
+   * share one visual language, even when the cursor lands on today's own
+   * column. */
+  cursor:  (s: string) => chalk.bgHex('#0ea5e9').black(s),
 };

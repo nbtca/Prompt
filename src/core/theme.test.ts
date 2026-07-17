@@ -86,4 +86,22 @@ describe('design tokens', () => {
       chalk.level = level;
     }
   });
+
+  it('type.cursor returns its text unchanged once ANSI codes are stripped', () => {
+    expect(stripAnsi(type.cursor('go'))).toBe('go');
+  });
+
+  it('type.cursor renders as a solid brand-colored background block, distinct from type.active', () => {
+    const level = chalk.level;
+    chalk.level = 3;
+    try {
+      // Background truecolor escape (48;2;...), not type.active's foreground
+      // truecolor (38;2;...) -- the whole point is these read as visually
+      // different mechanisms (fill vs. text color), not just different hues.
+      expect(type.cursor('go')).toContain('\x1b[48;2;14;165;233m');
+      expect(type.cursor('go')).not.toBe(type.active('go'));
+    } finally {
+      chalk.level = level;
+    }
+  });
 });
