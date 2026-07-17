@@ -50,3 +50,16 @@ export function nextMeeting(
   }
   return best;
 }
+
+/** The meeting occupying a grid cell, whether it starts there or is a later
+ * period of a meeting that started earlier the same day -- one condition
+ * (`startPeriod <= period <= endPeriod`) covers both cases, matching
+ * renderWeekGrid's own starting/continuing lookup so "does this cell have a
+ * meeting" and "what does the grid actually draw there" never disagree. */
+export function meetingAtCursor(
+  meetings: readonly TimetableMeeting[], week: number, cursor: { weekday: number; period: number },
+): TimetableMeeting | null {
+  return meetingsInWeek(meetings, week).find(
+    (m) => m.weekday === cursor.weekday && m.startPeriod <= cursor.period && cursor.period <= m.endPeriod,
+  ) ?? null;
+}

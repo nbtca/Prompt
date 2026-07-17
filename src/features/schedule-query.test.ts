@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { TimetableMeeting, TimetablePeriod } from '@nbtca/nbtcal/timetable';
-import { currentWeekNumber, campusWeekday, meetingsInWeek, meetingsOnDay, periodStartDate, nextMeeting } from './schedule-query.js';
+import { currentWeekNumber, campusWeekday, meetingsInWeek, meetingsOnDay, periodStartDate, nextMeeting, meetingAtCursor } from './schedule-query.js';
 
 const periods: TimetablePeriod[] = [
   { period: 1, label: null, start: '08:00', end: '08:45' },
@@ -50,5 +50,22 @@ describe('periodStartDate + nextMeeting', () => {
   it('nextMeeting is null when nothing is left', () => {
     const list = [m({ weekday: 1, startPeriod: 1, weeks: [1] })];
     expect(nextMeeting(list, periods, '2026-09-07', new Date('2027-01-01T00:00:00'))).toBeNull();
+  });
+});
+
+describe('meetingAtCursor', () => {
+  const list = [m({ courseName: 'Math', weekday: 1, startPeriod: 1, endPeriod: 2, weeks: [1] })];
+
+  it('finds a meeting whose span covers the cursor period, not just its starting period', () => {
+    expect(meetingAtCursor(list, 1, { weekday: 1, period: 2 })?.courseName).toBe('Math');
+  });
+  it('returns null when the cursor is on an empty cell', () => {
+    expect(meetingAtCursor(list, 1, { weekday: 1, period: 3 })).toBeNull();
+  });
+  it('returns null when the meeting is not in the given week', () => {
+    expect(meetingAtCursor(list, 2, { weekday: 1, period: 1 })).toBeNull();
+  });
+  it('returns null when the weekday does not match', () => {
+    expect(meetingAtCursor(list, 1, { weekday: 2, period: 1 })).toBeNull();
   });
 });
