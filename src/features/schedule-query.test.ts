@@ -59,6 +59,9 @@ describe('meetingAtCursor', () => {
   it('finds a meeting whose span covers the cursor period, not just its starting period', () => {
     expect(meetingAtCursor(list, 1, { weekday: 1, period: 2 })?.courseName).toBe('Math');
   });
+  it('finds a meeting at its starting period', () => {
+    expect(meetingAtCursor(list, 1, { weekday: 1, period: 1 })?.courseName).toBe('Math');
+  });
   it('returns null when the cursor is on an empty cell', () => {
     expect(meetingAtCursor(list, 1, { weekday: 1, period: 3 })).toBeNull();
   });
