@@ -51,6 +51,18 @@ describe('moveCursorPeriod', () => {
   it('is a no-op when the period table is empty', () => {
     expect(moveCursorPeriod({ weekday: 1, period: 1 }, [], 1)).toEqual({ weekday: 1, period: 1 });
   });
+  it('uses table lookup, not period±1 arithmetic, with non-contiguous periods', () => {
+    const nonContiguousPeriods: TimetablePeriod[] = [
+      { period: 1, label: null, start: '08:00', end: '08:45' },
+      { period: 3, label: null, start: '10:00', end: '10:45' },
+      { period: 5, label: null, start: '13:00', end: '13:45' },
+    ];
+    // Moving from period 1 should land on period 3 (the next defined period in the table),
+    // NOT period 2 (which doesn't exist)
+    expect(moveCursorPeriod({ weekday: 1, period: 1 }, nonContiguousPeriods, 1)).toEqual({ weekday: 1, period: 3 });
+    // Moving backward from period 5 should land on period 3, not period 4
+    expect(moveCursorPeriod({ weekday: 1, period: 5 }, nonContiguousPeriods, -1)).toEqual({ weekday: 1, period: 3 });
+  });
 });
 
 describe('handleGridKey', () => {
