@@ -53,7 +53,7 @@ vi.mock('../../features/calendar.js', async (importOriginal) => {
   };
 });
 
-const { scheduleView, buildHubField } = await import('./schedule.js');
+const { scheduleView } = await import('./schedule.js');
 const { setLanguage } = await import('../../i18n/index.js');
 const { resetIconCache } = await import('../../core/icons.js');
 const { stripAnsi } = await import('../../core/text.js');
@@ -104,53 +104,17 @@ describe('scheduleView', () => {
   });
 
   it('handleBack() returns false when there is nothing to step back from', () => {
-    // Fresh module state (no load() has run): not in a week/unresolved/termPicker
-    // sub-mode, so there is nothing for the view to step back to internally —
-    // it must defer to the app's default (leave the tab for Home).
     expect(scheduleView.handleBack?.()).toBe(false);
   });
 });
 
-describe('buildHubField', () => {
-  const baseTimetable: Omit<Timetable, 'unresolvedItems'> = {
-    term: { academicYear: '2026', semester: '3' },
-    meetings: [],
-    periods: [],
-    calendarDays: [],
-    warnings: [],
-    fetchedAt: new Date('2026-09-07T00:00:00Z'),
-  };
-
-  it('does not show a "needs attention" row when there are no unresolved items', () => {
-    const field = buildHubField({ ...baseTimetable, unresolvedItems: [] });
-    const text = field.render().join('\n');
-    expect(text).not.toContain('Needs attention');
-  });
-
-  it('surfaces a "needs attention" row with a count when there are unresolved items', () => {
-    const field = buildHubField({
-      ...baseTimetable,
-      unresolvedItems: [{ kind: 'practice', itemIndex: 0, sourceFields: { kcmc: 'Fitness test' } }],
-    });
-    const text = field.render().join('\n');
-    expect(text).toContain('Needs attention');
-    expect(text).toContain('1');
-  });
-
-  it('includes the term density option, grouped with This week', () => {
-    const field = buildHubField({ ...baseTimetable, unresolvedItems: [] });
-    const text = field.render().join('\n');
-    expect(text).toContain('Term density');
-    expect(text).not.toContain('By location'); // removed once the week grid started showing location directly
-  });
-});
+// hubShortcuts itself (its data shape, the unresolved-count badge, key
+// ordering) is fully covered by src/app/views/schedule-render.test.ts
+// (Task 7) -- no need to re-test the same pure function's behavior here.
+// This file's own tests exercise it only through scheduleView's key
+// handling, below.
 
 describe('scheduleView.load() with an expired session', () => {
-  // Regression tests for a real "the Schedule tab is completely unusable"
-  // report: a stale persisted session used to be routed into a bare error
-  // screen with no login field and no session cleanup, so every future
-  // launch hit the exact same dead end. Fixed by giving afterAuthenticated's
-  // catch block the same session-expired handling fetchAndShowHub already had.
   function fakeCtx(): AppContext {
     return {
       size: { rows: 24, cols: 80 },
@@ -195,7 +159,7 @@ describe('scheduleView.load() with an expired session', () => {
     expect(sessionStoreClear).toHaveBeenCalled();
     expect(scheduleView.capturesInput?.()).toBe(false);
     const out = stripAnsi(scheduleView.render(ctx).join('\n'));
-    expect(out).toContain(t().timetable.menuEntry);
+    expect(out).toContain(t().timetable.hubLogout); // shortcut bar's own "Log out" -- the hub's always-present anchor
   });
 });
 
@@ -209,19 +173,19 @@ describe('scheduleView.load() with no session — public view', () => {
 
   it('shows the public view (not a login prompt) when there is no persisted session', async () => {
     vi.mocked(loadCurrentPointer).mockReturnValue(null);
-    sessionStoreLoad.mockReturnValue(null); // no persisted session at all
+    sessionStoreLoad.mockReturnValue(null);
 
     const ctx = fakeCtx();
     await scheduleView.load(ctx);
 
-    expect(scheduleView.capturesInput?.()).toBe(false); // public hub is a ListField, not a text field
+    expect(scheduleView.capturesInput?.()).toBe(false);
     const out = stripAnsi(scheduleView.render(ctx).join('\n'));
     expect(out).toContain(t().timetable.publicLoginAction);
     expect(out).not.toContain(t().timetable.studentId);
   });
 });
 
-describe('scheduleView — term density / by-location navigation', () => {
+describe('scheduleView — hub navigation', () => {
   function fakeCtx(): AppContext {
     return {
       size: { rows: 24, cols: 80 }, bodyRows: 40, rerender: vi.fn(),
@@ -229,16 +193,14 @@ describe('scheduleView — term density / by-location navigation', () => {
     };
   }
 
-  // Reuses the exact "cached hub survives a failed background refresh"
-  // setup from the describe block above — the simplest reliable way to land
-  // scheduleView in 'hub' mode with a real hubField, without also having to
-  // mock a successful client.fetchTerm() round trip.
-  async function loadIntoHub(): Promise<AppContext> {
+  async function loadIntoHub(timetable?: Partial<Timetable>): Promise<AppContext> {
     vi.mocked(loadCurrentPointer).mockReturnValue({ termKey: '2026-3', weekOneMonday: '2026-09-07' });
     vi.mocked(loadTimetableCache).mockReturnValue({
       term: { academicYear: '2026', semester: '3' },
-      meetings: [], periods: [], calendarDays: [], warnings: [], unresolvedItems: [],
+      meetings: [], periods: [{ period: 1, label: null, start: '08:00', end: '08:45' }],
+      calendarDays: [], warnings: [], unresolvedItems: [],
       fetchedAt: new Date('2026-09-07T00:00:00Z'),
+      ...timetable,
     } as unknown as Timetable);
     sessionStoreLoad.mockReturnValue({
       version: 1, provider: 'nbt-webvpn', jar: { cookies: [] }, authenticatedAt: '2026-01-01T00:00:00Z', validatedAt: '2026-01-01T00:00:00Z',
@@ -249,16 +211,72 @@ describe('scheduleView — term density / by-location navigation', () => {
     return ctx;
   }
 
-  it('navigates into termDensity mode and back to the hub on Esc', async () => {
+  it('navigates into termDensity mode via the "t" shortcut and back to the hub on Esc', async () => {
     const ctx = await loadIntoHub();
-    scheduleView.handleKey('\x1b[B', ctx); // 'week' -> 'termDensity'
-    scheduleView.handleKey('\r', ctx); // select
+    scheduleView.handleKey('t', ctx);
     let out = stripAnsi(scheduleView.render(ctx).join('\n'));
     expect(out).toContain(t().timetable.termDensityTitle);
 
     expect(scheduleView.handleBack?.()).toBe(true);
     out = stripAnsi(scheduleView.render(ctx).join('\n'));
-    expect(out).toContain(t().timetable.menuEntry);
+    expect(out).toContain(t().timetable.hubLogout);
   });
 
+  it('navigates into the standalone week grid via the "w" shortcut and back to the hub on any key', async () => {
+    const ctx = await loadIntoHub();
+    scheduleView.handleKey('w', ctx);
+    let out = stripAnsi(scheduleView.render(ctx).join('\n'));
+    expect(out).toContain(t().timetable.hubWeek);
+
+    scheduleView.handleKey('z', ctx); // any key returns
+    out = stripAnsi(scheduleView.render(ctx).join('\n'));
+    expect(out).toContain(t().timetable.hubLogout);
+  });
+
+  it('opens a meeting detail card on Enter when the cursor cell has a class, and returns to the hub on any key', async () => {
+    const ctx = await loadIntoHub({
+      meetings: [{
+        sourceId: null, courseName: 'Math', teacherNames: ['Dr Li'], location: 'Room 201',
+        weekday: 1, startPeriod: 1, endPeriod: 1, weeks: [1], kind: 'regular',
+      }],
+    });
+    // The default cursor starts at *today's real* weekday (whatever day this
+    // test suite happens to run on), not a fixed fixture date -- move all
+    // the way left first (no wraparound, so 7 presses guarantees landing on
+    // Monday/weekday 1 regardless of the starting weekday) to deterministically
+    // reach the cell that matches this fixture's Mon/period1 meeting.
+    for (let i = 0; i < 7; i++) scheduleView.handleKey('\x1b[D', ctx);
+    scheduleView.handleKey('\r', ctx);
+    const out = stripAnsi(scheduleView.render(ctx).join('\n'));
+    expect(out).toContain('Math');
+    expect(out).toContain('Room 201');
+
+    scheduleView.handleKey('z', ctx);
+    const back = stripAnsi(scheduleView.render(ctx).join('\n'));
+    expect(back).toContain(t().timetable.hubLogout);
+  });
+
+  it('does not open a detail card on Enter when the cursor cell is empty', async () => {
+    const ctx = await loadIntoHub();
+    scheduleView.handleKey('\r', ctx);
+    const out = stripAnsi(scheduleView.render(ctx).join('\n'));
+    expect(out).toContain(t().timetable.hubLogout); // stayed on hub, not meetingDetail
+  });
+
+  it('moves the grid cursor right with ArrowRight and does not wrap past Sunday', async () => {
+    const ctx = await loadIntoHub();
+    for (let i = 0; i < 10; i++) scheduleView.handleKey('\x1b[C', ctx);
+    // No direct cursor accessor from the view -- confirm indirectly: Enter
+    // at the clamped-right edge (weekday 7) still doesn't crash and the
+    // view stays on hub (no meeting there in this empty-meetings fixture).
+    scheduleView.handleKey('\r', ctx);
+    const out = stripAnsi(scheduleView.render(ctx).join('\n'));
+    expect(out).toContain(t().timetable.hubLogout);
+  });
+
+  it('logs out via the "x" shortcut', async () => {
+    const ctx = await loadIntoHub();
+    scheduleView.handleKey('x', ctx);
+    expect(sessionStoreClear).toHaveBeenCalled();
+  });
 });

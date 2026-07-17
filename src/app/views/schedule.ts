@@ -11,10 +11,9 @@ import type { AppContext, View } from '../view.js';
 import { captureFooterHint } from '../chrome.js';
 import { ListField, computeMaxVisible } from '../fields/list-field.js';
 import { TextField } from '../fields/text-field.js';
-import { renderSchedule, type ScheduleViewState } from './schedule-render.js';
+import { renderSchedule, hubShortcuts, type ScheduleViewState } from './schedule-render.js';
+import { defaultGridCursor, handleGridKey } from './schedule-grid-cursor.js';
 import { setVimKeysActive } from '../../core/vim-keys.js';
-import { c } from '../../core/theme.js';
-import { pickIcon } from '../../core/icons.js';
 import { t } from '../../i18n/index.js';
 import { AuthError } from '../../auth/errors.js';
 import { loginWithStudentPassword, restoreNbtSession, type AuthenticatedNbtSession } from '../../auth/nbt-auth.js';
@@ -30,6 +29,7 @@ import { loadCalendarOrThrow, toDisplayEvent } from '../../features/calendar.js'
 import type { Event } from '../../features/calendar.js';
 import { currentAcademicWindow, inferWeekOneMonday, isAcademicBreakEvent } from '../../features/academic-calendar.js';
 import type { AcademicWindow, OnBreak } from '../../features/academic-calendar.js';
+import { currentWeekNumber, campusWeekday } from '../../features/schedule-query.js';
 
 let state: ScheduleViewState = { mode: 'loading' };
 let session: AuthenticatedNbtSession | null = null;
@@ -43,39 +43,19 @@ function isTimetableLike(value: unknown): value is Timetable {
     && Array.isArray((value as Timetable).periods);
 }
 
-/** Exported for direct unit testing — pure given a Timetable, no module state. */
-export function buildHubField(tt: Timetable): ListField {
-  const trans = t();
-  const options = [
-    // 本周/学期活跃度 are grouped first as two "zoom levels" on the same
-    // timetable data, before the existing term/export/logout actions.
-    // (按教室 was removed once the week grid started showing location
-    // directly in each cell, making a separate by-location view redundant.)
-    { value: 'week', label: trans.timetable.hubWeek },
-    { value: 'termDensity', label: trans.timetable.hubTermDensity },
-    { value: 'term', label: trans.timetable.hubSwitchTerm },
-    { value: 'export', label: trans.timetable.hubExport },
-    ...(tt.unresolvedItems.length > 0
-      ? [{
-        value: 'unresolved',
-        // Warn-colored so it stands out even when not the selected row —
-        // this is the one thing on the hub that genuinely needs the
-        // student's attention, unlike the routine actions around it.
-        label: c.warn(`${pickIcon('⚠', '!')} ${trans.timetable.hubUnresolved}`),
-        hint: String(tt.unresolvedItems.length),
-      }]
-      : []),
-    { value: 'logout', label: trans.timetable.hubLogout },
-  ];
-  return new ListField({ title: trans.timetable.menuEntry, options, footer: trans.menu.hintMove });
-}
-
 function returnToHub(): boolean {
   const tt = state.timetable;
   const backKey = state.key;
   const backWeekOne = state.weekOne;
   if (tt && backKey && backWeekOne) {
-    state = { mode: 'hub', key: backKey, term: state.term, weekOne: backWeekOne, timetable: tt, hubField: buildHubField(tt) };
+    // Carries over the existing cursor rather than resetting it -- closing a
+    // meeting's detail card (or backing out of term density/unresolved)
+    // should leave the student's grid navigation exactly where it was, not
+    // silently jump back to today.
+    state = {
+      mode: 'hub', key: backKey, term: state.term, weekOne: backWeekOne, timetable: tt,
+      gridCursor: state.gridCursor ?? defaultGridCursor(campusWeekday(new Date()), tt.periods),
+    };
     return true;
   }
   return false;
@@ -207,7 +187,10 @@ async function fetchAndShowHub(ctx: AppContext, term: AcademicTerm, key: string,
     const timetable = await client.fetchTerm(term as AcademicTermRef);
     saveTimetableCache(key, timetable);
     saveCurrentPointer(key, weekOne);
-    state = { mode: 'hub', key, term, weekOne, timetable, hubField: buildHubField(timetable) };
+    state = {
+      mode: 'hub', key, term, weekOne, timetable,
+      gridCursor: defaultGridCursor(campusWeekday(new Date()), timetable.periods),
+    };
   } catch (err) {
     if (isSessionExpired(err)) {
       createSessionStore().clear();
@@ -249,7 +232,10 @@ export const scheduleView: View = {
     const ptr = loadCurrentPointer();
     const cached = ptr ? loadTimetableCache(ptr.termKey) : null;
     if (ptr && isTimetableLike(cached)) {
-      state = { mode: 'hub', key: ptr.termKey, weekOne: ptr.weekOneMonday, timetable: cached, hubField: buildHubField(cached) };
+      state = {
+        mode: 'hub', key: ptr.termKey, weekOne: ptr.weekOneMonday, timetable: cached,
+        gridCursor: defaultGridCursor(campusWeekday(new Date()), cached.periods),
+      };
     } else {
       state = { mode: 'loading' };
     }
@@ -275,6 +261,12 @@ export const scheduleView: View = {
   },
 
   handleBack(): boolean {
+    if (state.mode === 'meetingDetail') {
+      // Esc respects where the detail card was opened from -- from the
+      // standalone 'week' mode, it steps back there, not all the way to hub.
+      if (state.detailFrom === 'week') { state = { ...state, mode: 'week' }; return true; }
+      return returnToHub();
+    }
     if (
       state.mode === 'week' || state.mode === 'unresolved' || state.mode === 'termPicker'
       || state.mode === 'termDensity'
@@ -342,15 +334,22 @@ export const scheduleView: View = {
         return;
       }
       case 'hub': {
-        const result = state.hubField?.handleKey(key);
         const tt = state.timetable;
         const hubKey = state.key;
         const hubWeekOne = state.weekOne;
-        if (!result?.selected || !tt || !hubKey || !hubWeekOne) return;
-        if (result.selected === 'week') { state = { ...state, mode: 'week' }; return; }
-        if (result.selected === 'termDensity') { state = { ...state, mode: 'termDensity' }; return; }
-        if (result.selected === 'unresolved') { state = { ...state, mode: 'unresolved' }; return; }
-        if (result.selected === 'term') {
+        if (!tt || !hubKey || !hubWeekOne) return;
+        const cursor = state.gridCursor ?? defaultGridCursor(campusWeekday(new Date()), tt.periods);
+        const week = Math.max(1, currentWeekNumber(hubWeekOne, new Date()));
+        const nav = handleGridKey(key, cursor, tt, week);
+        if (nav.kind === 'moveCursor') { state = { ...state, gridCursor: nav.cursor }; return; }
+        if (nav.kind === 'openDetail') { state = { ...state, mode: 'meetingDetail', detailMeeting: nav.meeting, detailFrom: 'hub' }; return; }
+
+        const shortcut = hubShortcuts(tt).find((sc) => sc.key === key);
+        if (!shortcut) return;
+        if (shortcut.key === 'w') { state = { ...state, mode: 'week' }; return; }
+        if (shortcut.key === 't') { state = { ...state, mode: 'termDensity' }; return; }
+        if (shortcut.key === 'u') { state = { ...state, mode: 'unresolved' }; return; }
+        if (shortcut.key === 's') {
           const options = relevantTerms(catalog).map((tm) => ({
             value: `${tm.academicYear}:${tm.semester}`,
             label: tm.academicYearLabel,
@@ -364,7 +363,7 @@ export const scheduleView: View = {
           };
           return;
         }
-        if (result.selected === 'export') {
+        if (shortcut.key === 'e') {
           try {
             const ics = timetableToIcs(tt, { weekOneMonday: hubWeekOne, calendarName: `NBT ${state.term?.academicYearLabel ?? ''}` });
             const out = `timetable-${hubKey}.ics`;
@@ -375,7 +374,7 @@ export const scheduleView: View = {
           }
           return;
         }
-        if (result.selected === 'logout') {
+        if (shortcut.key === 'x') {
           createSessionStore().clear();
           clearScheduleCache();
           void session?.close();
@@ -385,7 +384,23 @@ export const scheduleView: View = {
         }
         return;
       }
-      case 'week':
+      case 'week': {
+        const tt = state.timetable;
+        const weekOne = state.weekOne;
+        if (!tt || !weekOne) { returnToHub(); return; }
+        const cursor = state.gridCursor ?? defaultGridCursor(campusWeekday(new Date()), tt.periods);
+        const week = Math.max(1, currentWeekNumber(weekOne, new Date()));
+        const nav = handleGridKey(key, cursor, tt, week);
+        if (nav.kind === 'moveCursor') { state = { ...state, gridCursor: nav.cursor }; return; }
+        if (nav.kind === 'openDetail') { state = { ...state, mode: 'meetingDetail', detailMeeting: nav.meeting, detailFrom: 'week' }; return; }
+        returnToHub();
+        return;
+      }
+      case 'meetingDetail': {
+        if (state.detailFrom === 'week') { state = { ...state, mode: 'week' }; return; }
+        returnToHub();
+        return;
+      }
       case 'unresolved':
       case 'termDensity': {
         returnToHub();
