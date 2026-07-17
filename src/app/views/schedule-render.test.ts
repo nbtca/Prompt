@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { renderSchedule, type ScheduleViewState } from './schedule-render.js';
+import { renderSchedule, hubShortcuts, type ScheduleViewState } from './schedule-render.js';
 import { ListField } from '../fields/list-field.js';
 import { TextField } from '../fields/text-field.js';
 import { setLanguage } from '../../i18n/index.js';
@@ -56,18 +56,22 @@ describe('renderSchedule', () => {
   });
 
   it('hub mode shows the next-class banner, today, and the unresolved badge', () => {
-    const hubField = new ListField({
-      title: 'Schedule',
-      options: [
-        { value: 'week', label: 'This week' },
-        { value: 'unresolved', label: 'Needs attention', hint: '1' },
-      ],
-    });
     const out = stripAnsi(renderSchedule({
-      mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable, hubField,
+      mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable,
     }, new Date('2026-09-07T07:00:00')).join('\n'));
     expect(out).toContain('Math');
-    expect(out).toContain('Needs attention');
+    expect(out).toContain('⚠ 1');
+  });
+
+  it('hub mode shows the shortcut bar instead of a vertical menu', () => {
+    const out = stripAnsi(renderSchedule({
+      mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable,
+    }, new Date('2026-09-07T07:00:00')).join('\n'));
+    expect(out).toContain('[w] Full grid');
+    expect(out).toContain('[t] Term density');
+    expect(out).toContain('[s] Switch term');
+    expect(out).toContain('[e] Export .ics');
+    expect(out).toContain('[x] Log out');
   });
 
   it('hub mode shows a "term not started" state instead of a negative week when weekOne is in the future', () => {
@@ -77,46 +81,28 @@ describe('renderSchedule', () => {
     // today/timeline/week-strip section anyway against a future weekOne
     // produced a nonsensical negative week number and an empty class grid
     // that read as "there are classes right now."
-    const hubField = new ListField({ title: 'Schedule', options: [{ value: 'week', label: 'This week' }] });
     const out = stripAnsi(renderSchedule({
-      mode: 'hub', key: '2026-3', weekOne: '2099-01-05', timetable, hubField,
+      mode: 'hub', key: '2026-3', weekOne: '2099-01-05', timetable,
     }, new Date('2026-09-07T07:00:00')).join('\n'));
     expect(out).toContain("Term hasn't started yet");
     expect(out).toContain('2099-01-05');
-    // A *negative* week number specifically -- "Week 1 preview" (the
-    // deliberate week-1-preview grid added below) legitimately contains
-    // "Week 1" and must not trip this assertion.
     expect(out).not.toMatch(/Week -\d/);
   });
 
   describe('term-not-started week-1 preview', () => {
-    // Regression: previously this state showed *only* "Term hasn't started
-    // yet" text, with zero grid content regardless of how tall the
-    // terminal was — "should we show a grid" was gated on there being a
-    // "current week" concept at all, not on available room, which broke
-    // this app's own adaptive-density convention (every other section
-    // shows more content on a tall terminal, never *no* content). The
-    // timetable's real week-1 data is already fetched by this point (see
-    // academic-calendar.ts's weekOne-ahead-of-now behavior), so there's no
-    // reason not to preview it.
     it('shows a week-1 preview grid on a tall terminal even though the term has not started', () => {
-      const hubField = new ListField({ title: 'Schedule', options: [{ value: 'week', label: 'This week' }] });
       const out = stripAnsi(renderSchedule({
-        mode: 'hub', key: '2026-3', weekOne: '2099-01-05', timetable: busyTimetable, hubField,
+        mode: 'hub', key: '2026-3', weekOne: '2099-01-05', timetable: busyTimetable,
       }, new Date('2026-09-07T07:00:00'), 45).join('\n'));
       expect(out).toContain("Term hasn't started yet");
       expect(out).toContain('Week 1 preview');
-      // Room 105 (Physics's location) is what the full grid distinctly
-      // places at period 3 -- the course name itself may truncate under
-      // location-priority cell formatting, location does not.
       expect(out).toContain('Room 105');
       expect(out).toContain('19:00'); // busyTimetable's 12-period table starts period 12 at 19:00
     });
 
     it('falls back to the week strip on a short terminal even though the term has not started', () => {
-      const hubField = new ListField({ title: 'Schedule', options: [{ value: 'week', label: 'This week' }] });
       const out = stripAnsi(renderSchedule({
-        mode: 'hub', key: '2026-3', weekOne: '2099-01-05', timetable: busyTimetable, hubField,
+        mode: 'hub', key: '2026-3', weekOne: '2099-01-05', timetable: busyTimetable,
       }, new Date('2026-09-07T07:00:00'), 19).join('\n'));
       expect(out).toContain('Week 1 preview');
       expect(out).not.toContain('19:00');
@@ -125,21 +111,19 @@ describe('renderSchedule', () => {
 
     it('shows an empty week-1 preview without crashing when there are no meetings at all', () => {
       const emptyTimetable: Timetable = { ...timetable, meetings: [] };
-      const hubField = new ListField({ title: 'Schedule', options: [{ value: 'week', label: 'This week' }] });
       expect(() => renderSchedule({
-        mode: 'hub', key: '2026-3', weekOne: '2099-01-05', timetable: emptyTimetable, hubField,
+        mode: 'hub', key: '2026-3', weekOne: '2099-01-05', timetable: emptyTimetable,
       }, new Date('2026-09-07T07:00:00'), 45)).not.toThrow();
       const out = stripAnsi(renderSchedule({
-        mode: 'hub', key: '2026-3', weekOne: '2099-01-05', timetable: emptyTimetable, hubField,
+        mode: 'hub', key: '2026-3', weekOne: '2099-01-05', timetable: emptyTimetable,
       }, new Date('2026-09-07T07:00:00'), 45).join('\n'));
       expect(out).toContain('Week 1 preview');
       expect(out).not.toContain('Math');
     });
 
     it('never collapses the week-1 preview into one array entry', () => {
-      const hubField = new ListField({ title: 'Schedule', options: [{ value: 'week', label: 'This week' }] });
       const lines = renderSchedule({
-        mode: 'hub', key: '2026-3', weekOne: '2099-01-05', timetable: busyTimetable, hubField,
+        mode: 'hub', key: '2026-3', weekOne: '2099-01-05', timetable: busyTimetable,
       }, new Date('2026-09-07T07:00:00'), 45);
       for (const line of lines) {
         expect(line).not.toContain('\n');
@@ -147,29 +131,9 @@ describe('renderSchedule', () => {
     });
   });
 
-  it('hub mode windows the menu instead of overflowing when the timeline pushes it past bodyRows', () => {
-    // Regression guard: the timeline/week-strip above the menu have dynamic
-    // height, and hubField previously had no maxVisible at all — a short
-    // terminal (or a busy today) silently dropped the menu's bottom rows
-    // (the unresolved-items warning, log out) with no scroll indicator.
-    const manyOptions = Array.from({ length: 8 }, (_, i) => ({ value: String(i), label: `MenuOption${i}` }));
-    const hubField = new ListField({ title: 'Schedule', options: manyOptions });
-    const out = stripAnsi(renderSchedule({
-      mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable, hubField,
-    }, new Date('2026-09-07T07:00:00'), 15).join('\n'));
-    const visibleCount = manyOptions.filter((o) => out.includes(o.label)).length;
-    expect(visibleCount).toBeLessThan(manyOptions.length);
-    expect(visibleCount).toBeGreaterThan(0);
-  });
-
   it('hub mode never collapses a multi-line renderer output into one array entry', () => {
-    // Regression guard for the renderTodayTimeline/renderWeekStrip wiring:
-    // both return one '\n'-joined string by this module's convention, and a
-    // missed .split('\n') at the call site corrupts the frame compositor's
-    // row count (the exact bug that previously pushed the header off-screen).
-    const hubField = new ListField({ title: 'Schedule', options: [{ value: 'week', label: 'This week' }] });
     const lines = renderSchedule({
-      mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable, hubField,
+      mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable,
     }, new Date('2026-09-07T07:00:00'));
     for (const line of lines) {
       expect(line).not.toContain('\n');
@@ -177,29 +141,26 @@ describe('renderSchedule', () => {
   });
 
   describe('adaptive week section', () => {
-    it('shows the full week grid inline on a tall terminal, with the menu still reachable', () => {
-      const hubField = new ListField({ title: 'Schedule', options: [{ value: 'week', label: 'This week' }, { value: 'logout', label: 'Log out' }] });
+    it('shows the full week grid inline on a tall terminal, with the shortcut bar still reachable', () => {
       const out = stripAnsi(renderSchedule({
-        mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: busyTimetable, hubField,
+        mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: busyTimetable,
       }, new Date('2026-09-07T07:00:00'), 45).join('\n'));
       expect(out).toContain('Physics'); // only the full grid places period-3 courses distinctly
       expect(out).toContain('19:00'); // busyTimetable's 12-period table starts period 12 at 19:00
-      expect(out).toContain('Log out'); // menu still rendered underneath
+      expect(out).toContain('Log out'); // shortcut bar still rendered underneath
     });
 
     it('stays with the compact week strip on a normal-size terminal', () => {
-      const hubField = new ListField({ title: 'Schedule', options: [{ value: 'week', label: 'This week' }] });
       const out = stripAnsi(renderSchedule({
-        mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: busyTimetable, hubField,
+        mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: busyTimetable,
       }, new Date('2026-09-07T07:00:00'), 19).join('\n'));
       expect(out).not.toContain('19:00');
       expect(out).toContain('has class'); // the strip's own legend text
     });
 
     it('never collapses the inline grid into one array entry', () => {
-      const hubField = new ListField({ title: 'Schedule', options: [{ value: 'week', label: 'This week' }] });
       const lines = renderSchedule({
-        mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: busyTimetable, hubField,
+        mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: busyTimetable,
       }, new Date('2026-09-07T07:00:00'), 45);
       for (const line of lines) {
         expect(line).not.toContain('\n');
@@ -207,30 +168,16 @@ describe('renderSchedule', () => {
     });
 
     it('threads the real terminal column width down to the grid, so a wide terminal stops truncating real course names', () => {
-      // Regression: the grid's cell width used to be a hardcoded 10
-      // regardless of the actual terminal width, so real course names
-      // truncated to "..." even with plenty of unused horizontal space —
-      // renderSchedule now threads ctx.size.cols all the way down.
       const longNameTimetable: Timetable = {
         ...timetable,
         meetings: [{ sourceId: null, courseName: '工业机器人系统', teacherNames: ['Dr Wu'], location: 'Room 105', weekday: 1, startPeriod: 1, endPeriod: 1, weeks: [1], kind: 'regular' }],
       };
-      const hubField = new ListField({ title: 'Schedule', options: [{ value: 'week', label: 'This week' }] });
       const narrowLines = renderSchedule({
-        mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: longNameTimetable, hubField,
+        mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: longNameTimetable,
       }, new Date('2026-09-07T07:00:00'), 45, 80).map((l) => stripAnsi(l));
-      // Wide enough for the cell to fit "Room 105" + separator + the full
-      // 14-column course name (location takes priority in each cell, so a
-      // merely-wider-than-80 terminal isn't automatically enough once a
-      // location is also competing for the same cell width).
       const wideLines = renderSchedule({
-        mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: longNameTimetable, hubField,
+        mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: longNameTimetable,
       }, new Date('2026-09-07T07:00:00'), 45, 210).map((l) => stripAnsi(l));
-      // Scoped to the grid's own period-1 row specifically, searching only
-      // *after* the "This week" heading -- the Today timeline above the
-      // grid also has its own "08:00 ─┬─ ..." row (never truncated), so a
-      // bare "starts with 08:00" search would ambiguously match that one
-      // first instead of the grid's.
       const narrowHeadingIdx = narrowLines.findIndex((l) => l.includes('This week'));
       const wideHeadingIdx = wideLines.findIndex((l) => l.includes('This week'));
       const narrowGridRow = narrowLines.slice(narrowHeadingIdx).find((l) => l.trim().startsWith('08:00'))!;
@@ -245,6 +192,29 @@ describe('renderSchedule', () => {
       mode: 'week', key: '2026-3', weekOne: '2026-09-07', timetable,
     }, new Date('2026-09-07T09:00:00')).join('\n'));
     expect(out).toContain('Math');
+  });
+
+  it('week mode threads the cursor into renderWeekGrid', () => {
+    const withCursor = renderSchedule({
+      mode: 'week', key: '2026-3', weekOne: '2026-09-07', timetable, gridCursor: { weekday: 1, period: 1 },
+    }, new Date('2026-09-07T09:00:00')).join('\n');
+    const without = renderSchedule({
+      mode: 'week', key: '2026-3', weekOne: '2026-09-07', timetable,
+    }, new Date('2026-09-07T09:00:00')).join('\n');
+    expect(withCursor).not.toBe(without);
+  });
+
+  it('meetingDetail mode renders the full meeting detail card', () => {
+    const out = stripAnsi(renderSchedule({
+      mode: 'meetingDetail', key: '2026-3', weekOne: '2026-09-07', timetable, detailMeeting: timetable.meetings[0],
+    }, new Date('2026-09-07T09:00:00')).join('\n'));
+    expect(out).toContain('Math');
+    expect(out).toContain('Room 201');
+  });
+
+  it('meetingDetail mode shows an error message when there is no detail meeting to show', () => {
+    const out = stripAnsi(renderSchedule({ mode: 'meetingDetail' }, new Date()).join('\n'));
+    expect(out.trim().length).toBeGreaterThan(0);
   });
 
   it('unresolved mode lists the unresolved item', () => {
@@ -264,6 +234,35 @@ describe('renderSchedule', () => {
   it('error mode shows the error message', () => {
     const out = stripAnsi(renderSchedule({ mode: 'error', errorMessage: 'Something broke' }, new Date()).join('\n'));
     expect(out).toContain('Something broke');
+  });
+});
+
+describe('hubShortcuts', () => {
+  const baseTimetable: Omit<Timetable, 'unresolvedItems'> = {
+    term: { academicYear: '2026', semester: '3' },
+    meetings: [], periods: [], calendarDays: [], warnings: [],
+    fetchedAt: new Date('2026-09-07T00:00:00Z'),
+  };
+
+  it('does not include an unresolved-items shortcut when there are none', () => {
+    const shortcuts = hubShortcuts({ ...baseTimetable, unresolvedItems: [] });
+    expect(shortcuts.find((s) => s.key === 'u')).toBeUndefined();
+  });
+
+  it('includes an unresolved-items shortcut with a count when there are unresolved items', () => {
+    const shortcuts = hubShortcuts({
+      ...baseTimetable,
+      unresolvedItems: [{ kind: 'practice', itemIndex: 0, sourceFields: { kcmc: 'Fitness test' } }],
+    });
+    const unresolved = shortcuts.find((s) => s.key === 'u');
+    expect(unresolved).toBeDefined();
+    expect(unresolved?.label).toContain('1');
+    expect(unresolved?.showKey).toBe(false);
+  });
+
+  it('always includes the full-grid, term-density, switch-term, export, and logout shortcuts', () => {
+    const shortcuts = hubShortcuts({ ...baseTimetable, unresolvedItems: [] });
+    expect(shortcuts.map((s) => s.key)).toEqual(['w', 't', 's', 'e', 'x']);
   });
 });
 
@@ -302,10 +301,6 @@ describe('renderSchedule — public mode', () => {
   });
 
   it('groups the term heading, progress bar, and countdown as one block with no blank lines inside it', () => {
-    // Regression: this cluster used to push a blank line *before* the bar
-    // and *before* the countdown line, inverting the app's dominant
-    // "content, then blank" rhythm (every other hub — Home, Events —
-    // never puts a blank before a block's own content).
     const state: ScheduleViewState = {
       mode: 'public',
       publicWindow: {
@@ -317,7 +312,7 @@ describe('renderSchedule — public mode', () => {
     const lines = renderSchedule(state, new Date('2026-10-01')).map((l) => stripAnsi(l));
     const headingIndex = lines.findIndex((l) => l.includes('2026-2027'));
     const barIndex = lines.findIndex((l) => /\d+\/\d+/.test(l));
-    expect(lines[headingIndex + 1]?.trim()).not.toBe(''); // no blank right after the heading
+    expect(lines[headingIndex + 1]?.trim()).not.toBe('');
     expect(barIndex).toBeGreaterThan(headingIndex);
   });
 
@@ -382,7 +377,7 @@ describe('renderSchedule — public mode', () => {
       const visibleCount = manyUpcoming.filter((e) => out.includes(e.title)).length;
       expect(visibleCount).toBeLessThan(manyUpcoming.length);
       expect(visibleCount).toBeGreaterThan(0);
-      expect(out).toContain('Log in'); // login field still present, not starved out
+      expect(out).toContain('Log in');
     });
 
     it('shows more public-upcoming events on a tall terminal', () => {
