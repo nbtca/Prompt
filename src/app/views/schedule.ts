@@ -261,7 +261,7 @@ export const scheduleView: View = {
     // size on every frame (not just construction time) — this is what
     // keeps a long list correctly windowed across a live resize.
     state.termField?.setMaxVisible(computeMaxVisible(ctx.bodyRows));
-    return renderSchedule(state, new Date(), ctx.bodyRows);
+    return renderSchedule(state, new Date(), ctx.bodyRows, ctx.size.cols);
   },
 
   capturesInput(): boolean {

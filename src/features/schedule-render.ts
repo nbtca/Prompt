@@ -147,15 +147,27 @@ function minutesOf(hhmm: string): number {
   return (h || 0) * 60 + (m || 0);
 }
 
-export function renderWeekGrid(meetings: readonly TimetableMeeting[], periods: readonly TimetablePeriod[], weekNumber: number, now: Date): string {
+export function renderWeekGrid(
+  meetings: readonly TimetableMeeting[], periods: readonly TimetablePeriod[], weekNumber: number, now: Date, cols = 80,
+): string {
   const week = meetingsInWeek(meetings, weekNumber);
   const todayWd = campusWeekday(now);
-  const cellW = 10;
   // 5, not 4: a two-digit period under the Chinese "第" label ("第10")
   // already fills 4 display columns on its own (CJK 第=2 + "10"=2), which
   // left zero room for padEndV's own padding to separate it from the next
   // column — real campus period tables go up to 12.
   const rowHeadW = 5;
+  // Never wider than the longest real course name this week actually
+  // needs (+2 for breathing room before the next column) — growing cells
+  // just to fill unused terminal width when nothing would use the extra
+  // space reads as sloppy, not adaptive. Floored at the original fixed 10
+  // (narrow-terminal overflow is unchanged, pre-existing behavior — this
+  // only fixes the wide-terminal case, where real course names routinely
+  // truncated to "..." despite ample unused space to the grid's right).
+  const longestNameW = week.reduce((max, m) => Math.max(max, visualWidth(m.courseName)), 0);
+  const desiredCellW = longestNameW > 0 ? longestNameW + 2 : 10;
+  const availableCellW = Math.floor((cols - space.indent.length - rowHeadW) / 7);
+  const cellW = Math.max(10, Math.min(desiredCellW, availableCellW));
   const totalW = rowHeadW + cellW * 7;
   // cell lookup: weekday(1..7) × period → course
   const at = (wd: number, period: number): string => {

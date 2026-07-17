@@ -202,6 +202,31 @@ describe('renderSchedule', () => {
         expect(line).not.toContain('\n');
       }
     });
+
+    it('threads the real terminal column width down to the grid, so a wide terminal stops truncating real course names', () => {
+      // Regression: the grid's cell width used to be a hardcoded 10
+      // regardless of the actual terminal width, so real course names
+      // truncated to "..." even with plenty of unused horizontal space —
+      // renderSchedule now threads ctx.size.cols all the way down.
+      const longNameTimetable: Timetable = {
+        ...timetable,
+        meetings: [{ sourceId: null, courseName: '工业机器人系统', teacherNames: ['Dr Wu'], location: 'Room 105', weekday: 1, startPeriod: 1, endPeriod: 1, weeks: [1], kind: 'regular' }],
+      };
+      const hubField = new ListField({ title: 'Schedule', options: [{ value: 'week', label: 'This week' }] });
+      const narrowLines = renderSchedule({
+        mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: longNameTimetable, hubField,
+      }, new Date('2026-09-07T07:00:00'), 45, 80).map((l) => stripAnsi(l));
+      const wideLines = renderSchedule({
+        mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: longNameTimetable, hubField,
+      }, new Date('2026-09-07T07:00:00'), 45, 120).map((l) => stripAnsi(l));
+      // Scoped to the grid's own period-1 row specifically -- the full
+      // course name legitimately also appears in the Next/Today banners
+      // above the grid, which were never truncated (only grid cells are).
+      const narrowGridRow = narrowLines.find((l) => l.trim().startsWith('P1'))!;
+      const wideGridRow = wideLines.find((l) => l.trim().startsWith('P1'))!;
+      expect(narrowGridRow).not.toContain('工业机器人系统');
+      expect(wideGridRow).toContain('工业机器人系统');
+    });
   });
 
   it('week mode renders the grid', () => {

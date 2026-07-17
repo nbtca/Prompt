@@ -58,9 +58,9 @@ function hint(label: string): string {
  * branches of renderHubBody — the same measure-and-fallback decision, just
  * against a different week number. */
 function pushAdaptiveWeekGrid(
-  lines: string[], tt: Timetable, week: number, todayWd: number, now: Date, bodyRows: number, hubField: ListField | undefined,
+  lines: string[], tt: Timetable, week: number, todayWd: number, now: Date, bodyRows: number, cols: number, hubField: ListField | undefined,
 ): void {
-  const gridLines = renderWeekGrid(tt.meetings, tt.periods, week, now).split('\n');
+  const gridLines = renderWeekGrid(tt.meetings, tt.periods, week, now, cols).split('\n');
   // Derived from the field's *real* option count rather than a guessed
   // constant shared with Events' differently-sized hub menu: title +
   // blank + options + blank + footer (this hub field, unlike Events',
@@ -73,7 +73,7 @@ function pushAdaptiveWeekGrid(
   }
 }
 
-function renderHubBody(state: ScheduleViewState, now: Date, bodyRows: number): string[] {
+function renderHubBody(state: ScheduleViewState, now: Date, bodyRows: number, cols: number): string[] {
   const trans = t();
   const lines: string[] = [];
   const tt = state.timetable;
@@ -100,7 +100,7 @@ function renderHubBody(state: ScheduleViewState, now: Date, bodyRows: number): s
       })));
       lines.push('');
       lines.push(heading(trans.timetable.termPreviewWeek));
-      pushAdaptiveWeekGrid(lines, tt, 1, todayWd, now, bodyRows, state.hubField);
+      pushAdaptiveWeekGrid(lines, tt, 1, todayWd, now, bodyRows, cols, state.hubField);
       lines.push('');
     } else {
       const today = meetingsOnDay(tt.meetings, todayWd, week);
@@ -118,7 +118,7 @@ function renderHubBody(state: ScheduleViewState, now: Date, bodyRows: number): s
       // be a single hardcoded threshold. Measure it for real: render it,
       // and use it only if it (plus a floor reserved for the menu) still
       // fits, otherwise fall back to the fixed-height compact strip.
-      pushAdaptiveWeekGrid(lines, tt, week, todayWd, now, bodyRows, state.hubField);
+      pushAdaptiveWeekGrid(lines, tt, week, todayWd, now, bodyRows, cols, state.hubField);
       lines.push('');
     }
   }
@@ -209,7 +209,7 @@ function renderPublicBody(state: ScheduleViewState, now: Date, bodyRows: number)
   return lines;
 }
 
-export function renderSchedule(state: ScheduleViewState, now: Date, bodyRows = 100): string[] {
+export function renderSchedule(state: ScheduleViewState, now: Date, bodyRows = 100, cols = 80): string[] {
   const trans = t();
   switch (state.mode) {
     case 'loading':
@@ -231,13 +231,13 @@ export function renderSchedule(state: ScheduleViewState, now: Date, bodyRows = 1
         ...(state.weekOneField?.render() ?? []),
       ];
     case 'hub':
-      return renderHubBody(state, now, bodyRows);
+      return renderHubBody(state, now, bodyRows, cols);
     case 'week':
       return state.timetable && state.weekOne
         ? [
           heading(trans.timetable.hubWeek),
           '',
-          ...renderWeekGrid(state.timetable.meetings, state.timetable.periods, currentWeekNumber(state.weekOne, now), now).split('\n'),
+          ...renderWeekGrid(state.timetable.meetings, state.timetable.periods, currentWeekNumber(state.weekOne, now), now, cols).split('\n'),
         ]
         : [hint(trans.timetable.genericError)];
     case 'termDensity':

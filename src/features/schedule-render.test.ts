@@ -62,6 +62,56 @@ describe('renderWeekGrid', () => {
     done();
   });
 
+  describe('column-width adaptivity', () => {
+    // Regression: cell width was a hardcoded 10, with zero awareness of the
+    // real terminal width — on a wide terminal, real course names (which
+    // routinely run well past 10 display columns, especially in Chinese)
+    // truncated to "..." even though there was ample unused horizontal
+    // space to the right of the grid. This is the same "more room should
+    // show more" adaptive-density convention already established for
+    // bodyRows, just along the other axis.
+    it('grows cell width on a wide terminal to fit a real long course name without truncating', () => {
+      // 7 CJK chars = 14 display columns -- representative of real campus
+      // course names (matches "工业机器人系统" from real fetched data),
+      // not an artificial worst case. At cols=120 there's room for it.
+      const longName = '工业机器人系统';
+      const out = stripAnsi(renderWeekGrid([mk({ courseName: longName, weekday: 1, startPeriod: 1, weeks: [1] })], periods, 1, new Date('2026-09-07T09:00:00'), 120));
+      expect(out).toContain(longName);
+      done();
+    });
+
+    it('does not grow cell width past what real course names actually need, even on a very wide terminal', () => {
+      const out = stripAnsi(renderWeekGrid([mk({ courseName: 'Math', weekday: 1, startPeriod: 1, weeks: [1] })], periods, 1, new Date('2026-09-07T09:00:00'), 200));
+      const headerLine = out.split('\n')[0]!;
+      // Short names shouldn't stretch the grid out to fill a 200-column
+      // terminal -- growing to "whatever the terminal can hold" instead of
+      // "whatever the content needs" would read as sloppy, not adaptive.
+      // Matches the exact old fixed-width total: indent(3) + rowHeadW(5) + 10*7.
+      expect(visualWidth(headerLine)).toBe(3 + 5 + 10 * 7);
+      done();
+    });
+
+    it('keeps the existing minimum cell width on a normal terminal, unchanged from before this feature', () => {
+      const out = stripAnsi(renderWeekGrid([mk({ courseName: 'Physics', weekday: 1, startPeriod: 1, weeks: [1] })], periods, 1, new Date('2026-09-07T09:00:00')));
+      expect(out).toContain('Physics'); // 7 chars, fits the existing 10-wide cell untouched
+      done();
+    });
+
+    it('caps growth at what the given terminal width can actually hold, truncating instead of overflowing', () => {
+      // An 18-char CJK name (36 display columns) needs more room than a
+      // 150-column terminal can give 7 side-by-side cells -- cellW should
+      // grow past the old fixed 10, but stop short of what the name would
+      // ideally want, and never push the row past the terminal's own width.
+      const longName = '习近平新时代中国特色社会主义思想概论';
+      const out = stripAnsi(renderWeekGrid([mk({ courseName: longName, weekday: 1, startPeriod: 1, weeks: [1] })], periods, 1, new Date('2026-09-07T09:00:00'), 150));
+      const headerLine = out.split('\n')[0]!;
+      expect(visualWidth(headerLine)).toBeGreaterThan(3 + 5 + 10 * 7); // grew past the old fixed baseline
+      expect(visualWidth(headerLine)).toBeLessThanOrEqual(150); // but never past the terminal's own width
+      expect(out).not.toContain(longName); // still not wide enough for the full name -- truncates, doesn't overflow
+      done();
+    });
+  });
+
   it('leaves a real gap after a two-digit Chinese period label ("第10"), not glued to the next column', () => {
     // Regression: rowHeadW=4 exactly fits "第10" (CJK 第=2 cols + "10"=2
     // cols) with zero room for padEndV to add a separating space, unlike
