@@ -274,7 +274,13 @@
     "weekAheadBusy": "Busy",
     "weekAheadFree": "Free",
     "weekAheadNone": "N/A",
-    "termPreviewWeek": "Week 1 preview"
+    "termPreviewWeek": "Week 1 preview",
+    "hubFullGrid": "Full grid",
+    "detailTime": "Time",
+    "detailLocation": "Location",
+    "detailTeacher": "Teacher",
+    "detailWeeks": "Weeks",
+    "teacherSeparator": ", "
   },
   "theme": {
     "current": "Current theme settings",

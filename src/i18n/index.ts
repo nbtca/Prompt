@@ -294,6 +294,12 @@ export interface Translations {
     weekAheadFree: string;
     weekAheadNone: string;
     termPreviewWeek: string;
+    hubFullGrid: string;
+    detailTime: string;
+    detailLocation: string;
+    detailTeacher: string;
+    detailWeeks: string;
+    teacherSeparator: string;
   };
   theme: {
     current: string;

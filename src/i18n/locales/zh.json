@@ -274,7 +274,13 @@
     "weekAheadBusy": "较满",
     "weekAheadFree": "较空",
     "weekAheadNone": "无",
-    "termPreviewWeek": "第一周预览"
+    "termPreviewWeek": "第一周预览",
+    "hubFullGrid": "完整课表",
+    "detailTime": "时间",
+    "detailLocation": "地点",
+    "detailTeacher": "教师",
+    "detailWeeks": "周次",
+    "teacherSeparator": "、"
   },
   "theme": {
     "current": "当前主题设置",
