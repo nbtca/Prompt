@@ -147,35 +147,67 @@ function minutesOf(hhmm: string): number {
   return (h || 0) * 60 + (m || 0);
 }
 
+/** A cell's content when a meeting starts there: the location in full
+ * whenever there's room (knowing *where* to go matters more than the exact
+ * class title, which is usually recognizable even truncated), with the
+ * course name truncated to whatever's left — and truncated to nothing
+ * before the location itself ever gives up any width. */
+function gridCellContent(m: TimetableMeeting, cellW: number): string {
+  if (!m.location) return truncate(m.courseName, cellW);
+  const sep = '  ';
+  const locW = visualWidth(m.location);
+  if (locW + sep.length >= cellW) return truncate(m.location, cellW);
+  const nameW = cellW - locW - sep.length;
+  return `${m.location}${sep}${truncate(m.courseName, nameW)}`;
+}
+
 export function renderWeekGrid(
   meetings: readonly TimetableMeeting[], periods: readonly TimetablePeriod[], weekNumber: number, now: Date, cols = 80,
 ): string {
   const week = meetingsInWeek(meetings, weekNumber);
   const todayWd = campusWeekday(now);
-  // 5, not 4: a two-digit period under the Chinese "第" label ("第10")
-  // already fills 4 display columns on its own (CJK 第=2 + "10"=2), which
-  // left zero room for padEndV's own padding to separate it from the next
-  // column — real campus period tables go up to 12.
-  const rowHeadW = 5;
-  // Never wider than the longest real course name this week actually
-  // needs (+2 for breathing room before the next column) — growing cells
-  // just to fill unused terminal width when nothing would use the extra
-  // space reads as sloppy, not adaptive. Floored at the original fixed 10
-  // (narrow-terminal overflow is unchanged, pre-existing behavior — this
-  // only fixes the wide-terminal case, where real course names routinely
-  // truncated to "..." despite ample unused space to the grid's right).
-  const longestNameW = week.reduce((max, m) => Math.max(max, visualWidth(m.courseName)), 0);
-  const desiredCellW = longestNameW > 0 ? longestNameW + 2 : 10;
+  // Row labels are the period's real clock start time ("08:00"), always
+  // exactly 5 display columns — knowing when to actually be there is more
+  // useful than an abstract period index. 6, not 5: "08:00" alone already
+  // fills 5 columns with zero room for padEndV's own separating space
+  // before the first cell (the same class of bug the old CJK period label
+  // had, just for a uniformly-5-wide label instead of a variable one).
+  const rowHeadW = 6;
+  // Real cell content is "{location}  {courseName}" when a location is
+  // known, course-name-only otherwise (see gridCellContent). Measure the
+  // widest real content this week actually needs, capped by what the given
+  // terminal can hold.
+  const idealCellW = week.reduce((max, m) => {
+    const w = m.location ? visualWidth(m.location) + 2 + visualWidth(m.courseName) : visualWidth(m.courseName);
+    return Math.max(max, w);
+  }, 0) || 10;
+  // The floor is content-aware, not a flat 10: once a location is
+  // prepended, a flat 10 is often *entirely* consumed by "location + the
+  // 2-column separator", squeezing the course name down to zero real
+  // characters (truncate() needs at least 5 columns to show even one real
+  // CJK character before the "..." marker) -- exactly the kind of
+  // "recognizable even truncated" name visibility the location-priority
+  // format is supposed to preserve, not eliminate. Name-only cells (no
+  // location) keep the original flat-10 floor, unchanged from before.
+  const NAME_SLIVER = 5;
+  const minCellW = week.reduce((max, m) => {
+    const w = m.location ? visualWidth(m.location) + 2 + NAME_SLIVER : 10;
+    return Math.max(max, w);
+  }, 10);
   const availableCellW = Math.floor((cols - space.indent.length - rowHeadW) / 7);
-  const cellW = Math.max(10, Math.min(desiredCellW, availableCellW));
+  const cellW = Math.max(minCellW, Math.min(idealCellW, availableCellW));
   const totalW = rowHeadW + cellW * 7;
-  // cell lookup: weekday(1..7) × period → course
-  const at = (wd: number, period: number): string => {
-    const m = week.find((x) => x.weekday === wd && period >= x.startPeriod && period <= x.endPeriod);
-    return m ? truncate(m.courseName, cellW) : '';
-  };
+  // Consecutive periods of the same meeting collapse into one labeled cell
+  // at its starting period — later periods in its span show a plain
+  // connector instead of repeating the same course/location text down the
+  // whole column. A genuine conflict (two meetings both starting at the
+  // same weekday+period) is rare and, like the pre-existing lookup, just
+  // shows whichever one is found first.
+  const startingAt = (wd: number, period: number) => week.find((m) => m.weekday === wd && m.startPeriod === period);
+  const continuingAt = (wd: number, period: number) => week.find((m) => m.weekday === wd && m.startPeriod < period && period <= m.endPeriod);
   const lines: string[] = [];
   const todayMark = pickIcon('•', '*');
+  const connector = pickIcon('│', '|');
   const headerCells = WEEKDAY_KEYS.map((d, i) => {
     const wd = i + 1;
     const label = wd === todayWd ? `${d}${todayMark}` : d;
@@ -184,11 +216,19 @@ export function renderWeekGrid(
   lines.push(space.indent + padEndV('', rowHeadW) + headerCells);
   const sorted = [...periods].sort((a, b) => a.period - b.period);
   sorted.forEach((p, i) => {
-    const rowHead = type.hint(padEndV(`${t().timetable.periodShort}${p.period}`, rowHeadW));
+    const rowHead = type.hint(padEndV(p.start, rowHeadW));
     const cells = [1, 2, 3, 4, 5, 6, 7].map((wd) => {
-      const v = at(wd, p.period);
       const isToday = wd === todayWd;
-      const text = v ? (isToday ? type.active(v) : type.body(v)) : type.hint(pickIcon('·', '.'));
+      const starting = startingAt(wd, p.period);
+      let text: string;
+      if (starting) {
+        const content = gridCellContent(starting, cellW);
+        text = isToday ? type.active(content) : type.body(content);
+      } else if (continuingAt(wd, p.period)) {
+        text = type.hint(connector);
+      } else {
+        text = type.hint(pickIcon('·', '.'));
+      }
       return padEndV(text, cellW);
     }).join('');
     lines.push(space.indent + rowHead + cells);

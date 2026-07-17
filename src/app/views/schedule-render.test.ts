@@ -106,8 +106,11 @@ describe('renderSchedule', () => {
       }, new Date('2026-09-07T07:00:00'), 45).join('\n'));
       expect(out).toContain("Term hasn't started yet");
       expect(out).toContain('Week 1 preview');
-      expect(out).toContain('Physics'); // only the full grid places period-3 courses distinctly
-      expect(out).toContain('P12');
+      // Room 105 (Physics's location) is what the full grid distinctly
+      // places at period 3 -- the course name itself may truncate under
+      // location-priority cell formatting, location does not.
+      expect(out).toContain('Room 105');
+      expect(out).toContain('19:00'); // busyTimetable's 12-period table starts period 12 at 19:00
     });
 
     it('falls back to the week strip on a short terminal even though the term has not started', () => {
@@ -116,7 +119,7 @@ describe('renderSchedule', () => {
         mode: 'hub', key: '2026-3', weekOne: '2099-01-05', timetable: busyTimetable, hubField,
       }, new Date('2026-09-07T07:00:00'), 19).join('\n'));
       expect(out).toContain('Week 1 preview');
-      expect(out).not.toContain('P12');
+      expect(out).not.toContain('19:00');
       expect(out).toContain('has class'); // the strip's own legend text
     });
 
@@ -180,7 +183,7 @@ describe('renderSchedule', () => {
         mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: busyTimetable, hubField,
       }, new Date('2026-09-07T07:00:00'), 45).join('\n'));
       expect(out).toContain('Physics'); // only the full grid places period-3 courses distinctly
-      expect(out).toContain('P12'); // the full grid's row for the 12th period
+      expect(out).toContain('19:00'); // busyTimetable's 12-period table starts period 12 at 19:00
       expect(out).toContain('Log out'); // menu still rendered underneath
     });
 
@@ -189,7 +192,7 @@ describe('renderSchedule', () => {
       const out = stripAnsi(renderSchedule({
         mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: busyTimetable, hubField,
       }, new Date('2026-09-07T07:00:00'), 19).join('\n'));
-      expect(out).not.toContain('P12');
+      expect(out).not.toContain('19:00');
       expect(out).toContain('has class'); // the strip's own legend text
     });
 
@@ -216,14 +219,22 @@ describe('renderSchedule', () => {
       const narrowLines = renderSchedule({
         mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: longNameTimetable, hubField,
       }, new Date('2026-09-07T07:00:00'), 45, 80).map((l) => stripAnsi(l));
+      // Wide enough for the cell to fit "Room 105" + separator + the full
+      // 14-column course name (location takes priority in each cell, so a
+      // merely-wider-than-80 terminal isn't automatically enough once a
+      // location is also competing for the same cell width).
       const wideLines = renderSchedule({
         mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: longNameTimetable, hubField,
-      }, new Date('2026-09-07T07:00:00'), 45, 120).map((l) => stripAnsi(l));
-      // Scoped to the grid's own period-1 row specifically -- the full
-      // course name legitimately also appears in the Next/Today banners
-      // above the grid, which were never truncated (only grid cells are).
-      const narrowGridRow = narrowLines.find((l) => l.trim().startsWith('P1'))!;
-      const wideGridRow = wideLines.find((l) => l.trim().startsWith('P1'))!;
+      }, new Date('2026-09-07T07:00:00'), 45, 180).map((l) => stripAnsi(l));
+      // Scoped to the grid's own period-1 row specifically, searching only
+      // *after* the "This week" heading -- the Today timeline above the
+      // grid also has its own "08:00 ─┬─ ..." row (never truncated), so a
+      // bare "starts with 08:00" search would ambiguously match that one
+      // first instead of the grid's.
+      const narrowHeadingIdx = narrowLines.findIndex((l) => l.includes('This week'));
+      const wideHeadingIdx = wideLines.findIndex((l) => l.includes('This week'));
+      const narrowGridRow = narrowLines.slice(narrowHeadingIdx).find((l) => l.trim().startsWith('08:00'))!;
+      const wideGridRow = wideLines.slice(wideHeadingIdx).find((l) => l.trim().startsWith('08:00'))!;
       expect(narrowGridRow).not.toContain('工业机器人系统');
       expect(wideGridRow).toContain('工业机器人系统');
     });

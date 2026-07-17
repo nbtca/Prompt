@@ -47,7 +47,7 @@ describe('renderTodayClasses', () => {
 
 describe('renderWeekGrid', () => {
   it('renders weekday headers and places a course in its cell', () => {
-    const out = stripAnsi(renderWeekGrid([mk({ courseName: 'Math', weekday: 1, startPeriod: 1, weeks: [1] })], periods, 1, new Date('2026-09-07T09:00:00')));
+    const out = stripAnsi(renderWeekGrid([mk({ courseName: 'Math', location: null, weekday: 1, startPeriod: 1, endPeriod: 1, weeks: [1] })], periods, 1, new Date('2026-09-07T09:00:00')));
     expect(out).toMatch(/Mon/);         // weekday header
     expect(out).toContain('Math');      // placed in Mon / period 1
     done();
@@ -62,6 +62,21 @@ describe('renderWeekGrid', () => {
     done();
   });
 
+  describe('row headers show clock time, not an abstract period number', () => {
+    // Regression: row labels used to be an abstract "P1"/"P2" that told you
+    // nothing about when to actually be there without checking elsewhere —
+    // for something as practical as "what time is my class", the real
+    // clock time is what's actually useful.
+    it('shows the period\'s real start time as the row label', () => {
+      const out = stripAnsi(renderWeekGrid([], periods, 1, new Date('2026-09-07T09:00:00')));
+      const lines = out.split('\n');
+      expect(lines.some((l) => l.trim().startsWith('08:00'))).toBe(true); // period 1
+      expect(lines.some((l) => l.trim().startsWith('08:55'))).toBe(true); // period 2
+      expect(out).not.toMatch(/\bP1\b/);
+      done();
+    });
+  });
+
   describe('column-width adaptivity', () => {
     // Regression: cell width was a hardcoded 10, with zero awareness of the
     // real terminal width — on a wide terminal, real course names (which
@@ -69,30 +84,32 @@ describe('renderWeekGrid', () => {
     // truncated to "..." even though there was ample unused horizontal
     // space to the right of the grid. This is the same "more room should
     // show more" adaptive-density convention already established for
-    // bodyRows, just along the other axis.
+    // bodyRows, just along the other axis. These tests use location: null
+    // to isolate course-name-width behavior specifically -- location's
+    // effect on cell width is covered separately below.
     it('grows cell width on a wide terminal to fit a real long course name without truncating', () => {
       // 7 CJK chars = 14 display columns -- representative of real campus
       // course names (matches "工业机器人系统" from real fetched data),
       // not an artificial worst case. At cols=120 there's room for it.
       const longName = '工业机器人系统';
-      const out = stripAnsi(renderWeekGrid([mk({ courseName: longName, weekday: 1, startPeriod: 1, weeks: [1] })], periods, 1, new Date('2026-09-07T09:00:00'), 120));
+      const out = stripAnsi(renderWeekGrid([mk({ courseName: longName, location: null, weekday: 1, startPeriod: 1, endPeriod: 1, weeks: [1] })], periods, 1, new Date('2026-09-07T09:00:00'), 120));
       expect(out).toContain(longName);
       done();
     });
 
     it('does not grow cell width past what real course names actually need, even on a very wide terminal', () => {
-      const out = stripAnsi(renderWeekGrid([mk({ courseName: 'Math', weekday: 1, startPeriod: 1, weeks: [1] })], periods, 1, new Date('2026-09-07T09:00:00'), 200));
+      const out = stripAnsi(renderWeekGrid([mk({ courseName: 'Math', location: null, weekday: 1, startPeriod: 1, endPeriod: 1, weeks: [1] })], periods, 1, new Date('2026-09-07T09:00:00'), 200));
       const headerLine = out.split('\n')[0]!;
       // Short names shouldn't stretch the grid out to fill a 200-column
       // terminal -- growing to "whatever the terminal can hold" instead of
       // "whatever the content needs" would read as sloppy, not adaptive.
-      // Matches the exact old fixed-width total: indent(3) + rowHeadW(5) + 10*7.
-      expect(visualWidth(headerLine)).toBe(3 + 5 + 10 * 7);
+      // Matches the exact fixed-width total: indent(3) + rowHeadW(6) + 10*7.
+      expect(visualWidth(headerLine)).toBe(3 + 6 + 10 * 7);
       done();
     });
 
     it('keeps the existing minimum cell width on a normal terminal, unchanged from before this feature', () => {
-      const out = stripAnsi(renderWeekGrid([mk({ courseName: 'Physics', weekday: 1, startPeriod: 1, weeks: [1] })], periods, 1, new Date('2026-09-07T09:00:00')));
+      const out = stripAnsi(renderWeekGrid([mk({ courseName: 'Physics', location: null, weekday: 1, startPeriod: 1, endPeriod: 1, weeks: [1] })], periods, 1, new Date('2026-09-07T09:00:00')));
       expect(out).toContain('Physics'); // 7 chars, fits the existing 10-wide cell untouched
       done();
     });
@@ -103,38 +120,83 @@ describe('renderWeekGrid', () => {
       // grow past the old fixed 10, but stop short of what the name would
       // ideally want, and never push the row past the terminal's own width.
       const longName = '习近平新时代中国特色社会主义思想概论';
-      const out = stripAnsi(renderWeekGrid([mk({ courseName: longName, weekday: 1, startPeriod: 1, weeks: [1] })], periods, 1, new Date('2026-09-07T09:00:00'), 150));
+      const out = stripAnsi(renderWeekGrid([mk({ courseName: longName, location: null, weekday: 1, startPeriod: 1, endPeriod: 1, weeks: [1] })], periods, 1, new Date('2026-09-07T09:00:00'), 150));
       const headerLine = out.split('\n')[0]!;
-      expect(visualWidth(headerLine)).toBeGreaterThan(3 + 5 + 10 * 7); // grew past the old fixed baseline
+      expect(visualWidth(headerLine)).toBeGreaterThan(3 + 6 + 10 * 7); // grew past the old fixed baseline
       expect(visualWidth(headerLine)).toBeLessThanOrEqual(150); // but never past the terminal's own width
       expect(out).not.toContain(longName); // still not wide enough for the full name -- truncates, doesn't overflow
       done();
     });
   });
 
-  it('leaves a real gap after a two-digit Chinese period label ("第10"), not glued to the next column', () => {
-    // Regression: rowHeadW=4 exactly fits "第10" (CJK 第=2 cols + "10"=2
-    // cols) with zero room for padEndV to add a separating space, unlike
-    // single-digit periods ("第1" = 3 cols, leaving 1). Only shows up with
-    // real >9-period data, which nothing exercised until the adaptive
-    // hub started rendering the full grid inline with a real 12-period
-    // campus period table.
-    setLanguage('zh');
-    resetIconCache();
-    try {
-      const twelvePeriods: TimetablePeriod[] = Array.from({ length: 12 }, (_, i) => ({
-        period: i + 1, label: null, start: `${String(8 + i).padStart(2, '0')}:00`, end: `${String(8 + i).padStart(2, '0')}:45`,
-      }));
-      const out = renderWeekGrid([], twelvePeriods, 1, new Date('2026-09-07T09:00:00'));
-      const lines = stripAnsi(out).split('\n');
-      const row10 = lines.find((l) => l.startsWith('   第10'));
-      expect(row10).toBeDefined();
-      expect(row10).not.toMatch(/第10[^\s]/); // must not run straight into the next cell
-    } finally {
-      setLanguage('en');
-      resetIconCache();
+  describe('location takes priority over course name in each cell', () => {
+    // For actually getting to class, the room matters more than the exact
+    // title (which is usually recognizable even truncated) -- so a cell
+    // shows the location in full whenever there's room, and gives the
+    // course name whatever's left, truncating the name first.
+    it('shows both the full location and the full course name when there is room for both', () => {
+      const out = stripAnsi(renderWeekGrid([mk({ courseName: 'Math', location: 'sl707', weekday: 1, startPeriod: 1, endPeriod: 1, weeks: [1] })], periods, 1, new Date('2026-09-07T09:00:00'), 120));
+      const lines = out.split('\n');
+      const p1Row = lines.find((l) => l.trim().startsWith('08:00'))!;
+      expect(p1Row).toContain('sl707');
+      expect(p1Row).toContain('Math');
       done();
-    }
+    });
+
+    it('truncates the course name before ever truncating the location', () => {
+      // cellW is forced down to exactly 10 (default cols=80); "sl707"(5) +
+      // separator(2) leaves only 3 columns for the name -- location must
+      // still come through whole.
+      const out = stripAnsi(renderWeekGrid([mk({ courseName: 'Advanced Mathematics', location: 'sl707', weekday: 1, startPeriod: 1, endPeriod: 1, weeks: [1] })], periods, 1, new Date('2026-09-07T09:00:00')));
+      const lines = out.split('\n');
+      const p1Row = lines.find((l) => l.trim().startsWith('08:00'))!;
+      expect(p1Row).toContain('sl707');
+      expect(p1Row).not.toContain('Advanced Mathematics');
+      done();
+    });
+
+    it('falls back to just the course name when a meeting has no location', () => {
+      const out = stripAnsi(renderWeekGrid([mk({ courseName: 'Math', location: null, weekday: 1, startPeriod: 1, endPeriod: 1, weeks: [1] })], periods, 1, new Date('2026-09-07T09:00:00')));
+      const lines = out.split('\n');
+      const p1Row = lines.find((l) => l.trim().startsWith('08:00'))!;
+      expect(p1Row).toContain('Math');
+      done();
+    });
+  });
+
+  describe('consecutive periods of the same meeting collapse into one labeled cell', () => {
+    // A meeting spanning periods 1-2 used to repeat its full course
+    // name/location text on both rows -- multiplying visual noise for
+    // information that's still the exact same class. Now it's labeled
+    // once, at its starting period; later periods in its span show a
+    // plain continuation marker instead of repeating the text. Genuine
+    // conflicts (two meetings both starting at the same weekday+period)
+    // are rare and, like the pre-existing lookup, just show whichever one
+    // is found first -- not worth over-engineering for.
+    it('labels only the starting period of a multi-period meeting, not every period it spans', () => {
+      // cols=100 leaves enough room for both "sl707" and the full "Math" --
+      // this test is about the starting-vs-continuation row difference,
+      // not about truncation, so it deliberately avoids that edge case.
+      const out = stripAnsi(renderWeekGrid([mk({ courseName: 'Math', location: 'sl707', weekday: 1, startPeriod: 1, endPeriod: 2, weeks: [1] })], periods, 1, new Date('2026-09-07T09:00:00'), 100));
+      const lines = out.split('\n');
+      const p1Row = lines.find((l) => l.trim().startsWith('08:00'))!;
+      const p2Row = lines.find((l) => l.trim().startsWith('08:55'))!;
+      expect(p1Row).toContain('Math');
+      expect(p2Row).not.toContain('Math');
+      expect(p2Row).not.toContain('sl707');
+      done();
+    });
+
+    it('shows a plain connector, not a "no class" dot, on a continuation row', () => {
+      const out = stripAnsi(renderWeekGrid([mk({ courseName: 'Math', location: 'sl707', weekday: 1, startPeriod: 1, endPeriod: 2, weeks: [1] })], periods, 1, new Date('2026-09-07T09:00:00')));
+      const lines = out.split('\n');
+      const p2Row = lines.find((l) => l.trim().startsWith('08:55'))!;
+      // The Mon column on the continuation row must be visually distinct
+      // from a genuinely free "no class" cell elsewhere on the same row.
+      const p2Cells = p2Row.slice(p2Row.indexOf('08:55') + 5).trim().split(/\s+/);
+      expect(p2Cells[0]).not.toBe('.'); // ascii "no class" glyph
+      done();
+    });
   });
 });
 
@@ -147,8 +209,8 @@ describe('renderWeekGrid gap marker', () => {
   it('inserts a separator line when the gap to the next period exceeds 30 minutes', () => {
     const out = stripAnsi(renderWeekGrid([], periodsWithGap, 1, new Date('2026-09-07T09:00:00')));
     const lines = out.split('\n');
-    const p2Index = lines.findIndex((l) => l.includes('P2'));
-    const p3Index = lines.findIndex((l) => l.includes('P3'));
+    const p2Index = lines.findIndex((l) => l.includes('08:55'));
+    const p3Index = lines.findIndex((l) => l.includes('13:30'));
     expect(p2Index).toBeGreaterThan(-1);
     expect(p3Index).toBeGreaterThan(p2Index + 1); // at least one separator line between them
     done();
