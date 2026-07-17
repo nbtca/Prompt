@@ -65,8 +65,13 @@ empty for personal timetables).
 - `Enter`: if the cell at the cursor has a meeting (starting or continuing
   there), enter the new `'meetingDetail'` mode (Part B) for that meeting. If
   the cell is empty, no-op.
-- Single letter keys (`w`, `t`, `s`, `e`, `l`, and `u` when applicable) trigger
-  the corresponding hub action directly — see Part C.
+- Single letter keys (`w`, `t`, `s`, `e`, `x`, and `u` when applicable) trigger
+  the corresponding hub action directly — see Part C. (`x`, not `l`: the
+  app's always-on vim-key layer, `src/core/vim-keys.ts`, remaps a raw `l`
+  keypress to Enter before it ever reaches a view's own key handler —
+  discovered while writing the implementation plan. Using `l` for logout
+  would have meant the letter shown in the shortcut bar silently never
+  fired.)
 - `Esc`/back: unchanged, leaves the Schedule tab (hub mode has nothing further
   to step back from — it's the tab's own root).
 
@@ -146,7 +151,7 @@ a single hint line (styled like this app's own footer hint bar, `type.hint`)
 listing available actions:
 
 ```
-   [w] Full grid  [t] Term density  [s] Switch term  [e] Export .ics  [⚠ 1]  [l] Log out
+   [w] Full grid  [t] Term density  [s] Switch term  [e] Export .ics  [⚠ 1]  [x] Log out
 ```
 
 - `[⚠ 1]` only appears when `unresolvedItems.length > 0` (same condition as
@@ -159,8 +164,9 @@ listing available actions:
   term density, `s` → the existing term-picker `ListField` (unchanged —
   switching terms is a genuine list-of-terms choice, not a single action, so
   it keeps its own interactive list), `e` → export (unchanged behavior, still
-  shows the resulting status message), `u` → unresolved items, `l` → log out
-  (unchanged behavior).
+  shows the resulting status message), `u` → unresolved items, `x` → log out
+  (unchanged behavior, just rebound from `l` — see Part A's note on the
+  vim-key collision).
 
 ### Data flow / state
 
