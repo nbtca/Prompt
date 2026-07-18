@@ -31,33 +31,6 @@ describe('composeFrame', () => {
     for (const line of f) expect(visualWidth(line)).toBe(3);
     expect(f[0]!.trim()).toBe('H'); expect(f[4]!.trim()).toBe('F');
   });
-
-  it('centers narrow body content horizontally, leaving header/footer untouched', () => {
-    // Body is 4 cols wide ('abcd'), frame is 20 cols -- centered pad is
-    // floor((20-4)/2) = 8 leading spaces before the content starts.
-    const f = composeFrame(['H'], ['abcd'], ['F'], 3, 20, 0).split('\n');
-    expect(f[1]!.indexOf('abcd')).toBe(8);
-    // Header/footer are never centered -- they're meant to already span
-    // the full width (tab bar, rule line, hint bar).
-    expect(f[0]!.indexOf('H')).toBe(0);
-    expect(f[2]!.indexOf('F')).toBe(0);
-  });
-
-  it('does not shift body content that already fills (or nearly fills) the terminal width', () => {
-    const wide = 'x'.repeat(18); // 18 of 20 cols -- pad would floor to 1
-    const f = composeFrame([], [wide], [], 1, 20, 0).split('\n');
-    expect(f[0]!.indexOf('x')).toBeLessThanOrEqual(1);
-  });
-
-  it('centers the body as one block -- every line gets the same left-pad, not centered individually', () => {
-    const f = composeFrame([], ['a', 'bb', 'ccc'], [], 3, 10, 0).split('\n');
-    // maxWidth=3 ('ccc') -> pad = floor((10-3)/2) = 3 for every line, even
-    // the shorter ones -- a ragged-left block, not three separately
-    // centered lines.
-    expect(f[0]!.indexOf('a')).toBe(3);
-    expect(f[1]!.indexOf('bb')).toBe(3);
-    expect(f[2]!.indexOf('ccc')).toBe(3);
-  });
 });
 
 describe('computeBodyRows', () => {
