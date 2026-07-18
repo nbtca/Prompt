@@ -280,15 +280,14 @@ describe('scheduleView — hub navigation', () => {
     expect(sessionStoreClear).toHaveBeenCalled();
   });
 
-  describe('short terminal — inline grid falls back to the non-interactive strip', () => {
+  describe('short/narrow terminal — inline grid falls back to the single-day view', () => {
     // A busy-enough period table (matches schedule-render.test.ts's own
     // "busyTimetable" fixture used to exercise this same fallback) so the
-    // grid genuinely does not fit in a short bodyRows, forcing renderHubBody
-    // to fall back to renderWeekStrip. Regression: arrow keys/Enter used to
-    // still move/act on state.gridCursor in this state even though the
-    // strip -- not the grid -- is what's actually on screen, so pressing
-    // Enter could pop open a meeting-detail card for a cell the student
-    // can't see.
+    // grid genuinely does not fit, forcing renderHubBody to fall back to the
+    // single-day view. Unlike the old non-interactive strip this replaced,
+    // the single-day view represents the exact same gridCursor as the grid
+    // -- arrow keys/Enter must keep working the same way here, not be
+    // gated off.
     const busyPeriods = Array.from({ length: 12 }, (_, i) => ({
       period: i + 1, label: null,
       start: `${String(8 + i).padStart(2, '0')}:00`, end: `${String(8 + i).padStart(2, '0')}:45`,
@@ -299,41 +298,39 @@ describe('scheduleView — hub navigation', () => {
     }];
 
     async function loadIntoShortHub(): Promise<AppContext> {
+      // fakeCtx()'s own cols (80) is already below MIN_GRID_COLS, so this
+      // never shows the grid regardless of bodyRows -- bodyRows=19 on top
+      // of that just also matches schedule-render.test.ts's own "too
+      // short" fixture, for a belt-and-suspenders "definitely not the grid"
+      // setup.
       const ctx = await loadIntoHub({ periods: busyPeriods, meetings: busyMeetings });
-      ctx.bodyRows = 19; // matches schedule-render.test.ts's own "too short, falls back to the strip" fixture
+      ctx.bodyRows = 19;
       return ctx;
     }
 
-    it('confirms the strip (not the grid), not the interactive grid, is what actually rendered', async () => {
+    it('confirms the single-day view (not the grid) is what actually rendered', async () => {
       const ctx = await loadIntoShortHub();
       const out = stripAnsi(scheduleView.render(ctx).join('\n'));
-      expect(out).not.toContain('19:00'); // the grid's own period-12 row label -- absent when the strip is shown
-      expect(out).toContain('has class'); // the strip's own legend text
+      expect(out).not.toContain('19:00'); // the grid's own period-12 row label -- absent when the day view is shown
+      expect(out).toContain('Room 201'); // the single-day view's own location column
     });
 
-    it('does not open a meeting-detail card or crash on Enter when the strip is shown instead of the grid', async () => {
+    it('opens a meeting-detail card on Enter in the single-day view, same as in the grid', async () => {
       const ctx = await loadIntoShortHub();
       // The default cursor starts at *today's real* weekday (whatever day
       // this suite happens to run on) -- move all the way left first (no
       // wraparound, so 7 presses guarantees landing on Monday/weekday 1
-      // regardless of the starting weekday, matching the pattern used by
-      // the "opens a meeting detail card" test above) so this deterministically
-      // lands on the Math meeting's cell. If the gate were missing, this
-      // would pop open its detail card even though the grid isn't visible.
-      expect(() => {
-        for (let i = 0; i < 7; i++) scheduleView.handleKey('\x1b[D', ctx);
-        scheduleView.handleKey('\r', ctx);
-      }).not.toThrow();
+      // regardless of the starting weekday) to deterministically land on
+      // the Math meeting. The single-day view is fully interactive, just
+      // like the grid -- Enter here must open the same detail card.
+      for (let i = 0; i < 7; i++) scheduleView.handleKey('\x1b[D', ctx);
+      scheduleView.handleKey('\r', ctx);
       const out = stripAnsi(scheduleView.render(ctx).join('\n'));
-      // meetingDetail mode renders only the detail card (no shortcut bar) --
-      // so "Log out" being present is itself proof no card opened and the
-      // view stayed on hub. (The banner above the strip legitimately
-      // mentions "Room 201" via the next-class summary, so asserting its
-      // absence would be the wrong check here.)
-      expect(out).toContain(t().timetable.hubLogout); // stayed on hub
+      expect(out).toContain('Math');
+      expect(out).toContain('Room 201');
     });
 
-    it('does not crash on arrow-key navigation when the strip is shown instead of the grid', async () => {
+    it('does not crash on arrow-key navigation in the single-day view', async () => {
       const ctx = await loadIntoShortHub();
       expect(() => {
         scheduleView.handleKey('\x1b[D', ctx);
@@ -344,11 +341,11 @@ describe('scheduleView — hub navigation', () => {
       expect(out).toContain(t().timetable.hubLogout); // stayed on hub
     });
 
-    it('still reaches the interactive grid via the "w" shortcut even when the inline strip is showing', async () => {
+    it('still reaches the standalone full-grid mode via the "w" shortcut even when the inline single-day view is showing', async () => {
       const ctx = await loadIntoShortHub();
       scheduleView.handleKey('w', ctx);
       const out = stripAnsi(scheduleView.render(ctx).join('\n'));
-      expect(out).toContain(t().timetable.hubWeek); // standalone full-screen week mode, unaffected by the gate
+      expect(out).toContain(t().timetable.hubWeek); // standalone full-screen week mode
     });
   });
 });

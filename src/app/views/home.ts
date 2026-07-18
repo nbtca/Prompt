@@ -65,8 +65,8 @@ function renderWeekAheadGrid(classDays: readonly boolean[], eventDays: readonly 
   const headerLine = `${space.indent}${padEndV('', rowLabelW)}${dayLabels}`;
 
   // Class row: weekend is hardcoded to the "N/A" glyph regardless of
-  // classDays data (campus never has weekend classes) -- matches
-  // renderWeekStrip's own established weekend treatment exactly.
+  // classDays data (campus never has weekend classes) -- the same
+  // weekend treatment used throughout the Schedule tab's own renderers.
   const classCells = days.map((wd) => {
     const isWeekend = wd === 6 || wd === 7;
     const glyphChar = isWeekend ? weekendChar : (classDays[wd - 1] ? hasClassChar : freeChar);

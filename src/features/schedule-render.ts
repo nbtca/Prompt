@@ -56,12 +56,17 @@ export function weekdayShortLabel(wd: number): string {
   return labels[wd - 1] ?? '';
 }
 
-/** A vertical timeline of today's classes: finished classes are dimmed and
- * marked done, the in-progress one (if any) is highlighted with a
- * remaining-minutes countdown and its location, and the timeline closes
- * with the last class's end time — a hand-drawn alternative to a flat list
- * that puts "what's happening right now" front and center. */
-export function renderTodayTimeline(meetings: readonly TimetableMeeting[], periods: readonly TimetablePeriod[], now: Date): string {
+/** Shared body for renderTodayTimeline and renderDayTimeline (below) --
+ * the two differ only in whether live/done status applies at all (it's
+ * meaningless for a day that isn't actually today) and whether location
+ * always shows or only for the live class. `cursorPeriod`, when given,
+ * highlights whichever meeting's span covers it, matching the interactive
+ * grid's own cursor -- Enter in the single-day view opens that meeting's
+ * detail card, the same as Enter on the grid's cursor cell. */
+function renderTimeline(
+  meetings: readonly TimetableMeeting[], periods: readonly TimetablePeriod[], now: Date,
+  isToday: boolean, alwaysShowLocation: boolean, cursorPeriod?: number,
+): string {
   const trans = t();
   const sorted = [...meetings].sort((a, b) => a.startPeriod - b.startPeriod);
   if (sorted.length === 0) return `${space.indent}${type.hint(trans.timetable.noClassToday)}`;
@@ -76,8 +81,9 @@ export function renderTodayTimeline(meetings: readonly TimetableMeeting[], perio
   const lines = sorted.map((m, i) => {
     const startStr = periods.find((p) => p.period === m.startPeriod)?.start ?? '00:00';
     const endStr = periods.find((p) => p.period === m.endPeriod)?.end ?? '23:59';
-    const isLive = nowStr >= startStr && nowStr <= endStr;
-    const isDone = nowStr > endStr;
+    const isLive = isToday && nowStr >= startStr && nowStr <= endStr;
+    const isDone = isToday && nowStr > endStr;
+    const isCursor = cursorPeriod !== undefined && m.startPeriod <= cursorPeriod && cursorPeriod <= m.endPeriod;
     const connector = i === 0 ? topConnector : midConnector;
     const marker = isLive ? type.active(pickIcon('▶', '>')) : ' ';
     const timeCol = `${marker}${type.hint(startStr)} ${rule}${connector}${rule}`;
@@ -95,8 +101,14 @@ export function renderTodayTimeline(meetings: readonly TimetableMeeting[], perio
       statusText = `${trans.timetable.classLive}  ${dot}  ${fmt(trans.timetable.minutesRemaining, { minutes: String(mins) })}`;
     }
     const statusCol = statusText ? `   ${type.hint(statusText)}` : '';
-    const loc = isLive && m.location ? `   ${type.hint(m.location)}` : '';
-    return `${space.indent}${timeCol} ${nameStyled}${statusCol}${loc}`;
+    const showLoc = alwaysShowLocation ? Boolean(m.location) : (isLive && Boolean(m.location));
+    const loc = showLoc ? `   ${type.hint(m.location!)}` : '';
+    const content = `${timeCol} ${nameStyled}${statusCol}${loc}`;
+    // Wrapping the already-styled content in the cursor token composes
+    // fine -- background codes don't cancel a nested foreground code, so
+    // the individual pieces' own colors stay visible against the solid
+    // cursor background.
+    return `${space.indent}${isCursor ? type.cursor(content) : content}`;
   });
 
   const last = sorted[sorted.length - 1]!;
@@ -106,37 +118,46 @@ export function renderTodayTimeline(meetings: readonly TimetableMeeting[], perio
   return lines.join('\n');
 }
 
-/** A compact one-glyph-per-day summary of the current week: which days have
- * class, which are free, which are the weekend — the hub's at-a-glance view
- * before drilling into the full weekday×period grid. */
-export function renderWeekStrip(meetings: readonly TimetableMeeting[], weekNumber: number, todayWeekday: number): string {
-  const trans = t();
-  const week = meetingsInWeek(meetings, weekNumber);
-  const hasClassChar = pickIcon('▓▓', '##');
-  const freeChar = pickIcon('░░', '..');
-  const weekendChar = pickIcon('··', '..');
+/** A vertical timeline of today's classes: finished classes are dimmed and
+ * marked done, the in-progress one (if any) is highlighted with a
+ * remaining-minutes countdown and its location, and the timeline closes
+ * with the last class's end time — a hand-drawn alternative to a flat list
+ * that puts "what's happening right now" front and center. */
+export function renderTodayTimeline(meetings: readonly TimetableMeeting[], periods: readonly TimetablePeriod[], now: Date): string {
+  return renderTimeline(meetings, periods, now, true, false);
+}
 
-  const days = [1, 2, 3, 4, 5, 6, 7];
-  const dayLabels = days.map((wd) => {
-    const label = weekdayShortLabel(wd);
-    return wd === todayWeekday ? type.active(label) : type.hint(label);
-  }).join('  ');
+/** The small-terminal counterpart to the interactive week grid: one day's
+ * classes, browsable day-by-day (see renderDaySwitcher below), reusing
+ * renderTodayTimeline's own visual language. Unlike renderTodayTimeline,
+ * every class's location is shown (not just the live one) -- there's no
+ * "what's happening right now" to prioritize when the viewed day isn't
+ * necessarily today, and the location matters just as much when simply
+ * browsing ahead. Live/done marking only applies when `isToday` is true --
+ * comparing a *different* day's classes against the current clock time
+ * would be comparing across days, not "is this happening right now." */
+export function renderDayTimeline(
+  meetings: readonly TimetableMeeting[], periods: readonly TimetablePeriod[], now: Date, isToday: boolean,
+  cursorPeriod?: number,
+): string {
+  return renderTimeline(meetings, periods, now, isToday, true, cursorPeriod);
+}
 
-  const cells = days.map((wd) => {
-    const isWeekend = wd === 6 || wd === 7;
-    const hasClass = week.some((m) => m.weekday === wd);
-    const glyph = isWeekend ? weekendChar : (hasClass ? hasClassChar : freeChar);
-    return wd === todayWeekday ? type.active(glyph) : type.hint(glyph);
-  }).join('  ');
-
-  const legend = type.hint(
-    `${hasClassChar} = ${trans.timetable.weekStripHasClass}  ${freeChar} = ${trans.timetable.weekStripFree}  ${weekendChar} = ${trans.timetable.weekStripWeekend}`,
-  );
-
-  return [
-    `${space.indent}${dayLabels}`,
-    `${space.indent}${cells}     ${legend}`,
-  ].join('\n');
+/** A single-line day switcher: all 7 weekday abbreviations, the selected
+ * one bracketed and styled, today's marked with the same dot used
+ * elsewhere in the grid. Sits above renderDayTimeline as the "which day am
+ * I looking at" header for the small-terminal single-day view. */
+export function renderDaySwitcher(selectedWeekday: number, todayWeekday: number): string {
+  const leftArrow = pickIcon('←', '<');
+  const rightArrow = pickIcon('→', '>');
+  const todayMark = pickIcon('•', '*');
+  const labels = WEEKDAY_KEYS.map((_, i) => {
+    const wd = i + 1;
+    const label = `${weekdayShortLabel(wd)}${wd === todayWeekday ? todayMark : ''}`;
+    if (wd === selectedWeekday) return type.cursor(`[${label}]`);
+    return type.hint(label);
+  }).join('   ');
+  return `${space.indent}${type.hint(leftArrow)}  ${labels}  ${type.hint(rightArrow)}`;
 }
 
 const WEEKDAY_KEYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -147,19 +168,28 @@ function minutesOf(hhmm: string): number {
   return (h || 0) * 60 + (m || 0);
 }
 
-/** A cell's content when a meeting starts there: the location in full
- * whenever there's room (knowing *where* to go matters more than the exact
- * class title, which is usually recognizable even truncated), with the
- * course name truncated to whatever's left — and truncated to nothing
- * before the location itself ever gives up any width. */
-function gridCellContent(m: TimetableMeeting, cellW: number): string {
-  if (!m.location) return truncate(m.courseName, cellW);
-  const sep = '  ';
-  const locW = visualWidth(m.location);
-  if (locW + sep.length >= cellW) return truncate(m.location, cellW);
-  const nameW = cellW - locW - sep.length;
-  return `${m.location}${sep}${truncate(m.courseName, nameW)}`;
+/** Centers raw (unstyled) text within a fixed width -- extra space splits
+ * left/right (left gets the smaller half on an odd remainder). Used for
+ * every weekday-header label and grid cell: most cells are short glyphs
+ * ("." for no class, "|" for a continuation) sitting in a column sized for
+ * that column's own longest real content, and left-anchoring them reads as
+ * ragged leftover text rather than a clean grid -- centering them (and the
+ * header labels above them) reads as an aligned table instead. Applied to
+ * the raw content before any chalk styling wraps it, so this works
+ * uniformly whether the eventual style adds a background (the cursor
+ * token) or only a foreground color -- there's no special case to keep in
+ * sync. */
+function centerInWidth(text: string, width: number): string {
+  const pad = Math.max(0, width - visualWidth(text));
+  const left = Math.floor(pad / 2);
+  const right = pad - left;
+  return ' '.repeat(left) + text + ' '.repeat(right);
 }
+
+// A sensible floor for a column that's mostly empty cells and a short
+// weekday label -- prevents a completely classless day from collapsing to
+// an unreadably thin sliver.
+const MIN_COL_WIDTH = 8;
 
 export function renderWeekGrid(
   meetings: readonly TimetableMeeting[], periods: readonly TimetablePeriod[], weekNumber: number, now: Date, cols = 80,
@@ -171,34 +201,48 @@ export function renderWeekGrid(
   // always exactly 11 display columns — a bare start time answers "when do
   // I need to be there" but leaves "when am I done" (and the class's real
   // duration) to guesswork; the full range answers both. 12, not 11: one
-  // column of separating space before the first cell (the same class of
-  // bug the old CJK period label had, just for a uniformly-11-wide label
-  // instead of a variable one).
+  // column of separating space before the first cell.
   const rowHeadW = 12;
-  // Real cell content is "{location}  {courseName}" when a location is
-  // known, course-name-only otherwise (see gridCellContent). Measure the
-  // widest real content this week actually needs, capped by what the given
-  // terminal can hold.
-  const idealCellW = week.reduce((max, m) => {
-    const w = m.location ? visualWidth(m.location) + 2 + visualWidth(m.courseName) : visualWidth(m.courseName);
-    return Math.max(max, w);
-  }, 0) || 10;
-  // The floor is content-aware, not a flat 10: once a location is
-  // prepended, a flat 10 is often *entirely* consumed by "location + the
-  // 2-column separator", squeezing the course name down to zero real
-  // characters (truncate() needs at least 5 columns to show even one real
-  // CJK character before the "..." marker) -- exactly the kind of
-  // "recognizable even truncated" name visibility the location-priority
-  // format is supposed to preserve, not eliminate. Name-only cells (no
-  // location) keep the original flat-10 floor, unchanged from before.
-  const NAME_SLIVER = 5;
-  const minCellW = week.reduce((max, m) => {
-    const w = m.location ? visualWidth(m.location) + 2 + NAME_SLIVER : 10;
-    return Math.max(max, w);
-  }, 10);
-  const availableCellW = Math.floor((cols - space.indent.length - rowHeadW) / 7);
-  const cellW = Math.max(minCellW, Math.min(idealCellW, availableCellW));
-  const totalW = rowHeadW + cellW * 7;
+  const todayMark = pickIcon('•', '*');
+  const connector = pickIcon('│', '|');
+  const emptyGlyph = pickIcon('·', '.');
+  const sepGlyph = pickIcon('│', '|');
+  const sep = type.hint(` ${sepGlyph} `);
+  const sepW = 3; // " │ " / " | " -- always 3 display columns regardless of icon mode
+
+  // Each weekday column is sized to *that day's own* content only, never a
+  // different day's longer course name -- a single long Tuesday class no
+  // longer forces Monday through Sunday to share its width. Course name and
+  // location are on separate lines (see the row loop below), so neither has
+  // to compete with the other for room within one column either.
+  const idealColWidths = WEEKDAY_KEYS.map((_, i) => {
+    const wd = i + 1;
+    const dayMeetings = week.filter((m) => m.weekday === wd);
+    const nameW = dayMeetings.reduce((max, m) => Math.max(max, visualWidth(m.courseName)), 0);
+    const locW = dayMeetings.reduce((max, m) => Math.max(max, m.location ? visualWidth(m.location) : 0), 0);
+    const headerW = visualWidth(weekdayShortLabel(wd)) + (wd === todayWd ? visualWidth(todayMark) : 0);
+    return Math.max(nameW, locW, headerW, MIN_COL_WIDTH);
+  });
+  // If every column's own ideal width already fits the terminal, use it
+  // outright -- an empty (floor-width) day must never eat into a genuinely
+  // busy day's share just because both are capped by the same flat "1/7th
+  // of the remaining space" division. Only when the ideal *total* doesn't
+  // fit does every column shrink, proportionally to its own ideal width, so
+  // the row's total width never exceeds `cols` -- unlike a flat floor that
+  // stays fixed regardless of how little room is actually left.
+  const fixedOverhead = space.indent.length + rowHeadW + 6 * sepW;
+  const availableForCols = Math.max(0, cols - fixedOverhead);
+  const totalIdealColW = idealColWidths.reduce((a, b) => a + b, 0);
+  const colWidths = totalIdealColW <= availableForCols
+    ? idealColWidths
+    // Floored at 3, not 1 -- truncate() itself can never shrink text below
+    // its own 3-column ellipsis ("..."), so a column narrower than that
+    // would make even the shortest weekday header ("Mon") overflow its own
+    // column when truncated. 3 is also exactly a bare weekday abbreviation's
+    // width, so at this floor a header never actually needs truncating.
+    : idealColWidths.map((w) => Math.max(3, Math.floor(w * (availableForCols / totalIdealColW))));
+  const totalW = rowHeadW + colWidths.reduce((a, b) => a + b, 0) + 6 * sepW;
+
   // Consecutive periods of the same meeting collapse into one labeled cell
   // at its starting period — later periods in its span show a plain
   // connector instead of repeating the same course/location text down the
@@ -208,36 +252,57 @@ export function renderWeekGrid(
   const startingAt = (wd: number, period: number) => week.find((m) => m.weekday === wd && m.startPeriod === period);
   const continuingAt = (wd: number, period: number) => week.find((m) => m.weekday === wd && m.startPeriod < period && period <= m.endPeriod);
   const lines: string[] = [];
-  const todayMark = pickIcon('•', '*');
-  const connector = pickIcon('│', '|');
-  const headerCells = WEEKDAY_KEYS.map((d, i) => {
+  const blankHead = padEndV('', rowHeadW);
+
+  const headerCells = WEEKDAY_KEYS.map((_, i) => {
     const wd = i + 1;
+    const d = weekdayShortLabel(wd);
     const label = wd === todayWd ? `${d}${todayMark}` : d;
-    return padEndV(wd === todayWd ? type.active(label) : type.hint(label), cellW);
-  }).join('');
-  lines.push(space.indent + padEndV('', rowHeadW) + headerCells);
+    // Column width always starts out >= the label's own width (headerW is
+    // one of the terms idealColWidths maxes over), but proportional
+    // shrinking on a too-narrow terminal can push a column's *scaled*
+    // width below that -- truncate defensively so the header can never
+    // render wider than the column it's supposed to sit in.
+    const padded = centerInWidth(truncate(label, colWidths[i]!), colWidths[i]!);
+    return wd === todayWd ? type.active(padded) : type.hint(padded);
+  }).join(sep);
+  lines.push(space.indent + blankHead + headerCells);
+
   const sorted = [...periods].sort((a, b) => a.period - b.period);
   sorted.forEach((p, i) => {
     const rowHead = type.hint(padEndV(`${p.start}-${p.end}`, rowHeadW));
-    const cells = [1, 2, 3, 4, 5, 6, 7].map((wd) => {
+    const nameCells: string[] = [];
+    const locCells: string[] = [];
+    for (let wdIdx = 0; wdIdx < 7; wdIdx++) {
+      const wd = wdIdx + 1;
+      const colW = colWidths[wdIdx]!;
       const isToday = wd === todayWd;
       const isCursor = cursor !== undefined && cursor.weekday === wd && cursor.period === p.period;
       const starting = startingAt(wd, p.period);
       const isContinuation = !starting && continuingAt(wd, p.period);
-      const rawContent = starting
-        ? gridCellContent(starting, cellW)
-        : (isContinuation ? connector : pickIcon('·', '.'));
-      // The cursor cell's solid background must cover the whole cell, not
-      // just the real text -- so it's padded to cellW *first*, then wrapped
-      // in type.cursor(), unlike every other branch below (styled first,
-      // padded after with plain, unstyled spaces).
-      if (isCursor) return type.cursor(padEndV(rawContent, cellW));
-      const text = starting
-        ? (isToday ? type.active(rawContent) : type.body(rawContent))
-        : type.hint(rawContent);
-      return padEndV(text, cellW);
-    }).join('');
-    lines.push(space.indent + rowHead + cells);
+
+      const rawName = starting ? starting.courseName : (isContinuation ? connector : emptyGlyph);
+      const rawLoc = starting ? (starting.location ?? '') : (isContinuation ? connector : '');
+      const paddedName = centerInWidth(truncate(rawName, colW), colW);
+      const paddedLoc = centerInWidth(truncate(rawLoc, colW), colW);
+
+      // Cursor styling covers both lines of the cell -- it's one selected
+      // unit, not just its name half. Otherwise the course name (primary
+      // info) gets full styling on today/cursor; the location (supporting
+      // info) always stays dim, even on today's own column.
+      if (isCursor) {
+        nameCells.push(type.cursor(paddedName));
+        locCells.push(type.cursor(paddedLoc));
+      } else if (starting) {
+        nameCells.push(isToday ? type.active(paddedName) : type.body(paddedName));
+        locCells.push(type.hint(paddedLoc));
+      } else {
+        nameCells.push(type.hint(paddedName));
+        locCells.push(type.hint(paddedLoc));
+      }
+    }
+    lines.push(space.indent + rowHead + nameCells.join(sep));
+    lines.push(space.indent + blankHead + locCells.join(sep));
 
     const next = sorted[i + 1];
     if (next && minutesOf(next.start) - minutesOf(p.end) > GAP_THRESHOLD_MINUTES) {

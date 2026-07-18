@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import chalk from 'chalk';
-import { renderSchedule, hubShortcuts, isHubGridInline, type ScheduleViewState } from './schedule-render.js';
+import { renderSchedule, hubShortcuts, type ScheduleViewState } from './schedule-render.js';
 import { ListField } from '../fields/list-field.js';
 import { TextField } from '../fields/text-field.js';
 import { setLanguage } from '../../i18n/index.js';
@@ -91,33 +91,42 @@ describe('renderSchedule', () => {
   });
 
   describe('term-not-started week-1 preview', () => {
-    it('shows a week-1 preview grid on a tall terminal even though the term has not started', () => {
+    it('shows a week-1 preview grid on a tall, wide terminal even though the term has not started', () => {
       const out = stripAnsi(renderSchedule({
         mode: 'hub', key: '2026-3', weekOne: '2099-01-05', timetable: busyTimetable,
-      }, new Date('2026-09-07T07:00:00'), 45).join('\n'));
+      }, new Date('2026-09-07T07:00:00'), 45, 150).join('\n'));
       expect(out).toContain("Term hasn't started yet");
       expect(out).toContain('Week 1 preview');
       expect(out).toContain('Room 105');
       expect(out).toContain('19:00'); // busyTimetable's 12-period table starts period 12 at 19:00
     });
 
-    it('falls back to the week strip on a short terminal even though the term has not started', () => {
+    it('falls back to the single-day view on a short terminal even though the term has not started', () => {
       const out = stripAnsi(renderSchedule({
         mode: 'hub', key: '2026-3', weekOne: '2099-01-05', timetable: busyTimetable,
-      }, new Date('2026-09-07T07:00:00'), 19).join('\n'));
+      }, new Date('2026-09-07T07:00:00'), 19, 150).join('\n'));
+      expect(out).toContain('Week 1 preview');
+      expect(out).not.toContain('19:00'); // the full grid's own period-12 row, not shown in the day view
+      expect(out).toContain('Room 201'); // the single-day view's own location column
+    });
+
+    it('falls back to the single-day view on a narrow terminal even though the term has not started', () => {
+      const out = stripAnsi(renderSchedule({
+        mode: 'hub', key: '2026-3', weekOne: '2099-01-05', timetable: busyTimetable,
+      }, new Date('2026-09-07T07:00:00'), 45, 80).join('\n'));
       expect(out).toContain('Week 1 preview');
       expect(out).not.toContain('19:00');
-      expect(out).toContain('has class'); // the strip's own legend text
+      expect(out).toContain('Room 201');
     });
 
     it('shows an empty week-1 preview without crashing when there are no meetings at all', () => {
       const emptyTimetable: Timetable = { ...timetable, meetings: [] };
       expect(() => renderSchedule({
         mode: 'hub', key: '2026-3', weekOne: '2099-01-05', timetable: emptyTimetable,
-      }, new Date('2026-09-07T07:00:00'), 45)).not.toThrow();
+      }, new Date('2026-09-07T07:00:00'), 45, 150)).not.toThrow();
       const out = stripAnsi(renderSchedule({
         mode: 'hub', key: '2026-3', weekOne: '2099-01-05', timetable: emptyTimetable,
-      }, new Date('2026-09-07T07:00:00'), 45).join('\n'));
+      }, new Date('2026-09-07T07:00:00'), 45, 150).join('\n'));
       expect(out).toContain('Week 1 preview');
       expect(out).not.toContain('Math');
     });
@@ -125,7 +134,7 @@ describe('renderSchedule', () => {
     it('never collapses the week-1 preview into one array entry', () => {
       const lines = renderSchedule({
         mode: 'hub', key: '2026-3', weekOne: '2099-01-05', timetable: busyTimetable,
-      }, new Date('2026-09-07T07:00:00'), 45);
+      }, new Date('2026-09-07T07:00:00'), 45, 150);
       for (const line of lines) {
         expect(line).not.toContain('\n');
       }
@@ -142,40 +151,56 @@ describe('renderSchedule', () => {
   });
 
   describe('adaptive week section', () => {
-    it('shows the full week grid inline on a tall terminal, with the shortcut bar still reachable', () => {
+    it('shows the full week grid inline on a tall, wide terminal, with the shortcut bar still reachable', () => {
       const out = stripAnsi(renderSchedule({
         mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: busyTimetable,
-      }, new Date('2026-09-07T07:00:00'), 45).join('\n'));
+      }, new Date('2026-09-07T07:00:00'), 45, 150).join('\n'));
       expect(out).toContain('Physics'); // only the full grid places period-3 courses distinctly
       expect(out).toContain('19:00'); // busyTimetable's 12-period table starts period 12 at 19:00
       expect(out).toContain('Log out'); // shortcut bar still rendered underneath
     });
 
-    it('stays with the compact week strip on a normal-size terminal', () => {
+    it('falls back to the single-day view on a short terminal', () => {
       const out = stripAnsi(renderSchedule({
         mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: busyTimetable,
-      }, new Date('2026-09-07T07:00:00'), 19).join('\n'));
+      }, new Date('2026-09-07T07:00:00'), 19, 150).join('\n'));
+      expect(out).not.toContain('19:00'); // the full grid's own period-12 row
+      expect(out).toContain('Room 201'); // the single-day view's own location column
+    });
+
+    it('falls back to the single-day view on a narrow terminal, even with plenty of height', () => {
+      const out = stripAnsi(renderSchedule({
+        mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: busyTimetable,
+      }, new Date('2026-09-07T07:00:00'), 45, 80).join('\n'));
       expect(out).not.toContain('19:00');
-      expect(out).toContain('has class'); // the strip's own legend text
+      expect(out).toContain('Room 201');
     });
 
     it('never collapses the inline grid into one array entry', () => {
       const lines = renderSchedule({
         mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: busyTimetable,
-      }, new Date('2026-09-07T07:00:00'), 45);
+      }, new Date('2026-09-07T07:00:00'), 45, 150);
       for (const line of lines) {
         expect(line).not.toContain('\n');
       }
     });
 
     it('threads the real terminal column width down to the grid, so a wide terminal stops truncating real course names', () => {
+      // 18 CJK chars = 36 display columns -- long enough that even
+      // MIN_GRID_COLS(100) can't fit it without scaling (a shorter name has
+      // enough per-column slack above the floor to fit at 100 already,
+      // which wouldn't demonstrate truncation).
+      const longName = '习近平新时代中国特色社会主义思想概论';
       const longNameTimetable: Timetable = {
         ...timetable,
-        meetings: [{ sourceId: null, courseName: '工业机器人系统', teacherNames: ['Dr Wu'], location: 'Room 105', weekday: 1, startPeriod: 1, endPeriod: 1, weeks: [1], kind: 'regular' }],
+        meetings: [{ sourceId: null, courseName: longName, teacherNames: ['Dr Wu'], location: 'Room 105', weekday: 1, startPeriod: 1, endPeriod: 1, weeks: [1], kind: 'regular' }],
       };
+      // "narrow" here means "just wide enough for the grid to render at
+      // all" (>= MIN_GRID_COLS), not "falls back to the single-day view" --
+      // that fallback threshold is covered by the tests above.
       const narrowLines = renderSchedule({
         mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: longNameTimetable,
-      }, new Date('2026-09-07T07:00:00'), 45, 80).map((l) => stripAnsi(l));
+      }, new Date('2026-09-07T07:00:00'), 45, 100).map((l) => stripAnsi(l));
       const wideLines = renderSchedule({
         mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: longNameTimetable,
       }, new Date('2026-09-07T07:00:00'), 45, 210).map((l) => stripAnsi(l));
@@ -183,36 +208,8 @@ describe('renderSchedule', () => {
       const wideHeadingIdx = wideLines.findIndex((l) => l.includes('This week'));
       const narrowGridRow = narrowLines.slice(narrowHeadingIdx).find((l) => l.trim().startsWith('08:00'))!;
       const wideGridRow = wideLines.slice(wideHeadingIdx).find((l) => l.trim().startsWith('08:00'))!;
-      expect(narrowGridRow).not.toContain('工业机器人系统');
-      expect(wideGridRow).toContain('工业机器人系统');
-    });
-  });
-
-  describe('isHubGridInline', () => {
-    // Mirrors the exact tall-vs-short terminal fixtures already used above
-    // ("shows the full week grid inline..." / "stays with the compact week
-    // strip...") -- isHubGridInline must agree with whichever one
-    // renderSchedule actually rendered, since schedule.ts's key handler uses
-    // it to decide whether the grid cursor is currently visible at all.
-    const state: ScheduleViewState = {
-      mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: busyTimetable,
-    };
-    const now = new Date('2026-09-07T07:00:00');
-
-    it('returns true when the grid actually fits and renders inline', () => {
-      const out = stripAnsi(renderSchedule(state, now, 45).join('\n'));
-      expect(out).toContain('19:00'); // sanity: the grid, not the strip, is what rendered
-      expect(isHubGridInline(state, now, 45, 80)).toBe(true);
-    });
-
-    it('returns false when the terminal is too short and the strip renders instead', () => {
-      const out = stripAnsi(renderSchedule(state, now, 19).join('\n'));
-      expect(out).not.toContain('19:00'); // sanity: the strip, not the grid, is what rendered
-      expect(isHubGridInline(state, now, 19, 80)).toBe(false);
-    });
-
-    it('returns false when there is no timetable loaded yet', () => {
-      expect(isHubGridInline({ mode: 'hub' }, now, 45, 80)).toBe(false);
+      expect(narrowGridRow).not.toContain(longName);
+      expect(wideGridRow).toContain(longName);
     });
   });
 

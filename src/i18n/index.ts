@@ -280,9 +280,6 @@ export interface Translations {
     classLive: string;
     minutesRemaining: string;
     timelineEnd: string;
-    weekStripHasClass: string;
-    weekStripFree: string;
-    weekStripWeekend: string;
     termNotStarted: string;
     termStartsIn: string;
     hubTermDensity: string;

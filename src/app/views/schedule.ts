@@ -11,7 +11,7 @@ import type { AppContext, View } from '../view.js';
 import { captureFooterHint } from '../chrome.js';
 import { ListField, computeMaxVisible } from '../fields/list-field.js';
 import { TextField } from '../fields/text-field.js';
-import { renderSchedule, hubShortcuts, isHubGridInline, type ScheduleViewState } from './schedule-render.js';
+import { renderSchedule, hubShortcuts, type ScheduleViewState } from './schedule-render.js';
 import { defaultGridCursor, handleGridKey } from './schedule-grid-cursor.js';
 import { setVimKeysActive } from '../../core/vim-keys.js';
 import { t } from '../../i18n/index.js';
@@ -338,16 +338,13 @@ export const scheduleView: View = {
         const hubKey = state.key;
         const hubWeekOne = state.weekOne;
         if (!tt || !hubKey || !hubWeekOne) return;
-        // The inline grid only actually renders when it fits within
-        // bodyRows -- on a short terminal, renderHubBody silently falls back
-        // to the non-interactive compact strip instead (see
-        // pushAdaptiveWeekGrid / isHubGridInline in schedule-render.ts).
-        // Arrow keys/Enter must not move or act on state.gridCursor when
-        // that fallback is what's actually on screen -- a student pressing
-        // Enter should never see a meeting-detail card pop up referencing a
-        // cell they can't see. The interactive grid is still reachable via
-        // the "w" shortcut below, unaffected by this gate.
-        if (isHubGridInline(state, new Date(), ctx.bodyRows, ctx.size.cols)) {
+        // The hub's adaptive week section is *always* interactive now,
+        // whether it's actually showing the full grid or has fallen back to
+        // the single-day view -- both represent the exact same gridCursor
+        // (weekday+period), just rendered differently, so arrow keys/Enter
+        // are always meaningful here (see pushAdaptiveWeekGrid in
+        // schedule-render.ts for the render-side fit-or-fallback decision).
+        {
           const cursor = state.gridCursor ?? defaultGridCursor(campusWeekday(new Date()), tt.periods);
           const week = Math.max(1, currentWeekNumber(hubWeekOne, new Date()));
           const nav = handleGridKey(key, cursor, tt, week);

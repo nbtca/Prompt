@@ -6,8 +6,8 @@ import { ListField } from '../fields/list-field.js';
 import { TextField } from '../fields/text-field.js';
 import { currentWeekNumber, campusWeekday, meetingsOnDay, nextMeeting } from '../../features/schedule-query.js';
 import {
-  renderNextClassBanner, renderWeekGrid, renderUnresolvedItems, renderTodayTimeline, renderWeekStrip,
-  weekdayShortLabel, renderTermDensity, renderMeetingDetail,
+  renderNextClassBanner, renderWeekGrid, renderUnresolvedItems, renderTodayTimeline,
+  weekdayShortLabel, renderTermDensity, renderMeetingDetail, renderDayTimeline, renderDaySwitcher,
 } from '../../features/schedule-render.js';
 import type { AcademicWindow, OnBreak } from '../../features/academic-calendar.js';
 import { renderEventBrief, type Event } from '../../features/calendar.js';
@@ -99,14 +99,11 @@ function renderShortcutBar(shortcuts: readonly HubShortcut[]): string {
 }
 
 /** Everything renderHubBody puts on screen *before* the adaptive week
- * grid/strip decision point -- the banner, and then either the "term hasn't
- * started yet, preview week 1" heading block or the today-heading + timeline
- * block, depending on which week is current. Split out from renderHubBody so
- * both it and isHubGridInline (below) measure the exact same preceding-line
- * count; if the two ever computed this count differently, the predicate
- * could say "the grid is on screen" for a frame where the strip actually
- * rendered (or vice versa). Returns null when there's nothing to show yet
- * (no timetable/weekOne loaded). */
+ * grid/single-day-view decision point -- the banner, and then either the
+ * "term hasn't started yet, preview week 1" heading block or the
+ * today-heading + timeline block, depending on which week is current.
+ * Returns null when there's nothing to show yet (no timetable/weekOne
+ * loaded). */
 function hubPreGridLines(state: ScheduleViewState, now: Date): { lines: string[]; week: number; tt: Timetable } | null {
   const trans = t();
   const tt = state.timetable;
@@ -141,16 +138,25 @@ function hubPreGridLines(state: ScheduleViewState, now: Date): { lines: string[]
   return { lines, week, tt };
 }
 
+// Below this width, even an all-empty grid's own per-column floor (3, plus
+// row-head and separator overhead) leaves each of the 7 columns too cramped
+// to show real content -- a technically-fitting but practically unreadable
+// grid isn't better than the single-day view, so width gates the decision
+// just as much as height does.
+const MIN_GRID_COLS = 100;
+
 /** The one place that decides "does the real week grid fit inline (plus a
  * floor reserved for the shortcut bar), or does the hub fall back to the
- * compact strip" -- shared by pushAdaptiveWeekGrid (which acts on the
- * decision) and isHubGridInline (which callers outside rendering, like
- * schedule.ts's key handler, use to ask the same question without
- * re-deriving it). */
+ * single-day view." Both branches represent the exact same gridCursor, just
+ * rendered differently, so unlike the old non-interactive strip fallback
+ * this decision no longer needs to be exposed to key handling -- arrow
+ * keys/Enter are always meaningful in hub mode regardless of which branch is
+ * currently on screen. */
 function gridFitsInline(
   precedingLineCount: number, tt: Timetable, week: number, now: Date, bodyRows: number, cols: number,
   cursor: GridCursor | undefined,
 ): boolean {
+  if (cols < MIN_GRID_COLS) return false;
   const gridLines = renderWeekGrid(tt.meetings, tt.periods, week, now, cols, cursor).split('\n');
   // The hub's own menu is now a fixed one-line shortcut bar (blank + the bar
   // itself), not a variable-height ListField -- no more "menu option count"
@@ -160,10 +166,13 @@ function gridFitsInline(
 }
 
 /** Renders the full weekday x period grid if it (plus a floor reserved for
- * the shortcut bar) fits within bodyRows, otherwise the fixed-height compact
- * strip. Shared by the "this week" and "term hasn't started yet, preview
- * week 1" branches of renderHubBody -- the same measure-and-fallback
- * decision, just against a different week number. */
+ * the shortcut bar) fits within bodyRows and cols, otherwise a single day's
+ * detailed timeline -- the day the cursor's own weekday points at (today, by
+ * default). A large terminal genuinely has no excuse to not show the whole
+ * week; a small one is better served by one day shown properly than seven
+ * days crammed into unreadable slivers. Shared by the "this week" and "term
+ * hasn't started yet, preview week 1" branches of renderHubBody -- the same
+ * measure-and-fallback decision, just against a different week number. */
 function pushAdaptiveWeekGrid(
   lines: string[], tt: Timetable, week: number, todayWd: number, now: Date, bodyRows: number, cols: number,
   cursor: GridCursor | undefined,
@@ -171,23 +180,11 @@ function pushAdaptiveWeekGrid(
   if (gridFitsInline(lines.length, tt, week, now, bodyRows, cols, cursor)) {
     lines.push(...renderWeekGrid(tt.meetings, tt.periods, week, now, cols, cursor).split('\n'));
   } else {
-    lines.push(...renderWeekStrip(tt.meetings, week, todayWd).split('\n'));
+    const selectedWd = cursor?.weekday ?? todayWd;
+    const dayMeetings = meetingsOnDay(tt.meetings, selectedWd, week);
+    lines.push(renderDaySwitcher(selectedWd, todayWd));
+    lines.push(...renderDayTimeline(dayMeetings, tt.periods, now, selectedWd === todayWd, cursor?.period).split('\n'));
   }
-}
-
-/** Is the hub's week grid actually the interactive thing on screen right
- * now, as opposed to the non-interactive compact strip it falls back to on a
- * short terminal? schedule.ts's key handler must ask this before letting
- * arrow keys/Enter act on the grid cursor -- moving/opening a cursor the
- * student can't see would make a meeting-detail card "pop up from nowhere."
- * This is the same fit-or-fallback decision pushAdaptiveWeekGrid makes while
- * actually rendering, exposed as a pure predicate so the two can never
- * drift apart (matches the existing hubShortcuts single-source-of-truth
- * convention). */
-export function isHubGridInline(state: ScheduleViewState, now: Date, bodyRows: number, cols: number): boolean {
-  const pre = hubPreGridLines(state, now);
-  if (!pre) return false;
-  return gridFitsInline(pre.lines.length, pre.tt, pre.week, now, bodyRows, cols, state.gridCursor);
 }
 
 function renderHubBody(state: ScheduleViewState, now: Date, bodyRows: number, cols: number): string[] {
@@ -295,16 +292,19 @@ export function renderSchedule(state: ScheduleViewState, now: Date, bodyRows = 1
       ];
     case 'hub':
       return renderHubBody(state, now, bodyRows, cols);
-    case 'week':
-      return state.timetable && state.weekOne
-        ? [
-          heading(trans.timetable.hubWeek),
-          '',
-          ...renderWeekGrid(
-            state.timetable.meetings, state.timetable.periods, currentWeekNumber(state.weekOne, now), now, cols, state.gridCursor,
-          ).split('\n'),
-        ]
-        : [hint(trans.timetable.genericError)];
+    case 'week': {
+      if (!state.timetable || !state.weekOne) return [hint(trans.timetable.genericError)];
+      const week = currentWeekNumber(state.weekOne, now);
+      const weekLines = [heading(trans.timetable.hubWeek), ''];
+      // Standalone week mode gets the *whole* bodyRows to itself (no
+      // banner/today-section eating into it first, unlike the hub's own
+      // inline area) -- reached via the `w` shortcut specifically so a
+      // marginal terminal that couldn't fit the grid inline the hub still
+      // gets a real shot at it here, falling back to the single-day view
+      // only if even the full screen isn't enough.
+      pushAdaptiveWeekGrid(weekLines, state.timetable, week, campusWeekday(now), now, bodyRows, cols, state.gridCursor);
+      return weekLines;
+    }
     case 'termDensity':
       return state.timetable && state.weekOne
         ? renderTermDensity(state.timetable.meetings, state.weekOne, currentWeekNumber(state.weekOne, now)).split('\n')
