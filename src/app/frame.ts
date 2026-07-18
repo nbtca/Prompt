@@ -23,6 +23,20 @@ export function fitLine(line: string, cols: number): string {
   return pad > 0 ? clipped + ' '.repeat(pad) : clipped;
 }
 
+/** Left-pads every line by the same amount so the body renders as one
+ * horizontally-centered block, rather than pinned to the left edge with
+ * unused space on the right. Content that already fills (or nearly fills)
+ * `cols` gets ~0 padding and stays put -- this only visibly centers content
+ * that's genuinely narrower than the terminal. */
+export function centerLines(lines: string[], cols: number): string[] {
+  if (lines.length === 0) return lines;
+  const maxWidth = Math.max(0, ...lines.map((l) => visualWidth(l)));
+  const pad = Math.max(0, Math.floor((cols - maxWidth) / 2));
+  if (pad === 0) return lines;
+  const prefix = ' '.repeat(pad);
+  return lines.map((l) => prefix + l);
+}
+
 export function fitBody(lines: string[], height: number, scroll: number, cols: number): string[] {
   const maxScroll = Math.max(0, lines.length - height);
   const start = Math.max(0, Math.min(scroll, maxScroll));
@@ -37,7 +51,7 @@ export function composeFrame(
   const h = header.map((l) => fitLine(l, cols));
   const f = footer.map((l) => fitLine(l, cols));
   const bodyH = Math.max(0, rows - h.length - f.length);
-  const b = fitBody(body, bodyH, scroll, cols);
+  const b = fitBody(centerLines(body, cols), bodyH, scroll, cols);
   return [...h, ...b, ...f].slice(0, rows).join('\n');
 }
 
