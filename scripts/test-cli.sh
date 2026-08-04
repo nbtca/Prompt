@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+cli_test_root="$(mktemp -d)"
+trap 'rm -rf "$cli_test_root"' EXIT
+export XDG_CONFIG_HOME="$cli_test_root/config"
+
 # Ensure tests run in English locale
-node dist/index.js lang en >/dev/null 2>&1 || true
+node dist/index.js lang en >/dev/null
 
 version_output="$(node dist/index.js --version)"
 if [[ ! "$version_output" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -34,15 +38,11 @@ if [[ "$docs_output" != "https://docs.nbtca.space" ]]; then
   exit 1
 fi
 
-tmp_home="$(mktemp -d)"
-trap 'rm -rf "$tmp_home"' EXIT
-HOME="$tmp_home" XDG_CONFIG_HOME="$tmp_home/.config" node dist/index.js theme icon ascii >/dev/null
-if ! grep -q '"iconMode": "ascii"' "$tmp_home/.config/nbtca/preferences.json"; then
+node dist/index.js theme icon ascii >/dev/null
+if ! grep -q '"iconMode": "ascii"' "$cli_test_root/config/nbtca/preferences.json"; then
   echo "theme preference was not persisted" >&2
-  rm -rf "$tmp_home"
   exit 1
 fi
-rm -rf "$tmp_home"
 
 unknown_flag_stderr="$(mktemp)"
 if node dist/index.js roadmap --oops >/dev/null 2>"$unknown_flag_stderr"; then

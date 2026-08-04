@@ -27,13 +27,7 @@ function charWidth(ch: string): 1 | 2 {
     (cp >= 0x2A700 && cp <= 0x2CEAF) ||
     (cp >= 0x2CEB0 && cp <= 0x2EBEF) ||
     (cp >= 0x30000 && cp <= 0x323AF) ||
-    // Emoji block (Misc Symbols & Pictographs, Emoticons, Transport, Chess
-    // Symbols, Supplemental Symbols & Pictographs, Extended-A). Real
-    // terminals render these as double-width glyphs; undercounting even one
-    // emoji is enough to push a line one column past the terminal width and
-    // trigger an unwanted auto-wrap — this is a real bug that was found: an
-    // emoji-titled event line loading in scrolled the app's header out of
-    // view because of exactly this miscount.
+    // Emoji blocks render as double-width terminal glyphs.
     (cp >= 0x1F300 && cp <= 0x1FAFF)
   ) ? 2 : 1;
 }

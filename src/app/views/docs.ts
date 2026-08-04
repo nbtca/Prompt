@@ -51,13 +51,6 @@ function buildSectionsField(): ListField {
 function buildFilesField(section: DocSection, maxVisible: number, initialIndex = 0): ListField {
   const trans = t();
   const isIndex = (f: DocItem) => f.name === 'index.md' || f.name.startsWith('index.');
-  // nbtca/documents' repair/ and concepts/ sections are explicitly built
-  // "hub + inline-link + search, no full sidebar" (.vitepress/config.mts) --
-  // each has a hand-curated index.md landing page (concepts/index.md groups
-  // all 21 entries by topic with one-line definitions; nothing like that
-  // exists in a flat alphabetical list). It used to be filtered out
-  // entirely here, making it unreachable from the Docs tab -- now it's
-  // pinned to the top as a distinctly-labeled entry instead.
   const index = section.files.find(isIndex);
   const files = section.files.filter((f) => !isIndex(f));
   const options = [

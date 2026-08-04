@@ -1,7 +1,3 @@
-/**
- * Minimalist menu system
- */
-
 import { runMenu, type MenuOption } from './components/menu.js';
 import { type, space, glyph } from './theme.js';
 import { clearScreen } from './ui.js';

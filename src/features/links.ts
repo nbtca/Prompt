@@ -1,7 +1,3 @@
-/**
- * Links — open NBTCA resources in browser
- */
-
 import open from 'open';
 import chalk from 'chalk';
 import { runMenu, menuFooter } from '../core/components/menu.js';

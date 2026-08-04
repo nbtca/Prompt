@@ -334,8 +334,7 @@ export function renderWeekGrid(
   // at its starting period — later periods in its span show a plain
   // connector instead of repeating the same course/location text down the
   // whole column. A genuine conflict (two meetings both starting at the
-  // same weekday+period) is rare and, like the pre-existing lookup, just
-  // shows whichever one is found first.
+  // same weekday+period) shows whichever one is found first.
   const startingAt = (wd: number, period: number) => week.find((m) => m.weekday === wd && m.startPeriod === period);
   const continuingAt = (wd: number, period: number) => week.find((m) => m.weekday === wd && m.startPeriod < period && period <= m.endPeriod);
   const lines: string[] = [];

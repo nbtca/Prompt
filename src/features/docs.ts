@@ -472,21 +472,8 @@ export async function loadDocForReader(filePath: string): Promise<ReaderDoc> {
 
 // ─── Document tree ────────────────────────────────────────────────────────────
 
-// Sourced from a live audit of nbtca/documents (2026-07-18): `about` and
-// `concepts` are two whole new top-level sections added in the repo's wiki
-// reconstruction (5abcc4d, 5beee27) -- omitted here, buildSections() below
-// silently drops every file under them, which is exactly what happened
-// before this fix caught up to the upstream restructuring. `about` leads
-// (org intro for newcomers) and `concepts` sits after the practical guide
-// as reference material.
 const TOP_SECTION_ORDER = ['about', 'guide', 'repair', 'concepts', 'archived'];
 const TOP_SECTION_SKIP = new Set(['docs', 'index.md', 'README.md']);
-// tutorial/ and process/ are two folders on disk but one section everywhere
-// a reader actually sees them: nbtca/documents' own site nav collapses both
-// under a single "指南/Guide" entry, and tutorial/sidebar.ts spells out why
-// ("「指南」= 教程（学技术）+流程（办社务）高内聚合并为一栏") -- presenting
-// them as two separate top-level categories in the terminal was true to the
-// folder layout but false to how the content is actually meant to be read.
 const SECTION_ALIAS: Readonly<Record<string, string>> = { tutorial: 'guide', process: 'guide' };
 
 export interface DocSection {
@@ -507,10 +494,6 @@ export function localizeDocSections(sections: readonly DocSection[], trans: Tran
   return sections.map((section) => ({ ...section, label: labels[section.key] ?? section.label }));
 }
 
-/**
- * Convert a kebab-case filename to a display-friendly title.
- * Preserves Chinese characters and date prefixes.
- */
 export function cleanFileName(name: string): string {
   const base = name.replace(/\.md$/, '');
   if (/^[\d.]/.test(base)) return base;
@@ -519,23 +502,6 @@ export function cleanFileName(name: string): string {
     .replace(/\b([a-z])/g, (_, c: string) => c.toUpperCase());
 }
 
-/**
- * Real titles (each document's own top-level `# heading`) for the
- * curated tutorial/process/repair sections, keyed by repo-relative path.
- * These are hand-authored English-filename docs with Chinese content —
- * mechanically title-casing the filename ("Clean Drive C") reads as a
- * different, lower-quality product than the document's own title ("C盘
- * 清理标准化流程"). Deliberately scoped to these three sections only:
- * `archived/`'s meeting notes are informal and often share the same
- * generic real heading across many different dates (e.g. five different
- * files all titled just "维修日") — there, the current filename-derived,
- * date-prefixed label is more useful for telling entries apart than the
- * real heading would be, so it is intentionally left as-is.
- *
- * Pulled from a live audit of the actual nbtca/documents content
- * (2026-07-16). A doc added later without an entry here simply falls
- * back to `cleanFileName` — never an error, never a blank label.
- */
 const KNOWN_DOC_TITLES: Readonly<Record<string, string>> = {
   'tutorial/2025/clean-drive-c.md': 'C盘清理标准化流程',
   'tutorial/2025/edu-email.md': '教育邮箱用途',
@@ -560,15 +526,10 @@ const KNOWN_DOC_TITLES: Readonly<Record<string, string>> = {
   'repair/weekend.md': '维修工单系统 (weekend)',
 };
 
-/** Display title for a tutorial/process/repair doc: the real, known title
- * when we have one, otherwise the same filename-derived fallback used
- * everywhere else (including for every archived/ doc, which never has a
- * known-title entry by design). */
 export function displayDocTitle(path: string, name: string): string {
   return KNOWN_DOC_TITLES[path] ?? cleanFileName(name);
 }
 
-/** Group flat DocItem list into top-level sections. */
 export function buildSections(all: DocItem[]): DocSection[] {
   const groups = new Map<string, DocItem[]>();
   for (const item of all) {
@@ -592,7 +553,6 @@ export function buildSections(all: DocItem[]): DocSection[] {
     })));
 }
 
-/** Group archived files by their second path component (year / manual / etc.). */
 export function getArchivedGroups(files: DocItem[]): Map<string, DocItem[]> {
   const groups = new Map<string, DocItem[]>();
   for (const item of files) {
@@ -603,8 +563,6 @@ export function getArchivedGroups(files: DocItem[]): Map<string, DocItem[]> {
   return groups;
 }
 
-/** Raw fetch, no spinner/UI — throws on failure. Shared by the classic and
- * native-view loaders. */
 export async function fetchAllDocs(): Promise<DocItem[]> {
   return docsClient.listAll();
 }

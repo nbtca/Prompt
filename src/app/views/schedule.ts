@@ -163,18 +163,9 @@ async function afterAuthenticated(ctx: AppContext, s: AuthenticatedNbtSession): 
     await fetchAndShowHub(ctx, term, key, weekOne);
   } catch (err) {
     if (isSessionExpired(err)) {
-      // A dead session must be cleared and routed back to the login
-      // field — leaving it as a bare error message here was a dead end:
-      // the stale session would keep failing the same way on every
-      // future launch/tab-switch, and there was no way back into the
-      // login form short of quitting the app.
       createSessionStore().clear();
       if (!hadCache) goToLoginId(t().timetable.expiredRelogin);
     } else if (!hadCache) {
-      // Only replace the screen with an error if there was nothing
-      // useful showing already — a background refresh failure must not
-      // blow away a working cached timetable (matches the same
-      // best-effort contract refreshFromNetwork documents below).
       state = { mode: 'error', errorMessage: safeMessage(err) };
     }
     ctx.rerender();

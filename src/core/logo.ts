@@ -1,9 +1,3 @@
-/**
- * Startup logo: a high-precision braille dot-matrix render of the NBTCA emblem
- * (generated from CA-logo.svg), shown with the brand blue->cyan gradient.
- * Falls back to plain ASCII on terminals without Unicode/braille support.
- */
-
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -25,14 +19,7 @@ function readArt(file: string): string | null {
   }
 }
 
-// Three braille dot-matrix tiers of the same emblem (all rendered from the
-// same text-ring-stripped SVG, so none of them reintroduce the illegible-blob
-// problem -- see ca-dotmatrix.txt's own history). Picking a tier is not just
-// "shrink to fit": a narrow terminal gets a purpose-built lower-detail render
-// rather than a squashed version of the big one, mirroring how the schedule
-// grid swaps in a whole different layout below its own width floor instead
-// of cramming columns.
-const TIERS = [
+const LOGO_TIERS = [
   { file: 'ca-dotmatrix-large.txt', minCols: 60, minRows: 34 },
   { file: 'ca-dotmatrix.txt', minCols: 44, minRows: 24 },
   { file: 'ca-dotmatrix-small.txt', minCols: 0, minRows: 0 },
@@ -41,14 +28,12 @@ const TIERS = [
 function dotmatrixFile(): string {
   const cols = process.stdout.columns ?? 0;
   const rows = process.stdout.rows ?? 0;
-  const tier = TIERS.find((t) => cols >= t.minCols && rows >= t.minRows);
+  const tier = LOGO_TIERS.find((t) => cols >= t.minCols && rows >= t.minRows);
   return tier?.file ?? 'ca-dotmatrix-small.txt';
 }
 
 function paint(text: string, color: boolean): string {
   if (!color) return text;
-  // multiline keeps the gradient aligned down the whole block; fall back to a
-  // per-line gradient if the installed gradient-string lacks .multiline.
   const fn = brand as unknown as { multiline?: (s: string) => string };
   return typeof fn.multiline === 'function'
     ? fn.multiline(text)

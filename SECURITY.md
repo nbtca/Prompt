@@ -13,7 +13,7 @@ fails closed. It does not automate or bypass the challenge.
 ## Authenticated transport
 
 Authentication redirects are restricted to exact HTTPS hosts and routes for
-the NingboTech WebVPN, authentication service and JWXT. CAS `service` and
+the campus WebVPN, authentication service and JWXT. CAS `service` and
 WebVPN `origin` parameters are validated against explicit callback routes.
 Caller-supplied `Cookie`, `Authorization` and `Host` headers are rejected.
 

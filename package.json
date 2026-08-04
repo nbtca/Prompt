@@ -1,6 +1,6 @@
 {
   "name": "@nbtca/prompt",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "type": "module",
   "main": "dist/index.js",
   "exports": {
@@ -33,14 +33,14 @@
     "terminal",
     "welcome",
     "nbtca",
-    "ningbotech",
-    "computer-association",
+    "community",
+    "calendar",
     "tui",
     "interactive"
   ],
   "dependencies": {
-    "@nbtca/docs": "^0.2.2",
-    "@nbtca/nbtcal": "^0.3.5",
+    "@nbtca/docs": "^0.2.3",
+    "@nbtca/nbtcal": "^0.3.7",
     "chalk": "^5.6.2",
     "cheerio": "1.0.0",
     "fetch-cookie": "^3.2.0",
@@ -52,8 +52,8 @@
   },
   "devDependencies": {
     "@types/gradient-string": "^1.1.6",
-    "@types/node": "^22.19.17",
-    "tsx": "^4.21.0",
+    "@types/node": "^22.20.1",
+    "tsx": "^4.23.5",
     "typescript": "^5.9.3",
     "vitest": "^3.2.7"
   },
@@ -73,5 +73,8 @@
     "url": "https://github.com/nbtca/prompt/issues"
   },
   "homepage": "https://github.com/nbtca/prompt#readme",
-  "description": "NBTCA Prompt - Minimalist CLI tool for NingboTech Computer Association"
+  "description": "Terminal information system for the NBTCA community",
+  "directories": {
+    "doc": "docs"
+  }
 }
