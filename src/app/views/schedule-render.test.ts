@@ -5,7 +5,7 @@ import { ListField } from '../fields/list-field.js';
 import { TextField } from '../fields/text-field.js';
 import { setLanguage } from '../../i18n/index.js';
 import { resetIconCache } from '../../core/icons.js';
-import { stripAnsi } from '../../core/text.js';
+import { stripAnsi, visualWidth } from '../../core/text.js';
 import type { Timetable } from '@nbtca/nbtcal/timetable';
 import type { Event } from '../../features/calendar.js';
 
@@ -50,10 +50,60 @@ describe('renderSchedule', () => {
     expect(out.length).toBeGreaterThan(0);
   });
 
+  it.each([
+    'The academic timetable service returned an unexpected authentication error',
+    '教务系统暂时无法完成课表身份验证请稍后重试',
+  ])('wraps complete error feedback at twenty columns', (message) => {
+    const lines = renderSchedule({ mode: 'error', errorMessage: message }, new Date(), 100, 20);
+    const text = lines
+      .map((line) => stripAnsi(line).trim())
+      .join(message.includes(' ') ? ' ' : '');
+
+    expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+    expect(text).toBe(message);
+  });
+
+  it('wraps authenticating status feedback at twenty columns', () => {
+    const message = 'Refreshing timetable data from the academic system';
+    const lines = renderSchedule({ mode: 'authenticating', statusMessage: message }, new Date(), 100, 20);
+    const text = lines.map(stripAnsi).join(' ').replace(/\s+/g, ' ').trim();
+
+    expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+    expect(text).toBe(message);
+  });
+
+  it('wraps login errors without displacing the input field', () => {
+    const message = 'The saved session expired and requires authentication again';
+    const idField = new TextField({ message: 'ID' });
+    const lines = renderSchedule({
+      mode: 'needsLoginId', errorMessage: message, idField,
+    }, new Date(), 100, 20);
+    const text = lines.map(stripAnsi).join(' ').replace(/\s+/g, ' ').trim();
+
+    expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+    expect(text).toContain(message);
+    expect(text).toContain('ID');
+  });
+
   it('needsLoginId mode renders the id field', () => {
     const idField = new TextField({ message: 'Student id' });
     const out = stripAnsi(renderSchedule({ mode: 'needsLoginId', idField }, new Date()).join('\n'));
     expect(out).toContain('Student id');
+  });
+
+  it.each([
+    ['First-week Monday (YYYY-MM-DD)', 'For example 2026-09-07'],
+    ['请输入第一周周一日期', '例如 2026-09-07'],
+  ])('fits a complete week-one input within twenty columns', (message, placeholder) => {
+    const weekOneField = new TextField({ message, placeholder });
+    const lines = renderSchedule({ mode: 'needsWeekOne', weekOneField }, new Date(), 5, 20);
+    const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
+
+    expect(lines.length).toBeLessThanOrEqual(5);
+    expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+    expect(text).toContain(message.replace(/\s/g, ''));
+    expect(text).toContain(placeholder.replace(/\s/g, ''));
+    expect(lines.filter((line) => /[→>]/u.test(stripAnsi(line)))).toHaveLength(1);
   });
 
   it('hub mode shows the next-class banner, today, and the unresolved badge', () => {
@@ -62,6 +112,18 @@ describe('renderSchedule', () => {
     }, new Date('2026-09-07T07:00:00')).join('\n'));
     expect(out).toContain('Math');
     expect(out).toContain('⚠ 1');
+  });
+
+  it('fits the next-class banner to the terminal width', () => {
+    const lines = renderSchedule({
+      mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable,
+    }, new Date('2026-09-07T07:00:00'), 19, 40);
+    const banner = lines.find((line) => stripAnsi(line).includes('Next'));
+
+    expect(banner).toBeDefined();
+    expect(visualWidth(banner ?? '')).toBeLessThanOrEqual(40);
+    expect(stripAnsi(banner ?? '')).toContain('1h 0m');
+    expect(stripAnsi(banner ?? '')).not.toContain('Room 201');
   });
 
   it('hub mode shows the shortcut bar instead of a vertical menu', () => {
@@ -73,6 +135,18 @@ describe('renderSchedule', () => {
     expect(out).toContain('[s] Switch term');
     expect(out).toContain('[e] Export .ics');
     expect(out).toContain('[x] Log out');
+  });
+
+  it('wraps hub status feedback and keeps it in the height budget', () => {
+    const message = 'The timetable export completed with a recoverable warning';
+    const lines = renderSchedule({
+      mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable, statusMessage: message,
+    }, new Date('2026-09-07T07:00:00'), 19, 20);
+    const text = lines.map(stripAnsi).join(' ').replace(/\s+/g, ' ').trim();
+
+    expect(lines.length).toBeLessThanOrEqual(19);
+    expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+    expect(text).toContain(message);
   });
 
   it('hub mode shows a "term not started" state instead of a negative week when weekOne is in the future', () => {
@@ -176,6 +250,68 @@ describe('renderSchedule', () => {
       expect(out).toContain('Room 201');
     });
 
+    it('does not render today twice when the hub falls back to the single-day view', () => {
+      const lines = renderSchedule({
+        mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: busyTimetable,
+      }, new Date('2026-09-07T07:00:00'), 19, 80).map(stripAnsi);
+
+      expect(lines.filter((line) => line.includes('08:00'))).toHaveLength(1);
+    });
+
+    it('wraps the full shortcut bar within a narrow terminal', () => {
+      const lines = renderSchedule({
+        mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable,
+      }, new Date('2026-09-07T07:00:00'), 19, 40);
+      const shortcutLines = lines.filter((line) => /\[(?:w|t|s|e|x)\]/.test(stripAnsi(line)));
+      const text = stripAnsi(shortcutLines.join('\n'));
+
+      expect(shortcutLines.length).toBeGreaterThan(1);
+      expect(shortcutLines.every((line) => visualWidth(line) <= 40)).toBe(true);
+      expect(text).toContain('Full grid');
+      expect(text).toContain('Term density');
+      expect(text).toContain('Switch term');
+      expect(text).toContain('Export .ics');
+      expect(text).toContain('Log out');
+    });
+
+    it('keeps every shortcut key visible in a five-row body', () => {
+      const lines = renderSchedule({
+        mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable,
+      }, new Date('2026-09-07T07:00:00'), 5, 40);
+      const visible = stripAnsi(lines.slice(0, 5).join('\n'));
+
+      expect(lines.length).toBeLessThanOrEqual(5);
+      for (const key of ['w', 't', 's', 'e', 'u', 'x']) expect(visible).toContain(`[${key}]`);
+    });
+
+    it('keeps a late-week cursor visible in the narrow hub switcher', () => {
+      const lines = renderSchedule({
+        mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable,
+        gridCursor: { weekday: 6, period: 1 },
+      }, new Date('2026-09-07T07:00:00'), 15, 40);
+      const switcher = lines.find((line) => stripAnsi(line).includes('[Sat]'));
+
+      expect(switcher).toBeDefined();
+      expect(visualWidth(switcher ?? '')).toBeLessThanOrEqual(40);
+    });
+
+    it('fits a long course in the narrow single-day timeline', () => {
+      const longCourseTimetable: Timetable = {
+        ...timetable,
+        meetings: [{ ...timetable.meetings[0]!, courseName: 'Distributed Systems' }],
+      };
+      const lines = renderSchedule({
+        mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: longCourseTimetable,
+      }, new Date('2026-09-07T07:00:00'), 19, 40);
+      const timelineLine = lines.find((line) => stripAnsi(line).includes('08:00'));
+      const text = stripAnsi(timelineLine ?? '');
+
+      expect(timelineLine).toBeDefined();
+      expect(visualWidth(timelineLine ?? '')).toBeLessThanOrEqual(40);
+      expect(text).toContain('Distributed Systems');
+      expect(text).not.toContain('Room 201');
+    });
+
     it('never collapses the inline grid into one array entry', () => {
       const lines = renderSchedule({
         mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: busyTimetable,
@@ -244,6 +380,25 @@ describe('renderSchedule', () => {
     expect(out).toContain('Room 201');
   });
 
+  it('threads terminal width into the meeting detail card', () => {
+    const detailMeeting = {
+      ...timetable.meetings[0]!,
+      courseName: 'Advanced Distributed Systems Architecture',
+      location: 'International Innovation Center Room 304',
+      teacherNames: ['Alexandria Montgomery', 'Bartholomew Richardson'],
+    };
+    const lines = renderSchedule({
+      mode: 'meetingDetail', key: '2026-3', weekOne: '2026-09-07',
+      timetable: { ...timetable, meetings: [detailMeeting] }, detailMeeting,
+    }, new Date('2026-09-07T09:00:00'), 100, 20);
+    const text = lines.map(stripAnsi).join(' ').replace(/\s+/g, ' ').trim();
+
+    expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+    expect(text).toContain('Advanced Distributed Systems Architecture');
+    expect(text).toContain('International Innovation Center Room 304');
+    expect(text).toContain('Alexandria Montgomery, Bartholomew Richardson');
+  });
+
   it('meetingDetail mode shows an error message when there is no detail meeting to show', () => {
     const out = stripAnsi(renderSchedule({ mode: 'meetingDetail' }, new Date()).join('\n'));
     expect(out.trim().length).toBeGreaterThan(0);
@@ -256,11 +411,66 @@ describe('renderSchedule', () => {
     expect(out).toContain('Fitness test');
   });
 
+  it('threads terminal width into unresolved items', () => {
+    const unresolvedItems = [{
+      kind: 'practice' as const, itemIndex: 0,
+      sourceFields: {
+        kcmc: 'Advanced Physical Education Practice',
+        sjkcgs: 'Campus fitness assessment during teaching week sixteen',
+      },
+    }];
+    const lines = renderSchedule({
+      mode: 'unresolved', key: '2026-3', weekOne: '2026-09-07',
+      timetable: { ...timetable, unresolvedItems },
+    }, new Date(), 100, 20);
+    const text = lines.map(stripAnsi).join(' ').replace(/\s+/g, ' ').trim();
+
+    expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+    expect(text).toContain('Advanced Physical Education Practice');
+    expect(text).toContain('Campus fitness assessment during teaching week sixteen');
+  });
+
   it('termDensity mode renders the term density strip with its own title', () => {
     const out = stripAnsi(renderSchedule({
       mode: 'termDensity', key: '2026-3', weekOne: '2026-09-07', timetable,
     }, new Date('2026-09-07T09:00:00')).join('\n'));
     expect(out).toContain('Term density');
+  });
+
+  it.each([
+    ['Switch term', '2026-2027 Academic Year Term One', 'Current'],
+    ['切换学期', '2026-2027学年第一学期', '当前'],
+  ])('fits a complete term-picker option within five rows and twenty columns', (title, label, current) => {
+    const termField = new ListField({
+      title,
+      options: [{ value: '2026:1', label, hint: current }],
+    });
+    const lines = renderSchedule({ mode: 'termPicker', termField }, new Date(), 5, 20);
+    const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
+
+    expect(lines.length).toBeLessThanOrEqual(5);
+    expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+    expect(text).toContain(label.replace(/\s/g, ''));
+    expect(text).toContain(current);
+    expect(lines.filter((line) => /[→>]/u.test(stripAnsi(line)))).toHaveLength(1);
+  });
+
+  it('threads terminal width into the term density view', () => {
+    const weeks = Array.from({ length: 18 }, (_, index) => index + 1);
+    const densityTimetable: Timetable = {
+      ...timetable,
+      meetings: [{ ...timetable.meetings[0]!, weeks }],
+    };
+    const lines = renderSchedule({
+      mode: 'termDensity', key: '2026-3', weekOne: '2026-09-07', timetable: densityTimetable,
+    }, new Date('2027-01-04T09:00:00'), 100, 20);
+    const plain = lines.map(stripAnsi);
+    const densityLines = plain.filter((line) => /^\s*(?:█\s*)+$/.test(line));
+
+    expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+    expect(densityLines).toHaveLength(2);
+    expect(densityLines.join('').match(/█/g)).toHaveLength(18);
+    expect(plain.some((line) => line.includes('This week'))).toBe(true);
   });
 
   it('error mode shows the error message', () => {
@@ -299,6 +509,23 @@ describe('hubShortcuts', () => {
 });
 
 describe('renderSchedule — public mode', () => {
+  it.each([
+    ['en', 'Academic calendar not available yet', 'Log in to export your timetable (.ics)'],
+    ['zh', '校历数据暂不可用', '登录后可导出课表 (.ics)'],
+  ] as const)('wraps complete %s public hints at twenty columns', (language, unavailable, loginHint) => {
+    setLanguage(language);
+    try {
+      const lines = renderSchedule({ mode: 'public', publicWindow: null }, new Date(), 100, 20);
+      const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
+
+      expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+      expect(text).toContain(unavailable.replace(/\s/g, ''));
+      expect(text).toContain(loginHint.replace(/\s/g, ''));
+    } finally {
+      setLanguage('en');
+    }
+  });
+
   it('shows a loading hint while publicWindow is undefined', () => {
     const out = stripAnsi(renderSchedule({ mode: 'public' }, new Date()).join('\n'));
     expect(out.trim().length).toBeGreaterThan(0);
@@ -316,6 +543,24 @@ describe('renderSchedule — public mode', () => {
     expect(out).toContain('暑假');
   });
 
+  it.each([
+    ['en', 'Summer research and teaching recess', 'On break · Summer research and teaching recess'],
+    ['zh', '暑期科研与教学实践假期', '假期中 · 暑期科研与教学实践假期'],
+  ] as const)('wraps the complete %s break heading at twenty columns', (language, breakTitle, expected) => {
+    setLanguage(language);
+    try {
+      const lines = renderSchedule({
+        mode: 'public', publicWindow: { status: 'onBreak', breakTitle },
+      }, new Date(), 100, 20);
+      const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
+
+      expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+      expect(text).toContain(expected.replace(/\s/g, ''));
+    } finally {
+      setLanguage('en');
+    }
+  });
+
   it('shows term/week and a progress bar when nextBreakStart is known', () => {
     const state = {
       mode: 'public' as const,
@@ -330,6 +575,36 @@ describe('renderSchedule — public mode', () => {
     expect(out).toContain('Term 1');
     expect(out).toContain('Week 3');
     expect(out).toContain('days until');
+  });
+
+  it.each([
+    [
+      'en', 'Winter break',
+      ['2026-2027 · Term 1 · Week 3', 'Week 3/17', '104 days until Winter break'],
+    ],
+    [
+      'zh', '寒假',
+      ['2026-2027学年 · 第一学期 · 第 3 周', '第 3/17 周', '距离寒假还有 104 天'],
+    ],
+  ] as const)('fits the complete %s term summary within twenty columns', (language, breakTitle, expected) => {
+    setLanguage(language);
+    try {
+      const lines = renderSchedule({
+        mode: 'public',
+        publicWindow: {
+          status: 'inTerm', academicYear: '2026-2027', semester: '1',
+          weekOneMonday: '2026-09-14', currentWeek: 3,
+          nextBreakStart: '2027-01-13', nextBreakTitle: breakTitle,
+        },
+      }, new Date('2026-10-01'), 100, 20);
+      const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
+
+      expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+      expect(lines.some((line) => /[█░]/u.test(stripAnsi(line)))).toBe(true);
+      for (const value of expected) expect(text).toContain(value.replace(/\s/g, ''));
+    } finally {
+      setLanguage('en');
+    }
   });
 
   it('groups the term heading, progress bar, and countdown as one block with no blank lines inside it', () => {
@@ -369,10 +644,93 @@ describe('renderSchedule — public mode', () => {
     expect(out).toContain('National Day');
   });
 
+  it.each([
+    ['en', 'International innovation and entrepreneurship competition'],
+    ['zh', '国际创新创业项目成果展示交流活动'],
+  ] as const)('wraps a complete %s public event at twenty columns', (language, title) => {
+    setLanguage(language);
+    try {
+      const event: Event = {
+        date: '10-01', time: '09:30', title, location: 'TBD', description: '',
+        startDate: new Date('2026-10-01T09:30:00'), recurring: true, uid: 'long-event',
+      };
+      const lines = renderSchedule({
+        mode: 'public', publicWindow: null, publicUpcoming: [event],
+      }, new Date('2026-09-30'), 100, 20);
+      const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
+
+      expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+      expect(text).toContain('10-0109:30');
+      expect(text).toContain(title.replace(/\s/g, ''));
+      expect(text).toMatch(/[↻~]/u);
+    } finally {
+      setLanguage('en');
+    }
+  });
+
+  it('omits a wrapped public event rather than showing it partially above a short login field', () => {
+    const publicField = new ListField({ title: 'x', options: [{ value: 'login', label: 'Log in' }] });
+    const event: Event = {
+      date: '10-01', time: '09:30', title: 'International innovation and entrepreneurship competition',
+      location: 'TBD', description: '', startDate: new Date('2026-10-01T09:30:00'),
+      recurring: true, uid: 'long-event',
+    };
+    const lines = renderSchedule({
+      mode: 'public', publicWindow: null, publicUpcoming: [event], publicField,
+    }, new Date('2026-09-30'), 9, 20);
+    const text = stripAnsi(lines.join('\n'));
+
+    expect(lines).toHaveLength(9);
+    expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+    expect(text).toContain('Log in');
+    expect(text).not.toContain('International');
+  });
+
   it('renders the login action field', () => {
     const publicField = new ListField({ title: 'x', options: [{ value: 'login', label: 'Log in' }] });
     const out = stripAnsi(renderSchedule({ mode: 'public', publicField }, new Date()).join('\n'));
     expect(out).toContain('Log in');
+  });
+
+  it.each([
+    ['en', 'Schedule', 'Log in to see my timetable'],
+    ['zh', '课表', '登录查看我的完整个人课表'],
+  ] as const)('fits the complete %s public login action within twenty columns', (language, title, label) => {
+    setLanguage(language);
+    try {
+      const publicField = new ListField({ title, options: [{ value: 'login', label }] });
+      const lines = renderSchedule({
+        mode: 'public', publicWindow: null, publicField,
+      }, new Date(), 100, 20);
+      const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
+
+      expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+      expect(text).toContain(label.replace(/\s/g, ''));
+    } finally {
+      setLanguage('en');
+    }
+  });
+
+  it('keeps the login action visible in a five-row body', () => {
+    const label = 'Log in to see my timetable';
+    const publicField = new ListField({
+      title: 'Schedule',
+      options: [{ value: 'login', label }],
+      footer: 'Move',
+    });
+    const publicUpcoming: Event[] = [{
+      date: '10-01', time: '', title: 'National Day', location: 'TBD', description: '',
+      startDate: new Date('2026-10-01'), recurring: true, uid: 'nd-1',
+    }];
+
+    const lines = renderSchedule({
+      mode: 'public', publicWindow: { status: 'onBreak', breakTitle: 'Summer' }, publicUpcoming, publicField,
+    }, new Date('2026-08-03'), 5, 20);
+    const visible = lines.map(stripAnsi).join('').replace(/\s/g, '');
+
+    expect(lines).toHaveLength(5);
+    expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+    expect(visible).toContain(label.replace(/\s/g, ''));
   });
 
   it('never collapses a multi-line renderer output into one array entry', () => {

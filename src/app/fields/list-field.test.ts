@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { ListField, computeMaxVisible } from './list-field.js';
+import { ListField, computeMaxVisible, renderListFieldWithContext } from './list-field.js';
+import { stripAnsi, visualWidth } from '../../core/text.js';
 import { setLanguage } from '../../i18n/index.js';
 
 beforeAll(() => setLanguage('en'));
@@ -156,6 +157,41 @@ describe('ListField.setMaxVisible (live resize)', () => {
     field.setMaxVisible(undefined);
     const text = field.render().join('\n');
     expect(text).toContain('Item 19');
+  });
+});
+
+describe('ListField row budgets', () => {
+  const manyOptions = Array.from({ length: 20 }, (_, i) => ({ value: String(i), label: `Item ${i}` }));
+
+  it('keeps the selected option visible in a one-row viewport', () => {
+    const field = new ListField({ title: 'List', options: manyOptions });
+    field.handleKey('\x1b[F');
+
+    const lines = field.render(1).map(stripAnsi);
+
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('Item 19');
+  });
+
+  it('keeps a complete wrapped selected option in a three-row viewport', () => {
+    const label = 'Log in to see my timetable';
+    const field = new ListField({ title: 'Schedule', options: [{ value: 'login', label }] });
+
+    const lines = field.render(3, 20);
+    const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
+
+    expect(lines).toHaveLength(3);
+    expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+    expect(text).toContain(label.replace(/\s/g, ''));
+  });
+
+  it('keeps context and an actionable option in a five-row composite viewport', () => {
+    const field = new ListField({ title: 'Actions', options: manyOptions });
+    const lines = renderListFieldWithContext(['Summary', '', 'Recent', 'Event', ''], field, 5).map(stripAnsi);
+
+    expect(lines.length).toBeLessThanOrEqual(5);
+    expect(lines.join('\n')).toContain('Summary');
+    expect(lines.join('\n')).toContain('Item 0');
   });
 });
 

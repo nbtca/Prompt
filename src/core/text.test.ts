@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { visualWidth, padEndV, truncate, stripAnsi } from './text.js';
+import { visualWidth, padEndV, truncate, stripAnsi, wrapAnsiToVisualWidth } from './text.js';
 
 describe('visualWidth', () => {
   it('counts plain ASCII as 1 column each', () => {
@@ -64,5 +64,21 @@ describe('truncate', () => {
   it('accounts for emoji width when truncating', () => {
     const result = truncate('🎉张明俊的生日', 8);
     expect(visualWidth(stripAnsi(result))).toBeLessThanOrEqual(8);
+  });
+});
+
+describe('wrapAnsiToVisualWidth', () => {
+  it('preserves styled Chinese text across wrapped lines', () => {
+    const source = '中文正文不会被截断';
+    const lines = wrapAnsiToVisualWidth(`\x1b[36m${source}\x1b[39m`, 6);
+
+    expect(lines.length).toBeGreaterThan(1);
+    expect(lines.every((line) => visualWidth(line) <= 6)).toBe(true);
+    expect(stripAnsi(lines.join(''))).toBe(source);
+    expect(lines.every((line) => line.includes('\x1b['))).toBe(true);
+  });
+
+  it('breaks English text at whitespace when possible', () => {
+    expect(wrapAnsiToVisualWidth('alpha beta gamma', 10)).toEqual(['alpha beta', 'gamma']);
   });
 });

@@ -8,7 +8,7 @@ import { scheduleView } from './views/schedule.js';
 import { docsView } from './views/docs.js';
 import { eventsView } from './views/events.js';
 import { settingsView } from './views/settings.js';
-import { t } from '../i18n/index.js';
+import { getAppTabs } from './tabs.js';
 
 /**
  * Event-driven full-screen app loop. Owns the alt-screen + raw-mode lifecycle
@@ -29,15 +29,7 @@ export async function runApp(): Promise<void> {
   let running = true;
   let suspended = false;
 
-  // A focused student companion: schedule-first, no infra-status/links noise.
-  const tabs: { id: ViewId; title: string }[] = [
-    { id: 'home', title: 'Home' },
-    { id: 'schedule', title: t().timetable.menuEntry },
-    { id: 'events', title: t().menu.events },
-    { id: 'docs', title: t().menu.docs },
-    { id: 'settings', title: t().menu.settings },
-  ];
-  const viewIds = tabs.map((tab) => tab.id);
+  const viewIds = getAppTabs().map((tab) => tab.id);
 
   // Every tab is a native View rendered in place inside the alt-screen frame.
   const nativeViews: Partial<Record<ViewId, View>> = {
@@ -56,6 +48,7 @@ export async function runApp(): Promise<void> {
     get size(): AppSize { return size(); },
     get bodyRows(): number { return computeBodyRows(size().rows, HEADER_LINES, FOOTER_LINES); },
     rerender(): void { render(); },
+    resetScroll(): void { scroll = 0; },
     runClassic(fn: () => Promise<void>): Promise<void> { return runClassic(fn); },
     quit(): void { quit(); },
   };
@@ -64,8 +57,9 @@ export async function runApp(): Promise<void> {
     if (suspended || !running) return;
     const { rows, cols } = size();
     const active = nativeViews[view];
+    const tabs = getAppTabs();
     const header = renderHeader(tabs, view, cols);
-    const footer = renderFooter(view, cols, tabs.length, active?.footerHint?.());
+    const footer = renderFooter(view, cols, tabs.length, active?.footerHint?.(tabs.length, cols));
     const body = active?.render(ctx) ?? [];
     process.stdout.write(ansi.home + composeFrame(header, body, footer, rows, cols, scroll) + ansi.eraseDown);
   }

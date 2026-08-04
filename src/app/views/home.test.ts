@@ -2,9 +2,9 @@ import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vite
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { setLanguage } from '../../i18n/index.js';
+import { setLanguage, t } from '../../i18n/index.js';
 import { resetIconCache } from '../../core/icons.js';
-import { stripAnsi } from '../../core/text.js';
+import { stripAnsi, visualWidth } from '../../core/text.js';
 import type { AppContext } from '../view.js';
 
 const calendarUpcoming = vi.fn().mockReturnValue([]);
@@ -27,6 +27,16 @@ beforeAll(() => {
 });
 
 const noon = new Date('2026-07-15T12:00:00');
+
+describe('homeView footer', () => {
+  it('offers tab switching and quitting without move or open actions', () => {
+    const hint = stripAnsi(homeView.footerHint?.(5) ?? '');
+    expect(hint).toContain('1-5');
+    expect(hint).toContain(t().menu.hintQuit);
+    expect(hint).not.toContain(t().menu.hintMove);
+    expect(hint).not.toContain(t().menu.hintOpen);
+  });
+});
 
 describe('renderHome (schedule-first dashboard)', () => {
   it('shows next class, today classes, and upcoming events', () => {
@@ -75,6 +85,30 @@ describe('renderHome (schedule-first dashboard)', () => {
     expect(out).toContain('Failed to load event calendar');
     expect(out).not.toContain('No upcoming events');
   });
+
+  it.each(['en', 'zh'] as const)('fits every generated home label within twenty columns in %s', (language) => {
+    setLanguage(language);
+    try {
+      const trans = t();
+      const lines = renderHome({ loading: false, unresolvedCount: 123 }, noon, 100, 20);
+      const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
+
+      expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+      for (const label of [
+        trans.timetable.nextClass,
+        trans.timetable.noNextClass,
+        trans.timetable.hubToday,
+        trans.timetable.noClassToday,
+        trans.timetable.hubUnresolved,
+        trans.menu.events,
+        trans.calendar.noEvents,
+      ]) {
+        expect(text).toContain(label.replace(/\s/g, ''));
+      }
+    } finally {
+      setLanguage('en');
+    }
+  });
 });
 
 describe('renderHome adaptive event count', () => {
@@ -95,6 +129,68 @@ describe('renderHome adaptive event count', () => {
     }, noon, 50).join('\n'));
     for (const l of manyEventLines) expect(out).toContain(l.trim());
   });
+
+  it.each([
+    [
+      '10:00 Advanced distributed systems in the engineering laboratory',
+      '14:00 Community governance seminar in the collaboration space',
+      '08-03 Campus organizations coordination and planning workshop',
+    ],
+    [
+      '10:00 高级分布式系统与工程实践课程',
+      '14:00 社区治理与组织协作专题研讨',
+      '08-03 校园组织协调与长期规划工作坊',
+    ],
+  ])('reflows complete schedule and event data within twenty columns', (nextClassLine, todayLine, eventLine) => {
+    const lines = renderHome({
+      nextClassLine: `   ${nextClassLine}`,
+      todayLines: [`   ${todayLine}`],
+      eventLines: [`   ${eventLine}`],
+      loading: false,
+    }, noon, 100, 20);
+    const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
+
+    expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+    expect(text).toContain(nextClassLine.replace(/\s/g, ''));
+    expect(text).toContain(todayLine.replace(/\s/g, ''));
+    expect(text).toContain(eventLine.replace(/\s/g, ''));
+  });
+
+  it('budgets wrapped events by rendered rows without splitting an event', () => {
+    const eventLines = [
+      '   08-03 Community planning workshop',
+      '   08-04 Student organizations coordination meeting',
+      '   08-05 Engineering projects presentation evening',
+    ];
+    const lines = renderHome({
+      nextClassLine: '',
+      todayLines: [],
+      eventLines,
+      loading: false,
+    }, noon, 12, 20);
+    const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
+
+    expect(lines.length).toBeLessThanOrEqual(12);
+    expect(text).toContain(eventLines[0]!.replace(/\s/g, ''));
+    expect(text).not.toContain(eventLines[1]!.replace(/\s/g, ''));
+  });
+
+  it('keeps one complete event scrollable when earlier panels fill the viewport', () => {
+    const eventLine = '   08-03 Community planning workshop';
+    const lines = renderHome({
+      weekAhead: {
+        classDays: [true, false, true, false, false, false, false],
+        eventDays: [false, true, false, false, true, false, false],
+      },
+      eventLines: [eventLine],
+      loading: false,
+    }, noon, 12, 20);
+    const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
+
+    expect(lines.length).toBeGreaterThan(12);
+    expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+    expect(text).toContain(eventLine.replace(/\s/g, ''));
+  });
 });
 
 describe('renderHome day-progress bar', () => {
@@ -113,6 +209,16 @@ describe('renderHome day-progress bar', () => {
     expect(out).toContain('0%');
     const lateOut = stripAnsi(renderHome({}, new Date('2026-07-15T23:59:00')).join('\n'));
     expect(lateOut).toContain('100%');
+  });
+
+  it('shrinks with a twenty-column terminal and grows back with available width', () => {
+    const narrow = renderHome({}, noon, 100, 20).find((line) => stripAnsi(line).includes('50%'))!;
+    const wide = renderHome({}, noon, 100, 40).find((line) => stripAnsi(line).includes('50%'))!;
+
+    expect(visualWidth(narrow)).toBeLessThanOrEqual(20);
+    expect(visualWidth(wide)).toBeGreaterThan(visualWidth(narrow));
+    expect(stripAnsi(narrow)).toContain('50%');
+    expect(stripAnsi(wide)).toContain('50%');
   });
 });
 
@@ -194,6 +300,35 @@ describe('renderHome — week overview panel (Part D)', () => {
     }, noon);
     for (const l of lines) expect(l).not.toContain('\n');
   });
+
+  it.each(['en', 'zh'] as const)('uses a complete vertical week grid at twenty columns in %s', (language) => {
+    setLanguage(language);
+    try {
+      const trans = t();
+      const lines = renderHome({
+        loading: false,
+        weekAhead: {
+          classDays: [true, false, true, false, false, false, false],
+          eventDays: [false, true, false, false, true, true, false],
+        },
+      }, noon, 100, 20);
+      const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
+
+      expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+      for (const label of [
+        trans.timetable.weekOverviewTitle,
+        trans.timetable.weekAheadClasses,
+        trans.menu.events,
+        trans.timetable.weekAheadBusy,
+        trans.timetable.weekAheadFree,
+        trans.timetable.weekAheadNone,
+      ]) {
+        expect(text).toContain(label.replace(/\s/g, ''));
+      }
+    } finally {
+      setLanguage('en');
+    }
+  });
 });
 
 describe('renderHome — unresolved items warning (Part E)', () => {
@@ -252,7 +387,7 @@ describe('homeView.load()', () => {
 
   function fakeCtx(): AppContext {
     return {
-      size: { rows: 24, cols: 80 }, bodyRows: 19, rerender: vi.fn(),
+      size: { rows: 24, cols: 80 }, bodyRows: 19, rerender: vi.fn(), resetScroll: vi.fn(),
       runClassic: vi.fn(async (fn: () => Promise<void>) => { await fn(); }), quit: vi.fn(),
     };
   }
@@ -309,6 +444,7 @@ describe('homeView.load()', () => {
           expect(out).toContain('Week overview');
         }
       }),
+      resetScroll: vi.fn(),
       runClassic: vi.fn(async (fn: () => Promise<void>) => { await fn(); }), quit: vi.fn(),
     };
     await homeView.load(ctx);

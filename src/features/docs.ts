@@ -9,7 +9,7 @@ import { warning, createSpinner } from '../core/ui.js';
 import { pickIcon } from '../core/icons.js';
 import { spawn, execFileSync } from 'child_process';
 import { URLS } from '../config/data.js';
-import { t, fmt } from '../i18n/index.js';
+import { t, fmt, type Translations } from '../i18n/index.js';
 import { enterScreen, breadcrumb } from '../core/transitions.js';
 import { createDocsClient } from '@nbtca/docs';
 import type { DocItem } from '@nbtca/docs';
@@ -57,17 +57,60 @@ function hasGlow(): boolean {
   return _hasGlow;
 }
 
+// nbtca/documents links internally with relative/root-relative paths
+// (`./what-is-nbtca`, `/concepts/school`) that only resolve in a browser --
+// a terminal pager can neither follow nor hover-preview them, so showing
+// the path is dead weight. Matches './x', '../x', and '/x' but not a bare
+// '/' (an internal href is never *just* a slash in this content).
+function isInternalHref(href: string): boolean {
+  return /^\.{0,2}\/./.test(href);
+}
+
 let _markedConfigured = false;
-function ensureMarkedConfigured(): void {
+export function ensureMarkedConfigured(): void {
   if (_markedConfigured) return;
   _markedConfigured = true;
-  marked.use(markedTerminal(getRendererOptions(getTerminalType())));
+  const extension = markedTerminal(getRendererOptions(getTerminalType()));
+  const renderer = extension.renderer ?? (extension.renderer = {});
+
+  const renderExternalLink = renderer.link;
+  if (renderExternalLink) {
+    renderer.link = function (token) {
+      if (isInternalHref(token.href)) return chalk.cyan.underline(token.text);
+      return renderExternalLink.call(this, token);
+    };
+  }
+
+  // marked-terminal's own `text` renderer always uses the token's raw
+  // `.text` string, never `.tokens` -- fine for a plain text run, but a
+  // *tight* list item (nbtca/documents' convention throughout: no blank
+  // line between "- " entries) tokenizes its content as a `text` token
+  // with markdown links inside still sitting unparsed in `.tokens`, not
+  // resolved into `.text`. Result: every link inside every bullet list
+  // rendered as completely raw, un-clickable-looking `[text](url)` syntax
+  // (only paragraph-level links, which *do* go through inline-parsing,
+  // picked up the `link` override above at all). Recursing into
+  // `parser.parseInline` here when `.tokens` exists routes list-item links
+  // through the same override, matching how paragraph/heading already do.
+  const renderPlainText = renderer.text;
+  if (renderPlainText) {
+    renderer.text = function (token) {
+      const withTokens = token as typeof token & { tokens?: unknown[] };
+      if (Array.isArray(withTokens.tokens) && withTokens.tokens.length > 0) {
+        return (this as { parser: { parseInline: (t: unknown[]) => string } })
+          .parser.parseInline(withTokens.tokens);
+      }
+      return renderPlainText.call(this, token);
+    };
+  }
+
+  marked.use(extension);
 }
 
 // ─── marked-terminal renderer ─────────────────────────────────────────────────
 
 function getRendererOptions(type: TerminalType): Record<string, unknown> {
-  const width = Math.min(process.stdout.columns || 80, 80);
+  const width = 80;
 
   const unicodeTableChars = {
     top: '─', 'top-mid': '┬', 'top-left': '┌', 'top-right': '┐',
@@ -87,6 +130,14 @@ function getRendererOptions(type: TerminalType): Record<string, unknown> {
     width,
     emoji: true,
     unescape: true,
+    // marked-terminal defaults this to true, prefixing every heading with
+    // its literal '#'/'##'/etc. markdown syntax. displayWithLess() already
+    // prints its own clean title line above the content, and most docs'
+    // first line is an H1 matching that same title -- so the raw '#
+    // Title' immediately below just repeated it a second time, syntax
+    // marks and all. firstHeading/heading's bold+color already
+    // distinguishes heading levels without the extra prefix.
+    showSectionPrefix: false,
     firstHeading: chalk.bold.cyan,
     heading: chalk.bold.white,
     codespan: chalk.yellowBright,
@@ -220,7 +271,7 @@ const CONTAINER_ICONS_UNICODE: Record<string, string> = {
   info: 'ℹ️', tip: '💡', warning: '⚠️', danger: '🚨', details: '▶️'
 };
 
-function cleanMarkdownContent(content: string, type: TerminalType = getTerminalType()): string {
+export function cleanMarkdownContent(content: string, type: TerminalType = getTerminalType()): string {
   let c = content;
 
   // 1. YAML frontmatter
@@ -244,6 +295,15 @@ function cleanMarkdownContent(content: string, type: TerminalType = getTerminalT
     }
   );
   c = c.replace(/^:::\s*\w*.*$/gm, '');
+
+  // Internal wiki links (./foo, /concepts/foo) are handled at the renderer
+  // level (ensureMarkedConfigured's link override below), not here -- an
+  // earlier version of this rewrote link syntax into pre-colored raw ANSI
+  // text before marked() ever saw it, which broke when marked-terminal's
+  // own text reflow/wrapping ran on top of already-escaped text, corrupting
+  // the escape sequences into literal visible "[36m...[24m" garbage.
+  // Overriding the renderer instead lets marked-terminal own all ANSI
+  // output, so nothing downstream can mangle it.
 
   // 4. GitHub / GitLab callout alerts  (> [!NOTE])
   c = c.replace(/^>\s*\[!(NOTE|TIP|WARNING|CAUTION|IMPORTANT)\]\s*$/gim,
@@ -332,16 +392,119 @@ function hasMermaidBlock(content: string): boolean {
   return /^```mermaid\b/m.test(content);
 }
 
+// ─── In-app reader (link-following, no shell-out to less/glow) ────────────────
+
+export interface DocLink { href: string; text: string }
+
+/** Every internal ([text](href) where isInternalHref(href)) link in a
+ * document, in reading order, raw href not yet resolved to a real path. */
+function extractInternalLinks(markdown: string): DocLink[] {
+  const links: DocLink[] = [];
+  const re = /\[([^\]]+)\]\(([^)]+)\)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(markdown))) {
+    const href = m[2] ?? '';
+    if (isInternalHref(href)) links.push({ text: m[1] ?? '', href });
+  }
+  return links;
+}
+
+/** Resolves a wiki-style href (relative to the *linking* document, VitePress
+ * conventions: no .md extension, trailing '/' means that dir's index) into
+ * a real repo-relative path matching DocItem.path -- e.g. './what-is-nbtca'
+ * from within 'about/index.md' -> 'about/what-is-nbtca.md'; '/concepts/'
+ * (root-relative, works from anywhere) -> 'concepts/index.md'. */
+function resolveInternalHref(href: string, fromPath: string): string {
+  const fromDir = fromPath.includes('/') ? fromPath.slice(0, fromPath.lastIndexOf('/')) : '';
+  const combined = href.startsWith('/') ? href.slice(1) : (fromDir ? `${fromDir}/${href}` : href);
+  const stack: string[] = [];
+  for (const part of combined.split('/')) {
+    if (part === '' || part === '.') continue;
+    if (part === '..') { stack.pop(); continue; }
+    stack.push(part);
+  }
+  let target = stack.join('/');
+  if (target === '' || href.endsWith('/')) target += (target ? '/' : '') + 'index';
+  if (!target.endsWith('.md')) target += '.md';
+  return target;
+}
+
+export interface ReaderDoc {
+  path: string;
+  title: string;
+  lines: string[];
+  links: DocLink[]; // .href here is already resolved to a real DocItem.path
+}
+
+/** Loads and renders a doc for the native in-app reader -- the same
+ * fetch/clean/render/cache pipeline viewMarkdownFile uses, minus the
+ * spinner/pager/post-read menu, which belong to the classic-pager
+ * presentation layer, not this one. */
+export async function loadDocForReader(filePath: string): Promise<ReaderDoc> {
+  ensureMarkedConfigured();
+  const rawContent = await fetchFileContent(filePath);
+  const fingerprint = contentFingerprint(rawContent);
+  const cached = getFreshRender(filePath);
+
+  let renderedDoc: RenderedDoc;
+  if (cached && cached.fingerprint === fingerprint) {
+    renderedDoc = cached;
+  } else {
+    const cleaned = cleanMarkdownContent(rawContent, getTerminalType());
+    const title = extractDocTitle(rawContent, cleaned) || cleanFileName(filePath.split('/').pop() ?? filePath);
+    const readTime = estimateReadTime(cleaned);
+    const rendered = await marked(cleaned) as string;
+    renderedDoc = { fingerprint, cleaned, rendered, title, readTime };
+    setRender(filePath, renderedDoc);
+  }
+
+  const seen = new Set<string>();
+  const links: DocLink[] = [];
+  for (const raw of extractInternalLinks(renderedDoc.cleaned)) {
+    const resolved = resolveInternalHref(raw.href, filePath);
+    if (seen.has(resolved)) continue;
+    seen.add(resolved);
+    links.push({ text: raw.text, href: resolved });
+  }
+
+  return { path: filePath, title: renderedDoc.title, lines: renderedDoc.rendered.split('\n'), links };
+}
+
 // ─── Document tree ────────────────────────────────────────────────────────────
 
-const TOP_SECTION_ORDER = ['tutorial', 'process', 'repair', 'archived'];
+// Sourced from a live audit of nbtca/documents (2026-07-18): `about` and
+// `concepts` are two whole new top-level sections added in the repo's wiki
+// reconstruction (5abcc4d, 5beee27) -- omitted here, buildSections() below
+// silently drops every file under them, which is exactly what happened
+// before this fix caught up to the upstream restructuring. `about` leads
+// (org intro for newcomers) and `concepts` sits after the practical guide
+// as reference material.
+const TOP_SECTION_ORDER = ['about', 'guide', 'repair', 'concepts', 'archived'];
 const TOP_SECTION_SKIP = new Set(['docs', 'index.md', 'README.md']);
+// tutorial/ and process/ are two folders on disk but one section everywhere
+// a reader actually sees them: nbtca/documents' own site nav collapses both
+// under a single "指南/Guide" entry, and tutorial/sidebar.ts spells out why
+// ("「指南」= 教程（学技术）+流程（办社务）高内聚合并为一栏") -- presenting
+// them as two separate top-level categories in the terminal was true to the
+// folder layout but false to how the content is actually meant to be read.
+const SECTION_ALIAS: Readonly<Record<string, string>> = { tutorial: 'guide', process: 'guide' };
 
 export interface DocSection {
   key: string;
   label: string;
   count: number;
   files: DocItem[];
+}
+
+export function localizeDocSections(sections: readonly DocSection[], trans: Translations = t()): DocSection[] {
+  const labels: Record<string, string> = {
+    about: trans.docs.categoryAbout,
+    guide: trans.docs.categoryGuide,
+    repair: trans.docs.categoryRepair,
+    concepts: trans.docs.categoryConcepts,
+    archived: trans.docs.categoryArchived,
+  };
+  return sections.map((section) => ({ ...section, label: labels[section.key] ?? section.label }));
 }
 
 /**
@@ -407,33 +570,26 @@ export function displayDocTitle(path: string, name: string): string {
 
 /** Group flat DocItem list into top-level sections. */
 export function buildSections(all: DocItem[]): DocSection[] {
-  const trans = t();
-  const labelMap: Record<string, string> = {
-    tutorial: trans.docs.categoryTutorial,
-    process:  trans.docs.categoryProcess,
-    repair:   trans.docs.categoryRepair,
-    archived: trans.docs.categoryArchived,
-  };
-
   const groups = new Map<string, DocItem[]>();
   for (const item of all) {
     const parts = item.path.split('/');
     if (parts.length < 2) continue;
-    const top = parts[0]!;
-    if (TOP_SECTION_SKIP.has(top)) continue;
+    const rawTop = parts[0]!;
+    if (TOP_SECTION_SKIP.has(rawTop)) continue;
+    const top = SECTION_ALIAS[rawTop] ?? rawTop;
     if (!TOP_SECTION_ORDER.includes(top)) continue;
     if (!groups.has(top)) groups.set(top, []);
     groups.get(top)!.push(item);
   }
 
-  return TOP_SECTION_ORDER
+  return localizeDocSections(TOP_SECTION_ORDER
     .filter(k => groups.has(k))
     .map(k => ({
       key:   k,
-      label: labelMap[k] ?? k,
+      label: k,
       count: groups.get(k)!.length,
       files: groups.get(k)!,
-    }));
+    })));
 }
 
 /** Group archived files by their second path component (year / manual / etc.). */

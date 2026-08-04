@@ -3,6 +3,24 @@ import { SessionExpiredError } from '../../auth/errors.js';
 
 const sessionStoreClear = vi.fn();
 const sessionStoreLoad = vi.fn();
+const setVimKeysActiveMock = vi.hoisted(() => vi.fn());
+const currentAcademicWindowMock = vi.hoisted(() => vi.fn().mockReturnValue(null));
+const inferWeekOneMondayMock = vi.hoisted(() => vi.fn().mockReturnValue(null));
+const isAcademicBreakEventMock = vi.hoisted(() => vi.fn().mockReturnValue(false));
+
+vi.mock('@nbtca/nbtcal', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@nbtca/nbtcal')>();
+  return {
+    ...actual,
+    currentAcademicWindow: currentAcademicWindowMock,
+    inferWeekOneMonday: inferWeekOneMondayMock,
+    isAcademicBreakEvent: isAcademicBreakEventMock,
+  };
+});
+
+vi.mock('../../core/vim-keys.js', () => ({
+  setVimKeysActive: setVimKeysActiveMock,
+}));
 
 vi.mock('../../auth/session-store.js', () => ({
   createSessionStore: () => ({
@@ -56,7 +74,7 @@ vi.mock('../../features/calendar.js', async (importOriginal) => {
 const { scheduleView } = await import('./schedule.js');
 const { setLanguage } = await import('../../i18n/index.js');
 const { resetIconCache } = await import('../../core/icons.js');
-const { stripAnsi } = await import('../../core/text.js');
+const { stripAnsi, visualWidth } = await import('../../core/text.js');
 const { loadCurrentPointer, loadTimetableCache } = await import('../../features/schedule-store.js');
 const { t } = await import('../../i18n/index.js');
 import type { AppContext } from '../view.js';
@@ -76,7 +94,7 @@ function fakeCtx(): AppContext {
   return {
     size: { rows: 24, cols: 80 },
     bodyRows: 19,
-    rerender: vi.fn(),
+    rerender: vi.fn(), resetScroll: vi.fn(),
     runClassic: vi.fn(async (fn: () => Promise<void>) => { await fn(); }),
     quit: vi.fn(),
   };
@@ -106,6 +124,13 @@ describe('scheduleView', () => {
   it('handleBack() returns false when there is nothing to step back from', () => {
     expect(scheduleView.handleBack?.()).toBe(false);
   });
+
+  it('does not offer move or open actions while loading', () => {
+    const hint = stripAnsi(scheduleView.footerHint?.(5) ?? '');
+    expect(hint).toContain('1-5');
+    expect(hint).not.toContain(t().menu.hintMove);
+    expect(hint).not.toContain(t().menu.hintOpen);
+  });
 });
 
 // hubShortcuts itself (its data shape, the unresolved-count badge, key
@@ -119,7 +144,7 @@ describe('scheduleView.load() with an expired session', () => {
     return {
       size: { rows: 24, cols: 80 },
       bodyRows: 19,
-      rerender: vi.fn(),
+      rerender: vi.fn(), resetScroll: vi.fn(),
       runClassic: vi.fn(async (fn: () => Promise<void>) => { await fn(); }),
       quit: vi.fn(),
     };
@@ -161,12 +186,27 @@ describe('scheduleView.load() with an expired session', () => {
     const out = stripAnsi(scheduleView.render(ctx).join('\n'));
     expect(out).toContain(t().timetable.hubLogout); // shortcut bar's own "Log out" -- the hub's always-present anchor
   });
+
+  it('does not offer move or open actions on an error screen', async () => {
+    vi.mocked(loadCurrentPointer).mockReturnValue(null);
+    sessionStoreLoad.mockReturnValue({
+      version: 1, provider: 'nbt-webvpn', jar: { cookies: [] }, authenticatedAt: '2026-01-01T00:00:00Z', validatedAt: '2026-01-01T00:00:00Z',
+    });
+    listTerms.mockRejectedValue(new Error('Broke'));
+
+    await scheduleView.load(fakeCtx());
+
+    const hint = stripAnsi(scheduleView.footerHint?.(5) ?? '');
+    expect(hint).toContain('1-5');
+    expect(hint).not.toContain(t().menu.hintMove);
+    expect(hint).not.toContain(t().menu.hintOpen);
+  });
 });
 
 describe('scheduleView.load() with no session — public view', () => {
   function fakeCtx(): AppContext {
     return {
-      size: { rows: 24, cols: 80 }, bodyRows: 19, rerender: vi.fn(),
+      size: { rows: 24, cols: 80 }, bodyRows: 19, rerender: vi.fn(), resetScroll: vi.fn(),
       runClassic: vi.fn(async (fn: () => Promise<void>) => { await fn(); }), quit: vi.fn(),
     };
   }
@@ -183,12 +223,57 @@ describe('scheduleView.load() with no session — public view', () => {
     expect(out).toContain(t().timetable.publicLoginAction);
     expect(out).not.toContain(t().timetable.studentId);
   });
+
+  it('derives the public academic window through nbtcal', async () => {
+    vi.mocked(loadCurrentPointer).mockReturnValue(null);
+    sessionStoreLoad.mockReturnValue(null);
+    calendarInRange.mockReturnValue([]);
+
+    await scheduleView.load(fakeCtx());
+
+    expect(currentAcademicWindowMock).toHaveBeenCalledWith([], expect.any(Date));
+  });
+
+  it('restores Vim keys when Esc leaves the student ID field', async () => {
+    vi.mocked(loadCurrentPointer).mockReturnValue(null);
+    sessionStoreLoad.mockReturnValue(null);
+    const ctx = fakeCtx();
+    await scheduleView.load(ctx);
+
+    scheduleView.handleKey('\r', ctx);
+    expect(scheduleView.capturesInput?.()).toBe(true);
+    expect(setVimKeysActiveMock).toHaveBeenLastCalledWith(false);
+    expect(visualWidth(scheduleView.footerHint?.(5, 20) ?? '')).toBeLessThanOrEqual(17);
+
+    expect(scheduleView.handleBack?.(ctx)).toBe(true);
+    expect(scheduleView.capturesInput?.()).toBe(false);
+    expect(setVimKeysActiveMock).toHaveBeenLastCalledWith(true);
+  });
+
+  it('steps from password to student ID before leaving login', async () => {
+    vi.mocked(loadCurrentPointer).mockReturnValue(null);
+    sessionStoreLoad.mockReturnValue(null);
+    const ctx = fakeCtx();
+    await scheduleView.load(ctx);
+
+    scheduleView.handleKey('\r', ctx);
+    scheduleView.handleKey('20260001', ctx);
+    scheduleView.handleKey('\r', ctx);
+
+    expect(scheduleView.handleBack?.(ctx)).toBe(true);
+    expect(scheduleView.capturesInput?.()).toBe(true);
+    expect(stripAnsi(scheduleView.render(ctx).join('\n'))).toContain(t().timetable.studentId);
+
+    expect(scheduleView.handleBack?.(ctx)).toBe(true);
+    expect(scheduleView.capturesInput?.()).toBe(false);
+    expect(setVimKeysActiveMock).toHaveBeenLastCalledWith(true);
+  });
 });
 
 describe('scheduleView — hub navigation', () => {
   function fakeCtx(): AppContext {
     return {
-      size: { rows: 24, cols: 80 }, bodyRows: 40, rerender: vi.fn(),
+      size: { rows: 24, cols: 80 }, bodyRows: 40, rerender: vi.fn(), resetScroll: vi.fn(),
       runClassic: vi.fn(async (fn: () => Promise<void>) => { await fn(); }), quit: vi.fn(),
     };
   }
@@ -278,6 +363,55 @@ describe('scheduleView — hub navigation', () => {
     const ctx = await loadIntoHub();
     scheduleView.handleKey('x', ctx);
     expect(sessionStoreClear).toHaveBeenCalled();
+  });
+
+  describe('footerHint — drill-down screens do not promise "move · open"', () => {
+    // Regression: meetingDetail/unresolved/termDensity all return to the hub
+    // on *any* key (see the tests above) -- there's no field to move a
+    // cursor within or open an item from, so the generic footer's "move ·
+    // open" wording was actively misleading on these three screens.
+    it('termDensity mode drops move/open but keeps the tab-switch and quit hints', async () => {
+      const ctx = await loadIntoHub();
+      scheduleView.handleKey('t', ctx);
+      const hint = scheduleView.footerHint?.(5);
+      expect(hint).toBeDefined();
+      expect(hint).not.toContain(t().menu.hintMove);
+      expect(hint).not.toContain(t().menu.hintOpen);
+      expect(hint).toContain('1-5');
+      expect(hint).toContain(t().menu.hintQuit);
+    });
+
+    it('unresolved mode drops move/open but keeps the tab-switch and quit hints', async () => {
+      const ctx = await loadIntoHub({
+        unresolvedItems: [{ kind: 'practice', itemIndex: 0, sourceFields: { kcmc: 'Fitness test' } }],
+      });
+      scheduleView.handleKey('u', ctx);
+      const hint = scheduleView.footerHint?.(5);
+      expect(hint).not.toContain(t().menu.hintMove);
+      expect(hint).not.toContain(t().menu.hintOpen);
+      expect(hint).toContain(t().menu.hintQuit);
+    });
+
+    it('meetingDetail mode drops move/open but keeps the tab-switch and quit hints', async () => {
+      const ctx = await loadIntoHub({
+        meetings: [{
+          sourceId: null, courseName: 'Math', teacherNames: ['Dr Li'], location: 'Room 201',
+          weekday: 1, startPeriod: 1, endPeriod: 1, weeks: [1], kind: 'regular',
+        }],
+      });
+      for (let i = 0; i < 7; i++) scheduleView.handleKey('\x1b[D', ctx);
+      scheduleView.handleKey('\r', ctx);
+      const hint = scheduleView.footerHint?.(5);
+      expect(hint).not.toContain(t().menu.hintMove);
+      expect(hint).not.toContain(t().menu.hintOpen);
+    });
+
+    it('the standalone week grid is NOT treated as a drill-down -- its arrow/Enter keys genuinely move/open', async () => {
+      const ctx = await loadIntoHub();
+      scheduleView.handleKey('w', ctx);
+      const hint = scheduleView.footerHint?.(5);
+      expect(hint).toBeUndefined(); // falls through to chrome's generic hint
+    });
   });
 
   describe('short/narrow terminal — inline grid falls back to the single-day view', () => {

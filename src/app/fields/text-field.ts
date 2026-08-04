@@ -28,13 +28,14 @@ export class TextField {
     return this.value;
   }
 
-  render(): string[] {
+  render(cols = Number.POSITIVE_INFINITY): string[] {
     return renderInput({
       message: this.config.message,
       value: this.value,
       placeholder: this.config.placeholder,
       secret: this.config.secret,
       mask: this.config.mask,
+      cols,
     }).split('\n');
   }
 

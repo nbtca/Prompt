@@ -103,13 +103,15 @@ export interface Translations {
   docs: {
     loading: string;
     loadingDir: string;
-    categoryTutorial: string;
+    categoryAbout: string;
+    categoryGuide: string;
     categoryRepairLogs: string;
     categoryEvents: string;
-    categoryProcess: string;
+    categoryConcepts: string;
     categoryRepair: string;
     categoryArchived: string;
     categoryReadme: string;
+    overviewLabel: string;
     chooseCategory: string;
     refreshCache: string;
     cacheCleared: string;
@@ -147,6 +149,9 @@ export interface Translations {
     tocTitle: string;
     tableHint: string;
     mermaidHint: string;
+    readerLinksTitle: string;
+    readerLinksHint: string;
+    readerNoLinks: string;
   };
   links: {
     choose: string;

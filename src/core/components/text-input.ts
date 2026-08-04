@@ -2,6 +2,7 @@ import { glyph, type, space } from '../theme.js';
 import { startRawInput } from './input-session.js';
 import { setVimKeysActive } from '../vim-keys.js';
 import { createPainter } from './painter.js';
+import { visualWidth, wrapAnsiToVisualWidth } from '../text.js';
 
 export type InputEvent =
   | { type: 'char'; ch: string }
@@ -34,17 +35,29 @@ export function renderInput(opts: {
   placeholder?: string;
   secret?: boolean;
   mask?: string;
+  cols?: number;
 }): string {
+  const width = Number.isFinite(opts.cols)
+    ? Math.max(1, Math.floor(opts.cols ?? Number.POSITIVE_INFINITY))
+    : Number.POSITIVE_INFINITY;
+  const indent = visualWidth(space.indent) < width ? space.indent : '';
+  const messageWidth = Math.max(1, width - visualWidth(indent));
+  const messageLines = wrapAnsiToVisualWidth(type.label(opts.message), messageWidth)
+    .map((line) => `${indent}${line}`);
   const visibleValue = opts.secret
     ? (opts.mask ?? '*').repeat([...opts.value].length)
     : opts.value;
   const shown = opts.value.length > 0
     ? type.body(visibleValue)
     : type.hint(opts.placeholder ?? '');
-  return [
-    space.indent + type.label(opts.message),
-    `${space.indent}${type.active(glyph.cursor())} ${shown}`,
-  ].join('\n');
+  const cursor = type.active(glyph.cursor());
+  const prefixes = [`${space.indent}${cursor} `, `${cursor} `, cursor, ''];
+  const prefix = prefixes.find((candidate) => visualWidth(candidate) < width) ?? '';
+  const continuation = ' '.repeat(visualWidth(prefix));
+  const inputWidth = Math.max(1, width - visualWidth(prefix));
+  const inputLines = wrapAnsiToVisualWidth(shown, inputWidth)
+    .map((line, index) => `${index === 0 ? prefix : continuation}${line}`);
+  return [...messageLines, ...inputLines].join('\n');
 }
 
 export interface RunTextInputConfig {

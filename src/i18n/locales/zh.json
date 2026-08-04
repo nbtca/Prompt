@@ -84,13 +84,15 @@
   "docs": {
     "loading": "正在加载文档列表...",
     "loadingDir": "正在加载目录",
-    "categoryTutorial": "教程",
+    "categoryAbout": "认识 NBTCA",
+    "categoryGuide": "指南",
     "categoryRepairLogs": "维修日记",
     "categoryEvents": "活动文档",
-    "categoryProcess": "流程",
+    "categoryConcepts": "参考",
     "categoryRepair": "维修",
     "categoryArchived": "归档",
     "categoryReadme": "项目说明 (README)",
+    "overviewLabel": "总览",
     "chooseCategory": "文档",
     "refreshCache": "刷新缓存",
     "cacheCleared": "文档缓存已清除",
@@ -127,7 +129,10 @@
     "searching": "正在搜索文档...",
     "searchResults": "个结果",
     "searchNoResults": "未找到匹配的文档",
-    "loadingFile": "正在加载"
+    "loadingFile": "正在加载",
+    "readerLinksTitle": "跳转到",
+    "readerLinksHint": "链接",
+    "readerNoLinks": "本页没有指向其他文档的链接"
   },
   "links": {
     "choose": "链接",

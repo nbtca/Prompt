@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parseKey, nextIndex, renderMenu, runMenu } from './menu.js';
-import { stripAnsi } from '../text.js';
+import { stripAnsi, visualWidth } from '../text.js';
 import { resetIconCache } from '../icons.js';
 
 describe('parseKey', () => {
@@ -83,6 +83,27 @@ describe('renderMenu', () => {
     const lines = plain();
     expect(lines.some((l) => l.includes('3 upcoming'))).toBe(true);
     expect(lines.some((l) => l.includes('wiki'))).toBe(true);
+  });
+
+  it.each([
+    'Log in to see my timetable',
+    '登录查看我的完整个人课表',
+  ])('wraps a complete selected option at twenty columns', (label) => {
+    process.env['NBTCA_ICON_MODE'] = 'ascii';
+    resetIconCache();
+    try {
+      const lines = renderMenu({
+        title: 'Schedule', options: [{ value: 'login', label }], selectedIndex: 0,
+      }, 20).split('\n');
+      const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
+
+      expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+      expect(text).toContain(label.replace(/\s/g, ''));
+      expect(lines.filter((line) => stripAnsi(line).includes('>'))).toHaveLength(1);
+    } finally {
+      process.env['NBTCA_ICON_MODE'] = 'unicode';
+      resetIconCache();
+    }
   });
 });
 

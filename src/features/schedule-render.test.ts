@@ -4,7 +4,7 @@ import type { TimetableMeeting, TimetablePeriod, TimetableUnresolvedItem } from 
 import {
   renderNextClassBanner, renderTodayClasses, renderWeekGrid, renderUnresolvedItems,
   renderTodayTimeline, renderTermDensity, renderMeetingDetail,
-  renderDayTimeline, renderDaySwitcher,
+  renderDayTimeline, renderDaySwitcher, weekdayShortLabel,
 } from './schedule-render.js';
 import { setLanguage } from '../i18n/index.js';
 import { resetIconCache } from '../core/icons.js';
@@ -33,6 +33,36 @@ describe('renderNextClassBanner', () => {
     expect(out).toContain('Next'); expect(out).toContain('Math'); expect(out).toMatch(/1h/); done();
   });
   it('empty when no next class', () => { expect(renderNextClassBanner(null, new Date())).toBe(''); done(); });
+
+  it('keeps the course and countdown ahead of the location at forty columns', () => {
+    const out = stripAnsi(renderNextClassBanner({
+      meeting: mk({
+        courseName: 'Advanced Distributed Systems Architecture',
+        location: 'Building 12 Room 304',
+      }),
+      start: new Date('2026-09-07T08:00:00'),
+    }, new Date('2026-09-07T06:30:00'), 40));
+
+    expect(visualWidth(out)).toBeLessThanOrEqual(40);
+    expect(out).toContain('Advanced');
+    expect(out).toContain('1h 30m');
+    expect(out).not.toContain('Building 12 Room 304');
+    done();
+  });
+
+  it('uses a compact course and countdown banner at twenty columns', () => {
+    const out = stripAnsi(renderNextClassBanner({
+      meeting: mk({}),
+      start: new Date('2026-09-07T08:00:00'),
+    }, new Date('2026-09-07T06:30:00'), 20));
+
+    expect(visualWidth(out)).toBeLessThanOrEqual(20);
+    expect(out).toContain('Math');
+    expect(out).toContain('1h 30m');
+    expect(out).not.toContain('Room 201');
+    expect(out).not.toContain('Next');
+    done();
+  });
 });
 
 describe('renderTodayClasses', () => {
@@ -418,6 +448,25 @@ describe('renderMeetingDetail', () => {
     expect(out.split('\n').length).toBeGreaterThan(1);
     for (const line of out.split('\n')) expect(line).not.toContain('\n');
   });
+
+  it('wraps every detail value without losing content at twenty columns', () => {
+    const lines = renderMeetingDetail(mk({
+      courseName: 'Advanced Distributed Systems Architecture',
+      location: 'International Innovation Center Room 304',
+      teacherNames: ['Alexandria Montgomery', 'Bartholomew Richardson'],
+      weeks: [1, 3, 5, 7, 9, 11, 13, 15],
+    }), periods, 20).split('\n');
+    const text = lines.map(stripAnsi).join(' ').replace(/\s+/g, ' ').trim();
+    const locationLabel = lines.map(stripAnsi).findIndex((line) => line.trim() === 'Location');
+
+    expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+    expect(text).toContain('Advanced Distributed Systems Architecture');
+    expect(text).toContain('International Innovation Center Room 304');
+    expect(text).toContain('Alexandria Montgomery, Bartholomew Richardson');
+    expect(text).toContain('1, 3, 5, 7, 9, 11, 13, 15');
+    expect(locationLabel).toBeGreaterThanOrEqual(0);
+    expect(stripAnsi(lines[locationLabel + 1] ?? '').trim()).toBe('International');
+  });
 });
 
 const dayPeriods: TimetablePeriod[] = [
@@ -449,6 +498,23 @@ describe('renderTodayTimeline', () => {
     expect(out).toContain('In progress');
     expect(out).toContain('25m left');
     expect(out).toContain('Bldg 1-302');
+    done();
+  });
+
+  it('compacts a live class before truncating its course at forty columns', () => {
+    const meetings = [mk({
+      courseName: 'Data Structures', location: 'Bldg 1-302', startPeriod: 3, endPeriod: 3,
+    })];
+    const lines = renderTodayTimeline(
+      meetings, dayPeriods, new Date('2026-09-07T14:55:00'), 40,
+    ).split('\n');
+    const classLine = stripAnsi(lines[0] ?? '');
+
+    expect(lines.every((line) => visualWidth(line) <= 40)).toBe(true);
+    expect(classLine).toContain('Data Structures');
+    expect(classLine).toContain('25m');
+    expect(classLine).not.toContain('In progress');
+    expect(classLine).not.toContain('Bldg 1-302');
     done();
   });
 
@@ -488,6 +554,20 @@ describe('renderDayTimeline', () => {
     const meetings = [mk({ courseName: 'Physics', location: 'Bldg 1-302', startPeriod: 2, endPeriod: 2 })];
     const out = stripAnsi(renderDayTimeline(meetings, dayPeriods, new Date('2026-09-07T07:00:00'), true));
     expect(out).toContain('Bldg 1-302');
+    done();
+  });
+
+  it('keeps time and course visible at twenty columns', () => {
+    const meetings = [mk({ courseName: 'Math', location: 'Bldg 1-302', startPeriod: 1, endPeriod: 1 })];
+    const lines = renderDayTimeline(
+      meetings, dayPeriods, new Date('2026-09-07T07:00:00'), false, undefined, 20,
+    ).split('\n');
+    const classLine = stripAnsi(lines[0] ?? '');
+
+    expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+    expect(classLine).toContain('08:00');
+    expect(classLine).toContain('Math');
+    expect(classLine).not.toContain('Bldg 1-302');
     done();
   });
 
@@ -549,6 +629,23 @@ describe('renderDaySwitcher', () => {
     const out = renderDaySwitcher(1, 1);
     expect(out.split('\n').length).toBe(1);
   });
+
+  it('keeps every selected weekday visible within twenty columns', () => {
+    for (let weekday = 1; weekday <= 7; weekday += 1) {
+      const out = stripAnsi(renderDaySwitcher(weekday, 1, 20));
+      expect(visualWidth(out)).toBeLessThanOrEqual(20);
+      expect(out).toContain(`[${weekdayShortLabel(weekday)}${weekday === 1 ? '*' : ''}]`);
+    }
+  });
+
+  it('shows a balanced weekday window around a late-week selection', () => {
+    const out = stripAnsi(renderDaySwitcher(5, 1, 40));
+
+    expect(visualWidth(out)).toBeLessThanOrEqual(40);
+    expect(out).toContain('[Fri]');
+    expect(out).toContain('Sun');
+    expect(out).not.toContain('Mon');
+  });
 });
 
 
@@ -566,6 +663,32 @@ describe('renderUnresolvedItems', () => {
   it('shows a non-empty empty-state for no items', () => {
     const out = stripAnsi(renderUnresolvedItems([]));
     expect(out.trim().length).toBeGreaterThan(0);
+    done();
+  });
+
+  it('wraps long names and details without losing content at twenty columns', () => {
+    const longItems: TimetableUnresolvedItem[] = [{
+      kind: 'practice', itemIndex: 0,
+      sourceFields: {
+        kcmc: 'Advanced Physical Education Practice',
+        sjkcgs: 'Campus fitness assessment during teaching week sixteen',
+      },
+    }];
+    const lines = renderUnresolvedItems(longItems, 20).split('\n');
+    const text = lines.map(stripAnsi).join(' ').replace(/\s+/g, ' ').trim();
+
+    expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+    expect(text).toContain('Advanced Physical Education Practice');
+    expect(text).toContain('Campus fitness assessment during teaching week sixteen');
+    done();
+  });
+
+  it('wraps the empty state at twenty columns', () => {
+    const lines = renderUnresolvedItems([], 20).split('\n');
+    const text = lines.map(stripAnsi).join(' ').replace(/\s+/g, ' ').trim();
+
+    expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+    expect(text).toBe('Nothing needs attention');
     done();
   });
 });
@@ -666,5 +789,33 @@ describe('renderTermDensity', () => {
       resetIconCache();
     }
   });
-});
 
+  it('shows every week across narrow chunks and keeps a late current week visible', () => {
+    const weeks = Array.from({ length: 18 }, (_, index) => index + 1);
+    const lines = stripAnsi(renderTermDensity([mk({ weeks })], '2026-09-07', 18, 20)).split('\n');
+    const densityLines = lines.filter((line) => /^\s*(?:=\s*)+$/.test(line));
+
+    expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+    expect(densityLines).toHaveLength(2);
+    expect(densityLines.join('').match(/=/g)).toHaveLength(18);
+    expect(lines.some((line) => line.includes('This week ^'))).toBe(true);
+    done();
+  });
+
+  it('keeps the Chinese narrow density view within twenty columns', () => {
+    setLanguage('zh');
+    try {
+      const weeks = Array.from({ length: 18 }, (_, index) => index + 1);
+      const lines = stripAnsi(renderTermDensity([mk({ weeks })], '2026-09-07', 18, 20)).split('\n');
+      const densityLines = lines.filter((line) => /^\s*(?:=\s*)+$/.test(line));
+
+      expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+      expect(densityLines.join('').match(/=/g)).toHaveLength(18);
+      expect(lines.some((line) => line.includes('本周 ^'))).toBe(true);
+    } finally {
+      setLanguage('en');
+      resetIconCache();
+    }
+    done();
+  });
+});

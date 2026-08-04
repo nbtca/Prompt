@@ -6,7 +6,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import type { CalendarEvent } from '@nbtca/nbtcal';
 import { toDisplayEvent, renderEventsTable, renderCountdownBanner, renderEventBrief, exportEventIcs } from './calendar.js';
 import { setLanguage } from '../i18n/index.js';
-import { stripAnsi } from '../core/text.js';
+import { stripAnsi, visualWidth } from '../core/text.js';
 import { resetIconCache } from '../core/icons.js';
 import { mkdtempSync, readFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
@@ -154,6 +154,23 @@ describe('renderCountdownBanner', () => {
     expect(out).toContain('Next');
     expect(out).toContain('Hack Night');
     expect(out).toMatch(/3d/);
+  });
+  it('wraps a complete long countdown banner at twenty columns', () => {
+    const now = new Date('2026-09-30T09:30:00');
+    const title = 'International innovation and entrepreneurship competition';
+    const event = toDisplayEvent(makeEvent({
+      title,
+      start: new Date('2026-10-01T09:30:00'),
+      end: new Date('2026-10-01T11:30:00'),
+    }));
+    const lines = renderCountdownBanner(event, now, 20).split('\n');
+    const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
+
+    expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+    expect(text).toContain(title.replace(/\s/g, ''));
+    expect(text).toContain('Next');
+    expect(text).toContain('1d0h');
+    expect(lines.filter((line) => /[→>]/u.test(stripAnsi(line)))).toHaveLength(1);
   });
   it('returns empty string when there is no event', () => {
     expect(renderCountdownBanner(undefined, new Date())).toBe('');

@@ -8,6 +8,7 @@ import {
 import { resetIconCache, pickIcon } from '../../core/icons.js';
 import { APP_INFO, URLS } from '../../config/data.js';
 import { t, getCurrentLanguage, setLanguage, clearTranslationCache, type Language } from '../../i18n/index.js';
+import { padEndV } from '../../core/text.js';
 
 let state: SettingsViewState = { mode: 'menu' };
 
@@ -37,8 +38,8 @@ export const settingsView: View = {
     goToMenu();
   },
 
-  render(_ctx: AppContext): string[] {
-    return renderSettings(state);
+  render(ctx: AppContext): string[] {
+    return renderSettings(state, ctx.bodyRows, ctx.size.cols);
   },
 
   capturesInput(): boolean {
@@ -99,7 +100,7 @@ export const settingsView: View = {
         }
         if (result.selected === 'about') {
           const pad = 12;
-          const row = (label: string, value: string) => `${label.padEnd(pad)}${value}`;
+          const row = (label: string, value: string) => `${padEndV(label, pad)}${value}`;
           state = {
             mode: 'about',
             aboutLines: [

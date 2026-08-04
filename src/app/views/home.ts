@@ -1,12 +1,13 @@
 import { c, type, space, glyph } from '../../core/theme.js';
 import { t } from '../../i18n/index.js';
 import { pickIcon } from '../../core/icons.js';
-import { padEndV, visualWidth } from '../../core/text.js';
+import { padEndV, visualWidth, wrapAnsiToVisualWidth } from '../../core/text.js';
 import { peekNextClassLine, peekTodayLines, peekWeekAheadInfo, peekUnresolvedCount } from '../../features/schedule-view.js';
 import { loadCalendarOrThrow, toDisplayEvent, renderEventBrief } from '../../features/calendar.js';
 import { weekdayShortLabel } from '../../features/schedule-render.js';
 import { campusWeekday } from '../../features/schedule-query.js';
 import type { View, AppContext } from '../view.js';
+import { passiveFooterHint } from '../chrome.js';
 
 /** Data consumed by the pure `renderHome`; populated best-effort by `homeView.load`. */
 export interface HomeData {
@@ -22,26 +23,58 @@ export interface HomeData {
   unresolvedCount?: number;
 }
 
-function panelHeading(label: string): string {
-  return `${space.indent}${type.heading(label)}`;
+function wrappedIndentedLines(
+  label: string,
+  cols: number,
+  style: (value: string) => string,
+): string[] {
+  const width = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : Number.POSITIVE_INFINITY;
+  const styled = style(label);
+  const preferredIndent = visualWidth(space.indent) < width ? space.indent : '';
+  const indent = preferredIndent
+    && visualWidth(styled) > width - visualWidth(preferredIndent)
+    && visualWidth(styled) <= width
+    ? ''
+    : preferredIndent;
+  const contentWidth = Math.max(1, width - visualWidth(indent));
+  return wrapAnsiToVisualWidth(styled, contentWidth).map((line) => `${indent}${line}`);
 }
 
-function loadingLine(): string {
-  return `${space.indent}${type.hint(t().common.loading)}`;
+function panelHeading(label: string, cols: number): string[] {
+  return wrappedIndentedLines(label, cols, type.heading);
+}
+
+function loadingLines(cols: number): string[] {
+  return wrappedIndentedLines(t().common.loading, cols, type.hint);
+}
+
+function wrappedRenderedLines(line: string, cols: number): string[] {
+  const content = line.startsWith(space.indent) ? line.slice(space.indent.length) : line;
+  return wrappedIndentedLines(content, cols, (value) => value);
 }
 
 const DAY_PROGRESS_WIDTH = 20;
 
 /** Pure: a block-character bar for how far into the calendar day `now` is. */
-function renderDayProgress(now: Date): string {
+function renderDayProgress(now: Date, cols: number): string {
   const minutesElapsed = now.getHours() * 60 + now.getMinutes();
   const fraction = Math.min(1, Math.max(0, minutesElapsed / 1440));
-  const filled = Math.round(fraction * DAY_PROGRESS_WIDTH);
+  const pct = Math.round(fraction * 100);
+  const percentage = `${pct}%`;
+  const width = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : Number.POSITIVE_INFINITY;
+  const indent = visualWidth(space.indent) + 2 + visualWidth(percentage) + 1 <= width ? space.indent : '';
+  const gap = visualWidth(indent) + 2 + visualWidth(percentage) + 1 <= width
+    ? '  '
+    : visualWidth(indent) + 1 + visualWidth(percentage) + 1 <= width ? ' ' : '';
+  const barWidth = Math.max(0, Math.min(
+    DAY_PROGRESS_WIDTH,
+    width - visualWidth(indent) - visualWidth(gap) - visualWidth(percentage),
+  ));
+  const filled = Math.round(fraction * barWidth);
   const filledChar = glyph.barFilled();
   const emptyChar = glyph.barEmpty();
-  const bar = filledChar.repeat(filled) + emptyChar.repeat(DAY_PROGRESS_WIDTH - filled);
-  const pct = Math.round(fraction * 100);
-  return `${space.indent}${type.body(bar)}  ${type.hint(`${pct}%`)}`;
+  const bar = filledChar.repeat(filled) + emptyChar.repeat(barWidth - filled);
+  return `${indent}${type.body(bar)}${gap}${type.hint(percentage)}`;
 }
 
 /** Combined class+event density grid for the coming campus week — the one
@@ -51,7 +84,11 @@ function renderDayProgress(now: Date): string {
  * uncolored (see the design spec's "Visual language decision") since it's
  * an overview of two other already-colored things, not a third color
  * language to learn. */
-function renderWeekAheadGrid(classDays: readonly boolean[], eventDays: readonly boolean[] | undefined): string {
+function renderWeekAheadGrid(
+  classDays: readonly boolean[],
+  eventDays: readonly boolean[] | undefined,
+  cols: number,
+): string {
   const trans = t();
   const hasClassChar = pickIcon('▓▓', '##');
   const freeChar = pickIcon('░░', '..');
@@ -87,29 +124,53 @@ function renderWeekAheadGrid(classDays: readonly boolean[], eventDays: readonly 
 
   const legend = `${space.indent}${type.hint(`${hasClassChar} ${trans.timetable.weekAheadBusy}  ${freeChar} ${trans.timetable.weekAheadFree}  ${weekendChar} ${trans.timetable.weekAheadNone}`)}`;
 
-  return [headerLine, classLine, eventLine, legend].join('\n');
+  const wideLines = [headerLine, classLine, eventLine, legend];
+  const width = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : Number.POSITIVE_INFINITY;
+  if (wideLines.every((line) => visualWidth(line) <= width)) return wideLines.join('\n');
+
+  const compactHeading = wrappedIndentedLines(
+    `${trans.timetable.weekAheadClasses} / ${trans.menu.events}`,
+    cols,
+    type.hint,
+  );
+  const compactDays = days.flatMap((wd) => {
+    const classCell = wd === 6 || wd === 7
+      ? weekendChar
+      : classDays[wd - 1] ? hasClassChar : freeChar;
+    const eventCell = eventDays
+      ? eventDays[wd - 1] ? hasClassChar : freeChar
+      : blankCell;
+    const row = `${type.hint(weekdayShortLabel(wd))}  ${type.body(classCell)}  ${type.body(eventCell)}`;
+    return wrappedIndentedLines(row, cols, (value) => value);
+  });
+  const compactLegend = wrappedIndentedLines(
+    `${hasClassChar} ${trans.timetable.weekAheadBusy}  ${freeChar} ${trans.timetable.weekAheadFree}  ${weekendChar} ${trans.timetable.weekAheadNone}`,
+    cols,
+    type.hint,
+  );
+  return [...compactHeading, ...compactDays, ...compactLegend].join('\n');
 }
 
 /** Pure: renders the schedule-first dashboard from already-fetched data. No I/O. */
-export function renderHome(data: HomeData, now: Date, bodyRows = 100): string[] {
+export function renderHome(data: HomeData, now: Date, bodyRows = 100, cols = 80): string[] {
   const trans = t();
   const lines: string[] = [];
 
   // Next class (cache-only, instant).
   const nextClass = data.nextClassLine !== undefined && data.nextClassLine.trim().length > 0
-    ? data.nextClassLine
-    : `${space.indent}${type.hint(trans.timetable.noNextClass)}`;
-  lines.push(panelHeading(trans.timetable.nextClass));
-  lines.push(nextClass);
+    ? wrappedRenderedLines(data.nextClassLine, cols)
+    : wrappedIndentedLines(trans.timetable.noNextClass, cols, type.hint);
+  lines.push(...panelHeading(trans.timetable.nextClass, cols));
+  lines.push(...nextClass);
   lines.push('');
 
   // Today's classes (cache-only, instant).
-  lines.push(panelHeading(trans.timetable.hubToday));
-  lines.push(renderDayProgress(now));
+  lines.push(...panelHeading(trans.timetable.hubToday, cols));
+  lines.push(renderDayProgress(now, cols));
   if (data.todayLines && data.todayLines.length > 0) {
-    for (const l of data.todayLines) lines.push(l);
+    for (const line of data.todayLines) lines.push(...wrappedRenderedLines(line, cols));
   } else {
-    lines.push(`${space.indent}${type.hint(trans.timetable.noClassToday)}`);
+    lines.push(...wrappedIndentedLines(trans.timetable.noClassToday, cols, type.hint));
   }
   lines.push('');
 
@@ -118,8 +179,8 @@ export function renderHome(data: HomeData, now: Date, bodyRows = 100): string[] 
   // / term hasn't started" -> null contract, hiding the whole panel rather
   // than showing empty/misleading cells.
   if (data.weekAhead) {
-    lines.push(panelHeading(trans.timetable.weekOverviewTitle));
-    lines.push(...renderWeekAheadGrid(data.weekAhead.classDays, data.weekAhead.eventDays).split('\n'));
+    lines.push(...panelHeading(trans.timetable.weekOverviewTitle, cols));
+    lines.push(...renderWeekAheadGrid(data.weekAhead.classDays, data.weekAhead.eventDays, cols).split('\n'));
     lines.push('');
   }
 
@@ -129,7 +190,11 @@ export function renderHome(data: HomeData, now: Date, bodyRows = 100): string[] 
   // matching the "everything that needs your attention, in one place"
   // spirit of a gh-status-like control center.
   if ((data.unresolvedCount ?? 0) > 0) {
-    lines.push(`${space.indent}${c.warn(`${pickIcon('⚠', '!')} ${trans.timetable.hubUnresolved} · ${data.unresolvedCount}`)}`);
+    lines.push(...wrappedIndentedLines(
+      `${pickIcon('⚠', '!')} ${trans.timetable.hubUnresolved} · ${data.unresolvedCount}`,
+      cols,
+      c.warn,
+    ));
     lines.push('');
   }
 
@@ -137,16 +202,27 @@ export function renderHome(data: HomeData, now: Date, bodyRows = 100): string[] 
   // is actually left after next-class/today above — on a tall terminal
   // that's most of `data.eventLines`; on a normal one, still just a few,
   // same as before this was ever adaptive.
-  lines.push(panelHeading(trans.menu.events));
+  lines.push(...panelHeading(trans.menu.events, cols));
   if (data.eventLines && data.eventLines.length > 0) {
-    const remaining = Math.max(1, bodyRows - lines.length);
-    for (const l of data.eventLines.slice(0, remaining)) lines.push(l);
+    const remaining = Number.isFinite(bodyRows)
+      ? Math.max(0, Math.floor(bodyRows) - lines.length)
+      : Number.POSITIVE_INFINITY;
+    let usedRows = 0;
+    for (const line of data.eventLines) {
+      const wrapped = wrappedRenderedLines(line, cols);
+      if (usedRows + wrapped.length > remaining) {
+        if (usedRows === 0 && remaining === 0) lines.push(...wrapped);
+        break;
+      }
+      lines.push(...wrapped);
+      usedRows += wrapped.length;
+    }
   } else if (data.loading) {
-    lines.push(loadingLine());
+    lines.push(...loadingLines(cols));
   } else if (data.eventsError) {
-    lines.push(`${space.indent}${type.hint(trans.calendar.error)}`);
+    lines.push(...wrappedIndentedLines(trans.calendar.error, cols, type.hint));
   } else {
-    lines.push(`${space.indent}${type.hint(trans.calendar.noEvents)}`);
+    lines.push(...wrappedIndentedLines(trans.calendar.noEvents, cols, type.hint));
   }
 
   return lines;
@@ -157,6 +233,10 @@ let data: HomeData = { loading: true };
 export const homeView: View = {
   id: 'home',
   title: 'Home',
+
+  footerHint(tabCount: number, cols = Number.POSITIVE_INFINITY): string {
+    return passiveFooterHint(tabCount, cols);
+  },
 
   async load(ctx: AppContext): Promise<void> {
     // Schedule panels are cache-only and instant — populate them
@@ -206,6 +286,6 @@ export const homeView: View = {
   },
 
   render(ctx: AppContext): string[] {
-    return renderHome(data, new Date(), ctx.bodyRows);
+    return renderHome(data, new Date(), ctx.bodyRows, ctx.size.cols);
   },
 };

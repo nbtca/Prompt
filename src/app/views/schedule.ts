@@ -8,7 +8,7 @@ import {
   type Timetable,
 } from '@nbtca/nbtcal/timetable';
 import type { AppContext, View } from '../view.js';
-import { captureFooterHint } from '../chrome.js';
+import { captureFooterHint, passiveFooterHint } from '../chrome.js';
 import { ListField, computeMaxVisible } from '../fields/list-field.js';
 import { TextField } from '../fields/text-field.js';
 import { renderSchedule, hubShortcuts, type ScheduleViewState } from './schedule-render.js';
@@ -27,8 +27,10 @@ import {
 } from '../../features/schedule-store.js';
 import { loadCalendarOrThrow, toDisplayEvent } from '../../features/calendar.js';
 import type { Event } from '../../features/calendar.js';
-import { currentAcademicWindow, inferWeekOneMonday, isAcademicBreakEvent } from '../../features/academic-calendar.js';
-import type { AcademicWindow, OnBreak } from '../../features/academic-calendar.js';
+import {
+  currentAcademicWindow, inferWeekOneMonday, isAcademicBreakEvent,
+  type AcademicWindow, type OnBreak,
+} from '@nbtca/nbtcal';
 import { currentWeekNumber, campusWeekday } from '../../features/schedule-query.js';
 
 let state: ScheduleViewState = { mode: 'loading' };
@@ -255,12 +257,27 @@ export const scheduleView: View = {
     return state.mode === 'needsLoginId' || state.mode === 'needsLoginPassword' || state.mode === 'needsWeekOne';
   },
 
-  footerHint(): string | undefined {
+  footerHint(tabCount: number, cols = Number.POSITIVE_INFINITY): string | undefined {
     const capturing = state.mode === 'needsLoginId' || state.mode === 'needsLoginPassword' || state.mode === 'needsWeekOne';
-    return capturing ? captureFooterHint() : undefined;
+    if (capturing) return captureFooterHint(cols);
+    // These three are pure "read this, any key returns to the hub" drill-
+    // downs (see handleKey below) — no field to move a cursor within or
+    // open an item from, so the generic "move · open" hint would promise
+    // keys that don't do that here.
+    const passive = state.mode === 'loading' || state.mode === 'authenticating' || state.mode === 'error'
+      || state.mode === 'meetingDetail' || state.mode === 'unresolved' || state.mode === 'termDensity';
+    return passive ? passiveFooterHint(tabCount, cols) : undefined;
   },
 
-  handleBack(): boolean {
+  handleBack(ctx: AppContext): boolean {
+    if (state.mode === 'needsLoginId') {
+      void goToPublic(ctx);
+      return true;
+    }
+    if (state.mode === 'needsLoginPassword' || state.mode === 'needsWeekOne') {
+      goToLoginId();
+      return true;
+    }
     if (state.mode === 'meetingDetail') {
       // Esc respects where the detail card was opened from -- from the
       // standalone 'week' mode, it steps back there, not all the way to hub.
@@ -338,12 +355,6 @@ export const scheduleView: View = {
         const hubKey = state.key;
         const hubWeekOne = state.weekOne;
         if (!tt || !hubKey || !hubWeekOne) return;
-        // The hub's adaptive week section is *always* interactive now,
-        // whether it's actually showing the full grid or has fallen back to
-        // the single-day view -- both represent the exact same gridCursor
-        // (weekday+period), just rendered differently, so arrow keys/Enter
-        // are always meaningful here (see pushAdaptiveWeekGrid in
-        // schedule-render.ts for the render-side fit-or-fallback decision).
         {
           const cursor = state.gridCursor ?? defaultGridCursor(campusWeekday(new Date()), tt.periods);
           const week = Math.max(1, currentWeekNumber(hubWeekOne, new Date()));

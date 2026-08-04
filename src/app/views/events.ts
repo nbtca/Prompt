@@ -1,6 +1,6 @@
 import type { Calendar, CalendarEvent } from '@nbtca/nbtcal';
 import type { AppContext, View } from '../view.js';
-import { captureFooterHint } from '../chrome.js';
+import { captureFooterHint, passiveFooterHint } from '../chrome.js';
 import { ListField, computeMaxVisible } from '../fields/list-field.js';
 import { TextField } from '../fields/text-field.js';
 import { renderEvents, type EventsViewState } from './events-render.js';
@@ -82,8 +82,13 @@ function showDetail(raw: CalendarEvent): void {
     detailTitle: e.title,
     detailMeta: `${e.date}${e.time ? ' ' + e.time : ''}  ${dot}  ${e.location}${raw.recurring ? `  ${dot}  ${trans.calendar.recurringLabel}` : ''}`,
     detailDescription: e.description,
+    detailEvent: raw,
     detailField: new ListField({
-      title: e.title,
+      // Empty, not e.title: renderEvents already prints the event title as
+      // its own heading right above (detailTitle) -- giving the field the
+      // same string a second time repeated it verbatim just above the
+      // Export/Back options.
+      title: '',
       options: [
         { value: 'export', label: trans.calendar.exportIcs },
         { value: '__back__', label: backLabel() },
@@ -113,15 +118,21 @@ export const eventsView: View = {
     // frame (not just construction time) — this is what keeps a long list
     // correctly windowed across a live resize.
     state.listField?.setMaxVisible(computeMaxVisible(ctx.bodyRows));
-    return renderEvents(state, new Date(), ctx.bodyRows);
+    return renderEvents(state, new Date(), ctx.bodyRows, ctx.size.cols);
   },
 
   capturesInput(): boolean {
     return state.mode === 'search';
   },
 
-  footerHint(): string | undefined {
-    return state.mode === 'search' ? captureFooterHint() : undefined;
+  footerHint(tabCount: number, cols = Number.POSITIVE_INFINITY): string | undefined {
+    if (state.mode === 'search') return captureFooterHint(cols);
+    // A pure "read this, any key returns to the hub" drill-down (see
+    // handleKey below) -- no field to move a cursor within or open an item
+    // from, so the generic "move · open" hint would promise keys that
+    // don't do that here.
+    const passive = state.mode === 'loading' || state.mode === 'error' || state.mode === 'heatmap';
+    return passive ? passiveFooterHint(tabCount, cols) : undefined;
   },
 
   handleBack(): boolean {
@@ -169,12 +180,9 @@ export const eventsView: View = {
         const result = state.detailField?.handleKey(key);
         if (!result?.selected) return;
         if (result.selected === '__back__') { showList('', currentList, ctx); return; }
-        if (result.selected === 'export' && state.detailTitle) {
-          const raw = currentList.find((e) => toDisplayEvent(e).title === state.detailTitle);
-          if (raw) {
-            const res = exportEventIcs(raw);
-            state = { ...state, statusMessage: res.ok ? `${t().calendar.exportSuccess}: ${res.path}` : `${t().calendar.exportError}: ${res.error ?? ''}` };
-          }
+        if (result.selected === 'export' && state.detailEvent) {
+          const res = exportEventIcs(state.detailEvent);
+          state = { ...state, statusMessage: res.ok ? `${t().calendar.exportSuccess}: ${res.path}` : `${t().calendar.exportError}: ${res.error ?? ''}` };
         }
         return;
       }
