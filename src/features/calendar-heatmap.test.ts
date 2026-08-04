@@ -7,6 +7,7 @@ import type { HeatmapBucket } from '@nbtca/nbtcal';
 import { renderHeatmap } from './calendar-heatmap.js';
 import { setLanguage } from '../i18n/index.js';
 import { resetIconCache } from '../core/icons.js';
+import { stripAnsi, visualWidth } from '../core/text.js';
 
 beforeAll(() => {
   // Pin language and icon mode for deterministic output
@@ -136,5 +137,17 @@ describe('renderHeatmap', () => {
     // earlier than the data zone — confirms the label sits *in* the
     // reserved slot rather than the slot being skipped for labeled rows.
     expect(firstNonSpace(firstGridRow)).toBe(3);
+  });
+
+  it('fits all 53 weeks within an 80-column terminal', () => {
+    const lines = renderHeatmap(buckets, today, { color: false, cols: 80 }).split('\n');
+    expect(lines.every((line) => visualWidth(stripAnsi(line)) <= 80)).toBe(true);
+    expect(visualWidth(stripAnsi(lines[2]!))).toBe(59);
+  });
+
+  it('reduces the visible week window to fit a 40-column terminal', () => {
+    const lines = renderHeatmap(buckets, today, { color: false, cols: 40 }).split('\n');
+    expect(lines.every((line) => visualWidth(stripAnsi(line)) <= 40)).toBe(true);
+    expect(visualWidth(stripAnsi(lines[2]!))).toBe(40);
   });
 });

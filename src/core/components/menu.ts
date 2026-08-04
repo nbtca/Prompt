@@ -1,5 +1,5 @@
 import { glyph, type, space } from '../theme.js';
-import { visualWidth, padEndV } from '../text.js';
+import { visualWidth, padEndV, wrapAnsiToVisualWidth } from '../text.js';
 import { ansi, ensureCursorRestored } from '../canvas.js';
 import { createPainter } from './painter.js';
 import { t } from '../../i18n/index.js';
@@ -45,27 +45,53 @@ export interface MenuState {
   footer?: string;
 }
 
-export function renderMenu(state: MenuState): string {
+function normalizedWidth(cols: number): number {
+  return Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : Number.POSITIVE_INFINITY;
+}
+
+function renderIndentedText(label: string, cols: number, style: (value: string) => string): string[] {
+  const width = normalizedWidth(cols);
+  const indent = visualWidth(space.indent) < width ? space.indent : '';
+  const contentWidth = Math.max(1, width - visualWidth(indent));
+  return wrapAnsiToVisualWidth(style(label), contentWidth).map((line) => `${indent}${line}`);
+}
+
+export function renderMenuOption(
+  option: MenuOption,
+  selected: boolean,
+  labelWidth = visualWidth(option.label),
+  cols = Number.POSITIVE_INFINITY,
+): string[] {
+  const width = normalizedWidth(cols);
   const cursor = glyph.cursor();
   const gap = ' '.repeat(visualWidth(cursor));
-  const labelWidth = state.options.reduce((w, o) => Math.max(w, visualWidth(o.label)), 0);
+  const marker = selected ? type.active(cursor) : gap;
+  const prefixes = [`${space.indent}${marker} `, `${marker} `, marker, ''];
+  const prefix = prefixes.find((candidate) => visualWidth(candidate) < width) ?? '';
+  const continuation = ' '.repeat(visualWidth(prefix));
+  const contentWidth = Math.max(1, width - visualWidth(prefix));
+  const hintWidth = option.hint ? 2 + visualWidth(option.hint) : 0;
+  const paddedWidth = labelWidth + hintWidth <= contentWidth ? labelWidth : visualWidth(option.label);
+  const padded = padEndV(option.label, paddedWidth);
+  const label = selected ? type.active(padded) : type.body(padded);
+  const hint = option.hint ? `  ${type.hint(option.hint)}` : '';
+  return wrapAnsiToVisualWidth(`${label}${hint}`, contentWidth)
+    .map((line, index) => `${index === 0 ? prefix : continuation}${line}`);
+}
 
-  const lines: string[] = [];
-  lines.push(space.indent + type.heading(state.title));
+export function renderMenu(state: MenuState, cols = Number.POSITIVE_INFINITY): string {
+  const labelWidth = state.options.reduce((width, option) => Math.max(width, visualWidth(option.label)), 0);
+
+  const lines = renderIndentedText(state.title, cols, type.heading);
   lines.push('');
 
-  state.options.forEach((opt, i) => {
-    const selected = i === state.selectedIndex;
-    const marker = selected ? type.active(cursor) : gap;
-    const padded = padEndV(opt.label, labelWidth);
-    const label = selected ? type.active(padded) : type.body(padded);
-    const hint = opt.hint ? '  ' + type.hint(opt.hint) : '';
-    lines.push(`${space.indent}${marker} ${label}${hint}`);
+  state.options.forEach((option, index) => {
+    lines.push(...renderMenuOption(option, index === state.selectedIndex, labelWidth, cols));
   });
 
   if (state.footer) {
     lines.push('');
-    lines.push(space.indent + type.hint(state.footer));
+    lines.push(...renderIndentedText(state.footer, cols, type.hint));
   }
 
   return lines.join('\n');

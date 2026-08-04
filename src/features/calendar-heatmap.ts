@@ -33,13 +33,22 @@ function countToGlyph(count: number): string {
   return pickIcon('█', '=');
 }
 
+// A fixed 4-stop truecolor green ramp, not chalk's named green/greenBright --
+// those resolve to whatever the user's terminal theme defines for "green",
+// same problem the rest of the app's palette solved by specifying hex
+// directly (theme.ts's brand blue, brandGradient) instead of leaning on
+// ANSI color names. Kept muted/desaturated rather than a punchy grass
+// green so it sits quietly next to the app's own cool blue palette instead
+// of reading as a louder, disconnected accent.
+const HEATMAP_RAMP = ['#1b4332', '#2d6a4f', '#40916c', '#52b788'] as const;
+const MAX_WEEK_COLUMNS = 53;
+const GRID_PREFIX_WIDTH = 6;
+
 /** Apply a green color ramp based on count. Identity when count is 0. */
 function applyColor(glyph: string, count: number, useColor: boolean): string {
   if (!useColor || count <= 0) return glyph;
-  if (count === 1) return chalk.green(glyph);
-  if (count === 2) return chalk.green(glyph);
-  if (count === 3) return chalk.greenBright(glyph);
-  return chalk.bold.greenBright(glyph);
+  const level = Math.min(count, HEATMAP_RAMP.length) - 1;
+  return chalk.hex(HEATMAP_RAMP[level] as string)(glyph);
 }
 
 /**
@@ -52,10 +61,16 @@ function applyColor(glyph: string, count: number, useColor: boolean): string {
 export function renderHeatmap(
   buckets: HeatmapBucket[],
   today: Date,
-  options?: { color?: boolean }
+  options?: { color?: boolean; cols?: number }
 ): string {
   const useColor = options?.color === true;
   const trans = t();
+  const cellWidth = options?.cols !== undefined
+    && options.cols < GRID_PREFIX_WIDTH + MAX_WEEK_COLUMNS * 2 ? 1 : 2;
+  const availableColumns = options?.cols === undefined
+    ? MAX_WEEK_COLUMNS
+    : Math.floor((options.cols - GRID_PREFIX_WIDTH) / cellWidth);
+  const numCols = Math.max(1, Math.min(MAX_WEEK_COLUMNS, availableColumns));
 
   // Build a lookup map: 'YYYY-MM-DD' -> count
   const countByDate = new Map<string, number>();
@@ -63,9 +78,6 @@ export function renderHeatmap(
     countByDate.set(b.date, b.count);
   }
 
-  // Determine the grid window.
-  // The grid ends at "today" (aligned to Mon-start week column).
-  // The grid starts 365 days before today.
   const todayProxy = new Date(Date.UTC(
     today.getFullYear(),
     today.getMonth(),
@@ -76,14 +88,9 @@ export function renderHeatmap(
   const todayMonIndex = utcDayToMonIndex(todayProxy.getUTCDay());
   const gridEndMs = todayProxy.getTime() + (6 - todayMonIndex) * 86400000; // Sunday of today's week
 
-  // Grid start: 52 full weeks back from the start of today's week, plus today's partial week
-  // Total columns = 53 weeks
-  const numCols = 53;
   const gridStartMs = gridEndMs - (numCols * 7 - 1) * 86400000;
   const gridStart = new Date(gridStartMs);
 
-  // Build column data: array of 53 columns, each with 7 day slots
-  // columns[col][row] = { date: 'YYYY-MM-DD', count } | null (padding)
   type Cell = { date: string; count: number } | null;
   const columns: Cell[][] = [];
 
@@ -107,15 +114,9 @@ export function renderHeatmap(
     columns.push(column);
   }
 
-  // Month labels row. Labels are 3-letter English abbreviations (universal and
-  // single-width, so alignment holds in any language). Each grid column occupies
-  // 2 terminal cells (glyph + joining space); we write each month's label into a
-  // character buffer starting at the column where that month begins, letting it
-  // overflow rightward into the spacing of the following columns (months are
-  // ~4-5 columns apart, so labels never collide).
   const weekdayLabel = space.indent; // matches the grid rows' "Mo " prefix width
   const monthFmt = new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: 'UTC' });
-  const cellsWidth = numCols * 2;
+  const cellsWidth = numCols * cellWidth;
   const monthChars = new Array<string>(cellsWidth).fill(' ');
   let prevMonth = -1;
   for (let col = 0; col < numCols; col++) {
@@ -132,7 +133,7 @@ export function renderHeatmap(
     if (month !== prevMonth) {
       prevMonth = month;
       const label = monthFmt.format(labelDate); // e.g. "Jun"
-      const start = col * 2;
+      const start = col * cellWidth;
       for (let i = 0; i < label.length && start + i < cellsWidth; i++) {
         monthChars[start + i] = label[i] ?? ' ';
       }
@@ -167,7 +168,7 @@ export function renderHeatmap(
       const glyph = countToGlyph(cell.count);
       return applyColor(glyph, cell.count, useColor);
     });
-    lines.push(`${space.indent}${wdLabel} ${cells.join(' ')}`);
+    lines.push(`${space.indent}${wdLabel} ${cells.join(cellWidth === 2 ? ' ' : '')}`);
   }
 
   // Legend line

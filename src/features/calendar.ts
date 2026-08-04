@@ -6,7 +6,7 @@ import { c, type, space, glyph } from '../core/theme.js';
 import { runMenu, menuFooter } from '../core/components/menu.js';
 import { runTextInput } from '../core/components/text-input.js';
 import { pickIcon } from '../core/icons.js';
-import { padEndV, truncate } from '../core/text.js';
+import { padEndV, truncate, visualWidth, wrapAnsiToVisualWidth } from '../core/text.js';
 import { t } from '../i18n/index.js';
 import { enterScreen, breadcrumb } from '../core/transitions.js';
 import { URLS } from '../config/data.js';
@@ -171,7 +171,11 @@ export function renderEventBrief(e: Event, now: Date): string {
   return `${space.indent}${marker} ${dateStyled}  ${dot}  ${titleStyled}${recurringMark}`;
 }
 
-export function renderCountdownBanner(event: Event | undefined, now: Date): string {
+export function renderCountdownBanner(
+  event: Event | undefined,
+  now: Date,
+  cols = Number.POSITIVE_INFINITY,
+): string {
   if (!event) return '';
   const trans = t();
   const p = countdownParts(event.startDate, now);
@@ -185,7 +189,16 @@ export function renderCountdownBanner(event: Event | undefined, now: Date): stri
         : `${inp} ${p.minutes}m`;
   const whenStyled = isCountdownUrgent(p) ? c.warn(when) : type.hint(when);
   const dot = pickIcon('·', '-');
-  return `${space.indent}${type.active(glyph.cursor())} ${type.label(trans.calendar.next)}  ${dot}  ${type.body(event.title)}  ${dot}  ${whenStyled}`;
+  const width = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : Number.POSITIVE_INFINITY;
+  const cursor = type.active(glyph.cursor());
+  const prefixes = [`${space.indent}${cursor} `, `${cursor} `, cursor, ''];
+  const prefix = prefixes.find((candidate) => visualWidth(candidate) < width) ?? '';
+  const continuation = ' '.repeat(visualWidth(prefix));
+  const contentWidth = Math.max(1, width - visualWidth(prefix));
+  const content = `${type.label(trans.calendar.next)}  ${dot}  ${type.body(event.title)}  ${dot}  ${whenStyled}`;
+  return wrapAnsiToVisualWidth(content, contentWidth)
+    .map((line, index) => `${index === 0 ? prefix : continuation}${line}`)
+    .join('\n');
 }
 
 function renderSubscribeHint(): void {

@@ -84,13 +84,15 @@
   "docs": {
     "loading": "Loading documentation list...",
     "loadingDir": "Loading directory",
-    "categoryTutorial": "Tutorials",
+    "categoryAbout": "About NBTCA",
+    "categoryGuide": "Guide",
     "categoryRepairLogs": "Repair Logs",
     "categoryEvents": "Event Docs",
-    "categoryProcess": "Process",
+    "categoryConcepts": "Reference",
     "categoryRepair": "Repair",
     "categoryArchived": "Archived",
     "categoryReadme": "Project README",
+    "overviewLabel": "Overview",
     "chooseCategory": "Docs",
     "refreshCache": "Refresh cache",
     "cacheCleared": "Documentation cache cleared",
@@ -127,7 +129,10 @@
     "searching": "Searching documents...",
     "searchResults": "results found",
     "searchNoResults": "No documents match your search",
-    "loadingFile": "Loading"
+    "loadingFile": "Loading",
+    "readerLinksTitle": "Jump to",
+    "readerLinksHint": "links",
+    "readerNoLinks": "This page has no links to other docs"
   },
   "links": {
     "choose": "Links",

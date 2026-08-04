@@ -20,9 +20,9 @@ jobs:
           registry-url: "https://registry.npmjs.org"
           cache: "npm"
       # Trusted publishing needs npm >= 11.5.1, newer than the bundled version.
-      - run: npm install -g npm@latest
+      - run: npm install -g npm@11.5.1
       - run: npm ci
-      - run: npm run build
+      - run: npm test
       - name: Check tag matches package version
         run: |
           TAG_VERSION=${GITHUB_REF#refs/tags/v}

@@ -9,6 +9,13 @@ export interface AppContext {
   bodyRows: number;
   /** Re-render the whole screen from current state (call after async data lands). */
   rerender(): void;
+  /** Snap the body scroll position back to the top. A view calls this when
+   * it swaps its own content for something unrelated in height/meaning
+   * without going through handleBack (e.g. Docs' reader following a link
+   * into a different document) -- app.ts already does this automatically
+   * on tab switches and handleBack, but has no way to know about a within-
+   * view content swap on its own. */
+  resetScroll(): void;
   /** Suspend the app (leave alt-screen), run a classic surface, then resume. */
   runClassic(fn: () => Promise<void>): Promise<void>;
   quit(): void;
@@ -36,6 +43,10 @@ export interface View {
   /** Overrides the chrome's generic footer hint. Return a string while the
    * generic "1-7/Tab switch · q quit" hint would be false (e.g. a focused
    * text field, where those keys type characters instead) — omit or return
-   * undefined otherwise to use the generic hint. */
-  footerHint?(): string | undefined;
+   * undefined otherwise to use the generic hint. `tabCount` is passed
+   * through so an override can still build an accurate "1-N / Tab" prefix
+   * (via `chrome.ts`'s `digitTabHint`/`passiveFooterHint`) instead of
+   * either hardcoding a digit range that goes stale or dropping a still-true
+   * promise entirely. `cols` is the full terminal width. */
+  footerHint?(tabCount: number, cols: number): string | undefined;
 }

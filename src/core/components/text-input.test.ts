@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { parseInputData, applyInputEvent, renderInput, runSecretInput, runTextInput } from './text-input.js';
-import { stripAnsi } from '../text.js';
+import { stripAnsi, visualWidth } from '../text.js';
 import { resetIconCache } from '../icons.js';
 
 describe('parseInputData', () => {
@@ -67,6 +67,29 @@ describe('renderInput', () => {
     const output = plain({ message: 'Password', value: 'pasted secret', secret: true, mask: '•' });
     expect(output).toContain('•'.repeat(13));
     expect(output).not.toContain('pasted secret');
+  });
+
+  it.each([
+    ['First-week Monday (YYYY-MM-DD)', 'For example 2026-09-07'],
+    ['请输入第一周周一日期', '例如 2026-09-07'],
+  ])('wraps a complete prompt and placeholder at twenty columns', (message, placeholder) => {
+    const lines = renderInput({ message, value: '', placeholder, cols: 20 }).split('\n');
+    const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
+
+    expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+    expect(text).toContain(message.replace(/\s/g, ''));
+    expect(text).toContain(placeholder.replace(/\s/g, ''));
+    expect(lines.filter((line) => /[→>]/u.test(stripAnsi(line)))).toHaveLength(1);
+  });
+
+  it('wraps a complete long entered value at twenty columns', () => {
+    const value = '2026-09-07-confirmed-by-student';
+    const lines = renderInput({ message: 'Date', value, cols: 20 }).split('\n');
+    const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
+
+    expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+    expect(text).toContain(value);
+    expect(lines.filter((line) => /[→>]/u.test(stripAnsi(line)))).toHaveLength(1);
   });
 });
 

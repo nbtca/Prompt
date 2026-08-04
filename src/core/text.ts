@@ -78,3 +78,116 @@ export function truncate(str: string, maxWidth: number): string {
   }
   return str.slice(0, i) + '...';
 }
+
+interface WrapToken {
+  raw: string;
+  width: number;
+  whitespace: boolean;
+  sgr: boolean;
+}
+
+function tokenizeForWrapping(str: string): WrapToken[] {
+  const tokens: WrapToken[] = [];
+  let index = 0;
+
+  while (index < str.length) {
+    const ansi = /^\x1b\[[0-9;]*m/.exec(str.slice(index));
+    if (ansi) {
+      tokens.push({ raw: ansi[0], width: 0, whitespace: false, sgr: true });
+      index += ansi[0].length;
+      continue;
+    }
+
+    const cp = str.codePointAt(index) ?? 0;
+    const raw = String.fromCodePoint(cp);
+    tokens.push({
+      raw,
+      width: isZeroWidth(cp) ? 0 : charWidth(raw),
+      whitespace: /\s/u.test(raw),
+      sgr: false,
+    });
+    index += raw.length;
+  }
+
+  return tokens;
+}
+
+function advanceSgr(active: string, tokens: WrapToken[], start: number, end: number): string {
+  let next = active;
+  for (let index = start; index < end; index += 1) {
+    const token = tokens[index];
+    if (!token?.sgr) continue;
+    const params = token.raw.slice(2, -1).split(';');
+    if (params.includes('0') || params[0] === '') {
+      next = params.length === 1 ? '' : token.raw;
+    } else {
+      next += token.raw;
+    }
+  }
+  return next;
+}
+
+function renderWrappedSegment(tokens: WrapToken[], start: number, end: number, prefix: string): string {
+  const body = tokens.slice(start, end).map((token) => token.raw).join('');
+  const styled = prefix + body;
+  return prefix || tokens.slice(start, end).some((token) => token.sgr)
+    ? `${styled}\x1b[0m`
+    : styled;
+}
+
+export function wrapAnsiToVisualWidth(str: string, maxWidth: number): string[] {
+  const widthLimit = Math.max(1, Math.floor(maxWidth));
+  if (!Number.isFinite(maxWidth) || visualWidth(str) <= widthLimit) return [str];
+
+  const tokens = tokenizeForWrapping(str);
+  const lines: string[] = [];
+  let activeSgr = '';
+  let start = 0;
+
+  while (start < tokens.length) {
+    let width = 0;
+    let hasVisible = false;
+    let lastWhitespace = -1;
+    let index = start;
+
+    while (index < tokens.length) {
+      const token = tokens[index];
+      if (!token) break;
+      if (token.sgr || token.width === 0) {
+        index += 1;
+        continue;
+      }
+      if (width + token.width > widthLimit && hasVisible) break;
+      width += token.width;
+      hasVisible = true;
+      if (token.whitespace) lastWhitespace = index;
+      index += 1;
+    }
+
+    if (index >= tokens.length) {
+      lines.push(renderWrappedSegment(tokens, start, tokens.length, activeSgr));
+      break;
+    }
+
+    const overflow = tokens[index];
+    let end = index;
+    let next = index;
+    if (overflow?.whitespace) {
+      next = index + 1;
+    } else if (lastWhitespace >= start) {
+      end = lastWhitespace;
+      next = lastWhitespace + 1;
+    }
+
+    if (end === start) {
+      end = Math.max(index, start + 1);
+      next = end;
+    }
+
+    lines.push(renderWrappedSegment(tokens, start, end, activeSgr));
+    activeSgr = advanceSgr(activeSgr, tokens, start, next);
+    start = next;
+  }
+
+  return lines.length > 0 ? lines : [''];
+}

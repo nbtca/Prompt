@@ -1,5 +1,27 @@
 import chalk from 'chalk';
+import gradient from 'gradient-string';
 import { pickIcon } from './icons.js';
+
+// The one gradient the brand uses anywhere it appears -- the startup logo,
+// and (in text form) the persistent header wordmark. Defined once here so
+// both stay the same three stops instead of drifting apart.
+export const brandGradient = gradient([
+  { color: '#124689', pos: 0 },
+  { color: '#0ea5e9', pos: 0.55 },
+  { color: '#06b6d4', pos: 1 },
+]);
+
+/** The brand wordmark treatment: bold text painted in `brandGradient`,
+ * falling back to plain text under NO_COLOR (gradient-string doesn't
+ * auto-respect it the way chalk's own colors do). Currently used by the
+ * header's persistent "nbtca" mark (`app/chrome.ts`) -- named here, not
+ * left as a one-off local helper, so any future chrome element that wants
+ * "the brand gradient, as a wordmark" has a single place to reuse instead
+ * of re-deriving the NO_COLOR/bold/gradient combination again. */
+export function brandMark(s: string): string {
+  if (process.env['NO_COLOR']) return s;
+  return chalk.bold(brandGradient(s));
+}
 
 export const c = {
   brand:   (s: string) => chalk.hex('#0ea5e9')(s),

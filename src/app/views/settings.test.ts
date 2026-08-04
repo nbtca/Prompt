@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { settingsView } from './settings.js';
 import { setLanguage } from '../../i18n/index.js';
 import { resetIconCache } from '../../core/icons.js';
-import { stripAnsi } from '../../core/text.js';
+import { stripAnsi, visualWidth } from '../../core/text.js';
 import type { AppContext } from '../view.js';
 
 beforeAll(() => {
@@ -15,7 +15,7 @@ function fakeCtx(): AppContext {
   return {
     size: { rows: 24, cols: 80 },
     bodyRows: 19,
-    rerender: vi.fn(),
+    rerender: vi.fn(), resetScroll: vi.fn(),
     runClassic: vi.fn(async (fn: () => Promise<void>) => { await fn(); }),
     quit: vi.fn(),
   };
@@ -55,5 +55,30 @@ describe('settingsView', () => {
     expect(settingsView.handleBack?.()).toBe(true);
     const menuOut = stripAnsi(settingsView.render(ctx).join('\n'));
     expect(menuOut).toContain('Icon mode');
+  });
+
+  it('aligns every Chinese about value on the same visual column', async () => {
+    const ctx = fakeCtx();
+    setLanguage('zh');
+    try {
+      await settingsView.load?.(ctx);
+      settingsView.handleKey?.('\x1b[F', ctx);
+      settingsView.handleKey?.('\r', ctx);
+      const lines = settingsView.render(ctx).map(stripAnsi);
+      const labels = [
+        '项目', '版本', '描述', 'GitHub', '网站', '邮箱', '许可证',
+      ];
+      const starts = labels.map((label) => {
+        const line = lines.find((candidate) => candidate.trimStart().startsWith(label))!;
+        const labelEnd = line.indexOf(label) + label.length;
+        const valueOffset = line.slice(labelEnd).search(/\S/u);
+        return visualWidth(line.slice(0, labelEnd + valueOffset));
+      });
+
+      expect(new Set(starts)).toEqual(new Set([15]));
+    } finally {
+      setLanguage('en');
+      await settingsView.load?.(ctx);
+    }
   });
 });

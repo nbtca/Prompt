@@ -2,16 +2,17 @@ import type { AcademicTerm, Timetable, TimetableMeeting } from '@nbtca/nbtcal/ti
 import { c, type, space, glyph } from '../../core/theme.js';
 import { pickIcon } from '../../core/icons.js';
 import { t, fmt } from '../../i18n/index.js';
-import { ListField } from '../fields/list-field.js';
+import { ListField, renderListFieldWithContext } from '../fields/list-field.js';
 import { TextField } from '../fields/text-field.js';
 import { currentWeekNumber, campusWeekday, meetingsOnDay, nextMeeting } from '../../features/schedule-query.js';
 import {
   renderNextClassBanner, renderWeekGrid, renderUnresolvedItems, renderTodayTimeline,
   weekdayShortLabel, renderTermDensity, renderMeetingDetail, renderDayTimeline, renderDaySwitcher,
 } from '../../features/schedule-render.js';
-import type { AcademicWindow, OnBreak } from '../../features/academic-calendar.js';
+import type { AcademicWindow, OnBreak } from '@nbtca/nbtcal';
 import { renderEventBrief, type Event } from '../../features/calendar.js';
 import type { GridCursor } from './schedule-grid-cursor.js';
+import { visualWidth, wrapAnsiToVisualWidth } from '../../core/text.js';
 
 export type ScheduleMode =
   | 'loading'
@@ -56,6 +57,30 @@ function hint(label: string): string {
   return `${space.indent}${type.hint(label)}`;
 }
 
+function wrappedIndentedLines(
+  label: string,
+  cols: number,
+  style: (value: string) => string,
+): string[] {
+  const width = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : Number.POSITIVE_INFINITY;
+  const indent = visualWidth(space.indent) < width ? space.indent : '';
+  const contentWidth = Math.max(1, width - visualWidth(indent));
+  return wrapAnsiToVisualWidth(style(label), contentWidth).map((part) => `${indent}${part}`);
+}
+
+function headingLines(label: string, cols: number): string[] {
+  return wrappedIndentedLines(label, cols, type.heading);
+}
+
+function hintLines(label: string, cols: number): string[] {
+  return wrappedIndentedLines(label, cols, type.hint);
+}
+
+function wrappedRenderedLine(line: string, cols: number): string[] {
+  const content = line.startsWith(space.indent) ? line.slice(space.indent.length) : line;
+  return wrappedIndentedLines(content, cols, (value) => value);
+}
+
 export interface HubShortcut {
   key: string;
   label: string;
@@ -66,10 +91,6 @@ export interface HubShortcut {
   warn?: boolean;
 }
 
-/** The hub's single-line shortcut bar, as data -- both renderShortcutBar
- * (below) and schedule.ts's key-handling switch consume this same array, so
- * the letters shown to the student and the letters that actually do
- * something can never drift apart. */
 export function hubShortcuts(tt: Timetable): HubShortcut[] {
   const trans = t();
   const shortcuts: HubShortcut[] = [
@@ -90,27 +111,41 @@ export function hubShortcuts(tt: Timetable): HubShortcut[] {
   return shortcuts;
 }
 
-function renderShortcutBar(shortcuts: readonly HubShortcut[]): string {
-  const parts = shortcuts.map((sc) => {
-    const bracket = sc.showKey === false ? `[${sc.label}]` : `[${sc.key}] ${sc.label}`;
-    return sc.warn ? c.warn(bracket) : type.hint(bracket);
+function renderShortcutLines(shortcuts: readonly HubShortcut[], cols: number, compact = false): string[] {
+  const available = Math.max(1, cols - visualWidth(space.indent));
+  const parts = shortcuts.map((shortcut) => {
+    const text = compact
+      ? shortcut.showKey === false ? `[${shortcut.key}] ${shortcut.label}` : `[${shortcut.key}]`
+      : shortcut.showKey === false ? `[${shortcut.label}]` : `[${shortcut.key}] ${shortcut.label}`;
+    return shortcut.warn ? c.warn(text) : type.hint(text);
   });
-  return `${space.indent}${parts.join('  ')}`;
+  const lines: string[] = [];
+  let current = '';
+  for (const part of parts) {
+    const next = current ? `${current}  ${part}` : part;
+    if (current && visualWidth(next) > available) {
+      lines.push(`${space.indent}${current}`);
+      current = part;
+    } else {
+      current = next;
+    }
+  }
+  if (current) lines.push(`${space.indent}${current}`);
+  return lines;
 }
 
-/** Everything renderHubBody puts on screen *before* the adaptive week
- * grid/single-day-view decision point -- the banner, and then either the
- * "term hasn't started yet, preview week 1" heading block or the
- * today-heading + timeline block, depending on which week is current.
- * Returns null when there's nothing to show yet (no timetable/weekOne
- * loaded). */
-function hubPreGridLines(state: ScheduleViewState, now: Date): { lines: string[]; week: number; tt: Timetable } | null {
+function hubPreGridLines(state: ScheduleViewState, now: Date, cols: number): {
+  inlineLines: string[];
+  fallbackLines: string[];
+  week: number;
+  tt: Timetable;
+} | null {
   const trans = t();
   const tt = state.timetable;
   if (!tt || !state.weekOne) return null;
   const week = currentWeekNumber(state.weekOne, now);
   const lines: string[] = [];
-  const banner = renderNextClassBanner(nextMeeting(tt.meetings, tt.periods, state.weekOne, now), now);
+  const banner = renderNextClassBanner(nextMeeting(tt.meetings, tt.periods, state.weekOne, now), now, cols);
   lines.push(banner || hint(trans.timetable.noNextClass));
   lines.push('');
   const todayWd = campusWeekday(now);
@@ -129,13 +164,17 @@ function hubPreGridLines(state: ScheduleViewState, now: Date): { lines: string[]
     })));
     lines.push('');
     lines.push(heading(trans.timetable.termPreviewWeek));
-    return { lines, week: 1, tt };
+    return { inlineLines: lines, fallbackLines: [...lines], week: 1, tt };
   }
   const today = meetingsOnDay(tt.meetings, todayWd, week);
-  lines.push(heading(fmt(trans.timetable.todayHeading, { weekday: weekdayShortLabel(todayWd), week: String(week) })));
-  lines.push(...renderTodayTimeline(today, tt.periods, now).split('\n'));
-  lines.push(heading(trans.timetable.hubWeek));
-  return { lines, week, tt };
+  const weekHeading = heading(trans.timetable.hubWeek);
+  const inlineLines = [
+    ...lines,
+    heading(fmt(trans.timetable.todayHeading, { weekday: weekdayShortLabel(todayWd), week: String(week) })),
+    ...renderTodayTimeline(today, tt.periods, now, cols).split('\n'),
+    weekHeading,
+  ];
+  return { inlineLines, fallbackLines: [...lines, weekHeading], week, tt };
 }
 
 // Below this width, even an all-empty grid's own per-column floor (3, plus
@@ -154,15 +193,11 @@ const MIN_GRID_COLS = 100;
  * currently on screen. */
 function gridFitsInline(
   precedingLineCount: number, tt: Timetable, week: number, now: Date, bodyRows: number, cols: number,
-  cursor: GridCursor | undefined,
+  cursor: GridCursor | undefined, reservedRows: number,
 ): boolean {
   if (cols < MIN_GRID_COLS) return false;
   const gridLines = renderWeekGrid(tt.meetings, tt.periods, week, now, cols, cursor).split('\n');
-  // The hub's own menu is now a fixed one-line shortcut bar (blank + the bar
-  // itself), not a variable-height ListField -- no more "menu option count"
-  // to reserve room for.
-  const roomForShortcutBar = 2;
-  return precedingLineCount + gridLines.length <= bodyRows - roomForShortcutBar;
+  return precedingLineCount + gridLines.length <= bodyRows - reservedRows;
 }
 
 /** Renders the full weekday x period grid if it (plus a floor reserved for
@@ -173,122 +208,169 @@ function gridFitsInline(
  * days crammed into unreadable slivers. Shared by the "this week" and "term
  * hasn't started yet, preview week 1" branches of renderHubBody -- the same
  * measure-and-fallback decision, just against a different week number. */
-function pushAdaptiveWeekGrid(
-  lines: string[], tt: Timetable, week: number, todayWd: number, now: Date, bodyRows: number, cols: number,
-  cursor: GridCursor | undefined,
-): void {
-  if (gridFitsInline(lines.length, tt, week, now, bodyRows, cols, cursor)) {
-    lines.push(...renderWeekGrid(tt.meetings, tt.periods, week, now, cols, cursor).split('\n'));
-  } else {
-    const selectedWd = cursor?.weekday ?? todayWd;
-    const dayMeetings = meetingsOnDay(tt.meetings, selectedWd, week);
-    lines.push(renderDaySwitcher(selectedWd, todayWd));
-    lines.push(...renderDayTimeline(dayMeetings, tt.periods, now, selectedWd === todayWd, cursor?.period).split('\n'));
+function renderAdaptiveWeekGrid(
+  inlineLines: string[], fallbackLines: string[], tt: Timetable, week: number, todayWd: number,
+  now: Date, bodyRows: number, cols: number, cursor: GridCursor | undefined, reservedRows: number,
+): string[] {
+  if (gridFitsInline(inlineLines.length, tt, week, now, bodyRows, cols, cursor, reservedRows)) {
+    return [...inlineLines, ...renderWeekGrid(tt.meetings, tt.periods, week, now, cols, cursor).split('\n')];
   }
+  const selectedWd = cursor?.weekday ?? todayWd;
+  const dayMeetings = meetingsOnDay(tt.meetings, selectedWd, week);
+  return [
+    ...fallbackLines,
+    renderDaySwitcher(selectedWd, todayWd, cols),
+    ...renderDayTimeline(dayMeetings, tt.periods, now, selectedWd === todayWd, cursor?.period, cols).split('\n'),
+  ];
 }
 
 function renderHubBody(state: ScheduleViewState, now: Date, bodyRows: number, cols: number): string[] {
-  const lines: string[] = [];
   const tt = state.timetable;
-  const pre = hubPreGridLines(state, now);
-  if (pre) {
-    const todayWd = campusWeekday(now);
-    lines.push(...pre.lines);
-    pushAdaptiveWeekGrid(lines, pre.tt, pre.week, todayWd, now, bodyRows, cols, state.gridCursor);
-    lines.push('');
-  }
-  if (state.statusMessage) {
-    lines.push(hint(state.statusMessage));
-    lines.push('');
-  }
-  if (tt) {
-    lines.push(renderShortcutBar(hubShortcuts(tt)));
-  }
-  return lines;
+  const pre = hubPreGridLines(state, now, cols);
+  const shortcuts = tt ? hubShortcuts(tt) : [];
+  const rows = Math.max(0, Math.floor(bodyRows));
+
+  const build = (shortcutLines: string[]): { content: string[]; tail: string[] } => {
+    const tail: string[] = [];
+    if (pre && (state.statusMessage || shortcutLines.length > 0)) tail.push('');
+    if (state.statusMessage) {
+      tail.push(...hintLines(state.statusMessage, cols));
+      if (shortcutLines.length > 0) tail.push('');
+    }
+    tail.push(...shortcutLines);
+    const content = pre
+      ? renderAdaptiveWeekGrid(
+        pre.inlineLines,
+        pre.fallbackLines,
+        pre.tt,
+        pre.week,
+        campusWeekday(now),
+        now,
+        rows,
+        cols,
+        state.gridCursor,
+        tail.length,
+      )
+      : [];
+    return { content, tail };
+  };
+
+  const full = build(renderShortcutLines(shortcuts, cols));
+  if (full.content.length + full.tail.length <= rows) return [...full.content, ...full.tail];
+
+  const compact = build(renderShortcutLines(shortcuts, cols, true));
+  if (compact.tail.length >= rows) return rows > 0 ? compact.tail.slice(-rows) : [];
+  return [
+    ...compact.content.slice(0, rows - compact.tail.length),
+    ...compact.tail,
+  ];
 }
 
 const TERM_PROGRESS_WIDTH = 20;
 
-function renderTermProgressBar(w: AcademicWindow, now: Date): string | null {
+function renderTermProgressBar(w: AcademicWindow, now: Date, cols: number): string[] | null {
   if (!w.nextBreakStart) return null;
   const weekOneMs = new Date(`${w.weekOneMonday}T00:00:00`).getTime();
   const nextBreakMs = new Date(`${w.nextBreakStart}T00:00:00`).getTime();
   const totalWeeks = Math.max(1, Math.round((nextBreakMs - weekOneMs) / (7 * 86400000)));
   const currentWeek = currentWeekNumber(w.weekOneMonday, now);
-  const filledCols = Math.max(0, Math.min(
-    TERM_PROGRESS_WIDTH, Math.round((currentWeek / totalWeeks) * TERM_PROGRESS_WIDTH),
-  ));
+  const labelText = fmt(t().timetable.weekLabel2, { week: `${currentWeek}/${totalWeeks}` });
+  const label = type.hint(labelText);
+  const width = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : Number.POSITIVE_INFINITY;
+  const indent = visualWidth(space.indent) < width ? space.indent : '';
+  const contentWidth = Math.max(1, width - visualWidth(indent));
+  const inlineBarWidth = Math.min(TERM_PROGRESS_WIDTH, contentWidth - visualWidth(label) - 2);
+  const barWidth = inlineBarWidth >= 1 ? inlineBarWidth : Math.min(TERM_PROGRESS_WIDTH, contentWidth);
+  const filledCols = Math.max(0, Math.min(barWidth, Math.round((currentWeek / totalWeeks) * barWidth)));
   const filledChar = glyph.barFilled();
   const emptyChar = glyph.barEmpty();
-  const bar = filledChar.repeat(filledCols) + emptyChar.repeat(TERM_PROGRESS_WIDTH - filledCols);
-  return `${space.indent}${type.body(bar)}  ${type.hint(`${currentWeek}/${totalWeeks}${t().timetable.weekLabel2.replace('{week}', '').trim()}`)}`;
+  const bar = type.body(filledChar.repeat(filledCols) + emptyChar.repeat(barWidth - filledCols));
+  return inlineBarWidth >= 1
+    ? [`${indent}${bar}  ${label}`]
+    : [`${indent}${bar}`, ...hintLines(labelText, cols)];
 }
 
 function daysBetween(a: Date, b: Date): number {
   return Math.max(0, Math.ceil((b.getTime() - a.getTime()) / 86400000));
 }
 
-function renderPublicBody(state: ScheduleViewState, now: Date, bodyRows: number): string[] {
+function renderPublicBody(state: ScheduleViewState, now: Date, bodyRows: number, cols: number): string[] {
   const trans = t();
   const lines: string[] = [];
   const w = state.publicWindow;
 
   if (w === undefined) {
-    lines.push(hint(trans.common.loading));
+    lines.push(...hintLines(trans.common.loading, cols));
   } else if (w === null) {
-    lines.push(hint(trans.timetable.publicUnavailable));
+    lines.push(...hintLines(trans.timetable.publicUnavailable, cols));
   } else if (w.status === 'onBreak') {
-    lines.push(heading(fmt(trans.timetable.onBreak, { title: w.breakTitle })));
+    lines.push(...headingLines(fmt(trans.timetable.onBreak, { title: w.breakTitle }), cols));
   } else {
     const semesterLabel = w.semester === '1' ? trans.timetable.semester1 : trans.timetable.semester2;
-    lines.push(heading(
+    lines.push(...headingLines(
       `${fmt(trans.timetable.academicYearSuffix, { year: w.academicYear })} · ${semesterLabel} · ${fmt(trans.timetable.weekLabel2, { week: String(w.currentWeek) })}`,
+      cols,
     ));
-    const bar = renderTermProgressBar(w, now);
-    if (bar) lines.push(bar);
+    const bar = renderTermProgressBar(w, now, cols);
+    if (bar) lines.push(...bar);
     if (w.nextBreakStart && w.nextBreakTitle) {
-      lines.push(hint(fmt(trans.timetable.daysUntilBreak, {
+      lines.push(...hintLines(fmt(trans.timetable.daysUntilBreak, {
         title: w.nextBreakTitle,
         days: String(daysBetween(now, new Date(`${w.nextBreakStart}T00:00:00`))),
-      })));
+      }), cols));
     }
   }
   lines.push('');
 
+  const loginLines = [...hintLines(trans.timetable.publicLoginHint, cols), ''];
+  const rows = Number.isFinite(bodyRows)
+    ? Math.max(0, Math.floor(bodyRows))
+    : Number.POSITIVE_INFINITY;
+  const fieldRows = state.publicField
+    ? Math.min(3, rows, state.publicField.render(Number.POSITIVE_INFINITY, cols).length)
+    : 0;
+
   if (state.publicUpcoming && state.publicUpcoming.length > 0) {
-    lines.push(heading(trans.calendar.recentActivity));
-    const floorForRest = 5;
-    const remaining = Math.max(1, bodyRows - lines.length - 1 - floorForRest);
-    for (const e of state.publicUpcoming.slice(0, remaining)) lines.push(renderEventBrief(e, now));
-    lines.push('');
+    const activityHeading = headingLines(trans.calendar.recentActivity, cols);
+    const eventBudget = Math.max(
+      0,
+      rows - lines.length - activityHeading.length - 1 - loginLines.length - fieldRows,
+    );
+    const eventLines: string[] = [];
+    for (const event of state.publicUpcoming) {
+      const wrapped = wrappedRenderedLine(renderEventBrief(event, now), cols);
+      if (eventLines.length + wrapped.length > eventBudget) break;
+      eventLines.push(...wrapped);
+    }
+    if (eventLines.length > 0) lines.push(...activityHeading, ...eventLines, '');
   }
 
-  lines.push(hint(trans.timetable.publicLoginHint));
-  lines.push('');
-  if (state.publicField) lines.push(...state.publicField.render());
-  return lines;
+  lines.push(...loginLines);
+  return state.publicField
+    ? renderListFieldWithContext(lines, state.publicField, bodyRows, cols)
+    : lines;
 }
 
 export function renderSchedule(state: ScheduleViewState, now: Date, bodyRows = 100, cols = 80): string[] {
   const trans = t();
   switch (state.mode) {
     case 'loading':
-      return [hint(trans.common.loading)];
+      return hintLines(trans.common.loading, cols);
     case 'public':
-      return renderPublicBody(state, now, bodyRows);
+      return renderPublicBody(state, now, bodyRows, cols);
     case 'needsLoginId':
       return [
-        ...(state.errorMessage ? [hint(state.errorMessage), ''] : []),
-        ...(state.idField?.render() ?? []),
+        ...(state.errorMessage ? [...hintLines(state.errorMessage, cols), ''] : []),
+        ...(state.idField?.render(cols) ?? []),
       ];
     case 'needsLoginPassword':
-      return state.passwordField?.render() ?? [];
+      return state.passwordField?.render(cols) ?? [];
     case 'authenticating':
-      return [hint(state.statusMessage ?? trans.common.loading)];
+      return hintLines(state.statusMessage ?? trans.common.loading, cols);
     case 'needsWeekOne':
       return [
-        ...(state.errorMessage ? [hint(state.errorMessage), ''] : []),
-        ...(state.weekOneField?.render() ?? []),
+        ...(state.errorMessage ? [...hintLines(state.errorMessage, cols), ''] : []),
+        ...(state.weekOneField?.render(cols) ?? []),
       ];
     case 'hub':
       return renderHubBody(state, now, bodyRows, cols);
@@ -302,27 +384,39 @@ export function renderSchedule(state: ScheduleViewState, now: Date, bodyRows = 1
       // marginal terminal that couldn't fit the grid inline the hub still
       // gets a real shot at it here, falling back to the single-day view
       // only if even the full screen isn't enough.
-      pushAdaptiveWeekGrid(weekLines, state.timetable, week, campusWeekday(now), now, bodyRows, cols, state.gridCursor);
-      return weekLines;
+      return renderAdaptiveWeekGrid(
+        weekLines,
+        weekLines,
+        state.timetable,
+        week,
+        campusWeekday(now),
+        now,
+        bodyRows,
+        cols,
+        state.gridCursor,
+        2,
+      );
     }
     case 'termDensity':
       return state.timetable && state.weekOne
-        ? renderTermDensity(state.timetable.meetings, state.weekOne, currentWeekNumber(state.weekOne, now)).split('\n')
+        ? renderTermDensity(
+          state.timetable.meetings, state.weekOne, currentWeekNumber(state.weekOne, now), cols,
+        ).split('\n')
         : [hint(trans.timetable.genericError)];
     case 'termPicker':
-      return state.termField?.render() ?? [];
+      return state.termField?.render(bodyRows, cols) ?? [];
     case 'unresolved':
       return [
         heading(trans.timetable.unresolvedTitle),
         '',
-        ...renderUnresolvedItems(state.timetable?.unresolvedItems ?? []).split('\n'),
+        ...renderUnresolvedItems(state.timetable?.unresolvedItems ?? [], cols).split('\n'),
       ];
     case 'meetingDetail':
       return state.detailMeeting && state.timetable
-        ? renderMeetingDetail(state.detailMeeting, state.timetable.periods).split('\n')
+        ? renderMeetingDetail(state.detailMeeting, state.timetable.periods, cols).split('\n')
         : [hint(trans.timetable.genericError)];
     case 'error':
-      return [hint(state.errorMessage ?? trans.timetable.genericError)];
+      return hintLines(state.errorMessage ?? trans.timetable.genericError, cols);
     default:
       return [];
   }

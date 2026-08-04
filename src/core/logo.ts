@@ -8,21 +8,14 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import chalk from 'chalk';
-import gradient from 'gradient-string';
 import { useUnicodeIcons } from './icons.js';
 import { APP_INFO } from '../config/data.js';
-import { typeReveal } from './motion.js';
+import { typeReveal, materializeBraille } from './motion.js';
+import { brandGradient as brand } from './theme.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const TAGLINE = 'To be at the intersection of technology and liberal arts.';
-
-// Brand gradient: emblem blue -> sky -> cyan.
-const brand = gradient([
-  { color: '#124689', pos: 0 },
-  { color: '#0ea5e9', pos: 0.55 },
-  { color: '#06b6d4', pos: 1 },
-]);
 
 function readArt(file: string): string | null {
   try {
@@ -30,6 +23,26 @@ function readArt(file: string): string | null {
   } catch {
     return null;
   }
+}
+
+// Three braille dot-matrix tiers of the same emblem (all rendered from the
+// same text-ring-stripped SVG, so none of them reintroduce the illegible-blob
+// problem -- see ca-dotmatrix.txt's own history). Picking a tier is not just
+// "shrink to fit": a narrow terminal gets a purpose-built lower-detail render
+// rather than a squashed version of the big one, mirroring how the schedule
+// grid swaps in a whole different layout below its own width floor instead
+// of cramming columns.
+const TIERS = [
+  { file: 'ca-dotmatrix-large.txt', minCols: 60, minRows: 34 },
+  { file: 'ca-dotmatrix.txt', minCols: 44, minRows: 24 },
+  { file: 'ca-dotmatrix-small.txt', minCols: 0, minRows: 0 },
+] as const;
+
+function dotmatrixFile(): string {
+  const cols = process.stdout.columns ?? 0;
+  const rows = process.stdout.rows ?? 0;
+  const tier = TIERS.find((t) => cols >= t.minCols && rows >= t.minRows);
+  return tier?.file ?? 'ca-dotmatrix-small.txt';
 }
 
 function paint(text: string, color: boolean): string {
@@ -42,10 +55,14 @@ function paint(text: string, color: boolean): string {
     : text.split('\n').map((line) => brand(line)).join('\n');
 }
 
+function loadArt(): string {
+  const art = useUnicodeIcons() ? readArt(dotmatrixFile()) : readArt('ascii-logo.txt');
+  return art ?? 'NBTCA';
+}
+
 export function buildLogoLines(): string[] {
   const color = !process.env['NO_COLOR'];
-  const art = useUnicodeIcons() ? readArt('ca-dotmatrix.txt') : readArt('ascii-logo.txt');
-  const paintedArt = paint(art ?? 'NBTCA', color).split('\n');
+  const paintedArt = paint(loadArt(), color).split('\n');
 
   return [
     '',
@@ -59,5 +76,8 @@ export function buildLogoLines(): string[] {
 
 export async function runStartup(): Promise<void> {
   if (!process.stdout.isTTY) return;
-  await typeReveal(buildLogoLines());
+  const color = !process.env['NO_COLOR'];
+  process.stdout.write('\n');
+  await materializeBraille(loadArt(), (s) => paint(s, color));
+  await typeReveal(['', color ? brand(TAGLINE) : TAGLINE, chalk.dim(`@nbtca/prompt  v${APP_INFO.version}`), '']);
 }
