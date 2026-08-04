@@ -1,6 +1,6 @@
 # NBTCA Prompt
 
-Terminal-based information system for NingboTech Computer Association.
+Terminal-based information system for the NBTCA community.
 
 [![npm version](https://img.shields.io/npm/v/@nbtca/prompt)](https://www.npmjs.com/package/@nbtca/prompt)
 [![License](https://img.shields.io/npm/l/@nbtca/prompt)](LICENSE)

@@ -1,7 +1,3 @@
-/**
- * Unified settings — language, theme, about
- */
-
 import chalk from 'chalk';
 import {
   applyColorModePreference,
@@ -17,7 +13,7 @@ import { resetIconCache } from '../core/icons.js';
 import { padEndV } from '../core/text.js';
 import { success, warning } from '../core/ui.js';
 import { APP_INFO, URLS } from '../config/data.js';
-import { t, getCurrentLanguage, setLanguage, clearTranslationCache, type Language } from '../i18n/index.js';
+import { t, getCurrentLanguage, saveLanguagePreference, clearTranslationCache, type Language } from '../i18n/index.js';
 import { runMenu, menuFooter } from '../core/components/menu.js';
 import { note } from '../core/components/note.js';
 import { enterScreen, breadcrumb } from '../core/transitions.js';
@@ -91,7 +87,7 @@ export async function showSettingsMenu(): Promise<void> {
       });
       if (language === null) continue;
       if (language !== currentLang) {
-        const saved = setLanguage(language as Language);
+        const saved = saveLanguagePreference(language as Language);
         clearTranslationCache();
         notifyResult(saved, t().language.changed, t().language.changedSessionOnly);
       }

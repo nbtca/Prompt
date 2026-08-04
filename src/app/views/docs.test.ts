@@ -310,6 +310,8 @@ describe('docsView native reader (no shell-out to less/glow)', () => {
     openDocsInBrowserMock.mockClear();
     clearDocsCacheMock.mockClear();
     vi.resetModules();
+    const { setLanguage: setFreshLanguage } = await import('../../i18n/index.js');
+    setFreshLanguage('en');
     ({ docsView: freshDocsView } = await import('./docs.js'));
   });
 

@@ -239,13 +239,6 @@ export interface WeekAheadInfo {
   classDays: boolean[];
 }
 
-/** Best-effort, cache-only (no network) computation of this week's per-day
- * class signal, for Home's combined week-overview grid. Returns null when
- * there's no set-up personal timetable, the cache is unusable, or the term
- * hasn't started yet (current week < 1) — the same "before term start"
- * guard already fixed once for Schedule's own hub (a future-dated weekOne,
- * auto-inferred while on break, must not render a nonsensical negative
- * week's worth of content). */
 export function peekWeekAheadInfo(now: Date = new Date()): WeekAheadInfo | null {
   try {
     const ptr = loadCurrentPointer();

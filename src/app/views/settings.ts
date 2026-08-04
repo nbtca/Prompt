@@ -7,7 +7,7 @@ import {
 } from '../../config/preferences.js';
 import { resetIconCache, pickIcon } from '../../core/icons.js';
 import { APP_INFO, URLS } from '../../config/data.js';
-import { t, getCurrentLanguage, setLanguage, clearTranslationCache, type Language } from '../../i18n/index.js';
+import { t, getCurrentLanguage, saveLanguagePreference, clearTranslationCache, type Language } from '../../i18n/index.js';
 import { padEndV } from '../../core/text.js';
 
 let state: SettingsViewState = { mode: 'menu' };
@@ -124,7 +124,7 @@ export const settingsView: View = {
         if (!result?.selected) return;
         const currentLang = getCurrentLanguage();
         if (result.selected !== currentLang) {
-          const saved = setLanguage(result.selected as Language);
+          const saved = saveLanguagePreference(result.selected as Language);
           clearTranslationCache();
           goToMenu(saved ? t().language.changed : t().language.changedSessionOnly);
         } else {

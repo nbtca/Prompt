@@ -1,7 +1,3 @@
-/**
- * Theme CLI command handler (non-interactive)
- */
-
 import {
   applyColorModePreference,
   loadPreferences,

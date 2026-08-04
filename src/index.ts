@@ -1,7 +1,3 @@
-/**
- * NBTCA Prompt entry point
- */
-
 import chalk from 'chalk';
 import open from 'open';
 import { main } from './main.js';
@@ -12,7 +8,7 @@ import { pickIcon } from './core/icons.js';
 import { applyColorModePreference } from './config/preferences.js';
 import { openDocsInBrowser } from './features/docs.js';
 import { runThemeCommand } from './features/theme.js';
-import { setLanguage, t, fmt, type Language } from './i18n/index.js';
+import { saveLanguagePreference, t, fmt, type Language } from './i18n/index.js';
 import { clearScreen, handleGracefulExit } from './core/ui.js';
 import { APP_INFO, URLS } from './config/data.js';
 import { runUpdateCheck } from './features/update.js';
@@ -414,7 +410,7 @@ async function runCommandMode(argv: string[]): Promise<void> {
       console.error(chalk.red(t().cli.invalidLang));
       process.exit(1);
     }
-    const persisted = setLanguage(language);
+    const persisted = saveLanguagePreference(language);
     if (persisted) {
       console.log(chalk.green(`${pickIcon('✓', 'OK')}: ${t().language.changed}`));
     } else {
@@ -506,7 +502,6 @@ async function runCommandMode(argv: string[]): Promise<void> {
     return;
   }
 
-  // URL actions: repair, website, github, roadmap
   const mappedUrl = URL_ACTIONS[action];
   if (mappedUrl) {
     if (flags.has('--open')) {

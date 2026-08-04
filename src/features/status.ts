@@ -38,15 +38,12 @@ export interface StatusCheckOptions {
 function getServiceTargets(): ServiceTarget[] {
   const trans = t();
   return [
-    // NBTCA-owned services
     { name: trans.status.serviceHomepage, url: URLS.homepage, group: 'nbtca' },
     { name: trans.status.serviceDocs,     url: URLS.docs,     group: 'nbtca' },
     { name: trans.status.serviceIcal,     url: URLS.calendar, group: 'nbtca' },
     { name: trans.status.serviceRepair,   url: URLS.repair,   group: 'nbtca' },
-    // External platforms
     { name: trans.status.serviceGithub,   url: URLS.github,   group: 'external' },
     { name: trans.status.serviceRoadmap,  url: URLS.roadmap,  group: 'external' },
-    // Intranet services (campus LAN only)
     { name: trans.status.serviceCloud,    url: URLS.cloud,    group: 'intranet', intranet: true },
     { name: trans.status.serviceMirror,   url: URLS.mirror,   group: 'intranet', intranet: true },
   ];

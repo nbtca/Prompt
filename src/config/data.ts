@@ -1,5 +1,3 @@
-/** Core URL and application constants. */
-
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -38,7 +36,7 @@ export const GITHUB_REPO = {
 export const APP_INFO = {
   name: 'Prompt',
   version: readPackageVersion(),
-  description: 'NingboTech Computer Association',
+  description: 'NBTCA community',
   author: 'm1ngsama <contact@m1ng.space>',
   license: 'MIT',
   repository: 'https://github.com/nbtca/prompt'

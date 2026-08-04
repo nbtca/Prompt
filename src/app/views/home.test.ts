@@ -27,6 +27,8 @@ beforeAll(() => {
 });
 
 const noon = new Date('2026-07-15T12:00:00');
+const FIXTURE_TERM_KEY = '2020-1';
+const FIXTURE_WEEK_ONE = '2020-01-06';
 
 describe('homeView footer', () => {
   it('offers tab switching and quitting without move or open actions', () => {
@@ -69,19 +71,12 @@ describe('renderHome (schedule-first dashboard)', () => {
   });
 
   it('shows real "no upcoming events" copy when the fetch succeeded but returned nothing, not a bare glyph', () => {
-    // Regression: this used to render a lone "-" with no words at all —
-    // every other empty state in the app (and every other panel on this
-    // same screen) uses actual translated copy.
     const out = stripAnsi(renderHome({ eventLines: [], loading: false }, noon).join('\n'));
     expect(out).toContain('No upcoming events');
   });
 
   it('shows an error state when the events fetch failed, distinct from "no events"', () => {
-    // Regression: Events/Docs/Schedule all show a real error line on fetch
-    // failure; Home silently fell back to the same empty-state placeholder
-    // used for "genuinely nothing happening," so a network failure and a
-    // quiet week looked identical.
-    const out = stripAnsi(renderHome({ eventsError: true, loading: false }, noon).join('\n'));
+    const out = stripAnsi(renderHome({ eventsLoadFailed: true, loading: false }, noon).join('\n'));
     expect(out).toContain('Failed to load event calendar');
     expect(out).not.toContain('No upcoming events');
   });
@@ -222,7 +217,7 @@ describe('renderHome day-progress bar', () => {
   });
 });
 
-describe('renderHome — week overview panel (Part D)', () => {
+describe('renderHome — week overview panel', () => {
   it('does not show the week overview panel at all when weekAhead is absent', () => {
     const out = stripAnsi(renderHome({ loading: false }, noon).join('\n'));
     expect(out).not.toContain('Week overview');
@@ -248,8 +243,6 @@ describe('renderHome — week overview panel (Part D)', () => {
     try {
       const lines = renderHome({
         loading: false,
-        // classDays[5]/[6] (Sat/Sun) are true on purpose -- the render
-        // layer must still show them as weekend/N-A, not "busy".
         weekAhead: { classDays: [false, false, false, false, false, true, true] },
       }, noon).map((l) => stripAnsi(l));
       const titleIdx = lines.findIndex((l) => l.includes('Week overview'));
@@ -270,13 +263,15 @@ describe('renderHome — week overview panel (Part D)', () => {
         loading: false,
         weekAhead: {
           classDays: [false, false, false, false, false, false, false],
-          eventDays: [false, false, false, false, false, true, false], // Saturday has an event
+          eventDays: [false, false, false, false, false, true, false],
         },
       }, noon).map((l) => stripAnsi(l));
       const titleIdx = lines.findIndex((l) => l.includes('Week overview'));
       const eventCells = lines[titleIdx + 3]!.trim().split(/\s+/).slice(1);
-      expect(eventCells[5]).toBe('▓▓'); // Saturday: busy, not weekend/N-A
-      expect(eventCells[6]).toBe('░░'); // Sunday: free, not weekend/N-A
+      const saturday = eventCells[5];
+      const sunday = eventCells[6];
+      expect(saturday).toBe('▓▓');
+      expect(sunday).toBe('░░');
     } finally {
       process.env['NBTCA_ICON_MODE'] = 'unicode';
       resetIconCache();
@@ -286,7 +281,7 @@ describe('renderHome — week overview panel (Part D)', () => {
   it('renders the event row with no glyphs at all when eventDays is not yet known', () => {
     const lines = renderHome({
       loading: false,
-      weekAhead: { classDays: [true, false, false, false, false, false, false] }, // no eventDays
+      weekAhead: { classDays: [true, false, false, false, false, false, false] },
     }, noon).map((l) => stripAnsi(l));
     const titleIdx = lines.findIndex((l) => l.includes('Week overview'));
     const eventLine = lines[titleIdx + 3]!;
@@ -331,7 +326,7 @@ describe('renderHome — week overview panel (Part D)', () => {
   });
 });
 
-describe('renderHome — unresolved items warning (Part E)', () => {
+describe('renderHome — unresolved items warning', () => {
   it('does not show a warning line when unresolvedCount is 0 or absent', () => {
     const out = stripAnsi(renderHome({ loading: false }, noon).join('\n'));
     expect(out).not.toContain('Needs attention');
@@ -361,10 +356,6 @@ describe('homeView.load()', () => {
   let prevStateHome: string | undefined;
 
   beforeEach(() => {
-    // Earlier describe blocks in this file (Part D's weekend-cell tests)
-    // leave NBTCA_ICON_MODE as 'ascii' behind them via their own
-    // try/finally. Pin it back to unicode here so this block's glyph
-    // assertions (▓/░) are deterministic regardless of run order.
     process.env['NBTCA_ICON_MODE'] = 'unicode';
     resetIconCache();
     vi.clearAllMocks();
@@ -392,17 +383,12 @@ describe('homeView.load()', () => {
     };
   }
 
-  // 2020-01-06 is a real, permanently-past Monday -- safe to use as
-  // weekOneMonday in these tests regardless of when the suite actually
-  // runs (unlike a near-future date, which would eventually put the
-  // fixture's "current week" before term start and make peekWeekAheadInfo
-  // return null instead of the populated data these tests need).
   function writeSetUpFixture(dir: string): void {
     mkdirSync(join(dir, 'nbtca'), { recursive: true });
-    writeFileSync(join(dir, 'nbtca', 'current-term.json'), JSON.stringify({ termKey: '2020-1', weekOneMonday: '2020-01-06' }));
-    writeFileSync(join(dir, 'nbtca', 'timetable-2020-1.json'), JSON.stringify({
+    writeFileSync(join(dir, 'nbtca', 'current-term.json'), JSON.stringify({ termKey: FIXTURE_TERM_KEY, weekOneMonday: FIXTURE_WEEK_ONE }));
+    writeFileSync(join(dir, 'nbtca', `timetable-${FIXTURE_TERM_KEY}.json`), JSON.stringify({
       term: { academicYear: '2020', semester: '1' }, meetings: [], unresolvedItems: [],
-      periods: [], calendarDays: [], warnings: [], fetchedAt: '2020-01-06T00:00:00Z',
+      periods: [], calendarDays: [], warnings: [], fetchedAt: `${FIXTURE_WEEK_ONE}T00:00:00Z`,
     }));
   }
 
@@ -425,13 +411,13 @@ describe('homeView.load()', () => {
 
   it('populates unresolvedCount and weekAhead.classDays synchronously, before the network call resolves', async () => {
     mkdirSync(join(dir, 'nbtca'), { recursive: true });
-    writeFileSync(join(dir, 'nbtca', 'current-term.json'), JSON.stringify({ termKey: '2020-1', weekOneMonday: '2020-01-06' }));
-    writeFileSync(join(dir, 'nbtca', 'timetable-2020-1.json'), JSON.stringify({
+    writeFileSync(join(dir, 'nbtca', 'current-term.json'), JSON.stringify({ termKey: FIXTURE_TERM_KEY, weekOneMonday: FIXTURE_WEEK_ONE }));
+    writeFileSync(join(dir, 'nbtca', `timetable-${FIXTURE_TERM_KEY}.json`), JSON.stringify({
       term: { academicYear: '2020', semester: '1' },
       meetings: [{ sourceId: null, courseName: 'Math', teacherNames: [], location: null, weekday: 1, startPeriod: 1, endPeriod: 1, weeks: [1], kind: 'regular' }],
       unresolvedItems: [{ kind: 'practice', itemIndex: 0, sourceFields: { kcmc: 'Fitness test' } }],
       periods: [{ period: 1, label: null, start: '08:00', end: '08:45' }],
-      calendarDays: [], warnings: [], fetchedAt: '2020-01-06T00:00:00Z',
+      calendarDays: [], warnings: [], fetchedAt: `${FIXTURE_WEEK_ONE}T00:00:00Z`,
     }));
     let capturedSync = false;
     const ctx: AppContext = {
@@ -448,20 +434,14 @@ describe('homeView.load()', () => {
       runClassic: vi.fn(async (fn: () => Promise<void>) => { await fn(); }), quit: vi.fn(),
     };
     await homeView.load(ctx);
-    expect(capturedSync).toBe(true); // sanity: the sync-phase rerender actually happened and was inspected
+    expect(capturedSync).toBe(true);
   });
 
   it('fills in weekAhead.eventDays from the real week-of-events after the network call resolves', async () => {
     writeSetUpFixture(dir);
-    // 2020-01-06 (the fixture's weekOneMonday, and thus also the Monday of
-    // "this week" for any `now` far enough in the future) has an event.
-    calendarInRange.mockReturnValue([{ start: new Date('2020-01-06T18:00:00'), title: 'Club meetup' }]);
+    calendarInRange.mockReturnValue([{ start: new Date(`${FIXTURE_WEEK_ONE}T18:00:00`), title: 'Club meetup' }]);
     const ctx = fakeCtx();
     await homeView.load(ctx);
-    // Not a meaningful assertion about *which* week is "current" relative
-    // to whatever "now" the test happens to run at -- just that eventDays
-    // was populated at all (some cell is a real glyph, not blank), proving
-    // the inRange result actually flowed into the rendered grid.
     const out = stripAnsi(homeView.render(ctx).join('\n'));
     const lines = out.split('\n');
     const titleIdx = lines.findIndex((l) => l.includes('Week overview'));

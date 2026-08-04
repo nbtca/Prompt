@@ -1,8 +1,3 @@
-/**
- * Internationalization (i18n) System
- * Multi-language support for the application
- */
-
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -14,9 +9,6 @@ const __dirname = dirname(__filename);
 
 export type Language = 'zh' | 'en';
 
-/**
- * Translation structure
- */
 export interface Translations {
   common: {
     back: string;
@@ -385,28 +377,16 @@ export interface Translations {
   };
 }
 
-/**
- * Language configuration
- */
-let currentLanguage: Language = 'zh'; // Default to Chinese
+let currentLanguage: Language = 'zh';
 
-/**
- * Get language configuration file path (read, with legacy fallback)
- */
 function getLanguageConfigPath(): string {
   return path.join(getConfigDir(), 'language.json');
 }
 
-/**
- * Get writable language configuration file path (XDG, creates dir)
- */
 function getWritableLanguageConfigPath(): string {
   return path.join(getWritableConfigDir(), 'language.json');
 }
 
-/**
- * Load language preference from config file
- */
 export function loadLanguagePreference(): Language {
   try {
     const configPath = getLanguageConfigPath();
@@ -414,65 +394,43 @@ export function loadLanguagePreference(): Language {
     if (config.language === 'zh' || config.language === 'en') {
       currentLanguage = config.language;
     }
-  } catch {
-    // If loading fails (file missing or invalid), use default (Chinese)
-  }
+  } catch {}
   return currentLanguage;
 }
 
-/**
- * Save language preference to config file
- */
 export function saveLanguagePreference(language: Language): boolean {
+  setLanguage(language);
   try {
     const configPath = getWritableLanguageConfigPath();
     fs.writeFileSync(configPath, JSON.stringify({ language }, null, 2));
-    currentLanguage = language;
     return true;
   } catch {
     return false;
   }
 }
 
-/**
- * Get current language
- */
 export function getCurrentLanguage(): Language {
   return currentLanguage;
 }
 
-/**
- * Set current language
- */
-export function setLanguage(language: Language): boolean {
+export function setLanguage(language: Language): void {
   currentLanguage = language;
-  return saveLanguagePreference(language);
 }
 
-/**
- * Load translation file
- */
 function loadTranslations(language: Language): Translations {
   try {
     const translationPath = path.join(__dirname, 'locales', `${language}.json`);
     const content = fs.readFileSync(translationPath, 'utf-8');
     return JSON.parse(content);
-  } catch (err) {
-    // Fallback to Chinese if loading fails
+  } catch {
     const fallbackPath = path.join(__dirname, 'locales', 'zh.json');
     const content = fs.readFileSync(fallbackPath, 'utf-8');
     return JSON.parse(content);
   }
 }
 
-/**
- * Translation cache
- */
-let translationsCache: Map<Language, Translations> = new Map();
+const translationsCache = new Map<Language, Translations>();
 
-/**
- * Get translations for current language
- */
 export function t(): Translations {
   if (!translationsCache.has(currentLanguage)) {
     translationsCache.set(currentLanguage, loadTranslations(currentLanguage));
@@ -487,12 +445,8 @@ export function fmt(template: string, vars: Record<string, string | number>): st
   });
 }
 
-/**
- * Clear translation cache (useful when switching languages)
- */
 export function clearTranslationCache(): void {
   translationsCache.clear();
 }
 
-// Initialize language preference on module load
 loadLanguagePreference();

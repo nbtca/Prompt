@@ -1,8 +1,3 @@
-/**
- * Version update checker
- * Non-blocking check against npm registry for newer versions.
- */
-
 import chalk from 'chalk';
 import { APP_INFO } from '../config/data.js';
 import { t, fmt } from '../i18n/index.js';
@@ -39,9 +34,6 @@ async function fetchLatestVersion(signal?: AbortSignal): Promise<string | null> 
   }
 }
 
-/**
- * Compare semver strings. Returns true if remote > local.
- */
 function isNewer(local: string, remote: string): boolean {
   const parse = (v: string) => v.split('.').map(Number);
   const l = parse(local);
@@ -66,9 +58,6 @@ export async function checkForUpdate(signal?: AbortSignal): Promise<string | nul
   return `${fmt(trans.update.available, { latest, current: APP_INFO.version })}  ${chalk.dim(trans.update.command)}`;
 }
 
-/**
- * Explicit update check command (nbtca update).
- */
 export async function runUpdateCheck(): Promise<void> {
   const trans = t();
   const latest = await fetchLatestVersion();
