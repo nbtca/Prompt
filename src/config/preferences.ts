@@ -17,6 +17,7 @@ const DEFAULT_PREFERENCES: Preferences = {
 };
 const detectedColorLevel = chalk.level;
 const inheritedNoColor = process.env['NO_COLOR'];
+const inheritedForceColor = process.env['FORCE_COLOR'];
 
 function getPreferencesPath(): string {
   return path.join(getConfigDir(), 'preferences.json');
@@ -88,6 +89,7 @@ export function resolveColorMode(): ColorMode {
 export function applyColorModePreference(forcePlain: boolean): void {
   const mode = forcePlain ? 'off' : resolveColorMode();
   if (mode === 'off') {
+    delete process.env['FORCE_COLOR'];
     process.env['NO_COLOR'] = '1';
     chalk.level = 0;
     return;
@@ -95,11 +97,14 @@ export function applyColorModePreference(forcePlain: boolean): void {
 
   if (mode === 'on') {
     delete process.env['NO_COLOR'];
+    delete process.env['FORCE_COLOR'];
     chalk.level = 3;
     return;
   }
 
   if (inheritedNoColor === undefined) delete process.env['NO_COLOR'];
   else process.env['NO_COLOR'] = inheritedNoColor;
+  if (inheritedForceColor === undefined) delete process.env['FORCE_COLOR'];
+  else process.env['FORCE_COLOR'] = inheritedForceColor;
   chalk.level = detectedColorLevel;
 }

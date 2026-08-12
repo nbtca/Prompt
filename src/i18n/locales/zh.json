@@ -148,6 +148,7 @@
     "checking": "正在检查服务状态...",
     "summaryOk": "所有服务运行正常",
     "summaryFail": "部分服务不可用",
+    "summaryIntranet": "公共服务运行正常；内网可用性取决于当前网络",
     "service": "服务",
     "health": "状态",
     "code": "代码",
@@ -361,6 +362,7 @@
     "invalidFlagHint": "运行 `nbtca --help` 查看命令用法。",
     "invalidLang": "无效语言。请使用 `zh` 或 `en`。",
     "invalidNext": "无效的 --next 值。请使用 --next=<数字>（>= 1）。",
+    "unexpectedArguments": "{command} 不接受多余参数。",
     "requiresTty": "交互模式需要 TTY 终端。",
     "requiresTtyHint": "使用 `nbtca --help` 查看命令模式。"
   }

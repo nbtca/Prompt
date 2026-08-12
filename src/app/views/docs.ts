@@ -589,7 +589,9 @@ export const docsView = {
           return;
         }
         if (result.selected === '__browser__') {
-          void ctx.runClassic(() => openDocsInBrowser());
+          void ctx.runClassic(async () => {
+            await openDocsInBrowser();
+          });
           return;
         }
         const section = sections.find((s) => s.key === result.selected);
@@ -698,7 +700,9 @@ export const docsView = {
           return;
         }
         if (key === 'b') {
-          void ctx.runClassic(() => openDocsInBrowser(readerCurrentPath ?? undefined));
+          void ctx.runClassic(async () => {
+            await openDocsInBrowser(readerCurrentPath ?? undefined);
+          });
           return;
         }
         return;

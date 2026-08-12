@@ -159,6 +159,7 @@ export interface Translations {
     checking: string;
     summaryOk: string;
     summaryFail: string;
+    summaryIntranet: string;
     service: string;
     health: string;
     code: string;
@@ -372,6 +373,7 @@ export interface Translations {
     invalidFlagHint: string;
     invalidLang: string;
     invalidNext: string;
+    unexpectedArguments: string;
     requiresTty: string;
     requiresTtyHint: string;
   };

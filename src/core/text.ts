@@ -304,10 +304,14 @@ export function wrapAnsiWithIndent(str: string, maxWidth: number, preferredInden
     : Number.POSITIVE_INFINITY;
   const indentWidth = visualWidth(preferredIndent);
   const contentWidth = visualWidth(str);
-  const indent =
+  let indent =
     indentWidth >= width || (contentWidth > width - indentWidth && contentWidth <= width)
       ? ''
       : preferredIndent;
-  const availableWidth = Math.max(1, width - visualWidth(indent));
-  return wrapAnsiToVisualWidth(str, availableWidth).map((line) => `${indent}${line}`);
+  let lines = wrapAnsiToVisualWidth(str, Math.max(1, width - visualWidth(indent)));
+  if (indent && lines.some((line) => visualWidth(indent + line) > width)) {
+    indent = '';
+    lines = wrapAnsiToVisualWidth(str, width);
+  }
+  return lines.map((line) => `${indent}${line}`);
 }

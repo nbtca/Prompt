@@ -138,6 +138,51 @@ describe('renderEventsTable recurring marker', () => {
     expect(out).not.toContain('~ One Off');
     expect(out).toContain('One Off');
   });
+
+  it('uses a complete compact layout on narrow terminals', () => {
+    process.env['NBTCA_ICON_MODE'] = 'ascii';
+    resetIconCache();
+    const event = toDisplayEvent(
+      makeEvent({
+        title: 'International developer conference',
+        location: 'Engineering building room 201',
+        recurring: true,
+      }),
+    );
+    const lines = renderEventsTable([event], { color: false, width: 20 }).split('\n');
+    const text = lines.join('').replace(/\s/gu, '');
+    process.env['NBTCA_ICON_MODE'] = 'unicode';
+    resetIconCache();
+
+    expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+    expect(text).toContain('Internationaldeveloperconference');
+    expect(text).toContain('Engineeringbuildingroom201');
+    expect(text).toContain('~');
+    expect(text).toContain('@');
+  });
+
+  it('drops compact indentation when a wide glyph would overflow', () => {
+    const event = toDisplayEvent(makeEvent({ title: '界abc', location: 'Lab' }));
+    const lines = renderEventsTable([event], { color: false, width: 4 }).split('\n');
+
+    expect(lines.every((line) => visualWidth(line) <= 4)).toBe(true);
+  });
+
+  it('keeps the table layout when enough columns are available', () => {
+    const event = toDisplayEvent(makeEvent());
+    const lines = stripAnsi(renderEventsTable([event], { color: false, width: 80 })).split('\n');
+
+    expect(lines[0]).toContain('Date & Time');
+    expect(lines[0]).toContain('Event Name');
+    expect(lines[0]).toContain('Location');
+  });
+
+  it('wraps the empty state to the terminal width', () => {
+    const lines = renderEventsTable([], { color: false, width: 8 }).split('\n');
+
+    expect(lines.every((line) => visualWidth(line) <= 8)).toBe(true);
+    expect(lines.join('').replace(/\s/gu, '')).toBe('Noupcomingevents');
+  });
 });
 
 describe('renderEventBrief', () => {

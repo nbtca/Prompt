@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
+import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
 import { marked } from 'marked';
+import chalk from 'chalk';
 import open from 'open';
 import {
   cleanFileName,
@@ -11,12 +14,20 @@ import {
   docsRouteFromPath,
   openDocsInBrowser,
   clearDocsCache,
+  displayWithGlow,
+  loadDocForReader,
 } from './docs.js';
 import { setLanguage } from '../i18n/index.js';
 import { stripAnsi } from '../core/text.js';
 import type { DocItem } from '@nbtca/docs';
 
+const spawnMock = vi.hoisted(() => vi.fn());
+
 vi.mock('open', () => ({ default: vi.fn() }));
+vi.mock('child_process', () => ({
+  execFileSync: vi.fn(),
+  spawn: spawnMock,
+}));
 
 beforeAll(() => {
   setLanguage('en');
@@ -25,6 +36,7 @@ beforeAll(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.mocked(open).mockClear();
+  spawnMock.mockReset();
   clearDocsCache();
 });
 
@@ -192,9 +204,102 @@ describe('docsRouteFromPath', () => {
       }),
     );
 
-    await openDocsInBrowser('about/index.md');
+    const opened = await openDocsInBrowser('about/index.md');
 
+    expect(opened).toBe(true);
     expect(open).toHaveBeenCalledWith('https://docs.nbtca.space/about/');
+  });
+
+  it('reports a browser launch failure', async () => {
+    vi.mocked(open).mockRejectedValueOnce(new Error('no browser'));
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    await expect(openDocsInBrowser()).resolves.toBe(false);
+
+    log.mockRestore();
+  });
+});
+
+describe('document rendering', () => {
+  const markdown = '# Table\n\n| Name | Value |\n| --- | --- |\n| Alpha | 1 |\n';
+
+  function stubDocument(): void {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        text: () => Promise.resolve(markdown),
+      }),
+    );
+  }
+
+  it('removes all terminal escapes from plain reader content, including tables', async () => {
+    const level = chalk.level;
+    chalk.level = 0;
+    stubDocument();
+
+    try {
+      const doc = await loadDocForReader('guide/table.md');
+      const rendered = doc.lines.join('\n');
+      expect(rendered).toContain('Alpha');
+      expect(rendered).toBe(stripAnsi(rendered));
+      expect(rendered).not.toMatch(/[\u001B\u009B\u009D]/u);
+    } finally {
+      chalk.level = level;
+    }
+  });
+
+  it('keeps plain and colored render cache entries separate', async () => {
+    const level = chalk.level;
+    stubDocument();
+
+    try {
+      chalk.level = 0;
+      const plain = (await loadDocForReader('guide/table.md')).lines.join('\n');
+      chalk.level = 3;
+      const colored = (await loadDocForReader('guide/table.md')).lines.join('\n');
+
+      expect(plain).toBe(stripAnsi(plain));
+      expect(colored).not.toBe(stripAnsi(colored));
+    } finally {
+      chalk.level = level;
+    }
+  });
+
+  it('bypasses glow in plain mode', async () => {
+    const level = chalk.level;
+    chalk.level = 0;
+
+    try {
+      await expect(displayWithGlow(markdown)).resolves.toBe(false);
+      expect(spawnMock).not.toHaveBeenCalled();
+    } finally {
+      chalk.level = level;
+    }
+  });
+
+  it('pipes Markdown to glow when colors are enabled', async () => {
+    const level = chalk.level;
+    const stdin = new PassThrough();
+    const child = Object.assign(new EventEmitter(), { stdin });
+    let input = '';
+    stdin.setEncoding('utf8');
+    stdin.on('data', (chunk: string) => {
+      input += chunk;
+    });
+    stdin.once('finish', () => child.emit('close', 0));
+    spawnMock.mockReturnValue(child);
+    chalk.level = 3;
+
+    try {
+      await expect(displayWithGlow(markdown)).resolves.toBe(true);
+      expect(spawnMock).toHaveBeenCalledWith('glow', ['--pager', '--width', '80', '-'], {
+        stdio: ['pipe', 'inherit', 'inherit'],
+      });
+      expect(input).toBe(markdown);
+    } finally {
+      chalk.level = level;
+    }
   });
 });
 

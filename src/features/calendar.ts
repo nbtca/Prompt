@@ -9,6 +9,7 @@ import {
   sanitizeTerminalText,
   truncate,
   visualWidth,
+  wrapAnsiWithIndent,
   wrapAnsiToVisualWidth,
 } from '../core/text.js';
 import { t } from '../i18n/index.js';
@@ -107,17 +108,45 @@ export function serializeEvents(events: Event[]): EventOutputItem[] {
   }));
 }
 
-export function renderEventsTable(events: Event[], options?: { color?: boolean }): string {
+export function renderEventsTable(
+  events: Event[],
+  options?: { color?: boolean; width?: number },
+): string {
   const trans = t();
   const useColor = options?.color !== false;
+  const width =
+    options?.width === undefined || !Number.isFinite(options.width)
+      ? Number.POSITIVE_INFINITY
+      : Math.max(1, Math.floor(options.width));
 
-  if (events.length === 0) return `${space.indent}${type.hint(trans.calendar.noEvents)}`;
+  if (events.length === 0) {
+    return wrapAnsiWithIndent(type.hint(trans.calendar.noEvents), width, space.indent).join('\n');
+  }
 
   const id = (s: string) => s;
   const applyDim = useColor ? chalk.dim : id;
   const applyCyan = useColor ? chalk.cyan : id;
   const applyBold = useColor ? chalk.bold : id;
   const applyGray = useColor ? chalk.gray : id;
+
+  if (width < 68) {
+    const lines: string[] = [];
+    for (const event of events) {
+      if (lines.length > 0) lines.push('');
+      const dateTime = event.time ? `${event.date} ${event.time}` : event.date;
+      const marker = event.recurring ? `${pickIcon('↻', '~')} ` : '';
+      lines.push(...wrapAnsiWithIndent(applyCyan(dateTime), width, space.indent));
+      lines.push(...wrapAnsiWithIndent(applyBold(`${marker}${event.title}`), width, space.indent));
+      lines.push(
+        ...wrapAnsiWithIndent(
+          applyGray(`${pickIcon('⌖', '@')} ${event.location}`),
+          width,
+          space.indent,
+        ),
+      );
+    }
+    return lines.join('\n');
+  }
 
   const dateWidth = 16;
   const titleWidth = 32;

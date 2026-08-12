@@ -1,6 +1,6 @@
 import { ansi, ensureCursorRestored } from '../core/canvas.js';
 import { composeFrame, computeBodyRows } from './frame.js';
-import { routeGlobalKey, type ViewId } from './keys.js';
+import { isPrintableKey, KeyStreamDecoder, routeGlobalKey, type ViewId } from './keys.js';
 import { renderHeader, renderFooter, resolveChromeLayout } from './chrome.js';
 import type { AppContext, AppSize, View } from './view.js';
 import { homeView } from './views/home.js';
@@ -17,6 +17,8 @@ export async function runApp(): Promise<void> {
   let scroll = 0;
   let running = true;
   let suspended = false;
+  const keyDecoder = new KeyStreamDecoder();
+  let keyFlushTimer: ReturnType<typeof setTimeout> | undefined;
 
   const viewIds = getAppTabs().map((tab) => tab.id);
 
@@ -87,8 +89,7 @@ export async function runApp(): Promise<void> {
     );
   }
 
-  function onKey(data: Buffer): void {
-    const key = data.toString();
+  function dispatchKey(key: string): void {
     if (key === '\x03') {
       quit();
       return;
@@ -135,7 +136,41 @@ export async function runApp(): Promise<void> {
     render();
   }
 
+  function dispatchKeys(keys: readonly string[]): void {
+    for (let index = 0; index < keys.length && running && !suspended; index += 1) {
+      let key = keys[index];
+      if (key === undefined) continue;
+
+      if (nativeViews[view]?.capturesInput?.() && isPrintableKey(key)) {
+        while (index + 1 < keys.length) {
+          const next = keys[index + 1];
+          if (next === undefined || !isPrintableKey(next)) break;
+          key += next;
+          index += 1;
+        }
+      }
+      dispatchKey(key);
+    }
+  }
+
+  function clearKeyFlush(): void {
+    if (keyFlushTimer === undefined) return;
+    clearTimeout(keyFlushTimer);
+    keyFlushTimer = undefined;
+  }
+
+  function onKey(data: Buffer): void {
+    clearKeyFlush();
+    dispatchKeys(keyDecoder.write(data));
+    if (!running || suspended || !keyDecoder.hasPending) return;
+    keyFlushTimer = setTimeout(() => {
+      keyFlushTimer = undefined;
+      dispatchKeys(keyDecoder.flush());
+    }, 20);
+  }
+
   function enter(): void {
+    keyDecoder.reset();
     ensureCursorRestored();
     process.stdout.write(ansi.enterAlt + ansi.hideCursor);
     if (process.stdin.isTTY) process.stdin.setRawMode(true);
@@ -144,6 +179,8 @@ export async function runApp(): Promise<void> {
   }
 
   function leave(): void {
+    clearKeyFlush();
+    keyDecoder.reset();
     process.stdin.removeListener('data', onKey);
     if (process.stdin.isTTY) process.stdin.setRawMode(false);
     process.stdout.write(ansi.showCursor + ansi.leaveAlt);

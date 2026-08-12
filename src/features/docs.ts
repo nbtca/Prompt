@@ -300,10 +300,11 @@ async function loadRenderedDoc(filePath: string): Promise<{
   const cleaned = cleanMarkdownContent(rawContent, getTerminalType());
   const title =
     sanitizeTerminalLine(page.title) || cleanFileName(filePath.split('/').pop() ?? filePath);
+  const markedOutput = await marked(cleaned);
   const renderedDoc = {
     fingerprint,
     cleaned,
-    rendered: await marked(cleaned),
+    rendered: chalk.level === 0 ? sanitizeTerminalText(markedOutput) : markedOutput,
     title,
     readTime: estimateReadTime(cleaned),
   };
@@ -769,9 +770,24 @@ async function loadSections(): Promise<DocSection[] | null> {
   }
 }
 
-function pipeToPager(command: string, args: string[], content: string): Promise<boolean> {
+function pipeToPager(
+  command: string,
+  args: string[],
+  content: string,
+  plain = false,
+): Promise<boolean> {
   return new Promise((resolve) => {
-    const child = spawn(command, args, { stdio: ['pipe', 'inherit', 'inherit'] });
+    const env = { ...process.env };
+    if (plain) {
+      delete env['FORCE_COLOR'];
+      env['NO_COLOR'] = '1';
+      env['CLICOLOR'] = '0';
+      env['CLICOLOR_FORCE'] = '0';
+    }
+    const child = spawn(command, args, {
+      stdio: ['pipe', 'inherit', 'inherit'],
+      ...(plain ? { env } : {}),
+    });
     let settled = false;
     const finish = (started: boolean) => {
       if (settled) return;
@@ -796,7 +812,8 @@ function pipeToPager(command: string, args: string[], content: string): Promise<
   });
 }
 
-async function displayWithGlow(cleanedMarkdown: string): Promise<boolean> {
+export async function displayWithGlow(cleanedMarkdown: string): Promise<boolean> {
+  if (chalk.level === 0) return false;
   const cols = String(Math.min(process.stdout.columns || 80, 80));
   return pipeToPager('glow', ['--pager', '--width', cols, '-'], cleanedMarkdown);
 }
@@ -834,18 +851,23 @@ async function displayWithLess(
 
   const footer = ['', rule, chalk.dim(`  ${trans.docs.endOfDocument}`), ''].join('\n');
 
-  const fullContent = header + rendered + footer;
+  const plain = chalk.level === 0;
+  const fullContent = plain
+    ? sanitizeTerminalText(header + rendered + footer)
+    : header + rendered + footer;
   const pagerSetting = (process.env['PAGER'] ?? 'less').trim();
   const [pagerCommand = 'less', ...pagerArgs] = pagerSetting.split(/\s+/).filter(Boolean);
   const isLess = /(?:^|[\\/])less(?:\.exe)?$/i.test(pagerCommand);
-  const args = isLess ? [...pagerArgs, '-R', '-F', '-X', '-i', '-j4'] : pagerArgs;
+  const args = isLess
+    ? [...pagerArgs, ...(plain ? [] : ['-R']), '-F', '-X', '-i', '-j4']
+    : pagerArgs;
 
   if (!commandExists(pagerCommand)) {
     console.log(fullContent);
     return;
   }
 
-  if (!(await pipeToPager(pagerCommand, args, fullContent))) console.log(fullContent);
+  if (!(await pipeToPager(pagerCommand, args, fullContent, plain))) console.log(fullContent);
 }
 
 async function showDocSection(section: DocSection): Promise<void> {
@@ -943,7 +965,7 @@ async function viewMarkdownFile(filePath: string): Promise<void> {
     s.stop(`${chalk.bold(renderedDoc.title)}  ${chalk.dim(renderedDoc.readTime)}`);
 
     const toc = extractTOC(renderedDoc.cleaned);
-    if (hasGlow()) {
+    if (chalk.level > 0 && hasGlow()) {
       if (!(await displayWithGlow(renderedDoc.cleaned))) {
         await displayWithLess(
           renderedDoc.rendered,
@@ -992,7 +1014,7 @@ async function viewMarkdownFile(filePath: string): Promise<void> {
   }
 }
 
-export async function openDocsInBrowser(path?: string): Promise<void> {
+export async function openDocsInBrowser(path?: string): Promise<boolean> {
   const trans = t();
   const s = createSpinner(trans.docs.opening);
   try {
@@ -1011,11 +1033,14 @@ export async function openDocsInBrowser(path?: string): Promise<void> {
     const url = path ? `${URLS.docs}${encodedRoute}` : URLS.docs;
     await open(url);
     s.stop(trans.docs.browserOpened);
+    console.log();
+    return true;
   } catch {
     s.error(trans.docs.browserError);
     console.log(chalk.gray(`  ${trans.docs.browserErrorHint}`));
+    console.log();
+    return false;
   }
-  console.log();
 }
 
 export function docsRouteFromPath(path: string): string {

@@ -8,6 +8,7 @@ import {
   truncate,
   truncateStart,
   visualWidth,
+  wrapAnsiWithIndent,
   wrapAnsiToVisualWidth,
 } from './text.js';
 
@@ -119,6 +120,15 @@ describe('wrapAnsiToVisualWidth', () => {
     const lines = wrapAnsiToVisualWidth(source, 2);
     expect(lines.map(stripAnsi)).toEqual(['li', 'nk']);
     expect(lines.every((line) => line.endsWith('\x1b]8;;\x07'))).toBe(true);
+  });
+});
+
+describe('wrapAnsiWithIndent', () => {
+  it('drops an indent that would overflow a wide grapheme', () => {
+    const lines = wrapAnsiWithIndent('界abc', 4, '   ');
+
+    expect(lines.every((line) => visualWidth(line) <= 4)).toBe(true);
+    expect(lines.join('')).toBe('界abc');
   });
 });
 

@@ -148,6 +148,7 @@
     "checking": "Checking service status...",
     "summaryOk": "All services are healthy",
     "summaryFail": "Some services are unavailable",
+    "summaryIntranet": "Public services are healthy; intranet availability depends on your network",
     "service": "Service",
     "health": "Health",
     "code": "Code",
@@ -361,6 +362,7 @@
     "invalidFlagHint": "Run `nbtca --help` to see command usage.",
     "invalidLang": "Invalid language. Use `zh` or `en`.",
     "invalidNext": "Invalid --next value. Use --next=<number> (>= 1).",
+    "unexpectedArguments": "Unexpected arguments for {command}.",
     "requiresTty": "Interactive mode requires a TTY terminal.",
     "requiresTtyHint": "Use `nbtca --help` for command mode."
   }
