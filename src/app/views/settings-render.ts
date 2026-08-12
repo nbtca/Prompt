@@ -1,6 +1,6 @@
 import { space, type } from '../../core/theme.js';
-import { visualWidth, wrapAnsiToVisualWidth } from '../../core/text.js';
-import { ListField, renderListFieldWithContext } from '../fields/list-field.js';
+import { wrapAnsiWithIndent } from '../../core/text.js';
+import { type ListField, renderListFieldWithContext } from '../fields/list-field.js';
 
 export type SettingsMode = 'menu' | 'language' | 'icon' | 'color' | 'about';
 
@@ -18,16 +18,7 @@ function wrappedIndentedLines(
   cols: number,
   style: (value: string) => string,
 ): string[] {
-  const width = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : Number.POSITIVE_INFINITY;
-  const styled = style(label);
-  const preferredIndent = visualWidth(space.indent) < width ? space.indent : '';
-  const indent = preferredIndent
-    && visualWidth(styled) > width - visualWidth(preferredIndent)
-    && visualWidth(styled) <= width
-    ? ''
-    : preferredIndent;
-  const contentWidth = Math.max(1, width - visualWidth(indent));
-  return wrapAnsiToVisualWidth(styled, contentWidth).map((line) => `${indent}${line}`);
+  return wrapAnsiWithIndent(style(label), cols, space.indent);
 }
 
 export function renderSettings(
@@ -38,7 +29,9 @@ export function renderSettings(
   switch (state.mode) {
     case 'menu': {
       const context = [
-        ...(state.statusMessage ? [...wrappedIndentedLines(state.statusMessage, cols, type.hint), ''] : []),
+        ...(state.statusMessage
+          ? [...wrappedIndentedLines(state.statusMessage, cols, type.hint), '']
+          : []),
       ];
       return state.menuField
         ? renderListFieldWithContext(context, state.menuField, bodyRows, cols)
@@ -50,9 +43,9 @@ export function renderSettings(
       return state.subField?.render(bodyRows, cols) ?? [];
     case 'about': {
       const context = [
-        ...(state.aboutLines ?? []).flatMap((line) => (
-          line ? wrappedIndentedLines(line, cols, (value) => value) : ['']
-        )),
+        ...(state.aboutLines ?? []).flatMap((line) =>
+          line ? wrappedIndentedLines(line, cols, (value) => value) : [''],
+        ),
         '',
       ];
       if (!state.backField) return context;
@@ -61,13 +54,10 @@ export function renderSettings(
         return [...context, ...fieldLines];
       }
       const rows = Math.max(0, Math.floor(bodyRows));
-      const visibleField = fieldLines.length <= rows
-        ? fieldLines
-        : state.backField.render(rows, cols);
+      const visibleField =
+        fieldLines.length <= rows ? fieldLines : state.backField.render(rows, cols);
       const content = context.at(-1) === '' ? context.slice(0, -1) : context;
-      return content.length > 0
-        ? [...visibleField, '', ...content]
-        : visibleField;
+      return content.length > 0 ? [...visibleField, '', ...content] : visibleField;
     }
     default:
       return [];

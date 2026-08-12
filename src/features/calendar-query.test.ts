@@ -1,19 +1,36 @@
 import { describe, it, expect } from 'vitest';
 import type { CalendarEvent } from '@nbtca/nbtcal';
-import { weekRange, monthRange, filterEvents, countdownParts, isCountdownUrgent, buildExportFilename } from './calendar-query.js';
+import {
+  weekRange,
+  monthRange,
+  filterEvents,
+  countdownParts,
+  isCountdownUrgent,
+  buildExportFilename,
+} from './calendar-query.js';
 
 function ev(o: Partial<CalendarEvent>): CalendarEvent {
-  return { uid: 'u', title: 'T', start: new Date(), end: null, isAllDay: false, location: null, description: null, recurring: false, ...o };
+  return {
+    uid: 'u',
+    title: 'T',
+    start: new Date(),
+    end: null,
+    isAllDay: false,
+    location: null,
+    description: null,
+    recurring: false,
+    ...o,
+  };
 }
 
 describe('weekRange', () => {
   it('spans Monday 00:00 to the next Monday 00:00', () => {
     const wed = new Date(2026, 2, 25, 15, 0, 0); // Wed 2026-03-25
     const { start, end } = weekRange(wed);
-    expect(start.getDay()).toBe(1);              // Monday
+    expect(start.getDay()).toBe(1); // Monday
     expect(start.getHours()).toBe(0);
-    expect(start.getDate()).toBe(23);            // Mon 2026-03-23
-    expect(end.getDate()).toBe(30);              // next Mon 2026-03-30
+    expect(start.getDate()).toBe(23); // Mon 2026-03-23
+    expect(end.getDate()).toBe(30); // next Mon 2026-03-30
     expect(Math.round((end.getTime() - start.getTime()) / 86400000)).toBe(7);
   });
 });
@@ -21,18 +38,24 @@ describe('weekRange', () => {
 describe('monthRange', () => {
   it('spans the 1st of this month to the 1st of next month', () => {
     const { start, end } = monthRange(new Date(2026, 2, 25));
-    expect(start.getMonth()).toBe(2); expect(start.getDate()).toBe(1); expect(start.getHours()).toBe(0);
-    expect(end.getMonth()).toBe(3); expect(end.getDate()).toBe(1);
+    expect(start.getMonth()).toBe(2);
+    expect(start.getDate()).toBe(1);
+    expect(start.getHours()).toBe(0);
+    expect(end.getMonth()).toBe(3);
+    expect(end.getDate()).toBe(1);
   });
 });
 
 describe('filterEvents', () => {
-  const events = [ev({ title: 'Hack Night', location: 'Lab' }), ev({ title: 'Study Group', location: 'Library' })];
+  const events = [
+    ev({ title: 'Hack Night', location: 'Lab' }),
+    ev({ title: 'Study Group', location: 'Library' }),
+  ];
   it('matches title case-insensitively', () => {
-    expect(filterEvents(events, 'hack').map(e => e.title)).toEqual(['Hack Night']);
+    expect(filterEvents(events, 'hack').map((e) => e.title)).toEqual(['Hack Night']);
   });
   it('matches location', () => {
-    expect(filterEvents(events, 'library').map(e => e.title)).toEqual(['Study Group']);
+    expect(filterEvents(events, 'library').map((e) => e.title)).toEqual(['Study Group']);
   });
   it('empty query returns all', () => {
     expect(filterEvents(events, '  ')).toHaveLength(2);
@@ -74,7 +97,9 @@ describe('isCountdownUrgent', () => {
 
 describe('buildExportFilename', () => {
   it('sanitizes to a safe .ics name', () => {
-    expect(buildExportFilename(ev({ title: 'Hack Night: v2 / 2026' }))).toBe('Hack-Night-v2-2026.ics');
+    expect(buildExportFilename(ev({ title: 'Hack Night: v2 / 2026' }))).toBe(
+      'Hack-Night-v2-2026.ics',
+    );
   });
   it('falls back to event.ics for empty/odd titles', () => {
     expect(buildExportFilename(ev({ title: null }))).toBe('event.ics');

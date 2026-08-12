@@ -18,12 +18,13 @@ export function parseConfirmData(data: Buffer | string): ConfirmEvent {
 export function renderConfirm(opts: { message: string; value: boolean }): string {
   const cursor = glyph.cursor();
   const gap = ' '.repeat(cursor.length);
-  const yes = opts.value ? `${type.active(cursor)} ${type.active('Yes')}` : `${gap} ${type.body('Yes')}`;
-  const no = opts.value ? `${gap} ${type.body('No')}` : `${type.active(cursor)} ${type.active('No')}`;
-  return [
-    space.indent + type.label(opts.message),
-    `${space.indent}${yes}   ${no}`,
-  ].join('\n');
+  const yes = opts.value
+    ? `${type.active(cursor)} ${type.active('Yes')}`
+    : `${gap} ${type.body('Yes')}`;
+  const no = opts.value
+    ? `${gap} ${type.body('No')}`
+    : `${type.active(cursor)} ${type.active('No')}`;
+  return [space.indent + type.label(opts.message), `${space.indent}${yes}   ${no}`].join('\n');
 }
 
 export interface RunConfirmConfig {
@@ -48,16 +49,38 @@ export function runConfirm(config: RunConfirmConfig): Promise<boolean | null> {
 
     const onData = (data: Buffer) => {
       const ev = parseConfirmData(data);
-      if (ev === 'cancel') { finish(null); return; }
-      if (ev === 'submit') { finish(value); return; }
-      if (ev === 'yes' && value !== true) { value = true; paint(); return; }
-      if (ev === 'no' && value !== false) { value = false; paint(); return; }
-      if (ev === 'toggle') { value = !value; paint(); return; }
+      if (ev === 'cancel') {
+        finish(null);
+        return;
+      }
+      if (ev === 'submit') {
+        finish(value);
+        return;
+      }
+      if (ev === 'yes' && !value) {
+        value = true;
+        paint();
+        return;
+      }
+      if (ev === 'no' && value) {
+        value = false;
+        paint();
+        return;
+      }
+      if (ev === 'toggle') {
+        value = !value;
+        paint();
+        return;
+      }
     };
 
     setVimKeysActive(false);
     const handle = startRawInput(onData);
-    if (!handle) { setVimKeysActive(true); resolve(null); return; }
+    if (!handle) {
+      setVimKeysActive(true);
+      resolve(null);
+      return;
+    }
     paint();
   });
 }

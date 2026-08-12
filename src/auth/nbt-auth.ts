@@ -1,4 +1,4 @@
-import { createCipheriv, randomBytes } from 'node:crypto';
+import { createCipheriv, randomFillSync } from 'node:crypto';
 import { load } from 'cheerio';
 import { AuthError } from './errors.js';
 import {
@@ -19,8 +19,15 @@ const TIMETABLE_INDEX = new URL(
 const RANDOM_ALPHABET = 'ABCDEFGHJKMNPQRSTWXYZabcdefhijkmnprstwxyz2345678';
 const MAX_AUTH_HTML_BYTES = 2 * 1024 * 1024;
 const SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const GRAPHEME_SEGMENTER = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+
+function signalOption(signal: AbortSignal | undefined): { signal?: AbortSignal } {
+  return signal === undefined ? {} : { signal };
+}
 
 export type RandomBytesSource = (size: number) => Uint8Array;
+
+const secureRandomBytes: RandomBytesSource = (size) => randomFillSync(new Uint8Array(size));
 
 export interface LoginOptions extends Omit<CreateCampusCookieSessionOptions, 'jar'> {
   now?: () => Date;
@@ -43,10 +50,19 @@ interface LoginForm {
 
 function randomCharacters(length: number, source: RandomBytesSource): string {
   const bytes = source(length);
-  if (bytes.length < length) throw new AuthError('LOGIN_PAGE_CHANGED', 'credentials', 'Secure login initialization failed.');
+  if (bytes.length < length)
+    throw new AuthError('LOGIN_PAGE_CHANGED', 'credentials', 'Secure login initialization failed.');
   let result = '';
   for (let index = 0; index < length; index += 1) {
-    result += RANDOM_ALPHABET[bytes[index]! % RANDOM_ALPHABET.length];
+    const byte = bytes[index];
+    if (byte === undefined) {
+      throw new AuthError(
+        'LOGIN_PAGE_CHANGED',
+        'credentials',
+        'Secure login initialization failed.',
+      );
+    }
+    result += RANDOM_ALPHABET.charAt(byte % RANDOM_ALPHABET.length);
   }
   return result;
 }
@@ -54,20 +70,24 @@ function randomCharacters(length: number, source: RandomBytesSource): string {
 export function encryptCampusPassword(
   password: string,
   salt: string,
-  source: RandomBytesSource = randomBytes,
+  source: RandomBytesSource = secureRandomBytes,
 ): string {
-  const key = Buffer.from(salt, 'utf8');
+  const key = Uint8Array.from(Buffer.from(salt, 'utf8'));
   if (key.length !== 16) {
     key.fill(0);
-    throw new AuthError('LOGIN_PAGE_CHANGED', 'credentials', 'The campus login page changed unexpectedly.');
+    throw new AuthError(
+      'LOGIN_PAGE_CHANGED',
+      'credentials',
+      'The campus login page changed unexpectedly.',
+    );
   }
   const ivText = randomCharacters(16, source);
   const prefix = randomCharacters(64, source);
-  const iv = Buffer.from(ivText, 'utf8');
-  const plaintext = Buffer.from(prefix + password, 'utf8');
+  const iv = Uint8Array.from(Buffer.from(ivText, 'utf8'));
+  const plaintext = Uint8Array.from(Buffer.from(prefix + password, 'utf8'));
   try {
     const cipher = createCipheriv('aes-128-cbc', key, iv);
-    return Buffer.concat([cipher.update(plaintext), cipher.final()]).toString('base64');
+    return cipher.update(plaintext, undefined, 'base64') + cipher.final('base64');
   } finally {
     key.fill(0);
     iv.fill(0);
@@ -78,11 +98,19 @@ export function encryptCampusPassword(
 function parseLoginForm(html: string, responseUrl: string): LoginForm {
   const $ = load(html);
   const form = $('#pwdFromId');
-  const execution = String(form.find('input[name="execution"], #execution').first().val() ?? '').trim();
-  const salt = String(form.find('#pwdEncryptSalt, input[name="pwdEncryptSalt"]').first().val() ?? '').trim();
+  const execution = String(
+    form.find('input[name="execution"], #execution').first().val() ?? '',
+  ).trim();
+  const salt = String(
+    form.find('#pwdEncryptSalt, input[name="pwdEncryptSalt"]').first().val() ?? '',
+  ).trim();
   const actionValue = form.attr('action');
   if (form.length === 0 || !execution || !salt || !actionValue) {
-    throw new AuthError('LOGIN_PAGE_CHANGED', 'login-page', 'The campus login page changed unexpectedly.');
+    throw new AuthError(
+      'LOGIN_PAGE_CHANGED',
+      'login-page',
+      'The campus login page changed unexpectedly.',
+    );
   }
 
   let current: URL;
@@ -91,7 +119,11 @@ function parseLoginForm(html: string, responseUrl: string): LoginForm {
     current = new URL(responseUrl);
     action = new URL(actionValue, current);
   } catch {
-    throw new AuthError('LOGIN_PAGE_CHANGED', 'login-page', 'The campus login page changed unexpectedly.');
+    throw new AuthError(
+      'LOGIN_PAGE_CHANGED',
+      'login-page',
+      'The campus login page changed unexpectedly.',
+    );
   }
   const service = current.searchParams.get('service');
   if (service && !action.searchParams.has('service')) action.searchParams.set('service', service);
@@ -109,12 +141,23 @@ function classifyRejectedLogin(html: string): AuthError {
     $('#showWarnTip').text(),
     $('#errorMsg').text(),
     $('.alert-danger').text(),
-  ].join(' ').replace(/\s+/g, ' ').trim();
+  ]
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
   if (/锁定|冻结|次数过多|稍后再试/.test(visibleError)) {
-    return new AuthError('ACCOUNT_LOCKED', 'credentials', 'The campus account is temporarily locked.');
+    return new AuthError(
+      'ACCOUNT_LOCKED',
+      'credentials',
+      'The campus account is temporarily locked.',
+    );
   }
   if (/激活|未启用/.test(visibleError)) {
-    return new AuthError('ACCOUNT_INACTIVE', 'credentials', 'The campus account must be activated first.');
+    return new AuthError(
+      'ACCOUNT_INACTIVE',
+      'credentials',
+      'The campus account must be activated first.',
+    );
   }
   if (/验证码|滑块|captcha/i.test(visibleError)) {
     return new AuthError(
@@ -124,22 +167,43 @@ function classifyRejectedLogin(html: string): AuthError {
     );
   }
   if (/用户名|账号|密码|credential|password/i.test(visibleError)) {
-    return new AuthError('INVALID_CREDENTIALS', 'credentials', 'The student id or password was rejected.');
+    return new AuthError(
+      'INVALID_CREDENTIALS',
+      'credentials',
+      'The student id or password was rejected.',
+    );
   }
-  return new AuthError('UNEXPECTED_RESPONSE', 'credentials', 'Campus login could not be confirmed.');
+  return new AuthError(
+    'UNEXPECTED_RESPONSE',
+    'credentials',
+    'Campus login could not be confirmed.',
+  );
 }
 
-async function readText(response: Response, stage: 'login-page' | 'challenge-check' | 'credentials' | 'sso'): Promise<string> {
+async function readText(
+  response: Response,
+  stage: 'login-page' | 'challenge-check' | 'credentials' | 'sso',
+): Promise<string> {
   if (response.status < 200 || response.status >= 300) {
-    throw new AuthError('HTTP_ERROR', stage, 'The campus service returned an error.', { retryable: response.status >= 500 });
+    throw new AuthError('HTTP_ERROR', stage, 'The campus service returned an error.', {
+      retryable: response.status >= 500,
+    });
   }
   const length = Number.parseInt(response.headers.get('content-length') ?? '', 10);
   if (Number.isFinite(length) && length > MAX_AUTH_HTML_BYTES) {
-    throw new AuthError('UNEXPECTED_RESPONSE', stage, 'The campus service returned an unexpected response.');
+    throw new AuthError(
+      'UNEXPECTED_RESPONSE',
+      stage,
+      'The campus service returned an unexpected response.',
+    );
   }
   const text = await response.text();
   if (Buffer.byteLength(text, 'utf8') > MAX_AUTH_HTML_BYTES) {
-    throw new AuthError('UNEXPECTED_RESPONSE', stage, 'The campus service returned an unexpected response.');
+    throw new AuthError(
+      'UNEXPECTED_RESPONSE',
+      stage,
+      'The campus service returned an unexpected response.',
+    );
   }
   return text;
 }
@@ -152,29 +216,42 @@ async function challengeRequired(
 ): Promise<boolean> {
   const endpoint = new URL('/authserver/checkNeedCaptcha.htl', loginUrl);
   endpoint.searchParams.set('username', username);
-  const response = await cookies.request(endpoint, {
-    method: 'GET',
-    headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-    signal,
-  }, 'challenge-check');
+  const response = await cookies.request(
+    endpoint,
+    {
+      method: 'GET',
+      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      ...signalOption(signal),
+    },
+    'challenge-check',
+  );
   const text = await readText(response, 'challenge-check');
   let parsed: unknown;
   try {
     parsed = JSON.parse(text) as unknown;
   } catch {
-    throw new AuthError('LOGIN_PAGE_CHANGED', 'challenge-check', 'The campus challenge response changed unexpectedly.');
+    throw new AuthError(
+      'LOGIN_PAGE_CHANGED',
+      'challenge-check',
+      'The campus challenge response changed unexpectedly.',
+    );
   }
   if (typeof parsed === 'boolean') return parsed;
   if (typeof parsed === 'object' && parsed !== null) {
-    const value = Reflect.get(parsed, 'isNeed') ?? Reflect.get(parsed, 'needCaptcha');
+    const challenge = parsed as Record<string, unknown>;
+    const value = challenge['isNeed'] ?? challenge['needCaptcha'];
     if (value === true || value === 'true' || value === 1 || value === '1') return true;
     if (value === false || value === 'false' || value === 0 || value === '0') return false;
   }
-  throw new AuthError('LOGIN_PAGE_CHANGED', 'challenge-check', 'The campus challenge response changed unexpectedly.');
+  throw new AuthError(
+    'LOGIN_PAGE_CHANGED',
+    'challenge-check',
+    'The campus challenge response changed unexpectedly.',
+  );
 }
 
 function maskAccountId(username: string): string {
-  const characters = [...username];
+  const characters = Array.from(GRAPHEME_SEGMENTER.segment(username), ({ segment }) => segment);
   if (characters.length <= 2) return '•'.repeat(characters.length);
   return `${'•'.repeat(characters.length - 2)}${characters.slice(-2).join('')}`;
 }
@@ -195,7 +272,7 @@ function createAuthenticatedSession(
         version: 1,
         provider: 'nbt-webvpn',
         jar: await cookies.serialize(),
-        accountHint: metadata.accountHint,
+        ...(metadata.accountHint === undefined ? {} : { accountHint: metadata.accountHint }),
         authenticatedAt: metadata.authenticatedAt,
         validatedAt: validatedAtText,
         expiresAt: new Date(validatedAt.getTime() + SESSION_MAX_AGE_MS).toISOString(),
@@ -205,20 +282,35 @@ function createAuthenticatedSession(
   };
 }
 
-async function verifyJwxtSession(cookies: CampusCookieSession, signal?: AbortSignal): Promise<void> {
-  await readText(await cookies.request(SSO_ENTRY, { method: 'GET', signal }, 'sso'), 'sso');
-  await readText(await cookies.request(JWXT_MENU, { method: 'GET', signal }, 'sso'), 'sso');
-  const response = await cookies.request(TIMETABLE_INDEX, { method: 'GET', signal }, 'sso');
+async function verifyJwxtSession(
+  cookies: CampusCookieSession,
+  signal?: AbortSignal,
+): Promise<void> {
+  await readText(
+    await cookies.request(SSO_ENTRY, { method: 'GET', ...signalOption(signal) }, 'sso'),
+    'sso',
+  );
+  await readText(
+    await cookies.request(JWXT_MENU, { method: 'GET', ...signalOption(signal) }, 'sso'),
+    'sso',
+  );
+  const response = await cookies.request(
+    TIMETABLE_INDEX,
+    { method: 'GET', ...signalOption(signal) },
+    'sso',
+  );
   const html = await readText(response, 'sso');
   let finalUrl: URL;
-  try { finalUrl = new URL(response.url); } catch {
+  try {
+    finalUrl = new URL(response.url);
+  } catch {
     throw new AuthError('UNEXPECTED_RESPONSE', 'sso', 'Campus login could not be confirmed.');
   }
   if (
-    finalUrl.hostname.toLowerCase() !== JWXT_HOST
-    || hasLoginFingerprint(html)
-    || !/<select\b[^>]*(?:id|name)=["']xnm["']/i.test(html)
-    || !/<select\b[^>]*(?:id|name)=["']xqm["']/i.test(html)
+    finalUrl.hostname.toLowerCase() !== JWXT_HOST ||
+    hasLoginFingerprint(html) ||
+    !/<select\b[^>]*(?:id|name)=["']xnm["']/i.test(html) ||
+    !/<select\b[^>]*(?:id|name)=["']xqm["']/i.test(html)
   ) {
     throw new AuthError('UNEXPECTED_RESPONSE', 'sso', 'Campus login could not be confirmed.');
   }
@@ -230,19 +322,27 @@ export async function loginWithStudentPassword(
   options: LoginOptions = {},
 ): Promise<AuthenticatedNbtSession> {
   if (!username.trim() || !password) {
-    throw new AuthError('INVALID_CREDENTIALS', 'credentials', 'Student id and password are required.');
+    throw new AuthError(
+      'INVALID_CREDENTIALS',
+      'credentials',
+      'Student id and password are required.',
+    );
   }
   const normalizedUsername = username.trim();
   const cookies = createCampusCookieSession(options);
   try {
-    const loginResponse = await cookies.request(WEBVPN_ENTRY, {
-      method: 'GET',
-      headers: {
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+    const loginResponse = await cookies.request(
+      WEBVPN_ENTRY,
+      {
+        method: 'GET',
+        headers: {
+          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+        },
+        ...signalOption(options.signal),
       },
-      signal: options.signal,
-    }, 'login-page');
+      'login-page',
+    );
     const loginHtml = await readText(loginResponse, 'login-page');
     const form = parseLoginForm(loginHtml, loginResponse.url);
 
@@ -257,7 +357,7 @@ export async function loginWithStudentPassword(
     const encryptedPassword = encryptCampusPassword(
       password,
       form.salt,
-      options.randomBytes ?? randomBytes,
+      options.randomBytes ?? secureRandomBytes,
     );
     const body = new URLSearchParams({
       username: normalizedUsername,
@@ -267,16 +367,20 @@ export async function loginWithStudentPassword(
       dllt: 'generalLogin',
       execution: form.execution,
     });
-    const credentialResponse = await cookies.request(form.action, {
-      method: 'POST',
-      headers: {
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Referer: loginResponse.url,
+    const credentialResponse = await cookies.request(
+      form.action,
+      {
+        method: 'POST',
+        headers: {
+          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Referer: loginResponse.url,
+        },
+        body: body.toString(),
+        ...signalOption(options.signal),
       },
-      body: body.toString(),
-      signal: options.signal,
-    }, 'credentials');
+      'credentials',
+    );
     const credentialHtml = await readText(credentialResponse, 'credentials');
     if (hasLoginFingerprint(credentialHtml)) throw classifyRejectedLogin(credentialHtml);
 
@@ -289,8 +393,11 @@ export async function loginWithStudentPassword(
   } catch (error) {
     await cookies.close();
     if (error instanceof AuthError) throw error;
-    if (typeof error === 'object' && error !== null && Reflect.get(error, 'name') === 'AbortError') throw error;
-    throw new AuthError('NETWORK', 'credentials', 'The campus login request failed.', { retryable: true });
+    if (typeof error === 'object' && error !== null && Reflect.get(error, 'name') === 'AbortError')
+      throw error;
+    throw new AuthError('NETWORK', 'credentials', 'The campus login request failed.', {
+      retryable: true,
+    });
   }
 }
 
@@ -300,7 +407,7 @@ export async function restoreNbtSession(
 ): Promise<AuthenticatedNbtSession> {
   const cookies = await cookieSessionFromSerialized(persisted.jar, options);
   return createAuthenticatedSession(cookies, {
-    accountHint: persisted.accountHint,
+    ...(persisted.accountHint === undefined ? {} : { accountHint: persisted.accountHint }),
     authenticatedAt: persisted.authenticatedAt,
   });
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { buildLogoLines } from './logo.js';
+import { buildLogoLines, startupFitsTerminal } from './logo.js';
 import { stripAnsi } from './text.js';
 import { resetIconCache } from './icons.js';
 
@@ -14,6 +14,15 @@ describe('buildLogoLines', () => {
     const text = buildLogoLines().map(stripAnsi).join('\n');
     expect(text).toContain('intersection of technology and liberal arts');
     expect(text).toMatch(/v\d+\.\d+\.\d+/);
+  });
+});
+
+describe('startupFitsTerminal', () => {
+  it('skips startup art that would overflow either terminal dimension', () => {
+    expect(startupFitsTerminal(5, 20, 'one\ntwo\nthree')).toBe(false);
+    expect(startupFitsTerminal(8, 2, 'one\ntwo\nthree')).toBe(false);
+    expect(startupFitsTerminal(8, 5, 'one\ntwo\nthree')).toBe(true);
+    expect(startupFitsTerminal(undefined, undefined, 'one\ntwo\nthree')).toBe(true);
   });
 });
 
@@ -35,7 +44,7 @@ describe('buildLogoLines dot-matrix tier selection', () => {
     resetIconCache();
   });
 
-  // Each tier's art block is a fixed, known line count (12/18/26 -- see
+  // Each tier's art block is a fixed, known line count (12/16/26 -- see
   // src/logo/ca-dotmatrix-*.txt), so counting the art lines between the
   // leading blank and the trailing blank+tagline+version block is enough to
   // tell which tier rendered, without hardcoding file paths in the test.
@@ -56,7 +65,7 @@ describe('buildLogoLines dot-matrix tier selection', () => {
   it('picks the medium tier once width and height clear the mid threshold', () => {
     process.stdout.columns = 50;
     process.stdout.rows = 28;
-    expect(artLineCount()).toBe(18);
+    expect(artLineCount()).toBe(16);
   });
 
   it('picks the large tier on a spacious terminal', () => {

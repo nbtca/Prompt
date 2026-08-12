@@ -43,26 +43,28 @@ function isSerializedJar(value: unknown): value is SerializedCookieJar {
 
 function parseSession(value: unknown): PersistedNbtSession | null {
   if (!isRecord(value)) return null;
-  if (value['version'] !== SESSION_SCHEMA_VERSION || value['provider'] !== 'nbt-webvpn') return null;
+  if (value['version'] !== SESSION_SCHEMA_VERSION || value['provider'] !== 'nbt-webvpn')
+    return null;
   if (!isSerializedJar(value['jar'])) return null;
   if (!isIsoDate(value['authenticatedAt']) || !isIsoDate(value['validatedAt'])) return null;
   if (value['expiresAt'] !== undefined && !isIsoDate(value['expiresAt'])) return null;
   if (
-    value['accountHint'] !== undefined
-    && (
-      typeof value['accountHint'] !== 'string'
-      || value['accountHint'].length > 64
-      || /[\u0000-\u001f\u007f]/.test(value['accountHint'])
-    )
-  ) return null;
+    value['accountHint'] !== undefined &&
+    (typeof value['accountHint'] !== 'string' ||
+      value['accountHint'].length > 64 ||
+      /[\u0000-\u001f\u007f]/.test(value['accountHint']))
+  )
+    return null;
+  const accountHint = value['accountHint'];
+  const expiresAt = value['expiresAt'];
   return {
     version: SESSION_SCHEMA_VERSION,
     provider: 'nbt-webvpn',
     jar: value['jar'],
-    accountHint: value['accountHint'] as string | undefined,
+    ...(typeof accountHint === 'string' ? { accountHint } : {}),
     authenticatedAt: value['authenticatedAt'],
     validatedAt: value['validatedAt'],
-    expiresAt: value['expiresAt'] as string | undefined,
+    ...(typeof expiresAt === 'string' ? { expiresAt } : {}),
   };
 }
 
@@ -79,7 +81,8 @@ function clearTemporaryFiles(filePath: string): void {
   const prefix = `${path.basename(filePath)}.`;
   try {
     for (const entry of fs.readdirSync(directory)) {
-      if (entry.startsWith(prefix) && entry.endsWith('.tmp')) removeFile(path.join(directory, entry));
+      if (entry.startsWith(prefix) && entry.endsWith('.tmp'))
+        removeFile(path.join(directory, entry));
     }
   } catch (error) {
     if (!isRecord(error) || error['code'] !== 'ENOENT') throw error;
@@ -115,7 +118,11 @@ export function createSessionStore(options: CreateSessionStoreOptions = {}): Ses
     if (!validated) throw new TypeError('Invalid persisted session.');
     const directory = options.filePath ? path.dirname(filePath) : getWritableStateDir();
     fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
-    try { fs.chmodSync(directory, 0o700); } catch { /* Best effort on non-POSIX filesystems. */ }
+    try {
+      fs.chmodSync(directory, 0o700);
+    } catch {
+      /* Best effort on non-POSIX filesystems. */
+    }
 
     const temporaryPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
     try {
@@ -125,9 +132,17 @@ export function createSessionStore(options: CreateSessionStoreOptions = {}): Ses
         mode: 0o600,
       });
       fs.renameSync(temporaryPath, filePath);
-      try { fs.chmodSync(filePath, 0o600); } catch { /* Best effort on non-POSIX filesystems. */ }
+      try {
+        fs.chmodSync(filePath, 0o600);
+      } catch {
+        /* Best effort on non-POSIX filesystems. */
+      }
     } finally {
-      try { removeFile(temporaryPath); } catch { /* The main write result is authoritative. */ }
+      try {
+        removeFile(temporaryPath);
+      } catch {
+        /* The main write result is authoritative. */
+      }
     }
   }
 

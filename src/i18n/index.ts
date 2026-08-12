@@ -1,7 +1,7 @@
 import fs from 'fs';
-import path from 'path';
+import path, { dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+import type englishTranslationSchema from './locales/en.json';
 import { getConfigDir, getWritableConfigDir } from '../config/paths.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -377,6 +377,92 @@ export interface Translations {
   };
 }
 
+type TranslationSchema = typeof englishTranslationSchema;
+type TranslationNode = string | TranslationObject;
+
+interface TranslationObject {
+  [key: string]: TranslationNode;
+}
+
+const unsafeTranslationKeys = new Set(['__proto__', 'constructor', 'prototype']);
+
+function childPath(parent: string, key: string): string {
+  return `${parent}.${key}`;
+}
+
+function assertTranslationNode(value: unknown, pathName: string): asserts value is TranslationNode {
+  if (typeof value === 'string') return;
+  assertTranslationObject(value, pathName);
+}
+
+function assertTranslationObject(
+  value: unknown,
+  pathName: string,
+): asserts value is TranslationObject {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new TypeError(`${pathName} must be a plain object`);
+  }
+
+  const prototype = Reflect.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new TypeError(`${pathName} must be a plain object`);
+  }
+
+  for (const [key, child] of Object.entries(value)) {
+    const currentPath = childPath(pathName, key);
+    if (unsafeTranslationKeys.has(key)) {
+      throw new TypeError(`${currentPath} uses an unsafe key`);
+    }
+    assertTranslationNode(child, currentPath);
+  }
+}
+
+function assertMatchingTranslationShape(
+  candidate: TranslationObject,
+  reference: TranslationObject,
+  pathName: string,
+): void {
+  for (const key of Object.keys(candidate)) {
+    if (!Object.hasOwn(reference, key)) {
+      throw new TypeError(`${childPath(pathName, key)} is not in the reference translation`);
+    }
+  }
+
+  for (const key of Object.keys(reference)) {
+    const currentPath = childPath(pathName, key);
+    if (!Object.hasOwn(candidate, key)) {
+      throw new TypeError(`${currentPath} is missing`);
+    }
+
+    const candidateNode = candidate[key];
+    const referenceNode = reference[key];
+    if (candidateNode === undefined || referenceNode === undefined) {
+      throw new TypeError(`${currentPath} is missing`);
+    }
+    if (typeof candidateNode !== typeof referenceNode) {
+      throw new TypeError(`${currentPath} has a mismatched leaf type`);
+    }
+    if (typeof candidateNode !== 'string' && typeof referenceNode !== 'string') {
+      assertMatchingTranslationShape(candidateNode, referenceNode, currentPath);
+    }
+  }
+}
+
+export function validateTranslationShape(candidate: unknown, reference?: unknown): void {
+  assertTranslationObject(candidate, 'translations');
+  if (reference === undefined) return;
+
+  assertTranslationObject(reference, 'reference');
+  assertMatchingTranslationShape(candidate, reference, 'translations');
+}
+
+function assertTranslations(
+  candidate: unknown,
+  reference?: unknown,
+): asserts candidate is TranslationSchema {
+  validateTranslationShape(candidate, reference);
+}
+
 let currentLanguage: Language = 'zh';
 
 function getLanguageConfigPath(): string {
@@ -390,9 +476,12 @@ function getWritableLanguageConfigPath(): string {
 export function loadLanguagePreference(): Language {
   try {
     const configPath = getLanguageConfigPath();
-    const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-    if (config.language === 'zh' || config.language === 'en') {
-      currentLanguage = config.language;
+    const config: unknown = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    if (typeof config === 'object' && config !== null && 'language' in config) {
+      const language: unknown = config.language;
+      if (language === 'zh' || language === 'en') {
+        currentLanguage = language;
+      }
     }
   } catch {}
   return currentLanguage;
@@ -417,25 +506,32 @@ export function setLanguage(language: Language): void {
   currentLanguage = language;
 }
 
-function loadTranslations(language: Language): Translations {
-  try {
-    const translationPath = path.join(__dirname, 'locales', `${language}.json`);
-    const content = fs.readFileSync(translationPath, 'utf-8');
-    return JSON.parse(content);
-  } catch {
-    const fallbackPath = path.join(__dirname, 'locales', 'zh.json');
-    const content = fs.readFileSync(fallbackPath, 'utf-8');
-    return JSON.parse(content);
-  }
+function parseTranslationFile(language: Language): unknown {
+  const translationPath = path.join(__dirname, 'locales', `${language}.json`);
+  const content = fs.readFileSync(translationPath, 'utf-8');
+  return JSON.parse(content) as unknown;
+}
+
+function loadTranslations(): Record<Language, Translations> {
+  const english = parseTranslationFile('en');
+  assertTranslations(english);
+
+  const chinese = parseTranslationFile('zh');
+  assertTranslations(chinese, english);
+
+  return { en: english, zh: chinese };
 }
 
 const translationsCache = new Map<Language, Translations>();
 
 export function t(): Translations {
-  if (!translationsCache.has(currentLanguage)) {
-    translationsCache.set(currentLanguage, loadTranslations(currentLanguage));
-  }
-  return translationsCache.get(currentLanguage)!;
+  const cached = translationsCache.get(currentLanguage);
+  if (cached !== undefined) return cached;
+
+  const translations = loadTranslations();
+  translationsCache.set('en', translations.en);
+  translationsCache.set('zh', translations.zh);
+  return translations[currentLanguage];
 }
 
 export function fmt(template: string, vars: Record<string, string | number>): string {

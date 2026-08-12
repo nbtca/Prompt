@@ -1,13 +1,20 @@
 import { c, type, space, glyph } from '../../core/theme.js';
 import { t } from '../../i18n/index.js';
 import { pickIcon } from '../../core/icons.js';
-import { padEndV, visualWidth, wrapAnsiToVisualWidth } from '../../core/text.js';
-import { peekNextClassLine, peekTodayLines, peekWeekAheadInfo, peekUnresolvedCount } from '../../features/schedule-view.js';
+import { padEndV, visualWidth, wrapAnsiWithIndent } from '../../core/text.js';
+import {
+  peekNextClassLine,
+  peekTodayLines,
+  peekWeekAheadInfo,
+  peekUnresolvedCount,
+} from '../../features/schedule-view.js';
 import { loadCalendarOrThrow, toDisplayEvent, renderEventBrief } from '../../features/calendar.js';
 import { weekdayShortLabel } from '../../features/schedule-render.js';
-import { campusWeekday } from '../../features/schedule-query.js';
+import { addLocalDays } from '../../core/calendar-day.js';
 import type { View, AppContext } from '../view.js';
 import { passiveFooterHint } from '../chrome.js';
+import { campusWeekday } from '@nbtca/nbtcal/timetable';
+const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const;
 
 export interface HomeData {
   loading?: boolean;
@@ -24,16 +31,7 @@ function wrappedIndentedLines(
   cols: number,
   style: (value: string) => string,
 ): string[] {
-  const width = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : Number.POSITIVE_INFINITY;
-  const styled = style(label);
-  const preferredIndent = visualWidth(space.indent) < width ? space.indent : '';
-  const indent = preferredIndent
-    && visualWidth(styled) > width - visualWidth(preferredIndent)
-    && visualWidth(styled) <= width
-    ? ''
-    : preferredIndent;
-  const contentWidth = Math.max(1, width - visualWidth(indent));
-  return wrapAnsiToVisualWidth(styled, contentWidth).map((line) => `${indent}${line}`);
+  return wrapAnsiWithIndent(style(label), cols, space.indent);
 }
 
 function panelHeading(label: string, cols: number): string[] {
@@ -57,14 +55,21 @@ function renderDayProgress(now: Date, cols: number): string {
   const pct = Math.round(fraction * 100);
   const percentage = `${pct}%`;
   const width = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : Number.POSITIVE_INFINITY;
-  const indent = visualWidth(space.indent) + 2 + visualWidth(percentage) + 1 <= width ? space.indent : '';
-  const gap = visualWidth(indent) + 2 + visualWidth(percentage) + 1 <= width
-    ? '  '
-    : visualWidth(indent) + 1 + visualWidth(percentage) + 1 <= width ? ' ' : '';
-  const barWidth = Math.max(0, Math.min(
-    DAY_PROGRESS_WIDTH,
-    width - visualWidth(indent) - visualWidth(gap) - visualWidth(percentage),
-  ));
+  const indent =
+    visualWidth(space.indent) + 2 + visualWidth(percentage) + 1 <= width ? space.indent : '';
+  const gap =
+    visualWidth(indent) + 2 + visualWidth(percentage) + 1 <= width
+      ? '  '
+      : visualWidth(indent) + 1 + visualWidth(percentage) + 1 <= width
+        ? ' '
+        : '';
+  const barWidth = Math.max(
+    0,
+    Math.min(
+      DAY_PROGRESS_WIDTH,
+      width - visualWidth(indent) - visualWidth(gap) - visualWidth(percentage),
+    ),
+  );
   const filled = Math.round(fraction * barWidth);
   const filledChar = glyph.barFilled();
   const emptyChar = glyph.barEmpty();
@@ -83,23 +88,28 @@ function renderWeekAheadGrid(
   const weekendChar = pickIcon('··', '..');
   const blankCell = '  ';
 
-  const rowLabelW = Math.max(visualWidth(trans.timetable.weekAheadClasses), visualWidth(trans.menu.events)) + 1;
+  const rowLabelW =
+    Math.max(visualWidth(trans.timetable.weekAheadClasses), visualWidth(trans.menu.events)) + 1;
 
   const days = [1, 2, 3, 4, 5, 6, 7];
   const dayLabels = days.map((wd) => type.hint(weekdayShortLabel(wd))).join('  ');
   const headerLine = `${space.indent}${padEndV('', rowLabelW)}${dayLabels}`;
 
-  const classCells = days.map((wd) => {
-    const isWeekend = wd === 6 || wd === 7;
-    const glyphChar = isWeekend ? weekendChar : (classDays[wd - 1] ? hasClassChar : freeChar);
-    return type.body(glyphChar);
-  }).join('  ');
+  const classCells = days
+    .map((wd) => {
+      const isWeekend = wd === 6 || wd === 7;
+      const glyphChar = isWeekend ? weekendChar : classDays[wd - 1] ? hasClassChar : freeChar;
+      return type.body(glyphChar);
+    })
+    .join('  ');
   const classLine = `${space.indent}${type.hint(padEndV(trans.timetable.weekAheadClasses, rowLabelW))}${classCells}`;
 
-  const eventCells = days.map((wd) => {
-    if (!eventDays) return blankCell;
-    return type.body(eventDays[wd - 1] ? hasClassChar : freeChar);
-  }).join('  ');
+  const eventCells = days
+    .map((wd) => {
+      if (!eventDays) return blankCell;
+      return type.body(eventDays[wd - 1] ? hasClassChar : freeChar);
+    })
+    .join('  ');
   const eventLine = `${space.indent}${type.hint(padEndV(trans.menu.events, rowLabelW))}${eventCells}`;
 
   const legend = `${space.indent}${type.hint(`${hasClassChar} ${trans.timetable.weekAheadBusy}  ${freeChar} ${trans.timetable.weekAheadFree}  ${weekendChar} ${trans.timetable.weekAheadNone}`)}`;
@@ -114,12 +124,9 @@ function renderWeekAheadGrid(
     type.hint,
   );
   const compactDays = days.flatMap((wd) => {
-    const classCell = wd === 6 || wd === 7
-      ? weekendChar
-      : classDays[wd - 1] ? hasClassChar : freeChar;
-    const eventCell = eventDays
-      ? eventDays[wd - 1] ? hasClassChar : freeChar
-      : blankCell;
+    const classCell =
+      wd === 6 || wd === 7 ? weekendChar : classDays[wd - 1] ? hasClassChar : freeChar;
+    const eventCell = eventDays ? (eventDays[wd - 1] ? hasClassChar : freeChar) : blankCell;
     const row = `${type.hint(weekdayShortLabel(wd))}  ${type.body(classCell)}  ${type.body(eventCell)}`;
     return wrappedIndentedLines(row, cols, (value) => value);
   });
@@ -135,9 +142,10 @@ export function renderHome(data: HomeData, now: Date, bodyRows = 100, cols = 80)
   const trans = t();
   const lines: string[] = [];
 
-  const nextClass = data.nextClassLine !== undefined && data.nextClassLine.trim().length > 0
-    ? wrappedRenderedLines(data.nextClassLine, cols)
-    : wrappedIndentedLines(trans.timetable.noNextClass, cols, type.hint);
+  const nextClass =
+    data.nextClassLine !== undefined && data.nextClassLine.trim().length > 0
+      ? wrappedRenderedLines(data.nextClassLine, cols)
+      : wrappedIndentedLines(trans.timetable.noNextClass, cols, type.hint);
   lines.push(...panelHeading(trans.timetable.nextClass, cols));
   lines.push(...nextClass);
   lines.push('');
@@ -153,16 +161,20 @@ export function renderHome(data: HomeData, now: Date, bodyRows = 100, cols = 80)
 
   if (data.weekAhead) {
     lines.push(...panelHeading(trans.timetable.weekOverviewTitle, cols));
-    lines.push(...renderWeekAheadGrid(data.weekAhead.classDays, data.weekAhead.eventDays, cols).split('\n'));
+    lines.push(
+      ...renderWeekAheadGrid(data.weekAhead.classDays, data.weekAhead.eventDays, cols).split('\n'),
+    );
     lines.push('');
   }
 
   if ((data.unresolvedCount ?? 0) > 0) {
-    lines.push(...wrappedIndentedLines(
-      `${pickIcon('⚠', '!')} ${trans.timetable.hubUnresolved} · ${data.unresolvedCount}`,
-      cols,
-      c.warn,
-    ));
+    lines.push(
+      ...wrappedIndentedLines(
+        `${pickIcon('⚠', '!')} ${trans.timetable.hubUnresolved} · ${data.unresolvedCount}`,
+        cols,
+        c.warn,
+      ),
+    );
     lines.push('');
   }
 
@@ -194,7 +206,7 @@ export function renderHome(data: HomeData, now: Date, bodyRows = 100, cols = 80)
 
 let data: HomeData = { loading: true };
 
-export const homeView: View = {
+export const homeView = {
   id: 'home',
   title: 'Home',
 
@@ -210,7 +222,7 @@ export const homeView: View = {
         nextClassLine: peekNextClassLine(),
         todayLines: peekTodayLines(),
         unresolvedCount: peekUnresolvedCount(),
-        weekAhead: weekAheadInfo ? { classDays: weekAheadInfo.classDays } : undefined,
+        ...(weekAheadInfo ? { weekAhead: { classDays: weekAheadInfo.classDays } } : {}),
       };
     } catch {
       data = { loading: true };
@@ -226,12 +238,15 @@ export const homeView: View = {
 
       let weekAhead = data.weekAhead;
       if (weekAheadInfo) {
-        const weekEnd = new Date(weekAheadInfo.weekStartDate.getTime() + 7 * 86400000);
+        const weekEnd = addLocalDays(weekAheadInfo.weekStartDate, 7);
         const weekEvents = cal.inRange(weekAheadInfo.weekStartDate, weekEnd);
-        const daySet = new Set(weekEvents.map((e) => campusWeekday(e.start)));
-        weekAhead = { classDays: weekAheadInfo.classDays, eventDays: [1, 2, 3, 4, 5, 6, 7].map((wd) => daySet.has(wd)) };
+        const daySet = new Set(weekEvents.map((event) => campusWeekday(event.start)));
+        weekAhead = {
+          classDays: weekAheadInfo.classDays,
+          eventDays: WEEKDAYS.map((weekday) => daySet.has(weekday)),
+        };
       }
-      data = { ...data, eventLines, weekAhead };
+      data = weekAhead ? { ...data, eventLines, weekAhead } : { ...data, eventLines };
     } catch {
       data = { ...data, eventsLoadFailed: true };
     } finally {
@@ -243,4 +258,4 @@ export const homeView: View = {
   render(ctx: AppContext): string[] {
     return renderHome(data, new Date(), ctx.bodyRows, ctx.size.cols);
   },
-};
+} satisfies View;

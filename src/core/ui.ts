@@ -1,16 +1,10 @@
 import { success, error, warning, info } from './components/messages.js';
 import { startSpinner } from './components/spinner.js';
 import chalk from 'chalk';
-import { pickIcon } from './icons.js';
 import { t } from '../i18n/index.js';
+import { sanitizeTerminalLine } from './text.js';
 
 export { success, error, warning, info };
-
-export function printDivider(): void {
-  const terminalWidth = process.stdout.columns || 80;
-  const dividerChar = pickIcon('─', '-');
-  console.log(chalk.dim(dividerChar.repeat(Math.min(terminalWidth, 80))));
-}
 
 export function clearScreen(): void {
   if (process.stdout.isTTY) {
@@ -18,18 +12,25 @@ export function clearScreen(): void {
   }
 }
 
-export function printNewLine(count: number = 1): void {
-  for (let i = 0; i < count; i++) {
-    console.log();
-  }
-}
-
 export function createSpinner(msg: string) {
   return startSpinner(msg);
 }
 
+function errorMessage(errorValue: unknown): string {
+  if (errorValue instanceof Error) return errorValue.message;
+  if (typeof errorValue === 'string') return errorValue;
+  if (
+    typeof errorValue === 'number' ||
+    typeof errorValue === 'boolean' ||
+    typeof errorValue === 'bigint'
+  ) {
+    return String(errorValue);
+  }
+  return '';
+}
+
 export function handleGracefulExit(err: unknown): never {
-  const message = err instanceof Error ? err.message : String(err ?? '');
+  const message = sanitizeTerminalLine(errorMessage(err));
   if (message.includes('SIGINT') || message.includes('User force closed')) {
     console.log();
     console.log(chalk.dim(t().common.goodbye));
@@ -38,7 +39,7 @@ export function handleGracefulExit(err: unknown): never {
   if (message) {
     console.error(message);
   } else {
-    console.error('Error occurred:', err);
+    console.error('An unexpected error occurred.');
   }
   process.exit(1);
 }

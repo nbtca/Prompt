@@ -14,10 +14,7 @@ const WEBVPN_PATHS = new Set([
   '/vpn_key/update',
 ]);
 
-const AUTH_PATHS = new Set([
-  '/authserver/login',
-  '/authserver/checkNeedCaptcha.htl',
-]);
+const AUTH_PATHS = new Set(['/authserver/login', '/authserver/checkNeedCaptcha.htl']);
 
 const JWXT_EXACT_PATHS = new Set([
   '/sso/jziotlogin',
@@ -38,31 +35,38 @@ function assertAllowedVpnOrigin(value: string): void {
   try {
     nested = new URL(value);
   } catch {
-    throw new AuthError('UNTRUSTED_URL', 'session', 'The campus service returned an untrusted redirect.');
+    throw new AuthError(
+      'UNTRUSTED_URL',
+      'session',
+      'The campus service returned an untrusted redirect.',
+    );
   }
   if (
-    nested.protocol !== 'https:'
-    || (nested.port !== '' && nested.port !== '443')
-    || nested.username !== ''
-    || nested.password !== ''
+    nested.protocol !== 'https:' ||
+    (nested.port !== '' && nested.port !== '443') ||
+    nested.username !== '' ||
+    nested.password !== ''
   ) {
-    throw new AuthError('UNTRUSTED_URL', 'session', 'The campus service returned an untrusted redirect.');
+    throw new AuthError(
+      'UNTRUSTED_URL',
+      'session',
+      'The campus service returned an untrusted redirect.',
+    );
   }
   const host = nested.hostname.toLowerCase();
-  const allowed = (
-    host === JWXT_HOST && isAllowedJwxtPath(nested.pathname)
-  ) || (
-    host === AUTH_HOST && nested.pathname === '/authserver/login'
-  ) || (
-    host === WEBVPN_HOST && [
-      '/',
-      '/users/sign_in',
-      '/users/auth/cas',
-      '/users/auth/cas/callback',
-    ].includes(nested.pathname)
-  );
+  const allowed =
+    (host === JWXT_HOST && isAllowedJwxtPath(nested.pathname)) ||
+    (host === AUTH_HOST && nested.pathname === '/authserver/login') ||
+    (host === WEBVPN_HOST &&
+      ['/', '/users/sign_in', '/users/auth/cas', '/users/auth/cas/callback'].includes(
+        nested.pathname,
+      ));
   if (!allowed) {
-    throw new AuthError('UNTRUSTED_URL', 'session', 'The campus service returned an untrusted redirect.');
+    throw new AuthError(
+      'UNTRUSTED_URL',
+      'session',
+      'The campus service returned an untrusted redirect.',
+    );
   }
 }
 
@@ -71,33 +75,36 @@ function assertAllowedCasService(value: string): void {
   try {
     service = new URL(value);
   } catch {
-    throw new AuthError('UNTRUSTED_URL', 'session', 'The campus service returned an untrusted redirect.');
-  }
-  const allowed = service.protocol === 'https:'
-    && (service.port === '' || service.port === '443')
-    && service.username === ''
-    && service.password === ''
-    && (
-    (
-      service.hostname.toLowerCase() === WEBVPN_HOST
-      && service.pathname === '/users/auth/cas/callback'
-    ) || (
-      service.hostname.toLowerCase() === JWXT_HOST
-      && service.pathname === '/sso/jziotlogin'
-    )
+    throw new AuthError(
+      'UNTRUSTED_URL',
+      'session',
+      'The campus service returned an untrusted redirect.',
     );
+  }
+  const allowed =
+    service.protocol === 'https:' &&
+    (service.port === '' || service.port === '443') &&
+    service.username === '' &&
+    service.password === '' &&
+    ((service.hostname.toLowerCase() === WEBVPN_HOST &&
+      service.pathname === '/users/auth/cas/callback') ||
+      (service.hostname.toLowerCase() === JWXT_HOST && service.pathname === '/sso/jziotlogin'));
   if (!allowed) {
-    throw new AuthError('UNTRUSTED_URL', 'session', 'The campus service returned an untrusted redirect.');
+    throw new AuthError(
+      'UNTRUSTED_URL',
+      'session',
+      'The campus service returned an untrusted redirect.',
+    );
   }
 }
 
 export function assertAllowedCampusUrl(url: URL): void {
   const hostname = url.hostname.toLowerCase();
   if (
-    url.protocol !== 'https:'
-    || (url.port !== '' && url.port !== '443')
-    || url.username !== ''
-    || url.password !== ''
+    url.protocol !== 'https:' ||
+    (url.port !== '' && url.port !== '443') ||
+    url.username !== '' ||
+    url.password !== ''
   ) {
     throw new AuthError('UNTRUSTED_URL', 'session', 'The campus service URL is not allowed.');
   }
@@ -125,27 +132,36 @@ function safeHeaders(headers: RequestInit['headers']): Record<string, string> {
   const result = new Headers(headers);
   for (const forbidden of ['authorization', 'cookie', 'host']) {
     if (result.has(forbidden)) {
-      throw new AuthError('UNTRUSTED_URL', 'session', 'Caller-supplied authentication headers are not allowed.');
+      throw new AuthError(
+        'UNTRUSTED_URL',
+        'session',
+        'Caller-supplied authentication headers are not allowed.',
+      );
     }
   }
   return Object.fromEntries(result.entries());
 }
 
-function abortSignal(signal: AbortSignal | null | undefined, timeoutMs: number): {
+function abortSignal(
+  signal: AbortSignal | null | undefined,
+  timeoutMs: number,
+): {
   signal: AbortSignal;
   cleanup(): void;
   timedOut(): boolean;
 } {
   const controller = new AbortController();
   let didTimeout = false;
-  const onAbort = () => controller.abort(signal?.reason);
+  const onAbort = () => {
+    controller.abort(signal?.reason);
+  };
   signal?.addEventListener('abort', onAbort, { once: true });
   if (signal?.aborted) onAbort();
   const timer = setTimeout(() => {
     didTimeout = true;
     controller.abort();
   }, timeoutMs);
-  timer.unref?.();
+  timer.unref();
   return {
     signal: controller.signal,
     cleanup() {
@@ -158,7 +174,10 @@ function abortSignal(signal: AbortSignal | null | undefined, timeoutMs: number):
 
 function safeFetchError(error: unknown, stage: AuthStage, didTimeout: boolean): Error {
   if (error instanceof AuthError) return error;
-  if (didTimeout) return new AuthError('TIMEOUT', stage, 'The campus service request timed out.', { retryable: true });
+  if (didTimeout)
+    return new AuthError('TIMEOUT', stage, 'The campus service request timed out.', {
+      retryable: true,
+    });
   if (typeof error === 'object' && error !== null && Reflect.get(error, 'name') === 'AbortError') {
     return new DOMException('The campus service request was aborted.', 'AbortError');
   }
@@ -201,7 +220,11 @@ export function createCampusCookieSession(
   const cookieFetch = makeFetchCookie(guardedFetch, jar, false);
   const timeoutMs = options.timeoutMs ?? 15_000;
 
-  async function request(url: URL, init: RequestInit = {}, stage: AuthStage = 'session'): Promise<Response> {
+  async function request(
+    url: URL,
+    init: RequestInit = {},
+    stage: AuthStage = 'session',
+  ): Promise<Response> {
     assertAllowedCampusUrl(url);
     if (init.method && init.method !== 'GET' && init.method !== 'POST') {
       throw new AuthError('UNTRUSTED_URL', stage, 'Only read and login requests are allowed.');
@@ -223,17 +246,22 @@ export function createCampusCookieSession(
 
   async function timetableTransport(url: URL, init: RequestInit): Promise<Response> {
     if (url.hostname.toLowerCase() !== JWXT_HOST || !isAllowedJwxtPath(url.pathname)) {
-      throw new AuthError('UNTRUSTED_URL', 'session', 'The timetable transport only accepts JWXT routes.');
+      throw new AuthError(
+        'UNTRUSTED_URL',
+        'session',
+        'The timetable transport only accepts JWXT routes.',
+      );
     }
     const response = await request(url, init, 'session');
     try {
       const finalUrl = new URL(response.url);
       if (
-        finalUrl.hostname.toLowerCase() !== JWXT_HOST
-        || finalUrl.pathname.includes('/authserver/login')
-        || finalUrl.pathname.includes('/users/sign_in')
-        || finalUrl.pathname === '/vpn_key/update'
-      ) throw new SessionExpiredError();
+        finalUrl.hostname.toLowerCase() !== JWXT_HOST ||
+        finalUrl.pathname.includes('/authserver/login') ||
+        finalUrl.pathname.includes('/users/sign_in') ||
+        finalUrl.pathname === '/vpn_key/update'
+      )
+        throw new SessionExpiredError();
     } catch (error) {
       if (error instanceof AuthError) throw error;
       throw new SessionExpiredError();

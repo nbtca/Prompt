@@ -36,7 +36,9 @@ describe('language state', () => {
     expect(saveLanguagePreference('en')).toBe(true);
 
     expect(getCurrentLanguage()).toBe('en');
-    expect(JSON.parse(readFileSync(join(configHome, 'nbtca', 'language.json'), 'utf8'))).toEqual({ language: 'en' });
+    expect(JSON.parse(readFileSync(join(configHome, 'nbtca', 'language.json'), 'utf8'))).toEqual({
+      language: 'en',
+    });
   });
 
   it('keeps the requested language active when persistence fails', async () => {
@@ -45,5 +47,63 @@ describe('language state', () => {
 
     expect(saveLanguagePreference('en')).toBe(false);
     expect(getCurrentLanguage()).toBe('en');
+  });
+});
+
+describe('translation validation', () => {
+  it.each([null, [], { common: null }, { common: [] }])(
+    'rejects malformed translation objects',
+    async (candidate) => {
+      const { validateTranslationShape } = await import('./index.js');
+
+      expect(() => {
+        validateTranslationShape(candidate);
+      }).toThrow(TypeError);
+    },
+  );
+
+  it('rejects missing and extra keys', async () => {
+    const { validateTranslationShape } = await import('./index.js');
+    const reference = { common: { back: 'Back', exit: 'Exit' } };
+
+    expect(() => {
+      validateTranslationShape({ common: { back: 'Back' } }, reference);
+    }).toThrow(/missing/);
+    expect(() => {
+      validateTranslationShape(
+        { common: { back: 'Back', exit: 'Exit', retry: 'Retry' } },
+        reference,
+      );
+    }).toThrow(/reference translation/);
+  });
+
+  it('rejects mismatched leaf types', async () => {
+    const { validateTranslationShape } = await import('./index.js');
+
+    expect(() => {
+      validateTranslationShape(
+        { common: { back: { label: 'Back' } } },
+        { common: { back: 'Back' } },
+      );
+    }).toThrow(/leaf type/);
+  });
+
+  it('rejects prototype mutation keys', async () => {
+    const { validateTranslationShape } = await import('./index.js');
+    const candidate: unknown = JSON.parse('{"common":{"__proto__":"unsafe"}}');
+
+    expect(() => {
+      validateTranslationShape(candidate);
+    }).toThrow(/unsafe key/);
+  });
+
+  it('loads and caches the validated locale pair', async () => {
+    const { clearTranslationCache, setLanguage, t } = await import('./index.js');
+
+    clearTranslationCache();
+    setLanguage('en');
+    expect(t().common.back).toBe('Back');
+    setLanguage('zh');
+    expect(t().common.back).toBe('返回');
   });
 });

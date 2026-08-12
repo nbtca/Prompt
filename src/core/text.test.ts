@@ -1,5 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { visualWidth, padEndV, truncate, stripAnsi, wrapAnsiToVisualWidth } from './text.js';
+import {
+  clipAnsiToVisualWidth,
+  padEndV,
+  sanitizeTerminalLine,
+  sanitizeTerminalText,
+  stripAnsi,
+  truncate,
+  truncateStart,
+  visualWidth,
+  wrapAnsiToVisualWidth,
+} from './text.js';
 
 describe('visualWidth', () => {
   it('counts plain ASCII as 1 column each', () => {
@@ -11,45 +21,36 @@ describe('visualWidth', () => {
   });
 
   it('counts a common emoji as 2 columns, not 1', () => {
-    // Real terminals render 🎉 (U+1F389) as a double-width glyph. Undercounting
-    // this by even one column is exactly what caused a real bug: padEndV added
-    // one extra trailing space, pushing a line one column past the terminal
-    // width and triggering an unwanted auto-wrap that scrolled the header out
-    // of view once real event data (with emoji titles) replaced a plain
-    // "Loading..." placeholder.
     expect(visualWidth('🎉')).toBe(2);
   });
 
   it('matches real terminal rendering for an emoji + CJK event title', () => {
-    // Confirmed against real @nbtca calendar data: "🎉张明俊的生日" renders as
-    // 14 columns in a real terminal (emoji=2 + 6 CJK chars * 2 = 14).
     expect(visualWidth('🎉张明俊的生日')).toBe(14);
   });
 
-  it('a variation selector (U+FE0F) never adds its own width', () => {
-    // Whether the base character before it renders narrow or as a wide
-    // emoji glyph is context/font-dependent (out of scope here) — but the
-    // selector itself must never count as an extra visible column.
-    const withSelector = '\u{2764}\u{FE0F}'; // heart + VS-16
+  it('honors emoji presentation selectors', () => {
+    const withSelector = '\u{2764}\u{FE0F}';
     const withoutSelector = '\u{2764}';
-    expect(visualWidth(withSelector)).toBe(visualWidth(withoutSelector));
+    expect(visualWidth(withSelector)).toBe(2);
+    expect(visualWidth(withoutSelector)).toBe(1);
   });
 
-  it('a zero-width joiner never adds its own width', () => {
-    // Terminals vary on whether a ZWJ sequence (e.g. family emoji) ligates
-    // into one glyph or renders each emoji separately — most monospace
-    // terminal fonts do the latter, so assuming non-ligated (safer: it
-    // undercounts a rare ligating terminal by a little rather than
-    // overcounting — undercounting is exactly the bug this file exists to
-    // catch) is the correct default. Either way, the joiner byte itself
-    // must never count as its own visible column.
-    const withJoiner = '\u{1F468}' + '\u{200D}' + '\u{1F469}' + '\u{200D}' + '\u{1F467}'; // man+ZWJ+woman+ZWJ+girl
-    const eachEmojiWidth = visualWidth('\u{1F468}');
-    expect(visualWidth(withJoiner)).toBe(eachEmojiWidth * 3);
+  it('counts a joined emoji family as one terminal glyph', () => {
+    expect(visualWidth('👨‍👩‍👧')).toBe(2);
+  });
+
+  it('does not allocate a column to combining marks', () => {
+    expect(visualWidth('e\u0301')).toBe(1);
   });
 
   it('ignores ANSI escape codes', () => {
     expect(visualWidth('\x1b[1m\x1b[31mhi\x1b[0m')).toBe(2);
+  });
+
+  it('treats OSC 8 hyperlinks as zero-width terminal controls', () => {
+    const linked = '\x1b]8;;https://example.com\x07link\x1b]8;;\x07';
+    expect(stripAnsi(linked)).toBe('link');
+    expect(visualWidth(linked)).toBe(4);
   });
 });
 
@@ -64,6 +65,33 @@ describe('truncate', () => {
   it('accounts for emoji width when truncating', () => {
     const result = truncate('🎉张明俊的生日', 8);
     expect(visualWidth(stripAnsi(result))).toBeLessThanOrEqual(8);
+  });
+
+  it('never splits a joined emoji', () => {
+    expect(truncate('a👨‍👩‍👧bc', 4)).toBe('a...');
+  });
+});
+
+describe('truncateStart', () => {
+  it('keeps the editable end of a narrow value visible', () => {
+    expect(truncateStart('student@example.com', 10, '<')).toBe('<ample.com');
+  });
+});
+
+describe('clipAnsiToVisualWidth', () => {
+  it('clips styled text without splitting grapheme clusters', () => {
+    const source = '\x1b[36ma👨‍👩‍👧b\x1b[0m';
+    const clipped = clipAnsiToVisualWidth(source, 2);
+    expect(stripAnsi(clipped)).toBe('a');
+    expect(visualWidth(clipped)).toBe(1);
+  });
+
+  it('clips OSC 8 links without splitting or leaking the control sequence', () => {
+    const source = '\x1b]8;;https://example.com\x07link\x1b]8;;\x07';
+    const clipped = clipAnsiToVisualWidth(source, 2);
+    expect(stripAnsi(clipped)).toBe('li');
+    expect(clipped).toMatch(/^\x1b\]8;;https:\/\/example\.com\x07/);
+    expect(clipped).toMatch(/\x1b\]8;;\x07$/);
   });
 });
 
@@ -80,5 +108,31 @@ describe('wrapAnsiToVisualWidth', () => {
 
   it('breaks English text at whitespace when possible', () => {
     expect(wrapAnsiToVisualWidth('alpha beta gamma', 10)).toEqual(['alpha beta', 'gamma']);
+  });
+
+  it('keeps combining and joined graphemes intact', () => {
+    expect(wrapAnsiToVisualWidth('e\u0301👨‍👩‍👧x', 2)).toEqual(['e\u0301', '👨‍👩‍👧', 'x']);
+  });
+
+  it('wraps OSC 8 links as complete, independently closed terminal lines', () => {
+    const source = '\x1b]8;;https://example.com\x07link\x1b]8;;\x07';
+    const lines = wrapAnsiToVisualWidth(source, 2);
+    expect(lines.map(stripAnsi)).toEqual(['li', 'nk']);
+    expect(lines.every((line) => line.endsWith('\x1b]8;;\x07'))).toBe(true);
+  });
+});
+
+describe('sanitizeTerminalText', () => {
+  it('removes terminal escape and control sequences from untrusted text', () => {
+    const source = 'safe\u001B]52;c;YWJj\u0007\u001B[31mred\u001B[0m\u0000\u0008\rnext';
+    expect(sanitizeTerminalText(source)).toBe('safered\nnext');
+  });
+
+  it('preserves printable Unicode, newlines, and tabs', () => {
+    expect(sanitizeTerminalText('课程\n\tRoom 1')).toBe('课程\n\tRoom 1');
+  });
+
+  it('collapses untrusted single-line fields', () => {
+    expect(sanitizeTerminalLine(' title\n\tlocation \u001B[31m')).toBe('title location');
   });
 });

@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { SessionExpiredError } from '../../auth/errors.js';
+import type * as NbtcalModule from '@nbtca/nbtcal';
+import type * as TimetableModule from '@nbtca/nbtcal/timetable';
+import type * as NbtAuthModule from '../../auth/nbt-auth.js';
+import type * as ScheduleStoreModule from '../../features/schedule-store.js';
+import type * as CalendarModule from '../../features/calendar.js';
 
 const sessionStoreClear = vi.fn();
 const sessionStoreLoad = vi.fn();
@@ -9,7 +14,7 @@ const inferWeekOneMondayMock = vi.hoisted(() => vi.fn().mockReturnValue(null));
 const isAcademicBreakEventMock = vi.hoisted(() => vi.fn().mockReturnValue(false));
 
 vi.mock('@nbtca/nbtcal', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@nbtca/nbtcal')>();
+  const actual = await importOriginal<typeof NbtcalModule>();
   return {
     ...actual,
     currentAcademicWindow: currentAcademicWindowMock,
@@ -32,7 +37,7 @@ vi.mock('../../auth/session-store.js', () => ({
 }));
 
 vi.mock('../../auth/nbt-auth.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../auth/nbt-auth.js')>();
+  const actual = await importOriginal<typeof NbtAuthModule>();
   return {
     ...actual,
     restoreNbtSession: vi.fn().mockResolvedValue({
@@ -45,7 +50,7 @@ vi.mock('../../auth/nbt-auth.js', async (importOriginal) => {
 
 const listTerms = vi.fn();
 vi.mock('@nbtca/nbtcal/timetable', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@nbtca/nbtcal/timetable')>();
+  const actual = await importOriginal<typeof TimetableModule>();
   return {
     ...actual,
     createNbtTimetableClient: () => ({ listTerms, fetchTerm: vi.fn() }),
@@ -53,19 +58,25 @@ vi.mock('@nbtca/nbtcal/timetable', async (importOriginal) => {
 });
 
 vi.mock('../../features/schedule-store.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../features/schedule-store.js')>();
-  return { ...actual, loadCurrentPointer: vi.fn().mockReturnValue(null), loadTimetableCache: vi.fn().mockReturnValue(null) };
+  const actual = await importOriginal<typeof ScheduleStoreModule>();
+  return {
+    ...actual,
+    loadCurrentPointer: vi.fn().mockReturnValue(null),
+    loadTimetableCache: vi.fn().mockReturnValue(null),
+  };
 });
 
 const calendarUpcoming = vi.fn().mockReturnValue([]);
 const calendarInRange = vi.fn().mockReturnValue([]);
 vi.mock('../../features/calendar.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../features/calendar.js')>();
+  const actual = await importOriginal<typeof CalendarModule>();
   return {
     ...actual,
     loadCalendarOrThrow: vi.fn().mockResolvedValue({
-      upcoming: calendarUpcoming, past: vi.fn().mockReturnValue([]),
-      next: vi.fn().mockReturnValue([]), inRange: calendarInRange,
+      upcoming: calendarUpcoming,
+      past: vi.fn().mockReturnValue([]),
+      next: vi.fn().mockReturnValue([]),
+      inRange: calendarInRange,
       heatmap: vi.fn().mockReturnValue([]),
     }),
   };
@@ -94,8 +105,11 @@ function fakeCtx(): AppContext {
   return {
     size: { rows: 24, cols: 80 },
     bodyRows: 19,
-    rerender: vi.fn(), resetScroll: vi.fn(),
-    runClassic: vi.fn(async (fn: () => Promise<void>) => { await fn(); }),
+    rerender: vi.fn(),
+    resetScroll: vi.fn(),
+    runClassic: vi.fn(async (fn: () => Promise<void>) => {
+      await fn();
+    }),
     quit: vi.fn(),
   };
 }
@@ -118,34 +132,31 @@ describe('scheduleView', () => {
   });
 
   it('capturesInput() returns a boolean and does not throw', () => {
-    expect(typeof scheduleView.capturesInput?.()).toBe('boolean');
+    expect(typeof scheduleView.capturesInput()).toBe('boolean');
   });
 
   it('handleBack() returns false when there is nothing to step back from', () => {
-    expect(scheduleView.handleBack?.()).toBe(false);
+    expect(scheduleView.handleBack(fakeCtx())).toBe(false);
   });
 
   it('does not offer move or open actions while loading', () => {
-    const hint = stripAnsi(scheduleView.footerHint?.(5) ?? '');
+    const hint = stripAnsi(scheduleView.footerHint(5, 80) ?? '');
     expect(hint).toContain('1-5');
     expect(hint).not.toContain(t().menu.hintMove);
     expect(hint).not.toContain(t().menu.hintOpen);
   });
 });
 
-// hubShortcuts itself (its data shape, the unresolved-count badge, key
-// ordering) is fully covered by src/app/views/schedule-render.test.ts
-// (Task 7) -- no need to re-test the same pure function's behavior here.
-// This file's own tests exercise it only through scheduleView's key
-// handling, below.
-
 describe('scheduleView.load() with an expired session', () => {
   function fakeCtx(): AppContext {
     return {
       size: { rows: 24, cols: 80 },
       bodyRows: 19,
-      rerender: vi.fn(), resetScroll: vi.fn(),
-      runClassic: vi.fn(async (fn: () => Promise<void>) => { await fn(); }),
+      rerender: vi.fn(),
+      resetScroll: vi.fn(),
+      runClassic: vi.fn(async (fn: () => Promise<void>) => {
+        await fn();
+      }),
       quit: vi.fn(),
     };
   }
@@ -153,7 +164,11 @@ describe('scheduleView.load() with an expired session', () => {
   it('routes to the login field (not a dead-end error) and clears the stale session, when launching with no cache', async () => {
     vi.mocked(loadCurrentPointer).mockReturnValue(null);
     sessionStoreLoad.mockReturnValue({
-      version: 1, provider: 'nbt-webvpn', jar: { cookies: [] }, authenticatedAt: '2026-01-01T00:00:00Z', validatedAt: '2026-01-01T00:00:00Z',
+      version: 1,
+      provider: 'nbt-webvpn',
+      jar: { cookies: [] },
+      authenticatedAt: '2026-01-01T00:00:00Z',
+      validatedAt: '2026-01-01T00:00:00Z',
     });
     listTerms.mockRejectedValue(new SessionExpiredError());
 
@@ -161,20 +176,31 @@ describe('scheduleView.load() with an expired session', () => {
     await scheduleView.load(ctx);
 
     expect(sessionStoreClear).toHaveBeenCalled();
-    expect(scheduleView.capturesInput?.()).toBe(true);
+    expect(scheduleView.capturesInput()).toBe(true);
     const out = stripAnsi(scheduleView.render(ctx).join('\n'));
     expect(out).toContain(t().timetable.studentId);
   });
 
   it('keeps an already-shown cached hub on screen when a background session refresh fails', async () => {
-    vi.mocked(loadCurrentPointer).mockReturnValue({ termKey: '2026-3', weekOneMonday: '2026-09-07' });
+    vi.mocked(loadCurrentPointer).mockReturnValue({
+      termKey: '2026-3',
+      weekOneMonday: '2026-09-07',
+    });
     vi.mocked(loadTimetableCache).mockReturnValue({
       term: { academicYear: '2026', semester: '3' },
-      meetings: [], periods: [], calendarDays: [], warnings: [], unresolvedItems: [],
+      meetings: [],
+      periods: [],
+      calendarDays: [],
+      warnings: [],
+      unresolvedItems: [],
       fetchedAt: new Date('2026-09-07T00:00:00Z'),
-    } as unknown as Timetable);
+    });
     sessionStoreLoad.mockReturnValue({
-      version: 1, provider: 'nbt-webvpn', jar: { cookies: [] }, authenticatedAt: '2026-01-01T00:00:00Z', validatedAt: '2026-01-01T00:00:00Z',
+      version: 1,
+      provider: 'nbt-webvpn',
+      jar: { cookies: [] },
+      authenticatedAt: '2026-01-01T00:00:00Z',
+      validatedAt: '2026-01-01T00:00:00Z',
     });
     listTerms.mockRejectedValue(new SessionExpiredError());
 
@@ -182,7 +208,7 @@ describe('scheduleView.load() with an expired session', () => {
     await scheduleView.load(ctx);
 
     expect(sessionStoreClear).toHaveBeenCalled();
-    expect(scheduleView.capturesInput?.()).toBe(false);
+    expect(scheduleView.capturesInput()).toBe(false);
     const out = stripAnsi(scheduleView.render(ctx).join('\n'));
     expect(out).toContain(t().timetable.hubLogout); // shortcut bar's own "Log out" -- the hub's always-present anchor
   });
@@ -190,13 +216,17 @@ describe('scheduleView.load() with an expired session', () => {
   it('does not offer move or open actions on an error screen', async () => {
     vi.mocked(loadCurrentPointer).mockReturnValue(null);
     sessionStoreLoad.mockReturnValue({
-      version: 1, provider: 'nbt-webvpn', jar: { cookies: [] }, authenticatedAt: '2026-01-01T00:00:00Z', validatedAt: '2026-01-01T00:00:00Z',
+      version: 1,
+      provider: 'nbt-webvpn',
+      jar: { cookies: [] },
+      authenticatedAt: '2026-01-01T00:00:00Z',
+      validatedAt: '2026-01-01T00:00:00Z',
     });
     listTerms.mockRejectedValue(new Error('Broke'));
 
     await scheduleView.load(fakeCtx());
 
-    const hint = stripAnsi(scheduleView.footerHint?.(5) ?? '');
+    const hint = stripAnsi(scheduleView.footerHint(5, 80) ?? '');
     expect(hint).toContain('1-5');
     expect(hint).not.toContain(t().menu.hintMove);
     expect(hint).not.toContain(t().menu.hintOpen);
@@ -206,8 +236,14 @@ describe('scheduleView.load() with an expired session', () => {
 describe('scheduleView.load() with no session — public view', () => {
   function fakeCtx(): AppContext {
     return {
-      size: { rows: 24, cols: 80 }, bodyRows: 19, rerender: vi.fn(), resetScroll: vi.fn(),
-      runClassic: vi.fn(async (fn: () => Promise<void>) => { await fn(); }), quit: vi.fn(),
+      size: { rows: 24, cols: 80 },
+      bodyRows: 19,
+      rerender: vi.fn(),
+      resetScroll: vi.fn(),
+      runClassic: vi.fn(async (fn: () => Promise<void>) => {
+        await fn();
+      }),
+      quit: vi.fn(),
     };
   }
 
@@ -218,7 +254,7 @@ describe('scheduleView.load() with no session — public view', () => {
     const ctx = fakeCtx();
     await scheduleView.load(ctx);
 
-    expect(scheduleView.capturesInput?.()).toBe(false);
+    expect(scheduleView.capturesInput()).toBe(false);
     const out = stripAnsi(scheduleView.render(ctx).join('\n'));
     expect(out).toContain(t().timetable.publicLoginAction);
     expect(out).not.toContain(t().timetable.studentId);
@@ -241,12 +277,12 @@ describe('scheduleView.load() with no session — public view', () => {
     await scheduleView.load(ctx);
 
     scheduleView.handleKey('\r', ctx);
-    expect(scheduleView.capturesInput?.()).toBe(true);
+    expect(scheduleView.capturesInput()).toBe(true);
     expect(setVimKeysActiveMock).toHaveBeenLastCalledWith(false);
-    expect(visualWidth(scheduleView.footerHint?.(5, 20) ?? '')).toBeLessThanOrEqual(17);
+    expect(visualWidth(scheduleView.footerHint(5, 20) ?? '')).toBeLessThanOrEqual(17);
 
-    expect(scheduleView.handleBack?.(ctx)).toBe(true);
-    expect(scheduleView.capturesInput?.()).toBe(false);
+    expect(scheduleView.handleBack(ctx)).toBe(true);
+    expect(scheduleView.capturesInput()).toBe(false);
     expect(setVimKeysActiveMock).toHaveBeenLastCalledWith(true);
   });
 
@@ -260,12 +296,12 @@ describe('scheduleView.load() with no session — public view', () => {
     scheduleView.handleKey('20260001', ctx);
     scheduleView.handleKey('\r', ctx);
 
-    expect(scheduleView.handleBack?.(ctx)).toBe(true);
-    expect(scheduleView.capturesInput?.()).toBe(true);
+    expect(scheduleView.handleBack(ctx)).toBe(true);
+    expect(scheduleView.capturesInput()).toBe(true);
     expect(stripAnsi(scheduleView.render(ctx).join('\n'))).toContain(t().timetable.studentId);
 
-    expect(scheduleView.handleBack?.(ctx)).toBe(true);
-    expect(scheduleView.capturesInput?.()).toBe(false);
+    expect(scheduleView.handleBack(ctx)).toBe(true);
+    expect(scheduleView.capturesInput()).toBe(false);
     expect(setVimKeysActiveMock).toHaveBeenLastCalledWith(true);
   });
 });
@@ -273,22 +309,38 @@ describe('scheduleView.load() with no session — public view', () => {
 describe('scheduleView — hub navigation', () => {
   function fakeCtx(): AppContext {
     return {
-      size: { rows: 24, cols: 80 }, bodyRows: 40, rerender: vi.fn(), resetScroll: vi.fn(),
-      runClassic: vi.fn(async (fn: () => Promise<void>) => { await fn(); }), quit: vi.fn(),
+      size: { rows: 24, cols: 80 },
+      bodyRows: 40,
+      rerender: vi.fn(),
+      resetScroll: vi.fn(),
+      runClassic: vi.fn(async (fn: () => Promise<void>) => {
+        await fn();
+      }),
+      quit: vi.fn(),
     };
   }
 
   async function loadIntoHub(timetable?: Partial<Timetable>): Promise<AppContext> {
-    vi.mocked(loadCurrentPointer).mockReturnValue({ termKey: '2026-3', weekOneMonday: '2026-09-07' });
+    vi.mocked(loadCurrentPointer).mockReturnValue({
+      termKey: '2026-3',
+      weekOneMonday: '2026-09-07',
+    });
     vi.mocked(loadTimetableCache).mockReturnValue({
       term: { academicYear: '2026', semester: '3' },
-      meetings: [], periods: [{ period: 1, label: null, start: '08:00', end: '08:45' }],
-      calendarDays: [], warnings: [], unresolvedItems: [],
+      meetings: [],
+      periods: [{ period: 1, label: null, start: '08:00', end: '08:45' }],
+      calendarDays: [],
+      warnings: [],
+      unresolvedItems: [],
       fetchedAt: new Date('2026-09-07T00:00:00Z'),
       ...timetable,
-    } as unknown as Timetable);
+    });
     sessionStoreLoad.mockReturnValue({
-      version: 1, provider: 'nbt-webvpn', jar: { cookies: [] }, authenticatedAt: '2026-01-01T00:00:00Z', validatedAt: '2026-01-01T00:00:00Z',
+      version: 1,
+      provider: 'nbt-webvpn',
+      jar: { cookies: [] },
+      authenticatedAt: '2026-01-01T00:00:00Z',
+      validatedAt: '2026-01-01T00:00:00Z',
     });
     listTerms.mockRejectedValue(new SessionExpiredError());
     const ctx = fakeCtx();
@@ -302,7 +354,7 @@ describe('scheduleView — hub navigation', () => {
     let out = stripAnsi(scheduleView.render(ctx).join('\n'));
     expect(out).toContain(t().timetable.termDensityTitle);
 
-    expect(scheduleView.handleBack?.()).toBe(true);
+    expect(scheduleView.handleBack(ctx)).toBe(true);
     out = stripAnsi(scheduleView.render(ctx).join('\n'));
     expect(out).toContain(t().timetable.hubLogout);
   });
@@ -320,16 +372,20 @@ describe('scheduleView — hub navigation', () => {
 
   it('opens a meeting detail card on Enter when the cursor cell has a class, and returns to the hub on any key', async () => {
     const ctx = await loadIntoHub({
-      meetings: [{
-        sourceId: null, courseName: 'Math', teacherNames: ['Dr Li'], location: 'Room 201',
-        weekday: 1, startPeriod: 1, endPeriod: 1, weeks: [1], kind: 'regular',
-      }],
+      meetings: [
+        {
+          sourceId: null,
+          courseName: 'Math',
+          teacherNames: ['Dr Li'],
+          location: 'Room 201',
+          weekday: 1,
+          startPeriod: 1,
+          endPeriod: 1,
+          weeks: [1],
+          kind: 'regular',
+        },
+      ],
     });
-    // The default cursor starts at *today's real* weekday (whatever day this
-    // test suite happens to run on), not a fixed fixture date -- move all
-    // the way left first (no wraparound, so 7 presses guarantees landing on
-    // Monday/weekday 1 regardless of the starting weekday) to deterministically
-    // reach the cell that matches this fixture's Mon/period1 meeting.
     for (let i = 0; i < 7; i++) scheduleView.handleKey('\x1b[D', ctx);
     scheduleView.handleKey('\r', ctx);
     const out = stripAnsi(scheduleView.render(ctx).join('\n'));
@@ -351,9 +407,6 @@ describe('scheduleView — hub navigation', () => {
   it('moves the grid cursor right with ArrowRight and does not wrap past Sunday', async () => {
     const ctx = await loadIntoHub();
     for (let i = 0; i < 10; i++) scheduleView.handleKey('\x1b[C', ctx);
-    // No direct cursor accessor from the view -- confirm indirectly: Enter
-    // at the clamped-right edge (weekday 7) still doesn't crash and the
-    // view stays on hub (no meeting there in this empty-meetings fixture).
     scheduleView.handleKey('\r', ctx);
     const out = stripAnsi(scheduleView.render(ctx).join('\n'));
     expect(out).toContain(t().timetable.hubLogout);
@@ -366,14 +419,10 @@ describe('scheduleView — hub navigation', () => {
   });
 
   describe('footerHint — drill-down screens do not promise "move · open"', () => {
-    // Regression: meetingDetail/unresolved/termDensity all return to the hub
-    // on *any* key (see the tests above) -- there's no field to move a
-    // cursor within or open an item from, so the generic footer's "move ·
-    // open" wording was actively misleading on these three screens.
     it('termDensity mode drops move/open but keeps the tab-switch and quit hints', async () => {
       const ctx = await loadIntoHub();
       scheduleView.handleKey('t', ctx);
-      const hint = scheduleView.footerHint?.(5);
+      const hint = scheduleView.footerHint(5, 80);
       expect(hint).toBeDefined();
       expect(hint).not.toContain(t().menu.hintMove);
       expect(hint).not.toContain(t().menu.hintOpen);
@@ -383,10 +432,12 @@ describe('scheduleView — hub navigation', () => {
 
     it('unresolved mode drops move/open but keeps the tab-switch and quit hints', async () => {
       const ctx = await loadIntoHub({
-        unresolvedItems: [{ kind: 'practice', itemIndex: 0, sourceFields: { kcmc: 'Fitness test' } }],
+        unresolvedItems: [
+          { kind: 'practice', itemIndex: 0, sourceFields: { kcmc: 'Fitness test' } },
+        ],
       });
       scheduleView.handleKey('u', ctx);
-      const hint = scheduleView.footerHint?.(5);
+      const hint = scheduleView.footerHint(5, 80);
       expect(hint).not.toContain(t().menu.hintMove);
       expect(hint).not.toContain(t().menu.hintOpen);
       expect(hint).toContain(t().menu.hintQuit);
@@ -394,14 +445,23 @@ describe('scheduleView — hub navigation', () => {
 
     it('meetingDetail mode drops move/open but keeps the tab-switch and quit hints', async () => {
       const ctx = await loadIntoHub({
-        meetings: [{
-          sourceId: null, courseName: 'Math', teacherNames: ['Dr Li'], location: 'Room 201',
-          weekday: 1, startPeriod: 1, endPeriod: 1, weeks: [1], kind: 'regular',
-        }],
+        meetings: [
+          {
+            sourceId: null,
+            courseName: 'Math',
+            teacherNames: ['Dr Li'],
+            location: 'Room 201',
+            weekday: 1,
+            startPeriod: 1,
+            endPeriod: 1,
+            weeks: [1],
+            kind: 'regular',
+          },
+        ],
       });
       for (let i = 0; i < 7; i++) scheduleView.handleKey('\x1b[D', ctx);
       scheduleView.handleKey('\r', ctx);
-      const hint = scheduleView.footerHint?.(5);
+      const hint = scheduleView.footerHint(5, 80);
       expect(hint).not.toContain(t().menu.hintMove);
       expect(hint).not.toContain(t().menu.hintOpen);
     });
@@ -409,34 +469,33 @@ describe('scheduleView — hub navigation', () => {
     it('the standalone week grid is NOT treated as a drill-down -- its arrow/Enter keys genuinely move/open', async () => {
       const ctx = await loadIntoHub();
       scheduleView.handleKey('w', ctx);
-      const hint = scheduleView.footerHint?.(5);
+      const hint = scheduleView.footerHint(5, 80);
       expect(hint).toBeUndefined(); // falls through to chrome's generic hint
     });
   });
 
   describe('short/narrow terminal — inline grid falls back to the single-day view', () => {
-    // A busy-enough period table (matches schedule-render.test.ts's own
-    // "busyTimetable" fixture used to exercise this same fallback) so the
-    // grid genuinely does not fit, forcing renderHubBody to fall back to the
-    // single-day view. Unlike the old non-interactive strip this replaced,
-    // the single-day view represents the exact same gridCursor as the grid
-    // -- arrow keys/Enter must keep working the same way here, not be
-    // gated off.
     const busyPeriods = Array.from({ length: 12 }, (_, i) => ({
-      period: i + 1, label: null,
-      start: `${String(8 + i).padStart(2, '0')}:00`, end: `${String(8 + i).padStart(2, '0')}:45`,
+      period: i + 1,
+      label: null,
+      start: `${String(8 + i).padStart(2, '0')}:00`,
+      end: `${String(8 + i).padStart(2, '0')}:45`,
     }));
-    const busyMeetings = [{
-      sourceId: null, courseName: 'Math', teacherNames: ['Dr Li'], location: 'Room 201',
-      weekday: 1, startPeriod: 1, endPeriod: 1, weeks: [1], kind: 'regular' as const,
-    }];
+    const busyMeetings = [
+      {
+        sourceId: null,
+        courseName: 'Math',
+        teacherNames: ['Dr Li'],
+        location: 'Room 201',
+        weekday: 1,
+        startPeriod: 1,
+        endPeriod: 1,
+        weeks: [1],
+        kind: 'regular',
+      },
+    ] satisfies Timetable['meetings'];
 
     async function loadIntoShortHub(): Promise<AppContext> {
-      // fakeCtx()'s own cols (80) is already below MIN_GRID_COLS, so this
-      // never shows the grid regardless of bodyRows -- bodyRows=19 on top
-      // of that just also matches schedule-render.test.ts's own "too
-      // short" fixture, for a belt-and-suspenders "definitely not the grid"
-      // setup.
       const ctx = await loadIntoHub({ periods: busyPeriods, meetings: busyMeetings });
       ctx.bodyRows = 19;
       return ctx;
@@ -451,12 +510,6 @@ describe('scheduleView — hub navigation', () => {
 
     it('opens a meeting-detail card on Enter in the single-day view, same as in the grid', async () => {
       const ctx = await loadIntoShortHub();
-      // The default cursor starts at *today's real* weekday (whatever day
-      // this suite happens to run on) -- move all the way left first (no
-      // wraparound, so 7 presses guarantees landing on Monday/weekday 1
-      // regardless of the starting weekday) to deterministically land on
-      // the Math meeting. The single-day view is fully interactive, just
-      // like the grid -- Enter here must open the same detail card.
       for (let i = 0; i < 7; i++) scheduleView.handleKey('\x1b[D', ctx);
       scheduleView.handleKey('\r', ctx);
       const out = stripAnsi(scheduleView.render(ctx).join('\n'));

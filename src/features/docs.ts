@@ -2,6 +2,7 @@ import { marked } from 'marked';
 import { markedTerminal } from 'marked-terminal';
 import chalk from 'chalk';
 import open from 'open';
+import { createHash } from 'node:crypto';
 import { runMenu, menuFooter } from '../core/components/menu.js';
 import { runTextInput } from '../core/components/text-input.js';
 import { runConfirm } from '../core/components/confirm.js';
@@ -9,32 +10,38 @@ import { warning, createSpinner } from '../core/ui.js';
 import { pickIcon } from '../core/icons.js';
 import { spawn, execFileSync } from 'child_process';
 import { URLS } from '../config/data.js';
-import { t, fmt, type Translations } from '../i18n/index.js';
+import { t, fmt, getCurrentLanguage, type Translations } from '../i18n/index.js';
 import { enterScreen, breadcrumb } from '../core/transitions.js';
+import { sanitizeTerminalLine, sanitizeTerminalText, truncate } from '../core/text.js';
 import { createDocsClient } from '@nbtca/docs';
-import type { DocItem } from '@nbtca/docs';
-
-// ─── Terminal capability detection ───────────────────────────────────────────
+import type { DocItem, DocPage, DocsSearchResult } from '@nbtca/docs';
 
 type TerminalType = 'basic' | 'enhanced' | 'advanced';
 
 function detectTerminalType(): TerminalType {
-  const term        = (process.env['TERM']         || '').toLowerCase();
-  const termProgram = (process.env['TERM_PROGRAM'] || '').toLowerCase();
+  const term = (process.env['TERM'] ?? '').toLowerCase();
+  const termProgram = (process.env['TERM_PROGRAM'] ?? '').toLowerCase();
 
-  const hasImages  = termProgram.includes('iterm') || term.includes('kitty') ||
-                     termProgram.includes('wezterm') || term.includes('sixel');
-  const hasColor   = process.env['COLORTERM'] !== undefined || term.includes('color') ||
-                     term.includes('256') || term.includes('ansi') || termProgram !== '';
-  const hasUnicode = (process.env['LANG']   || '').includes('UTF-8') ||
-                     (process.env['LC_ALL'] || '').includes('UTF-8');
+  const hasImages =
+    termProgram.includes('iterm') ||
+    term.includes('kitty') ||
+    termProgram.includes('wezterm') ||
+    term.includes('sixel');
+  const hasColor =
+    process.env['COLORTERM'] !== undefined ||
+    term.includes('color') ||
+    term.includes('256') ||
+    term.includes('ansi') ||
+    termProgram !== '';
+  const hasUnicode =
+    (process.env['LANG'] ?? '').includes('UTF-8') ||
+    (process.env['LC_ALL'] ?? '').includes('UTF-8');
 
   if (hasImages && hasColor && hasUnicode) return 'advanced';
-  if (hasColor  && hasUnicode)             return 'enhanced';
+  if (hasColor && hasUnicode) return 'enhanced';
   return 'basic';
 }
 
-/** Check whether an external command exists on PATH (once at startup). */
 function commandExists(cmd: string): boolean {
   try {
     const check = process.platform === 'win32' ? 'where' : 'which';
@@ -47,21 +54,16 @@ function commandExists(cmd: string): boolean {
 
 let _terminalType: TerminalType | null = null;
 function getTerminalType(): TerminalType {
-  if (_terminalType === null) _terminalType = detectTerminalType();
+  _terminalType ??= detectTerminalType();
   return _terminalType;
 }
 
 let _hasGlow: boolean | null = null;
 function hasGlow(): boolean {
-  if (_hasGlow === null) _hasGlow = commandExists('glow');
+  _hasGlow ??= commandExists('glow');
   return _hasGlow;
 }
 
-// nbtca/documents links internally with relative/root-relative paths
-// (`./what-is-nbtca`, `/concepts/school`) that only resolve in a browser --
-// a terminal pager can neither follow nor hover-preview them, so showing
-// the path is dead weight. Matches './x', '../x', and '/x' but not a bare
-// '/' (an internal href is never *just* a slash in this content).
 function isInternalHref(href: string): boolean {
   return /^\.{0,2}\/./.test(href);
 }
@@ -81,24 +83,14 @@ export function ensureMarkedConfigured(): void {
     };
   }
 
-  // marked-terminal's own `text` renderer always uses the token's raw
-  // `.text` string, never `.tokens` -- fine for a plain text run, but a
-  // *tight* list item (nbtca/documents' convention throughout: no blank
-  // line between "- " entries) tokenizes its content as a `text` token
-  // with markdown links inside still sitting unparsed in `.tokens`, not
-  // resolved into `.text`. Result: every link inside every bullet list
-  // rendered as completely raw, un-clickable-looking `[text](url)` syntax
-  // (only paragraph-level links, which *do* go through inline-parsing,
-  // picked up the `link` override above at all). Recursing into
-  // `parser.parseInline` here when `.tokens` exists routes list-item links
-  // through the same override, matching how paragraph/heading already do.
   const renderPlainText = renderer.text;
   if (renderPlainText) {
     renderer.text = function (token) {
       const withTokens = token as typeof token & { tokens?: unknown[] };
       if (Array.isArray(withTokens.tokens) && withTokens.tokens.length > 0) {
-        return (this as { parser: { parseInline: (t: unknown[]) => string } })
-          .parser.parseInline(withTokens.tokens);
+        return (this as { parser: { parseInline: (t: unknown[]) => string } }).parser.parseInline(
+          withTokens.tokens,
+        );
       }
       return renderPlainText.call(this, token);
     };
@@ -107,36 +99,49 @@ export function ensureMarkedConfigured(): void {
   marked.use(extension);
 }
 
-// ─── marked-terminal renderer ─────────────────────────────────────────────────
-
 function getRendererOptions(type: TerminalType): Record<string, unknown> {
   const width = 80;
 
   const unicodeTableChars = {
-    top: '─', 'top-mid': '┬', 'top-left': '┌', 'top-right': '┐',
-    bottom: '─', 'bottom-mid': '┴', 'bottom-left': '└', 'bottom-right': '┘',
-    left: '│', 'left-mid': '├', mid: '─', 'mid-mid': '┼',
-    right: '│', 'right-mid': '┤', middle: '│'
+    top: '─',
+    'top-mid': '┬',
+    'top-left': '┌',
+    'top-right': '┐',
+    bottom: '─',
+    'bottom-mid': '┴',
+    'bottom-left': '└',
+    'bottom-right': '┘',
+    left: '│',
+    'left-mid': '├',
+    mid: '─',
+    'mid-mid': '┼',
+    right: '│',
+    'right-mid': '┤',
+    middle: '│',
   };
 
   const asciiTableChars = {
-    top: '-', 'top-mid': '+', 'top-left': '+', 'top-right': '+',
-    bottom: '-', 'bottom-mid': '+', 'bottom-left': '+', 'bottom-right': '+',
-    left: '|', 'left-mid': '+', mid: '-', 'mid-mid': '+',
-    right: '|', 'right-mid': '+', middle: '|'
+    top: '-',
+    'top-mid': '+',
+    'top-left': '+',
+    'top-right': '+',
+    bottom: '-',
+    'bottom-mid': '+',
+    'bottom-left': '+',
+    'bottom-right': '+',
+    left: '|',
+    'left-mid': '+',
+    mid: '-',
+    'mid-mid': '+',
+    right: '|',
+    'right-mid': '+',
+    middle: '|',
   };
 
   return {
     width,
     emoji: true,
     unescape: true,
-    // marked-terminal defaults this to true, prefixing every heading with
-    // its literal '#'/'##'/etc. markdown syntax. displayWithLess() already
-    // prints its own clean title line above the content, and most docs'
-    // first line is an H1 matching that same title -- so the raw '#
-    // Title' immediately below just repeated it a second time, syntax
-    // marks and all. firstHeading/heading's bold+color already
-    // distinguishes heading levels without the extra prefix.
     showSectionPrefix: false,
     firstHeading: chalk.bold.cyan,
     heading: chalk.bold.white,
@@ -149,13 +154,10 @@ function getRendererOptions(type: TerminalType): Record<string, unknown> {
     link: chalk.cyan,
     href: chalk.cyan.underline,
     tableOptions: {
-      chars: type === 'basic' ? asciiTableChars : unicodeTableChars
-    }
+      chars: type === 'basic' ? asciiTableChars : unicodeTableChars,
+    },
   };
 }
-
-
-// ─── Data layer ───────────────────────────────────────────────────────────────
 
 interface RenderedDoc {
   fingerprint: string;
@@ -165,13 +167,29 @@ interface RenderedDoc {
   readTime: string;
 }
 
-interface CacheEntry<T> { value: T; expiresAt: number }
+interface CacheEntry<T> {
+  value: T;
+  expiresAt: number;
+}
 
 const RENDER_CACHE_TTL_MS = 10 * 60 * 1000;
 const RENDER_CACHE_MAX = 50;
 const renderCache = new Map<string, CacheEntry<RenderedDoc>>();
+const METADATA_CACHE_TTL_MS = 10 * 60 * 1000;
+const METADATA_CACHE_MAX = 200;
+const METADATA_CONCURRENCY = 4;
 
-let docsClient = createDocsClient();
+interface DocMetadata {
+  title: string;
+  summary: string;
+  route: string;
+}
+
+const metadataCache = new Map<string, CacheEntry<DocMetadata>>();
+const metadataRequests = new Map<string, Promise<DocMetadata>>();
+let cacheGeneration = 0;
+
+const docsClient = createDocsClient();
 
 function getFreshRender(key: string): RenderedDoc | null {
   const entry = renderCache.get(key);
@@ -187,30 +205,112 @@ function setRender(key: string, value: RenderedDoc): void {
 }
 
 function contentFingerprint(content: string): string {
-  return `${content.length}:${content.slice(0, 80)}:${content.slice(-80)}`;
+  return createHash('sha256').update(content).digest('base64url');
+}
+
+function renderCacheKey(filePath: string): string {
+  return [
+    filePath,
+    getCurrentLanguage(),
+    getTerminalType(),
+    pickIcon('unicode', 'ascii'),
+    chalk.level,
+  ].join('\0');
 }
 
 export function clearDocsCache(): void {
+  cacheGeneration += 1;
   docsClient.clear();
   renderCache.clear();
+  metadataCache.clear();
+  metadataRequests.clear();
 }
 
-async function fetchFileContent(path: string): Promise<string> {
+async function fetchDocument(path: string): Promise<DocPage> {
   try {
-    return await docsClient.getFile(path);
+    return await docsClient.getDocument(path);
   } catch (err) {
     const trans = t();
-    throw new Error(fmt(trans.docs.fetchFileFailed, { error: String(err) }));
+    throw new Error(fmt(trans.docs.fetchFileFailed, { error: sanitizeTerminalLine(String(err)) }));
   }
 }
 
-// ─── Content cleaning ─────────────────────────────────────────────────────────
+function metadataFromPage(page: DocPage): DocMetadata {
+  return {
+    title: sanitizeTerminalLine(page.title),
+    summary: sanitizeTerminalLine(page.summary),
+    route: page.route,
+  };
+}
 
-/**
- * Line-by-line scanner that processes fenced code blocks before marked sees them:
- * - mermaid blocks → styled blockquote placeholder with diagram type
- * - other blocks with a language tag → prepend an inline-code label line
- */
+function getFreshMetadata(path: string): DocMetadata | null {
+  const entry = metadataCache.get(path);
+  if (!entry) return null;
+  if (entry.expiresAt <= Date.now()) {
+    metadataCache.delete(path);
+    return null;
+  }
+  metadataCache.delete(path);
+  metadataCache.set(path, entry);
+  return entry.value;
+}
+
+function setMetadata(path: string, value: DocMetadata): void {
+  metadataCache.delete(path);
+  metadataCache.set(path, { value, expiresAt: Date.now() + METADATA_CACHE_TTL_MS });
+  if (metadataCache.size > METADATA_CACHE_MAX) {
+    const oldest = metadataCache.keys().next().value;
+    if (oldest) metadataCache.delete(oldest);
+  }
+}
+
+function loadDocMetadata(path: string): Promise<DocMetadata> {
+  const cached = getFreshMetadata(path);
+  if (cached) return Promise.resolve(cached);
+  const pending = metadataRequests.get(path);
+  if (pending) return pending;
+
+  const generation = cacheGeneration;
+  const request = fetchDocument(path).then((page) => {
+    const metadata = metadataFromPage(page);
+    if (generation === cacheGeneration) setMetadata(path, metadata);
+    return metadata;
+  });
+  metadataRequests.set(path, request);
+  const release = () => {
+    if (metadataRequests.get(path) === request) metadataRequests.delete(path);
+  };
+  void request.then(release, release);
+  return request;
+}
+
+async function loadRenderedDoc(filePath: string): Promise<{
+  rawContent: string;
+  renderedDoc: RenderedDoc;
+}> {
+  const generation = cacheGeneration;
+  const page = await fetchDocument(filePath);
+  if (generation === cacheGeneration) setMetadata(filePath, metadataFromPage(page));
+  const rawContent = page.content;
+  const fingerprint = contentFingerprint(rawContent);
+  const cacheKey = renderCacheKey(filePath);
+  const cached = getFreshRender(cacheKey);
+  if (cached?.fingerprint === fingerprint) return { rawContent, renderedDoc: cached };
+
+  const cleaned = cleanMarkdownContent(rawContent, getTerminalType());
+  const title =
+    sanitizeTerminalLine(page.title) || cleanFileName(filePath.split('/').pop() ?? filePath);
+  const renderedDoc = {
+    fingerprint,
+    cleaned,
+    rendered: await marked(cleaned),
+    title,
+    readTime: estimateReadTime(cleaned),
+  };
+  if (generation === cacheGeneration) setRender(cacheKey, renderedDoc);
+  return { rawContent, renderedDoc };
+}
+
 function processFencedCodeBlocks(content: string): string {
   const trans = t();
   const lines = content.split('\n');
@@ -222,11 +322,15 @@ function processFencedCodeBlocks(content: string): string {
 
   for (const line of lines) {
     if (!inBlock) {
-      // Accept VitePress code meta after language: ```js{1,3} or ```ts [file.ts] :line-numbers
-      const m = line.match(/^(`{3,})(\w+)?[^`\n]*$/);
+      const m = /^(`{3,})(\w+)?[^`\n]*$/.exec(line);
       if (m) {
-        inBlock   = true;
-        fence     = m[1]!;
+        const matchedFence = m[1];
+        if (!matchedFence) {
+          result.push(line);
+          continue;
+        }
+        inBlock = true;
+        fence = matchedFence;
         blockLang = (m[2] ?? '').toLowerCase();
         blockBody = [];
       } else {
@@ -238,9 +342,11 @@ function processFencedCodeBlocks(content: string): string {
         const body = blockBody.join('\n');
 
         if (blockLang === 'mermaid') {
-          // Skip %%{ init: ... }%% config directives to find the actual diagram type
-          const meaningfulLine = body.trim().split('\n')
-            .find(l => !l.trimStart().startsWith('%%') && l.trim()) ?? '';
+          const meaningfulLine =
+            body
+              .trim()
+              .split('\n')
+              .find((l) => !l.trimStart().startsWith('%%') && l.trim()) ?? '';
           const firstToken = meaningfulLine.trim().split(/\s+/)[0] ?? 'diagram';
           const icon = pickIcon('📊', '[diagram]');
           result.push(`> ${icon} **${firstToken}** — _${trans.docs.mermaidHint}_`);
@@ -265,105 +371,153 @@ function processFencedCodeBlocks(content: string): string {
 }
 
 const CONTAINER_ICONS_ASCII: Record<string, string> = {
-  info: '[INFO]', tip: '[TIP]', warning: '[WARN]', danger: '[DANGER]', details: '[DETAIL]'
+  info: '[INFO]',
+  tip: '[TIP]',
+  warning: '[WARN]',
+  danger: '[DANGER]',
+  details: '[DETAIL]',
 };
 const CONTAINER_ICONS_UNICODE: Record<string, string> = {
-  info: 'ℹ️', tip: '💡', warning: '⚠️', danger: '🚨', details: '▶️'
+  info: 'ℹ️',
+  tip: '💡',
+  warning: '⚠️',
+  danger: '🚨',
+  details: '▶️',
 };
 
-export function cleanMarkdownContent(content: string, type: TerminalType = getTerminalType()): string {
-  let c = content;
+function componentAttributes(source: string): ReadonlyMap<string, string> {
+  const attributes = new Map<string, string>();
+  const pattern = /(?:^|\s)([:@\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
+  for (const match of source.matchAll(pattern)) {
+    const name = match[1];
+    const value = match[2] ?? match[3];
+    if (name && value !== undefined) attributes.set(name, sanitizeTerminalLine(value));
+  }
+  return attributes;
+}
 
-  // 1. YAML frontmatter
-  c = c.replace(/^---\n[\s\S]*?\n---\n?/m, '');
+function replaceDocumentComponents(content: string): string {
+  let result = content;
 
-  // 1.5. Fenced code blocks: mermaid → placeholder, other langs → label prefix
+  result = result.replace(/<PageHero\b([\s\S]*?)\/>/gi, (_match: string, source: string) => {
+    const attributes = componentAttributes(source);
+    const title = attributes.get('title');
+    const lede = attributes.get('lede');
+    return [title ? `# ${title}` : '', lede ?? ''].filter(Boolean).join('\n\n');
+  });
+
+  result = result.replace(/<LinkCard\b([\s\S]*?)\/>/gi, (_match: string, source: string) => {
+    const attributes = componentAttributes(source);
+    const href = attributes.get('href');
+    const title = attributes.get('title');
+    if (!href || !title) return '';
+    const description = attributes.get('desc');
+    return `- [${title}](${href})${description ? ` — ${description}` : ''}`;
+  });
+
+  result = result.replace(/<(?:Figure|Band)\b([\s\S]*?)\/>/gi, (_match: string, source: string) => {
+    const attributes = componentAttributes(source);
+    const src = attributes.get('src');
+    if (!src) return '';
+    const label = attributes.get('caption') ?? attributes.get('alt') ?? 'image';
+    const details = [attributes.get('date'), attributes.get('source')].filter(Boolean).join(' · ');
+    return `![${label}](${src})${details ? `\n\n_${details}_` : ''}`;
+  });
+
+  result = result.replace(/<Split\b([^>]*)>/gi, (_match: string, source: string) => {
+    const heading = componentAttributes(source).get('heading');
+    return heading ? `### ${heading}\n\n` : '';
+  });
+
+  result = result.replace(/<TimelineEntry\b([^>]*)>/gi, (_match: string, source: string) => {
+    const attributes = componentAttributes(source);
+    const heading = [attributes.get('year'), attributes.get('title')].filter(Boolean).join(' · ');
+    return heading ? `### ${heading}\n\n` : '';
+  });
+
+  result = result.replace(/<FactStrip\b([\s\S]*?)\/>/gi, (_match: string, source: string) => {
+    const facts = componentAttributes(source).get(':facts');
+    if (!facts) return '';
+    return [...facts.matchAll(/\{\s*label:\s*'([^']*)'\s*,\s*value:\s*'([^']*)'\s*\}/g)]
+      .map((match) => `- **${match[1]}:** ${match[2]}`)
+      .join('\n');
+  });
+
+  return result;
+}
+
+export function cleanMarkdownContent(
+  content: string,
+  type: TerminalType = getTerminalType(),
+): string {
+  let c = sanitizeTerminalText(content);
+
+  c = c.replace(/^---\n[\s\S]*?\n---(?:\n|$)/, '');
+
   c = processFencedCodeBlocks(c);
 
-  // 2. VitePress script / style blocks
   c = c.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
   c = c.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
+  c = replaceDocumentComponents(c);
 
-  // 3. VitePress containers → blockquote with icon
   c = c.replace(
     /^:::\s*(info|tip|warning|danger|details)\s*(.*?)\n([\s\S]*?)^:::\s*$/gm,
     (_m, type: string, title: string, body: string) => {
-      const label = (title.trim() || type.charAt(0).toUpperCase() + type.slice(1));
+      const label = title.trim() || type.charAt(0).toUpperCase() + type.slice(1);
       const icon = pickIcon(CONTAINER_ICONS_UNICODE[type] ?? '', CONTAINER_ICONS_ASCII[type] ?? '');
-      const quoted = body.trimEnd().split('\n').map(l => `> ${l}`).join('\n');
+      const quoted = body
+        .trimEnd()
+        .split('\n')
+        .map((l) => `> ${l}`)
+        .join('\n');
       return `> ${icon} **${label}**\n>\n${quoted}\n`;
-    }
+    },
   );
   c = c.replace(/^:::\s*\w*.*$/gm, '');
 
-  // Internal wiki links (./foo, /concepts/foo) are handled at the renderer
-  // level (ensureMarkedConfigured's link override below), not here -- an
-  // earlier version of this rewrote link syntax into pre-colored raw ANSI
-  // text before marked() ever saw it, which broke when marked-terminal's
-  // own text reflow/wrapping ran on top of already-escaped text, corrupting
-  // the escape sequences into literal visible "[36m...[24m" garbage.
-  // Overriding the renderer instead lets marked-terminal own all ANSI
-  // output, so nothing downstream can mangle it.
-
-  // 4. GitHub / GitLab callout alerts  (> [!NOTE])
-  c = c.replace(/^>\s*\[!(NOTE|TIP|WARNING|CAUTION|IMPORTANT)\]\s*$/gim,
-    (_, type: string) => `> **${type.charAt(0) + type.slice(1).toLowerCase()}:**`
+  c = c.replace(
+    /^>\s*\[!(NOTE|TIP|WARNING|CAUTION|IMPORTANT)\]\s*$/gim,
+    (_, type: string) => `> **${type.charAt(0) + type.slice(1).toLowerCase()}:**`,
   );
 
-  // 5. [[toc]] — no value in terminal
   c = c.replace(/\[\[toc\]\]/gi, '');
 
-  // 5.5. VitePress heading anchors {#custom-id} — no value in terminal
   c = c.replace(/^(#{1,6}\s+[^\n]*?)\s*\{#[^}]+\}\s*$/gm, '$1');
 
-  // 5.6. ==highlight== → bold (VitePress extended syntax)
   c = c.replace(/==([^=\n]+)==/g, '**$1**');
 
-  // 6. Images — adapt to terminal capability
   if (type === 'basic') {
     c = c.replace(
       /!\[([^\]]*)\]\([^)]+\)/g,
-      (_, alt) => `${pickIcon('📎', '[image]')} ${alt || 'image'}`
+      (_match: string, alt: string) =>
+        `${pickIcon('📎', '[image]')} ${alt.length > 0 ? alt : 'image'}`,
     );
   } else {
-    c = c.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) => {
-      const filename = (url as string).split('/').pop() || url;
-      return `${pickIcon('🖼️', '[image]')} **${alt || 'image'}** _(${filename})_`;
+    c = c.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_match: string, alt: string, url: string) => {
+      const basename = url.split('/').pop();
+      const filename = basename?.length ? basename : url;
+      return `${pickIcon('🖼️', '[image]')} **${alt.length > 0 ? alt : 'image'}** _(${filename})_`;
     });
   }
 
-  // 7. HTML comments
   c = c.replace(/<!--[\s\S]*?-->/g, '');
 
-  // 8. Strip HTML tags, keep inner text
-  c = c.replace(/<br\s*\/?>/gi, '\n');                                   // void: line break
-  c = c.replace(/<(?:hr|input|link|meta)\b[^>]*\/?>/gi, '');            // void: discard
+  c = c.replace(/<br\s*\/?>/gi, '\n'); // void: line break
+  c = c.replace(/<(?:hr|input|link|meta)\b[^>]*\/?>/gi, ''); // void: discard
   c = c.replace(/<([a-z][a-z0-9]*)\b[^>]*>([\s\S]*?)<\/\1>/gi, '$2');
   c = c.replace(/<[a-z][a-z0-9]*\b[^>]*\/>/gi, '');
+  c = c.replace(/<\/(?:Split|TimelineEntry)>/gi, '');
 
-  // 8.5. Task list checkboxes
   c = c.replace(/^(\s*[-*+] )\[x\] /gim, '$1☑ ');
-  c = c.replace(/^(\s*[-*+] )\[ \] /gm,  '$1☐ ');
+  c = c.replace(/^(\s*[-*+] )\[ \] /gm, '$1☐ ');
 
-  // 9. Collapse runs of 3+ blank lines
   c = c.replace(/\n{3,}/g, '\n\n');
 
   return c.trim();
 }
 
-function extractDocTitle(rawContent: string, cleanedContent: string): string | null {
-  const fmMatch = rawContent.match(/^---\n[\s\S]*?\n---/m);
-  if (fmMatch) {
-    const titleMatch = fmMatch[0].match(/^title:\s*['"]?(.+?)['"]?\s*$/m);
-    if (titleMatch?.[1]) return titleMatch[1].trim();
-  }
-  const h1Match = cleanedContent.match(/^#\s+(.+)$/m);
-  return h1Match?.[1]?.trim() ?? null;
-}
-
-/** Approximate reading time: ~200 words/min for technical Chinese/English prose. */
 function estimateReadTime(text: string): string {
-  const cjkChars = (text.match(/[㐀-鿿]/g) || []).length;
+  const cjkChars = [...text.matchAll(/[㐀-鿿]/g)].length;
   const nonCjk = text.replace(/[㐀-鿿]/g, ' ');
   const words = nonCjk.trim().split(/\s+/).filter(Boolean).length;
   const units = words + cjkChars / 2;
@@ -371,33 +525,29 @@ function estimateReadTime(text: string): string {
   return mins === 1 ? '~1 min' : `~${mins} min`;
 }
 
-/** Extract h2/h3 headings for TOC display (skips the h1 title). */
 function extractTOC(content: string): string[] {
-  const lines = content.split('\n').filter(l => /^#{2,3}\s/.test(l));
-  return lines.map(l => {
-    const m = l.match(/^(#+)/);
+  const lines = content.split('\n').filter((l) => /^#{2,3}\s/.test(l));
+  return lines.map((l) => {
+    const m = /^(#+)/.exec(l);
     const level = m?.[1]?.length ?? 2;
     const text = l.replace(/^#+\s+/, '').trim();
     return (level === 3 ? '  ' : '') + text;
   });
 }
 
-/** True if the markdown source contains a pipe table. */
 function hasMarkdownTable(content: string): boolean {
   return /^\|.+\|/m.test(content) && /^\|[-: |]+\|/m.test(content);
 }
 
-/** True if the markdown source contains a mermaid diagram block. */
 function hasMermaidBlock(content: string): boolean {
   return /^```mermaid\b/m.test(content);
 }
 
-// ─── In-app reader (link-following, no shell-out to less/glow) ────────────────
+export interface DocLink {
+  href: string;
+  text: string;
+}
 
-export interface DocLink { href: string; text: string }
-
-/** Every internal ([text](href) where isInternalHref(href)) link in a
- * document, in reading order, raw href not yet resolved to a real path. */
 function extractInternalLinks(markdown: string): DocLink[] {
   const links: DocLink[] = [];
   const re = /\[([^\]]+)\]\(([^)]+)\)/g;
@@ -409,22 +559,25 @@ function extractInternalLinks(markdown: string): DocLink[] {
   return links;
 }
 
-/** Resolves a wiki-style href (relative to the *linking* document, VitePress
- * conventions: no .md extension, trailing '/' means that dir's index) into
- * a real repo-relative path matching DocItem.path -- e.g. './what-is-nbtca'
- * from within 'about/index.md' -> 'about/what-is-nbtca.md'; '/concepts/'
- * (root-relative, works from anywhere) -> 'concepts/index.md'. */
-function resolveInternalHref(href: string, fromPath: string): string {
+export function resolveInternalHref(href: string, fromPath: string): string {
+  const normalizedHref = href.split(/[?#]/, 1)[0] ?? '';
   const fromDir = fromPath.includes('/') ? fromPath.slice(0, fromPath.lastIndexOf('/')) : '';
-  const combined = href.startsWith('/') ? href.slice(1) : (fromDir ? `${fromDir}/${href}` : href);
+  const combined = normalizedHref.startsWith('/')
+    ? normalizedHref.slice(1)
+    : fromDir
+      ? `${fromDir}/${normalizedHref}`
+      : normalizedHref;
   const stack: string[] = [];
   for (const part of combined.split('/')) {
     if (part === '' || part === '.') continue;
-    if (part === '..') { stack.pop(); continue; }
+    if (part === '..') {
+      stack.pop();
+      continue;
+    }
     stack.push(part);
   }
   let target = stack.join('/');
-  if (target === '' || href.endsWith('/')) target += (target ? '/' : '') + 'index';
+  if (target === '' || normalizedHref.endsWith('/')) target += (target ? '/' : '') + 'index';
   if (!target.endsWith('.md')) target += '.md';
   return target;
 }
@@ -433,30 +586,12 @@ export interface ReaderDoc {
   path: string;
   title: string;
   lines: string[];
-  links: DocLink[]; // .href here is already resolved to a real DocItem.path
+  links: DocLink[];
 }
 
-/** Loads and renders a doc for the native in-app reader -- the same
- * fetch/clean/render/cache pipeline viewMarkdownFile uses, minus the
- * spinner/pager/post-read menu, which belong to the classic-pager
- * presentation layer, not this one. */
 export async function loadDocForReader(filePath: string): Promise<ReaderDoc> {
   ensureMarkedConfigured();
-  const rawContent = await fetchFileContent(filePath);
-  const fingerprint = contentFingerprint(rawContent);
-  const cached = getFreshRender(filePath);
-
-  let renderedDoc: RenderedDoc;
-  if (cached && cached.fingerprint === fingerprint) {
-    renderedDoc = cached;
-  } else {
-    const cleaned = cleanMarkdownContent(rawContent, getTerminalType());
-    const title = extractDocTitle(rawContent, cleaned) || cleanFileName(filePath.split('/').pop() ?? filePath);
-    const readTime = estimateReadTime(cleaned);
-    const rendered = await marked(cleaned) as string;
-    renderedDoc = { fingerprint, cleaned, rendered, title, readTime };
-    setRender(filePath, renderedDoc);
-  }
+  const { renderedDoc } = await loadRenderedDoc(filePath);
 
   const seen = new Set<string>();
   const links: DocLink[] = [];
@@ -464,13 +599,16 @@ export async function loadDocForReader(filePath: string): Promise<ReaderDoc> {
     const resolved = resolveInternalHref(raw.href, filePath);
     if (seen.has(resolved)) continue;
     seen.add(resolved);
-    links.push({ text: raw.text, href: resolved });
+    links.push({ text: sanitizeTerminalLine(raw.text), href: resolved });
   }
 
-  return { path: filePath, title: renderedDoc.title, lines: renderedDoc.rendered.split('\n'), links };
+  return {
+    path: filePath,
+    title: renderedDoc.title,
+    lines: renderedDoc.rendered.split('\n'),
+    links,
+  };
 }
-
-// ─── Document tree ────────────────────────────────────────────────────────────
 
 const TOP_SECTION_ORDER = ['about', 'guide', 'repair', 'concepts', 'archived'];
 const TOP_SECTION_SKIP = new Set(['docs', 'index.md', 'README.md']);
@@ -480,10 +618,25 @@ export interface DocSection {
   key: string;
   label: string;
   count: number;
-  files: DocItem[];
+  files: ListedDoc[];
 }
 
-export function localizeDocSections(sections: readonly DocSection[], trans: Translations = t()): DocSection[] {
+export interface ListedDoc extends DocItem {
+  title: string;
+  summary: string;
+}
+
+export interface SearchDoc extends ListedDoc {
+  excerpt: string;
+  route: string;
+  score: number;
+  section: string | null;
+}
+
+export function localizeDocSections(
+  sections: readonly DocSection[],
+  trans: Translations = t(),
+): DocSection[] {
   const labels: Record<string, string> = {
     about: trans.docs.categoryAbout,
     guide: trans.docs.categoryGuide,
@@ -495,70 +648,102 @@ export function localizeDocSections(sections: readonly DocSection[], trans: Tran
 }
 
 export function cleanFileName(name: string): string {
-  const base = name.replace(/\.md$/, '');
+  const base = sanitizeTerminalLine(name).replace(/\.md$/, '');
   if (/^[\d.]/.test(base)) return base;
-  return base
-    .replace(/[-_]/g, ' ')
-    .replace(/\b([a-z])/g, (_, c: string) => c.toUpperCase());
+  return base.replace(/[-_]/g, ' ').replace(/\b([a-z])/g, (_, c: string) => c.toUpperCase());
 }
 
-const KNOWN_DOC_TITLES: Readonly<Record<string, string>> = {
-  'tutorial/2025/clean-drive-c.md': 'C盘清理标准化流程',
-  'tutorial/2025/edu-email.md': '教育邮箱用途',
-  'tutorial/2025/github-education-verification.md': 'Github Education 认证指南',
-  'tutorial/2025/github-workflow.md': '快速上手社团目前的Github工作流',
-  'tutorial/2025/google-calendar.md': '谷歌日历使用指南',
-  'tutorial/2025/nginx-usage.md': '快速上手你的nginx',
-  'tutorial/2025/tailscale-usage.md': '社团自建 Tailscale 使用指南',
-  'tutorial/manual/hardware-establish.md': '计算机硬件系统的搭建与维护',
-  'tutorial/manual/net-usage.md': '国际互联网的使用',
-  'tutorial/manual/os-skills.md': '基础操作系统的使用技术',
-  'tutorial/manual/windows-from-scratch.md': '从零开始安装 Windows',
-  'process/2025/apply-for-credits.md': '申请第二课堂学分',
-  'process/2025/borrow-classroom.md': '借教室',
-  'process/2025/event-organization.md': '活动举办文档(待完善)',
-  'process/2025/nbtca-post.md': '撰写并发布你的第一篇NBTCA博客',
-  'process/2025/reimbursement-process.md': '报销流程',
-  'repair/checklist.md': '维修日检查单',
-  'repair/guide.md': '维修操作指南',
-  'repair/repair-day.md': '维修日',
-  'repair/tools.md': '软件仓库（校内镜像站）',
-  'repair/weekend.md': '维修工单系统 (weekend)',
-};
+export function displayDocTitle(name: string, title?: string): string {
+  const candidate = title?.trim();
+  return sanitizeTerminalLine(candidate?.length ? candidate : cleanFileName(name));
+}
 
-export function displayDocTitle(path: string, name: string): string {
-  return KNOWN_DOC_TITLES[path] ?? cleanFileName(name);
+function listedDoc(item: DocItem, metadata?: DocMetadata): ListedDoc {
+  return {
+    ...item,
+    name: sanitizeTerminalLine(item.name),
+    title: displayDocTitle(item.name, metadata?.title),
+    summary: sanitizeTerminalLine(metadata?.summary ?? ''),
+  };
+}
+
+export async function fetchDocMetadata(items: readonly DocItem[]): Promise<ListedDoc[]> {
+  const results = items.map((item) => listedDoc(item));
+  let nextIndex = 0;
+
+  async function worker(): Promise<void> {
+    for (;;) {
+      const index = nextIndex;
+      nextIndex += 1;
+      if (index >= items.length) return;
+      const item = items[index];
+      if (!item) continue;
+      try {
+        results[index] = listedDoc(item, await loadDocMetadata(item.path));
+      } catch {
+        results[index] = listedDoc(item);
+      }
+    }
+  }
+
+  const workerCount = Math.min(METADATA_CONCURRENCY, items.length);
+  await Promise.all(Array.from({ length: workerCount }, worker));
+  return results;
+}
+
+export async function fetchSectionMetadata(section: DocSection): Promise<DocSection> {
+  const files = await fetchDocMetadata(section.files);
+  return { ...section, count: files.length, files };
+}
+
+function searchDoc(result: DocsSearchResult): SearchDoc {
+  return {
+    name: sanitizeTerminalLine(result.name),
+    path: result.path,
+    type: 'file',
+    title: displayDocTitle(result.name, result.title),
+    summary: sanitizeTerminalLine(result.summary),
+    excerpt: sanitizeTerminalLine(result.excerpt),
+    route: result.route,
+    score: result.score,
+    section: result.section,
+  };
+}
+
+export async function searchDocuments(query: string): Promise<SearchDoc[]> {
+  return (await docsClient.search(query, { limit: 20 })).map(searchDoc);
 }
 
 export function buildSections(all: DocItem[]): DocSection[] {
-  const groups = new Map<string, DocItem[]>();
+  const groups = new Map<string, ListedDoc[]>();
   for (const item of all) {
     const parts = item.path.split('/');
     if (parts.length < 2) continue;
-    const rawTop = parts[0]!;
+    const rawTop = parts[0];
+    if (!rawTop) continue;
     if (TOP_SECTION_SKIP.has(rawTop)) continue;
     const top = SECTION_ALIAS[rawTop] ?? rawTop;
     if (!TOP_SECTION_ORDER.includes(top)) continue;
-    if (!groups.has(top)) groups.set(top, []);
-    groups.get(top)!.push(item);
+    const items = groups.get(top);
+    const file = listedDoc(item);
+    if (items) items.push(file);
+    else groups.set(top, [file]);
   }
 
-  return localizeDocSections(TOP_SECTION_ORDER
-    .filter(k => groups.has(k))
-    .map(k => ({
-      key:   k,
-      label: k,
-      count: groups.get(k)!.length,
-      files: groups.get(k)!,
-    })));
+  const orderedGroups = TOP_SECTION_ORDER.flatMap((key) => {
+    const files = groups.get(key);
+    return files ? [{ key, label: key, count: files.length, files }] : [];
+  });
+  return localizeDocSections(orderedGroups);
 }
 
-export function getArchivedGroups(files: DocItem[]): Map<string, DocItem[]> {
-  const groups = new Map<string, DocItem[]>();
+export function getArchivedGroups(files: ListedDoc[]): Map<string, ListedDoc[]> {
+  const groups = new Map<string, ListedDoc[]>();
   for (const item of files) {
     const group = item.path.split('/')[1] ?? 'other';
-    if (!groups.has(group)) groups.set(group, []);
-    groups.get(group)!.push(item);
+    const items = groups.get(group);
+    if (items) items.push(item);
+    else groups.set(group, [item]);
   }
   return groups;
 }
@@ -584,19 +769,36 @@ async function loadSections(): Promise<DocSection[] | null> {
   }
 }
 
-// ─── Pager layer ──────────────────────────────────────────────────────────────
+function pipeToPager(command: string, args: string[], content: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, { stdio: ['pipe', 'inherit', 'inherit'] });
+    let settled = false;
+    const finish = (started: boolean) => {
+      if (settled) return;
+      settled = true;
+      resolve(started);
+    };
 
-async function displayWithGlow(cleanedMarkdown: string): Promise<void> {
-  const cols = String(Math.min(process.stdout.columns || 80, 80));
-  return new Promise(resolve => {
-    const child = spawn('glow', ['--pager', '--width', cols, '-'], {
-      stdio: ['pipe', 'inherit', 'inherit']
+    child.once('close', () => {
+      finish(true);
     });
-    child.stdin.write(cleanedMarkdown, 'utf-8');
-    child.stdin.end();
-    child.on('close', resolve);
-    child.on('error', resolve);
+    child.once('error', () => {
+      finish(false);
+    });
+    child.stdin.once('error', () => {
+      finish(true);
+    });
+    try {
+      child.stdin.end(content, 'utf8');
+    } catch {
+      finish(false);
+    }
   });
+}
+
+async function displayWithGlow(cleanedMarkdown: string): Promise<boolean> {
+  const cols = String(Math.min(process.stdout.columns || 80, 80));
+  return pipeToPager('glow', ['--pager', '--width', cols, '-'], cleanedMarkdown);
 }
 
 async function displayWithLess(
@@ -610,15 +812,16 @@ async function displayWithLess(
   const cols = Math.min(process.stdout.columns || 80, 80);
   const rule = chalk.dim('─'.repeat(cols));
 
-  const tocBlock = toc.length >= 3
-    ? [
-        chalk.dim(`  ${trans.docs.tocTitle}`),
-        chalk.dim(`  ${'─'.repeat(36)}`),
-        ...toc.map(h => chalk.dim(`  ${h}`)),
-        chalk.dim(`  ${'─'.repeat(36)}`),
-        '',
-      ].join('\n')
-    : '';
+  const tocBlock =
+    toc.length >= 3
+      ? [
+          chalk.dim(`  ${trans.docs.tocTitle}`),
+          chalk.dim(`  ${'─'.repeat(36)}`),
+          ...toc.map((h) => chalk.dim(`  ${h}`)),
+          chalk.dim(`  ${'─'.repeat(36)}`),
+          '',
+        ].join('\n')
+      : '';
 
   const header = [
     '',
@@ -629,40 +832,22 @@ async function displayWithLess(
     '',
   ].join('\n');
 
-  const footer = [
-    '',
-    rule,
-    chalk.dim(`  ${trans.docs.endOfDocument}`),
-    '',
-  ].join('\n');
+  const footer = ['', rule, chalk.dim(`  ${trans.docs.endOfDocument}`), ''].join('\n');
 
   const fullContent = header + rendered + footer;
-  const pagerSetting = (process.env['PAGER'] || 'less').trim();
+  const pagerSetting = (process.env['PAGER'] ?? 'less').trim();
   const [pagerCommand = 'less', ...pagerArgs] = pagerSetting.split(/\s+/).filter(Boolean);
-  const args = [...pagerArgs, '-R', '-F', '-X', '-i', '-j4'];
+  const isLess = /(?:^|[\\/])less(?:\.exe)?$/i.test(pagerCommand);
+  const args = isLess ? [...pagerArgs, '-R', '-F', '-X', '-i', '-j4'] : pagerArgs;
 
   if (!commandExists(pagerCommand)) {
     console.log(fullContent);
     return;
   }
 
-  return new Promise(resolve => {
-    try {
-      const child = spawn(pagerCommand, args, { stdio: ['pipe', 'inherit', 'inherit'] });
-      child.stdin.write(fullContent, 'utf-8');
-      child.stdin.end();
-      child.on('close', resolve);
-      child.on('error', () => { console.log(fullContent); resolve(); });
-    } catch {
-      console.log(fullContent);
-      resolve();
-    }
-  });
+  if (!(await pipeToPager(pagerCommand, args, fullContent))) console.log(fullContent);
 }
 
-// ─── Section browsers ─────────────────────────────────────────────────────────
-
-/** Show a flat file list for tutorial / process / repair. */
 async function showDocSection(section: DocSection): Promise<void> {
   const trans = t();
 
@@ -671,15 +856,22 @@ async function showDocSection(section: DocSection): Promise<void> {
     return;
   }
 
-  const files = section.files.filter(f =>
-    f.name !== 'index.md' && !f.name.startsWith('index.')
+  const spinner = createSpinner(trans.docs.loading);
+  const hydrated = await fetchSectionMetadata(section);
+  spinner.stop();
+  const files = hydrated.files.filter(
+    (file) => file.name !== 'index.md' && !file.name.startsWith('index.'),
   );
   if (files.length === 0) return;
 
   const selected = await runMenu({
-    title: section.label,
+    title: hydrated.label,
     options: [
-      ...files.map(f => ({ value: f.path, label: cleanFileName(f.name) })),
+      ...files.map((file) => ({
+        value: file.path,
+        label: displayDocTitle(file.name, file.title),
+        ...(!file.summary ? {} : { hint: file.summary }),
+      })),
       { value: '__back__', label: chalk.dim(trans.common.back) },
     ],
     footer: menuFooter(),
@@ -689,8 +881,7 @@ async function showDocSection(section: DocSection): Promise<void> {
   await viewMarkdownFile(selected);
 }
 
-/** Show archived docs grouped by year, then files within the year. */
-async function showArchivedSection(files: DocItem[]): Promise<void> {
+async function showArchivedSection(files: ListedDoc[]): Promise<void> {
   const trans = t();
   const groups = getArchivedGroups(files);
 
@@ -706,10 +897,10 @@ async function showArchivedSection(files: DocItem[]): Promise<void> {
   const groupKey = await runMenu({
     title: trans.docs.categoryArchived,
     options: [
-      ...sortedKeys.map(k => ({
+      ...sortedKeys.map((k) => ({
         value: k,
         label: k,
-        hint: String(groups.get(k)!.length),
+        hint: String(groups.get(k)?.length ?? 0),
       })),
       { value: '__back__', label: chalk.dim(trans.common.back) },
     ],
@@ -718,17 +909,19 @@ async function showArchivedSection(files: DocItem[]): Promise<void> {
 
   if (groupKey === null || groupKey === '__back__') return;
 
-  const groupFiles = groups.get(groupKey) ?? [];
-  const subDirs = new Set(groupFiles.map(f => f.path.split('/')[2]).filter(Boolean));
+  const spinner = createSpinner(trans.docs.loading);
+  const groupFiles = await fetchDocMetadata(groups.get(groupKey) ?? []);
+  spinner.stop();
+  const subDirs = new Set(groupFiles.map((f) => f.path.split('/')[2]).filter(Boolean));
   const fileSelected = await runMenu({
     title: `${trans.docs.categoryArchived} · ${groupKey}`,
     options: [
-      ...groupFiles.map(f => {
+      ...groupFiles.map((f) => {
         const sub = f.path.split('/').slice(2, -1).join('/');
         return {
           value: f.path,
-          label: cleanFileName(f.name),
-          hint: subDirs.size > 1 ? sub : undefined,
+          label: displayDocTitle(f.name, f.title),
+          ...(subDirs.size > 1 ? { hint: sanitizeTerminalLine(sub) } : {}),
         };
       }),
       { value: '__back__', label: chalk.dim(trans.common.back) },
@@ -740,45 +933,46 @@ async function showArchivedSection(files: DocItem[]): Promise<void> {
   await viewMarkdownFile(fileSelected);
 }
 
-// ─── Document viewer ──────────────────────────────────────────────────────────
-
-export async function viewMarkdownFile(filePath: string): Promise<void> {
+async function viewMarkdownFile(filePath: string): Promise<void> {
   const trans = t();
   ensureMarkedConfigured();
   const s = createSpinner(`${trans.docs.loadingFile}: ${filePath}`);
   try {
-    const rawContent = await fetchFileContent(filePath);
-    const fingerprint = contentFingerprint(rawContent);
-    const cachedRendered = getFreshRender(filePath);
-
-    let renderedDoc: RenderedDoc;
-    if (cachedRendered && cachedRendered.fingerprint === fingerprint) {
-      renderedDoc = cachedRendered;
-    } else {
-      const cleaned = cleanMarkdownContent(rawContent, getTerminalType());
-      const title = extractDocTitle(rawContent, cleaned) || cleanFileName(filePath.split('/').pop() ?? filePath);
-      const readTime = estimateReadTime(cleaned);
-      const rendered = await marked(cleaned) as string;
-      renderedDoc = { fingerprint, cleaned, rendered, title, readTime };
-      setRender(filePath, renderedDoc);
-    }
+    const { rawContent, renderedDoc } = await loadRenderedDoc(filePath);
 
     s.stop(`${chalk.bold(renderedDoc.title)}  ${chalk.dim(renderedDoc.readTime)}`);
 
     const toc = extractTOC(renderedDoc.cleaned);
     if (hasGlow()) {
-      await displayWithGlow(renderedDoc.cleaned);
+      if (!(await displayWithGlow(renderedDoc.cleaned))) {
+        await displayWithLess(
+          renderedDoc.rendered,
+          renderedDoc.title,
+          filePath,
+          renderedDoc.readTime,
+          toc,
+        );
+      }
     } else {
-      await displayWithLess(renderedDoc.rendered, renderedDoc.title, filePath, renderedDoc.readTime, toc);
+      await displayWithLess(
+        renderedDoc.rendered,
+        renderedDoc.title,
+        filePath,
+        renderedDoc.readTime,
+        toc,
+      );
     }
 
     const needsBrowser = hasMarkdownTable(rawContent) || hasMermaidBlock(rawContent);
     const action = await runMenu({
       title: trans.docs.chooseAction,
       options: [
-        { value: 'back',    label: trans.docs.backToList },
-        { value: 'browser', label: trans.docs.openBrowser,
-          hint: needsBrowser ? trans.docs.tableHint : undefined },
+        { value: 'back', label: trans.docs.backToList },
+        {
+          value: 'browser',
+          label: trans.docs.openBrowser,
+          ...(needsBrowser ? { hint: trans.docs.tableHint } : {}),
+        },
       ],
       footer: menuFooter(),
     });
@@ -788,7 +982,7 @@ export async function viewMarkdownFile(filePath: string): Promise<void> {
     }
   } catch (err: unknown) {
     s.error(trans.docs.loadError);
-    const errMsg = err instanceof Error ? err.message : String(err);
+    const errMsg = sanitizeTerminalLine(err instanceof Error ? err.message : String(err));
     console.log(chalk.gray(`  ${trans.docs.errorHint}: ${errMsg}`));
 
     const openBrowser = await runConfirm({ message: trans.docs.openBrowserPrompt });
@@ -798,15 +992,23 @@ export async function viewMarkdownFile(filePath: string): Promise<void> {
   }
 }
 
-// ─── Browser fallback ─────────────────────────────────────────────────────────
-
 export async function openDocsInBrowser(path?: string): Promise<void> {
   const trans = t();
   const s = createSpinner(trans.docs.opening);
   try {
-    const url = path
-      ? `${URLS.docs}/${path.replace(/\.md$/, '')}`
-      : URLS.docs;
+    let route = path ? docsRouteFromPath(path) : '';
+    if (path) {
+      try {
+        route = (await loadDocMetadata(path)).route;
+      } catch {
+        route = docsRouteFromPath(path);
+      }
+    }
+    const encodedRoute = route
+      .split('/')
+      .map((segment) => encodeURIComponent(segment))
+      .join('/');
+    const url = path ? `${URLS.docs}${encodedRoute}` : URLS.docs;
     await open(url);
     s.stop(trans.docs.browserOpened);
   } catch {
@@ -816,7 +1018,12 @@ export async function openDocsInBrowser(path?: string): Promise<void> {
   console.log();
 }
 
-// ─── Search ────────────────────────────────────────────────────────────────────
+export function docsRouteFromPath(path: string): string {
+  const withoutExtension = path.replace(/\.md$/i, '');
+  if (withoutExtension === 'index') return '/';
+  if (withoutExtension.endsWith('/index')) return `/${withoutExtension.slice(0, -5)}`;
+  return `/${withoutExtension}`;
+}
 
 async function searchDocs(): Promise<void> {
   const trans = t();
@@ -825,16 +1032,12 @@ async function searchDocs(): Promise<void> {
     placeholder: trans.docs.searchPlaceholder,
   });
 
-  if (query === null || !query.trim()) return;
+  if (!query?.trim()) return;
 
-  const keyword = query.trim().toLowerCase();
   const s = createSpinner(trans.docs.searching);
 
   try {
-    const all = await docsClient.listAll();
-    const results = all.filter(item =>
-      item.path.toLowerCase().includes(keyword)
-    );
+    const results = await searchDocuments(query.trim());
 
     s.stop(`${results.length} ${trans.docs.searchResults}`);
 
@@ -846,10 +1049,17 @@ async function searchDocs(): Promise<void> {
     const selected = await runMenu({
       title: trans.docs.chooseDoc,
       options: [
-        ...results.map(r => ({
+        ...results.map((r) => ({
           value: r.path,
-          label: cleanFileName(r.name),
-          hint: r.path.includes('/') ? r.path.split('/').slice(0, -1).join('/') : '',
+          label: r.title,
+          hint: truncate(
+            r.excerpt ||
+              r.summary ||
+              (r.path.includes('/')
+                ? sanitizeTerminalLine(r.path.split('/').slice(0, -1).join('/'))
+                : ''),
+            44,
+          ),
         })),
         { value: '__back__', label: chalk.dim(trans.docs.returnToMenu) },
       ],
@@ -863,20 +1073,18 @@ async function searchDocs(): Promise<void> {
   }
 }
 
-// ─── Menu ─────────────────────────────────────────────────────────────────────
-
 export async function showDocsMenu(): Promise<void> {
   await enterScreen(breadcrumb(t().menu.docs));
-  let sections = await loadSections();
+  const sections = await loadSections();
   if (!sections) return;
 
-  while (true) {
+  for (;;) {
     const trans = t();
     const action = await runMenu({
       title: trans.docs.chooseCategory,
       options: [
-        ...sections.map(sec => ({ value: sec.key, label: sec.label })),
-        { value: 'search',  label: chalk.dim(trans.docs.searchPrompt.replace(':', '')) },
+        ...sections.map((sec) => ({ value: sec.key, label: sec.label })),
+        { value: 'search', label: chalk.dim(trans.docs.searchPrompt.replace(':', '')) },
         { value: 'browser', label: chalk.dim(trans.docs.openBrowser) },
       ],
       footer: menuFooter(),
@@ -889,7 +1097,7 @@ export async function showDocsMenu(): Promise<void> {
     } else if (action === 'browser') {
       await openDocsInBrowser();
     } else {
-      const section = sections.find(s => s.key === action);
+      const section = sections.find((s) => s.key === action);
       if (section) await showDocSection(section);
     }
   }

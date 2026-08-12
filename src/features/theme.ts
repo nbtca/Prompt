@@ -8,6 +8,7 @@ import {
   type IconMode,
 } from '../config/preferences.js';
 import { resetIconCache } from '../core/icons.js';
+import { resetCapabilities } from '../core/capabilities.js';
 import { t } from '../i18n/index.js';
 
 export interface ThemeCommandResult {
@@ -36,27 +37,30 @@ export function runThemeCommand(args: string[]): ThemeCommandResult {
     const saved = resetPreferences();
     resetIconCache();
     applyColorModePreference(false);
+    resetCapabilities();
     const message = saved ? trans.theme.reset : trans.theme.resetSessionOnly;
     return { ok: true, message };
   }
 
   if (scope === 'icon') {
-    const mode = (value || '').toLowerCase() as IconMode;
+    const mode = (value?.toLowerCase() ?? '') as IconMode;
     if (!ICON_MODES.includes(mode)) {
       return { ok: false, message: `${trans.theme.invalidValue} auto, ascii, unicode` };
     }
     const saved = setIconMode(mode);
     resetIconCache();
+    resetCapabilities();
     return { ok: true, message: saved ? trans.theme.updated : trans.theme.updatedSessionOnly };
   }
 
   if (scope === 'color') {
-    const mode = (value || '').toLowerCase() as ColorMode;
+    const mode = (value?.toLowerCase() ?? '') as ColorMode;
     if (!COLOR_MODES.includes(mode)) {
       return { ok: false, message: `${trans.theme.invalidValue} auto, on, off` };
     }
     const saved = setColorMode(mode);
     applyColorModePreference(false);
+    resetCapabilities();
     return { ok: true, message: saved ? trans.theme.updated : trans.theme.updatedSessionOnly };
   }
 

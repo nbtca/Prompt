@@ -1,11 +1,32 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
 import { marked } from 'marked';
-import { cleanFileName, displayDocTitle, buildSections, cleanMarkdownContent, ensureMarkedConfigured } from './docs.js';
+import open from 'open';
+import {
+  cleanFileName,
+  displayDocTitle,
+  buildSections,
+  cleanMarkdownContent,
+  ensureMarkedConfigured,
+  resolveInternalHref,
+  docsRouteFromPath,
+  openDocsInBrowser,
+  clearDocsCache,
+} from './docs.js';
 import { setLanguage } from '../i18n/index.js';
 import { stripAnsi } from '../core/text.js';
 import type { DocItem } from '@nbtca/docs';
 
-beforeAll(() => setLanguage('en'));
+vi.mock('open', () => ({ default: vi.fn() }));
+
+beforeAll(() => {
+  setLanguage('en');
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.mocked(open).mockClear();
+  clearDocsCache();
+});
 
 describe('cleanFileName', () => {
   it('title-cases a kebab-case English filename', () => {
@@ -22,37 +43,32 @@ describe('cleanFileName', () => {
 });
 
 describe('displayDocTitle', () => {
-  it('returns the known real title for a mapped tutorial/process/repair doc', () => {
-    expect(displayDocTitle('tutorial/manual/os-skills.md', 'os-skills.md')).toBe('基础操作系统的使用技术');
-    expect(displayDocTitle('repair/guide.md', 'guide.md')).toBe('维修操作指南');
+  it('derives readable titles from filenames', () => {
+    expect(displayDocTitle('os-skills.md')).toBe('Os Skills');
+    expect(displayDocTitle('guide.md')).toBe('Guide');
   });
 
-  it('falls back to cleanFileName for an unmapped path', () => {
-    // A doc added after this mapping was written, or one that was never
-    // worth mapping — must never throw or return a blank label.
-    expect(displayDocTitle('tutorial/manual/some-new-doc.md', 'some-new-doc.md')).toBe('Some New Doc');
+  it('handles newly added documents without a mapping', () => {
+    expect(displayDocTitle('some-new-doc.md')).toBe('Some New Doc');
   });
 
-  it('falls back to cleanFileName for archived/ docs, by design (not an oversight)', () => {
-    // archived/ meeting notes often share the same generic real heading
-    // across many different dates (five different files all titled just
-    // "维修日") -- the date-prefixed filename is what actually
-    // distinguishes them in the list, so archived/ is deliberately never
-    // in KNOWN_DOC_TITLES.
-    expect(displayDocTitle('archived/2022/2022.10.29例会.md', '2022.10.29例会.md')).toBe('2022.10.29例会');
+  it('preserves date-prefixed archive filenames', () => {
+    expect(displayDocTitle('2022.10.29例会.md')).toBe('2022.10.29例会');
+  });
+
+  it('prefers document metadata and strips terminal control sequences', () => {
+    expect(displayDocTitle('fallback.md', '\u001B]0;bad\u0007Human title')).toBe('Human title');
   });
 });
 
 describe('buildSections', () => {
-  const item = (path: string): DocItem => ({ path, name: path.split('/').pop()!, type: 'file' });
+  const item = (path: string): DocItem => ({
+    path,
+    name: path.split('/').at(-1) ?? path,
+    type: 'file',
+  });
 
   it('recognizes every real top-level section in nbtca/documents, including about/ and concepts/', () => {
-    // Regression: about/ and concepts/ were added to nbtca/documents in its
-    // 2026-07 wiki reconstruction (5beee27, 5abcc4d) but TOP_SECTION_ORDER
-    // wasn't updated to match -- buildSections silently dropped every file
-    // under them (line 432's `if (!TOP_SECTION_ORDER.includes(top)) continue`),
-    // so the whole section just never appeared in the Docs tab, with no
-    // error to notice.
     const all = [
       item('about/what-is-nbtca.md'),
       item('tutorial/manual/os-skills.md'),
@@ -62,23 +78,20 @@ describe('buildSections', () => {
       item('archived/2022/notes.md'),
     ];
     const sections = buildSections(all);
-    const keys = sections.map(s => s.key);
+    const keys = sections.map((s) => s.key);
     expect(keys).toEqual(['about', 'guide', 'repair', 'concepts', 'archived']);
   });
 
   it('merges tutorial/ and process/ into one "guide" section, matching how nbtca/documents\' own site nav presents them', () => {
-    // tutorial/sidebar.ts: "「指南」= 教程（学技术）+流程（办社务）高内聚合并为一栏,
-    // 同一份边栏同时挂在 /tutorial/ 与 /process/ 下" -- the folders stay separate
-    // on disk, but a reader (web or terminal) should see one section, not two.
     const all = [
       item('tutorial/manual/os-skills.md'),
       item('tutorial/2025/github-workflow.md'),
       item('process/2025/reimbursement-process.md'),
     ];
     const sections = buildSections(all);
-    expect(sections.map(s => s.key)).toEqual(['guide']);
+    expect(sections.map((s) => s.key)).toEqual(['guide']);
     expect(sections[0]?.count).toBe(3);
-    expect(sections[0]?.files.map(f => f.path)).toEqual([
+    expect(sections[0]?.files.map((f) => f.path)).toEqual([
       'tutorial/manual/os-skills.md',
       'tutorial/2025/github-workflow.md',
       'process/2025/reimbursement-process.md',
@@ -91,24 +104,21 @@ describe('buildSections', () => {
   });
 
   it('drops docs/ (meta content about the docs themselves, not member-facing) via TOP_SECTION_SKIP', () => {
-    // docs/editorial-standard.md and docs/reconstruction-notes.md are real
-    // files in nbtca/documents, but they're notes for whoever maintains the
-    // wiki, not knowledge base content for a club member browsing Docs --
-    // same category as CONTRIBUTING.md, intentionally excluded.
     const sections = buildSections([item('docs/editorial-standard.md')]);
     expect(sections).toEqual([]);
   });
 
   it('omits sections that have no files, rather than showing an empty category', () => {
     const sections = buildSections([item('repair/guide.md')]);
-    expect(sections.map(s => s.key)).toEqual(['repair']);
+    expect(sections.map((s) => s.key)).toEqual(['repair']);
   });
 });
 
 describe('cleanMarkdownContent', () => {
   it('converts a VitePress container into a labeled blockquote', () => {
     const out = cleanMarkdownContent(
-      '::: warning 以官方为准\n最后核对：2026-07。\n:::\n', 'advanced',
+      '::: warning 以官方为准\n最后核对：2026-07。\n:::\n',
+      'advanced',
     );
     expect(out).toContain('> ');
     expect(out).toContain('以官方为准');
@@ -116,27 +126,85 @@ describe('cleanMarkdownContent', () => {
     expect(out).not.toContain(':::');
   });
 
+  it('only removes frontmatter at the beginning of a document', () => {
+    expect(cleanMarkdownContent('---\ntitle: Guide\n---\n# Body', 'basic')).toBe('# Body');
+    const thematic = '# Body\n\n---\nkeep this\n---\n';
+    expect(cleanMarkdownContent(thematic, 'basic')).toContain('keep this');
+  });
+
+  it('removes terminal control sequences from remote Markdown', () => {
+    const source = 'safe\u001B]52;c;YWJj\u0007\u001B[31mred\u001B[0m';
+    expect(cleanMarkdownContent(source, 'basic')).toBe('safered');
+  });
+
+  it('preserves Markdown autolinks while removing HTML wrappers', () => {
+    const source = '<div>Visit <https://example.com> or <team@example.com>.</div>';
+    const out = cleanMarkdownContent(source, 'basic');
+    expect(out).toContain('<https://example.com>');
+    expect(out).toContain('<team@example.com>');
+    expect(out).not.toContain('<div>');
+  });
+
+  it('keeps meaningful content from the documents site components', () => {
+    const source = [
+      '<PageHero title="About" lede="A useful community." />',
+      '<LinkCards>',
+      '<LinkCard href="/about/join" title="Join" desc="Ways to participate." />',
+      '</LinkCards>',
+      '<Split heading="In person">Body</Split>',
+      '<Timeline><TimelineEntry year="2026" title="Today">Milestone</TimelineEntry></Timeline>',
+      '<Figure src="./photo.jpg" alt="People" caption="At the event" date="2026-07" />',
+      `<FactStrip :facts="[{ label: 'Founded', value: '2001' }]" />`,
+    ].join('\n');
+
+    const out = cleanMarkdownContent(source, 'basic');
+    expect(out).toContain('# About');
+    expect(out).toContain('A useful community.');
+    expect(out).toContain('[Join](/about/join) — Ways to participate.');
+    expect(out).toContain('### In person');
+    expect(out).toContain('### 2026 · Today');
+    expect(out).toContain('[image] At the event');
+    expect(out).toContain('**Founded:** 2001');
+    expect(out).not.toMatch(/<(?:PageHero|LinkCard|Split|Timeline|Figure|FactStrip)/);
+  });
+});
+
+describe('resolveInternalHref', () => {
+  it('ignores URL fragments and queries when resolving repository paths', () => {
+    expect(resolveInternalHref('./install#linux', 'guide/index.md')).toBe('guide/install.md');
+    expect(resolveInternalHref('./install?mode=plain', 'guide/index.md')).toBe('guide/install.md');
+  });
+});
+
+describe('docsRouteFromPath', () => {
+  it('uses the canonical site route for section indexes', () => {
+    expect(docsRouteFromPath('about/index.md')).toBe('/about/');
+    expect(docsRouteFromPath('index.md')).toBe('/');
+    expect(docsRouteFromPath('concepts/school.md')).toBe('/concepts/school');
+  });
+
+  it('opens an index document with the route returned by the docs client', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        text: () => Promise.resolve('---\ntitle: About\n---\n'),
+      }),
+    );
+
+    await openDocsInBrowser('about/index.md');
+
+    expect(open).toHaveBeenCalledWith('https://docs.nbtca.space/about/');
+  });
 });
 
 describe('internal wiki link rendering (via the configured marked/marked-terminal pipeline)', () => {
-  // These live at the marked renderer level (ensureMarkedConfigured's link
-  // override), not as a cleanMarkdownContent text rewrite -- an earlier
-  // version pre-colored link text with raw chalk ANSI codes and spliced
-  // that into the markdown *before* marked() ran, which broke once
-  // marked-terminal's own text reflow/wrapping touched the already-escaped
-  // text: the escape sequences got corrupted into literal visible
-  // "[36m...[24m" garbage in a real terminal. Rendering through the actual
-  // renderer instead of a text-substitution hack is what these tests guard.
   ensureMarkedConfigured();
 
   it('strips the path from internal links (./x, ../x, /x) -- text only, no dead path', async () => {
-    // Regression: nbtca/documents' whole cross-linking model assumes a
-    // browser that can follow the link and hover-preview it -- a terminal
-    // pager can do neither, so showing the raw path (e.g. "计算机学院
-    // (/concepts/college)") was pure noise cluttering the self-contained
-    // first-paragraph reading the site's own editorial standard is built
-    // around ("首段即答案").
-    const out = stripAnsi(await marked('见 [计算机学院](/concepts/college) 和 [什么是 NBTCA](./what-is-nbtca) 词条。'));
+    const out = stripAnsi(
+      await marked('见 [计算机学院](/concepts/college) 和 [什么是 NBTCA](./what-is-nbtca) 词条。'),
+    );
     expect(out).toContain('计算机学院');
     expect(out).toContain('什么是 NBTCA');
     expect(out).not.toContain('/concepts/college');

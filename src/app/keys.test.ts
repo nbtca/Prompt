@@ -18,6 +18,12 @@ describe('routeGlobalKey', () => {
   it('tab cycles to the next view', () => {
     expect(routeGlobalKey('\t', ids, 'settings')).toEqual({ switchTo: 'home', handled: true });
   });
+  it('shift-tab cycles to the previous view', () => {
+    expect(routeGlobalKey('\x1b[Z', ids, 'home')).toEqual({
+      switchTo: 'settings',
+      handled: true,
+    });
+  });
   it('other keys are not handled (delegated to the view)', () => {
     expect(routeGlobalKey('j', ids, 'events')).toEqual({ handled: false });
   });

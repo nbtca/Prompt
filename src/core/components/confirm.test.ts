@@ -20,10 +20,14 @@ describe('parseConfirmData', () => {
 });
 
 describe('renderConfirm', () => {
-  beforeEach(() => { process.env['NBTCA_ICON_MODE'] = 'ascii'; resetIconCache(); });
+  beforeEach(() => {
+    process.env['NBTCA_ICON_MODE'] = 'ascii';
+    resetIconCache();
+  });
   function plain(o: Parameters<typeof renderConfirm>[0]): string {
     const out = stripAnsi(renderConfirm(o));
-    process.env['NBTCA_ICON_MODE'] = 'unicode'; resetIconCache();
+    process.env['NBTCA_ICON_MODE'] = 'unicode';
+    resetIconCache();
     return out;
   }
   it('shows message and both options', () => {

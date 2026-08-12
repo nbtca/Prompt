@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { parseInputData, applyInputEvent, renderInput, runSecretInput, runTextInput } from './text-input.js';
+import {
+  parseInputData,
+  applyInputEvent,
+  renderInput,
+  runSecretInput,
+  runTextInput,
+} from './text-input.js';
 import { stripAnsi, visualWidth } from '../text.js';
 import { resetIconCache } from '../icons.js';
 
@@ -43,10 +49,14 @@ describe('applyInputEvent', () => {
 });
 
 describe('renderInput', () => {
-  beforeEach(() => { process.env['NBTCA_ICON_MODE'] = 'ascii'; resetIconCache(); });
+  beforeEach(() => {
+    process.env['NBTCA_ICON_MODE'] = 'ascii';
+    resetIconCache();
+  });
   function plain(o: Parameters<typeof renderInput>[0]): string {
     const out = stripAnsi(renderInput(o));
-    process.env['NBTCA_ICON_MODE'] = 'unicode'; resetIconCache();
+    process.env['NBTCA_ICON_MODE'] = 'unicode';
+    resetIconCache();
     return out;
   }
   it('shows the message and the current value', () => {
@@ -54,14 +64,21 @@ describe('renderInput', () => {
     expect(plain({ message: 'Search', value: 'abc' })).toContain('abc');
   });
   it('shows the placeholder when value is empty', () => {
-    expect(plain({ message: 'Search', value: '', placeholder: 'type here' })).toContain('type here');
+    expect(plain({ message: 'Search', value: '', placeholder: 'type here' })).toContain(
+      'type here',
+    );
   });
-  it('masks secrets by Unicode code point and never renders their value', () => {
+  it('masks secrets by grapheme and never renders their value', () => {
     const secret = 'p@ss密';
     const output = plain({ message: 'Password', value: secret, secret: true });
     expect(output).toContain('*****');
     expect(output).not.toContain(secret);
     expect(output).not.toContain('密');
+  });
+  it('uses one mask for a joined emoji grapheme', () => {
+    const output = plain({ message: 'Password', value: '👨‍👩‍👧', secret: true });
+    expect(output).toContain('*');
+    expect(output).not.toContain('**');
   });
   it('supports a caller-selected mask without revealing pasted input', () => {
     const output = plain({ message: 'Password', value: 'pasted secret', secret: true, mask: '•' });
@@ -82,13 +99,15 @@ describe('renderInput', () => {
     expect(lines.filter((line) => /[→>]/u.test(stripAnsi(line)))).toHaveLength(1);
   });
 
-  it('wraps a complete long entered value at twenty columns', () => {
+  it('keeps the end of a long entered value in a single narrow-screen row', () => {
     const value = '2026-09-07-confirmed-by-student';
     const lines = renderInput({ message: 'Date', value, cols: 20 }).split('\n');
-    const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
+    const input = stripAnsi(lines.at(-1) ?? '');
 
     expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
-    expect(text).toContain(value);
+    expect(lines).toHaveLength(2);
+    expect(input).toContain('med-by-student');
+    expect(input).not.toContain('2026-09-07');
     expect(lines.filter((line) => /[→>]/u.test(stripAnsi(line)))).toHaveLength(1);
   });
 });

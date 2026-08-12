@@ -10,6 +10,12 @@ describe('parseKey', () => {
     expect(parseKey('\x1b[H')).toBe('home');
     expect(parseKey('\x1b[F')).toBe('end');
   });
+  it('maps paging and common home/end sequences', () => {
+    expect(parseKey('\x1b[5~')).toBe('pageUp');
+    expect(parseKey('\x1b[6~')).toBe('pageDown');
+    expect(parseKey('\x1b[1~')).toBe('home');
+    expect(parseKey('\x1bOF')).toBe('end');
+  });
   it('maps enter (CR and LF)', () => {
     expect(parseKey('\r')).toBe('enter');
     expect(parseKey('\n')).toBe('enter');
@@ -36,6 +42,11 @@ describe('nextIndex', () => {
   it('home and end jump to bounds', () => {
     expect(nextIndex(1, 'home', 3)).toBe(0);
     expect(nextIndex(1, 'end', 3)).toBe(2);
+  });
+  it('page keys move by a bounded viewport-sized step', () => {
+    expect(nextIndex(8, 'pageUp', 20, 4)).toBe(4);
+    expect(nextIndex(8, 'pageDown', 20, 4)).toBe(12);
+    expect(nextIndex(18, 'pageDown', 20, 4)).toBe(19);
   });
   it('none keeps current', () => {
     expect(nextIndex(1, 'none', 3)).toBe(1);
@@ -67,8 +78,8 @@ describe('renderMenu', () => {
 
   it('marks the selected option with the cursor glyph', () => {
     const lines = plain();
-    const eventsLine = lines.find((l) => l.includes('Events'))!;
-    const docsLine = lines.find((l) => l.includes('Docs'))!;
+    const eventsLine = lines.find((l) => l.includes('Events'));
+    const docsLine = lines.find((l) => l.includes('Docs'));
     expect(eventsLine).toContain('>');
     expect(docsLine).not.toContain('>');
   });
@@ -85,26 +96,31 @@ describe('renderMenu', () => {
     expect(lines.some((l) => l.includes('wiki'))).toBe(true);
   });
 
-  it.each([
-    'Log in to see my timetable',
-    '登录查看我的完整个人课表',
-  ])('wraps a complete selected option at twenty columns', (label) => {
-    process.env['NBTCA_ICON_MODE'] = 'ascii';
-    resetIconCache();
-    try {
-      const lines = renderMenu({
-        title: 'Schedule', options: [{ value: 'login', label }], selectedIndex: 0,
-      }, 20).split('\n');
-      const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
-
-      expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
-      expect(text).toContain(label.replace(/\s/g, ''));
-      expect(lines.filter((line) => stripAnsi(line).includes('>'))).toHaveLength(1);
-    } finally {
-      process.env['NBTCA_ICON_MODE'] = 'unicode';
+  it.each(['Log in to see my timetable', '登录查看我的完整个人课表'])(
+    'wraps a complete selected option at twenty columns',
+    (label) => {
+      process.env['NBTCA_ICON_MODE'] = 'ascii';
       resetIconCache();
-    }
-  });
+      try {
+        const lines = renderMenu(
+          {
+            title: 'Schedule',
+            options: [{ value: 'login', label }],
+            selectedIndex: 0,
+          },
+          20,
+        ).split('\n');
+        const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
+
+        expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+        expect(text).toContain(label.replace(/\s/g, ''));
+        expect(lines.filter((line) => stripAnsi(line).includes('>'))).toHaveLength(1);
+      } finally {
+        process.env['NBTCA_ICON_MODE'] = 'unicode';
+        resetIconCache();
+      }
+    },
+  );
 });
 
 describe('runMenu', () => {

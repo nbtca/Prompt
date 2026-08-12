@@ -124,7 +124,7 @@
     "githubTokenHint": "Tip: set GITHUB_TOKEN for a higher rate limit.",
     "fetchDirFailed": "Failed to fetch directory: {error}",
     "fetchFileFailed": "Failed to fetch file: {error}",
-    "searchPrompt": "Search documents by title:",
+    "searchPrompt": "Search documents:",
     "searchPlaceholder": "Enter keyword...",
     "searching": "Searching documents...",
     "searchResults": "results found",

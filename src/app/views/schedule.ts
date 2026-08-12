@@ -1,9 +1,9 @@
 import path from 'node:path';
 import {
   createNbtTimetableClient,
+  createTimetableSchedule,
   timetableToIcs,
   type AcademicTerm,
-  type AcademicTermRef,
   type NbtTimetableClient,
   type Timetable,
 } from '@nbtca/nbtcal/timetable';
@@ -16,22 +16,41 @@ import { defaultGridCursor, handleGridKey } from './schedule-grid-cursor.js';
 import { setVimKeysActive } from '../../core/vim-keys.js';
 import { t } from '../../i18n/index.js';
 import { AuthError } from '../../auth/errors.js';
-import { loginWithStudentPassword, restoreNbtSession, type AuthenticatedNbtSession } from '../../auth/nbt-auth.js';
+import {
+  loginWithStudentPassword,
+  restoreNbtSession,
+  type AuthenticatedNbtSession,
+} from '../../auth/nbt-auth.js';
 import { createSessionStore } from '../../auth/session-store.js';
 import {
-  resolveTerm, relevantTerms, writePrivateIcs, isSessionExpired, JWXT_ORIGIN, safeMessage,
+  resolveTerm,
+  relevantTerms,
+  writePrivateIcs,
+  isSessionExpired,
+  JWXT_ORIGIN,
+  safeMessage,
 } from '../../features/student-timetable.js';
 import {
-  termKey, loadWeekOne, saveWeekOne, saveTimetableCache,
-  saveCurrentPointer, loadCurrentPointer, loadTimetableCache, clearScheduleCache,
+  termKey,
+  loadWeekOne,
+  saveWeekOne,
+  saveTimetableCache,
+  saveCurrentPointer,
+  loadCurrentPointer,
+  loadTimetableCache,
+  clearScheduleCache,
 } from '../../features/schedule-store.js';
 import { loadCalendarOrThrow, toDisplayEvent } from '../../features/calendar.js';
 import type { Event } from '../../features/calendar.js';
 import {
-  currentAcademicWindow, inferWeekOneMonday, isAcademicBreakEvent,
-  type AcademicWindow, type OnBreak,
+  currentAcademicWindow,
+  inferWeekOneMonday,
+  isAcademicBreakEvent,
+  type AcademicWindow,
+  type OnBreak,
 } from '@nbtca/nbtcal';
-import { currentWeekNumber, campusWeekday } from '../../features/schedule-query.js';
+import { sanitizeAcademicTerm, sanitizeTimetable } from '../../features/timetable-sanitize.js';
+import { addLocalDays, parseLocalMonday } from '../../core/calendar-day.js';
 
 let state: ScheduleViewState = { mode: 'loading' };
 let session: AuthenticatedNbtSession | null = null;
@@ -39,10 +58,33 @@ let client: NbtTimetableClient | null = null;
 let catalog: AcademicTerm[] = [];
 let pendingId = '';
 
+async function releaseSession(target: AuthenticatedNbtSession | null = session): Promise<void> {
+  if (!target) return;
+  if (session === target) {
+    session = null;
+    client = null;
+  }
+  try {
+    await target.close();
+  } catch {}
+}
+
 function isTimetableLike(value: unknown): value is Timetable {
-  return !!value && typeof value === 'object'
-    && Array.isArray((value as Timetable).meetings)
-    && Array.isArray((value as Timetable).periods);
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    Array.isArray((value as Timetable).meetings) &&
+    Array.isArray((value as Timetable).periods)
+  );
+}
+
+function readCachedTimetable(value: unknown): Timetable | null {
+  if (!isTimetableLike(value)) return null;
+  try {
+    return sanitizeTimetable(value);
+  } catch {
+    return null;
+  }
 }
 
 function returnToHub(): boolean {
@@ -50,13 +92,14 @@ function returnToHub(): boolean {
   const backKey = state.key;
   const backWeekOne = state.weekOne;
   if (tt && backKey && backWeekOne) {
-    // Carries over the existing cursor rather than resetting it -- closing a
-    // meeting's detail card (or backing out of term density/unresolved)
-    // should leave the student's grid navigation exactly where it was, not
-    // silently jump back to today.
+    const schedule = createTimetableSchedule(tt, { weekOneMonday: backWeekOne });
     state = {
-      mode: 'hub', key: backKey, term: state.term, weekOne: backWeekOne, timetable: tt,
-      gridCursor: state.gridCursor ?? defaultGridCursor(campusWeekday(new Date()), tt.periods),
+      mode: 'hub',
+      key: backKey,
+      ...(state.term ? { term: state.term } : {}),
+      weekOne: backWeekOne,
+      timetable: tt,
+      gridCursor: state.gridCursor ?? defaultGridCursor(schedule.weekdayAt(new Date()), tt.periods),
     };
     return true;
   }
@@ -68,8 +111,11 @@ function goToLoginId(errorMessage?: string): void {
   setVimKeysActive(false);
   state = {
     mode: 'needsLoginId',
-    errorMessage,
-    idField: new TextField({ message: t().timetable.studentId, placeholder: t().timetable.studentIdHint }),
+    ...(errorMessage === undefined ? {} : { errorMessage }),
+    idField: new TextField({
+      message: t().timetable.studentId,
+      placeholder: t().timetable.studentIdHint,
+    }),
   };
 }
 
@@ -82,14 +128,8 @@ function buildPublicField(): ListField {
   });
 }
 
-// A glance-panel ceiling, not "browse everything" (matches the same-purpose
-// constants in events.ts/home.ts) — renderPublicBody trims further based on
-// the real ctx.bodyRows.
 const PUBLIC_UPCOMING_FETCH_CAP = 15;
 
-/** The default, no-login Schedule view: public term/week status sourced from
- * the same public calendar feed Events already uses. Login is now something
- * the student opts into from here, not a gate they hit immediately. */
 async function goToPublic(ctx: AppContext): Promise<void> {
   setVimKeysActive(true);
   state = { mode: 'public', publicField: buildPublicField() };
@@ -97,11 +137,10 @@ async function goToPublic(ctx: AppContext): Promise<void> {
   try {
     const cal = await loadCalendarOrThrow();
     const now = new Date();
-    const windowEvents = cal.inRange(
-      new Date(now.getTime() - 400 * 86400000), new Date(now.getTime() + 400 * 86400000),
-    );
+    const windowEvents = cal.inRange(addLocalDays(now, -400), addLocalDays(now, 400));
     const publicWindow: AcademicWindow | OnBreak | null = currentAcademicWindow(windowEvents, now);
-    const publicUpcoming: Event[] = cal.upcoming({ days: 30 })
+    const publicUpcoming: Event[] = cal
+      .upcoming({ days: 30 })
       .filter((e) => !isAcademicBreakEvent(e))
       .slice(0, PUBLIC_UPCOMING_FETCH_CAP)
       .map(toDisplayEvent);
@@ -112,19 +151,11 @@ async function goToPublic(ctx: AppContext): Promise<void> {
   ctx.rerender();
 }
 
-/** Best-effort: try to auto-fill "week one Monday" from the same public
- * calendar feed before falling back to the manual prompt. Never throws —
- * any failure here just means the student sees today's existing prompt. */
 async function tryInferWeekOne(): Promise<string | null> {
   try {
     const cal = await loadCalendarOrThrow();
     const now = new Date();
-    // Symmetric window (matches goToPublic's): inferWeekOneMonday can look
-    // forward to an *upcoming* semester-start marker while on break (e.g. a
-    // student logging in mid-summer, months before the next term's own
-    // start date) — a narrow forward window would silently miss exactly the
-    // event this is meant to find.
-    const events = cal.inRange(new Date(now.getTime() - 400 * 86400000), new Date(now.getTime() + 400 * 86400000));
+    const events = cal.inRange(addLocalDays(now, -400), addLocalDays(now, 400));
     return inferWeekOneMonday(events, now);
   } catch {
     return null;
@@ -132,15 +163,12 @@ async function tryInferWeekOne(): Promise<string | null> {
 }
 
 async function afterAuthenticated(ctx: AppContext, s: AuthenticatedNbtSession): Promise<void> {
-  // Captured before any state mutation below, so it reflects whether a
-  // cached hub was already on screen when this call started (e.g. a
-  // background session restore on launch) as opposed to a fresh login
-  // (where state is 'authenticating', so hadCache is false).
   const hadCache = state.mode === 'hub';
+  if (session && session !== s) await releaseSession(session);
   session = s;
   client = createNbtTimetableClient(s.timetableTransport, { baseUrl: JWXT_ORIGIN });
   try {
-    catalog = await client.listTerms();
+    catalog = (await client.listTerms()).map(sanitizeAcademicTerm);
     const term = resolveTerm(catalog);
     const key = termKey(term);
     let weekOne = loadWeekOne(key);
@@ -155,7 +183,10 @@ async function afterAuthenticated(ctx: AppContext, s: AuthenticatedNbtSession): 
         key,
         term,
         errorMessage: t().timetable.weekOneAutoFailed,
-        weekOneField: new TextField({ message: t().timetable.weekOne, placeholder: t().timetable.weekOneHint }),
+        weekOneField: new TextField({
+          message: t().timetable.weekOne,
+          placeholder: t().timetable.weekOneHint,
+        }),
       };
       ctx.rerender();
       return;
@@ -164,29 +195,42 @@ async function afterAuthenticated(ctx: AppContext, s: AuthenticatedNbtSession): 
   } catch (err) {
     if (isSessionExpired(err)) {
       createSessionStore().clear();
+      await releaseSession(s);
       if (!hadCache) goToLoginId(t().timetable.expiredRelogin);
-    } else if (!hadCache) {
-      state = { mode: 'error', errorMessage: safeMessage(err) };
+    } else {
+      await releaseSession(s);
+      if (!hadCache) state = { mode: 'error', errorMessage: safeMessage(err) };
     }
     ctx.rerender();
   }
 }
 
-async function fetchAndShowHub(ctx: AppContext, term: AcademicTerm, key: string, weekOne: string): Promise<void> {
+async function fetchAndShowHub(
+  ctx: AppContext,
+  term: AcademicTerm,
+  key: string,
+  weekOne: string,
+): Promise<void> {
   if (!client) return;
   state = { mode: 'loading', statusMessage: t().calendar.loading };
   ctx.rerender();
   try {
-    const timetable = await client.fetchTerm(term as AcademicTermRef);
+    const timetable = sanitizeTimetable(await client.fetchTerm(term));
+    const schedule = createTimetableSchedule(timetable, { weekOneMonday: weekOne });
     saveTimetableCache(key, timetable);
     saveCurrentPointer(key, weekOne);
     state = {
-      mode: 'hub', key, term, weekOne, timetable,
-      gridCursor: defaultGridCursor(campusWeekday(new Date()), timetable.periods),
+      mode: 'hub',
+      key,
+      term,
+      weekOne,
+      timetable,
+      gridCursor: defaultGridCursor(schedule.weekdayAt(new Date()), timetable.periods),
     };
   } catch (err) {
     if (isSessionExpired(err)) {
       createSessionStore().clear();
+      await releaseSession();
       goToLoginId(t().timetable.expiredRelogin);
     } else {
       state = { mode: 'error', errorMessage: safeMessage(err) };
@@ -213,21 +257,24 @@ async function refreshFromNetwork(ctx: AppContext): Promise<void> {
       }
       await goToPublic(ctx);
     }
-    // best-effort: a cached hub already showed, keep it as-is on refresh failure.
   }
 }
 
-export const scheduleView: View = {
+export const scheduleView = {
   id: 'schedule',
   title: t().timetable.menuEntry,
 
   async load(ctx: AppContext): Promise<void> {
     const ptr = loadCurrentPointer();
-    const cached = ptr ? loadTimetableCache(ptr.termKey) : null;
-    if (ptr && isTimetableLike(cached)) {
+    const cached = readCachedTimetable(ptr ? loadTimetableCache(ptr.termKey) : null);
+    if (ptr && cached) {
+      const schedule = createTimetableSchedule(cached, { weekOneMonday: ptr.weekOneMonday });
       state = {
-        mode: 'hub', key: ptr.termKey, weekOne: ptr.weekOneMonday, timetable: cached,
-        gridCursor: defaultGridCursor(campusWeekday(new Date()), cached.periods),
+        mode: 'hub',
+        key: ptr.termKey,
+        weekOne: ptr.weekOneMonday,
+        timetable: cached,
+        gridCursor: defaultGridCursor(schedule.weekdayAt(new Date()), cached.periods),
       };
     } else {
       state = { mode: 'loading' };
@@ -236,27 +283,40 @@ export const scheduleView: View = {
     await refreshFromNetwork(ctx);
   },
 
+  async dispose(): Promise<void> {
+    await releaseSession();
+  },
+
   render(ctx: AppContext): string[] {
-    // Sync every visible field's scroll window to the *current* terminal
-    // size on every frame (not just construction time) — this is what
-    // keeps a long list correctly windowed across a live resize.
     state.termField?.setMaxVisible(computeMaxVisible(ctx.bodyRows));
     return renderSchedule(state, new Date(), ctx.bodyRows, ctx.size.cols);
   },
 
   capturesInput(): boolean {
-    return state.mode === 'needsLoginId' || state.mode === 'needsLoginPassword' || state.mode === 'needsWeekOne';
+    return (
+      state.mode === 'needsLoginId' ||
+      state.mode === 'needsLoginPassword' ||
+      state.mode === 'needsWeekOne'
+    );
+  },
+
+  capturesPageKeys(): boolean {
+    return state.mode === 'public' || state.mode === 'termPicker';
   },
 
   footerHint(tabCount: number, cols = Number.POSITIVE_INFINITY): string | undefined {
-    const capturing = state.mode === 'needsLoginId' || state.mode === 'needsLoginPassword' || state.mode === 'needsWeekOne';
+    const capturing =
+      state.mode === 'needsLoginId' ||
+      state.mode === 'needsLoginPassword' ||
+      state.mode === 'needsWeekOne';
     if (capturing) return captureFooterHint(cols);
-    // These three are pure "read this, any key returns to the hub" drill-
-    // downs (see handleKey below) — no field to move a cursor within or
-    // open an item from, so the generic "move · open" hint would promise
-    // keys that don't do that here.
-    const passive = state.mode === 'loading' || state.mode === 'authenticating' || state.mode === 'error'
-      || state.mode === 'meetingDetail' || state.mode === 'unresolved' || state.mode === 'termDensity';
+    const passive =
+      state.mode === 'loading' ||
+      state.mode === 'authenticating' ||
+      state.mode === 'error' ||
+      state.mode === 'meetingDetail' ||
+      state.mode === 'unresolved' ||
+      state.mode === 'termDensity';
     return passive ? passiveFooterHint(tabCount, cols) : undefined;
   },
 
@@ -270,14 +330,17 @@ export const scheduleView: View = {
       return true;
     }
     if (state.mode === 'meetingDetail') {
-      // Esc respects where the detail card was opened from -- from the
-      // standalone 'week' mode, it steps back there, not all the way to hub.
-      if (state.detailFrom === 'week') { state = { ...state, mode: 'week' }; return true; }
+      if (state.detailFrom === 'week') {
+        state = { ...state, mode: 'week' };
+        return true;
+      }
       return returnToHub();
     }
     if (
-      state.mode === 'week' || state.mode === 'unresolved' || state.mode === 'termPicker'
-      || state.mode === 'termDensity'
+      state.mode === 'week' ||
+      state.mode === 'unresolved' ||
+      state.mode === 'termPicker' ||
+      state.mode === 'termDensity'
     ) {
       return returnToHub();
     }
@@ -293,19 +356,29 @@ export const scheduleView: View = {
       }
       case 'needsLoginId': {
         const result = state.idField?.handleKey(key);
-        if (result?.cancelled) { void goToPublic(ctx); return; }
+        if (result?.cancelled) {
+          void goToPublic(ctx);
+          return;
+        }
         if (result?.submitted !== undefined) {
           pendingId = result.submitted;
           state = {
             mode: 'needsLoginPassword',
-            passwordField: new TextField({ message: t().timetable.password, placeholder: t().timetable.passwordHint, secret: true }),
+            passwordField: new TextField({
+              message: t().timetable.password,
+              placeholder: t().timetable.passwordHint,
+              secret: true,
+            }),
           };
         }
         return;
       }
       case 'needsLoginPassword': {
         const result = state.passwordField?.handleKey(key);
-        if (result?.cancelled) { goToLoginId(); return; }
+        if (result?.cancelled) {
+          goToLoginId();
+          return;
+        }
         if (result?.submitted !== undefined) {
           const password = result.submitted;
           setVimKeysActive(true);
@@ -313,10 +386,16 @@ export const scheduleView: View = {
           ctx.rerender();
           void loginWithStudentPassword(pendingId, password)
             .then(async (s) => {
-              createSessionStore().save(await s.snapshot());
-              await afterAuthenticated(ctx, s);
+              let handedOff = false;
+              try {
+                createSessionStore().save(await s.snapshot());
+                handedOff = true;
+                await afterAuthenticated(ctx, s);
+              } finally {
+                if (!handedOff) await releaseSession(s);
+              }
             })
-            .catch((err) => {
+            .catch((err: unknown) => {
               goToLoginId(safeMessage(err));
               ctx.rerender();
             });
@@ -325,10 +404,18 @@ export const scheduleView: View = {
       }
       case 'needsWeekOne': {
         const result = state.weekOneField?.handleKey(key);
-        if (result?.cancelled) { goToLoginId(); return; }
+        if (result?.cancelled) {
+          goToLoginId();
+          return;
+        }
         if (result?.submitted !== undefined) {
           const trimmed = result.submitted.trim();
-          const valid = /^\d{4}-\d{2}-\d{2}$/.test(trimmed) && !Number.isNaN(new Date(`${trimmed}T00:00:00`).getTime());
+          let valid = true;
+          try {
+            parseLocalMonday(trimmed);
+          } catch {
+            valid = false;
+          }
           const targetKey = state.key;
           const targetTerm = state.term;
           if (!valid || !targetKey || !targetTerm) {
@@ -347,35 +434,64 @@ export const scheduleView: View = {
         const hubWeekOne = state.weekOne;
         if (!tt || !hubKey || !hubWeekOne) return;
         {
-          const cursor = state.gridCursor ?? defaultGridCursor(campusWeekday(new Date()), tt.periods);
-          const week = Math.max(1, currentWeekNumber(hubWeekOne, new Date()));
+          const schedule = createTimetableSchedule(tt, { weekOneMonday: hubWeekOne });
+          const now = new Date();
+          const cursor = state.gridCursor ?? defaultGridCursor(schedule.weekdayAt(now), tt.periods);
+          const week = Math.max(1, schedule.weekAt(now));
           const nav = handleGridKey(key, cursor, tt, week);
-          if (nav.kind === 'moveCursor') { state = { ...state, gridCursor: nav.cursor }; return; }
-          if (nav.kind === 'openDetail') { state = { ...state, mode: 'meetingDetail', detailMeeting: nav.meeting, detailFrom: 'hub' }; return; }
+          if (nav.kind === 'moveCursor') {
+            state = { ...state, gridCursor: nav.cursor };
+            return;
+          }
+          if (nav.kind === 'openDetail') {
+            state = {
+              ...state,
+              mode: 'meetingDetail',
+              detailMeeting: nav.meeting,
+              detailFrom: 'hub',
+            };
+            return;
+          }
         }
 
         const shortcut = hubShortcuts(tt).find((sc) => sc.key === key);
         if (!shortcut) return;
-        if (shortcut.key === 'w') { state = { ...state, mode: 'week' }; return; }
-        if (shortcut.key === 't') { state = { ...state, mode: 'termDensity' }; return; }
-        if (shortcut.key === 'u') { state = { ...state, mode: 'unresolved' }; return; }
+        if (shortcut.key === 'w') {
+          state = { ...state, mode: 'week' };
+          return;
+        }
+        if (shortcut.key === 't') {
+          state = { ...state, mode: 'termDensity' };
+          return;
+        }
+        if (shortcut.key === 'u') {
+          state = { ...state, mode: 'unresolved' };
+          return;
+        }
         if (shortcut.key === 's') {
           const options = relevantTerms(catalog).map((tm) => ({
             value: `${tm.academicYear}:${tm.semester}`,
             label: tm.academicYearLabel,
-            hint: tm.current ? t().common.current : undefined,
+            ...(tm.current ? { hint: t().common.current } : {}),
           }));
-          options.push({ value: '__back__', label: t().common.back, hint: undefined });
+          options.push({ value: '__back__', label: t().common.back });
           state = {
             ...state,
             mode: 'termPicker',
-            termField: new ListField({ title: t().timetable.hubSwitchTerm, options, maxVisible: computeMaxVisible(ctx.bodyRows) }),
+            termField: new ListField({
+              title: t().timetable.hubSwitchTerm,
+              options,
+              maxVisible: computeMaxVisible(ctx.bodyRows),
+            }),
           };
           return;
         }
         if (shortcut.key === 'e') {
           try {
-            const ics = timetableToIcs(tt, { weekOneMonday: hubWeekOne, calendarName: `NBT ${state.term?.academicYearLabel ?? ''}` });
+            const ics = timetableToIcs(tt, {
+              weekOneMonday: hubWeekOne,
+              calendarName: `NBT ${state.term?.academicYearLabel ?? ''}`,
+            });
             const out = `timetable-${hubKey}.ics`;
             writePrivateIcs(out, ics);
             state = { ...state, statusMessage: `${t().common.success}: ${path.resolve(out)}` };
@@ -387,9 +503,7 @@ export const scheduleView: View = {
         if (shortcut.key === 'x') {
           createSessionStore().clear();
           clearScheduleCache();
-          void session?.close();
-          session = null;
-          client = null;
+          void releaseSession();
           void goToPublic(ctx);
         }
         return;
@@ -397,17 +511,36 @@ export const scheduleView: View = {
       case 'week': {
         const tt = state.timetable;
         const weekOne = state.weekOne;
-        if (!tt || !weekOne) { returnToHub(); return; }
-        const cursor = state.gridCursor ?? defaultGridCursor(campusWeekday(new Date()), tt.periods);
-        const week = Math.max(1, currentWeekNumber(weekOne, new Date()));
+        if (!tt || !weekOne) {
+          returnToHub();
+          return;
+        }
+        const schedule = createTimetableSchedule(tt, { weekOneMonday: weekOne });
+        const now = new Date();
+        const cursor = state.gridCursor ?? defaultGridCursor(schedule.weekdayAt(now), tt.periods);
+        const week = Math.max(1, schedule.weekAt(now));
         const nav = handleGridKey(key, cursor, tt, week);
-        if (nav.kind === 'moveCursor') { state = { ...state, gridCursor: nav.cursor }; return; }
-        if (nav.kind === 'openDetail') { state = { ...state, mode: 'meetingDetail', detailMeeting: nav.meeting, detailFrom: 'week' }; return; }
+        if (nav.kind === 'moveCursor') {
+          state = { ...state, gridCursor: nav.cursor };
+          return;
+        }
+        if (nav.kind === 'openDetail') {
+          state = {
+            ...state,
+            mode: 'meetingDetail',
+            detailMeeting: nav.meeting,
+            detailFrom: 'week',
+          };
+          return;
+        }
         returnToHub();
         return;
       }
       case 'meetingDetail': {
-        if (state.detailFrom === 'week') { state = { ...state, mode: 'week' }; return; }
+        if (state.detailFrom === 'week') {
+          state = { ...state, mode: 'week' };
+          return;
+        }
         returnToHub();
         return;
       }
@@ -432,15 +565,20 @@ export const scheduleView: View = {
             mode: 'needsWeekOne',
             key: newTermKey,
             term,
-            weekOneField: new TextField({ message: t().timetable.weekOne, placeholder: t().timetable.weekOneHint }),
+            weekOneField: new TextField({
+              message: t().timetable.weekOne,
+              placeholder: t().timetable.weekOneHint,
+            }),
           };
           return;
         }
         void fetchAndShowHub(ctx, term, newTermKey, weekOne);
         return;
       }
-      default:
+      case 'loading':
+      case 'authenticating':
+      case 'error':
         return;
     }
   },
-};
+} satisfies View;

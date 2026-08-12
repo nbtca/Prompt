@@ -28,7 +28,9 @@ describe('deriveReducedMotion', () => {
 });
 
 describe('getCapabilities', () => {
-  afterEach(() => resetCapabilities());
+  afterEach(() => {
+    resetCapabilities();
+  });
   it('returns reducedMotion=true under vitest (non-TTY)', () => {
     expect(getCapabilities().reducedMotion).toBe(true);
     expect(getCapabilities().isTTY).toBe(false);

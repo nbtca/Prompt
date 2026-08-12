@@ -1,0 +1,5 @@
+dist
+node_modules
+assets
+src/logo
+package-lock.json

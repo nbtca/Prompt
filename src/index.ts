@@ -1,20 +1,35 @@
+#!/usr/bin/env node
 import chalk from 'chalk';
 import open from 'open';
 import { main } from './main.js';
-import { fetchEvents, fetchHeatmapBuckets, renderEventsTable, serializeEvents, type Event } from './features/calendar.js';
+import {
+  fetchEvents,
+  fetchHeatmapBuckets,
+  renderEventsTable,
+  serializeEvents,
+  type Event,
+} from './features/calendar.js';
 import { renderHeatmap } from './features/calendar-heatmap.js';
-import { checkServices, countServiceHealth, hasServiceFailures, renderServiceStatusTable, serializeServiceStatus } from './features/status.js';
+import {
+  checkServices,
+  countServiceHealth,
+  hasServiceFailures,
+  renderServiceStatusTable,
+  serializeServiceStatus,
+} from './features/status.js';
 import { pickIcon } from './core/icons.js';
 import { applyColorModePreference } from './config/preferences.js';
 import { openDocsInBrowser } from './features/docs.js';
 import { runThemeCommand } from './features/theme.js';
-import { saveLanguagePreference, t, fmt, type Language } from './i18n/index.js';
+import { saveLanguagePreference, t, fmt } from './i18n/index.js';
 import { clearScreen, handleGracefulExit } from './core/ui.js';
 import { APP_INFO, URLS } from './config/data.js';
 import { runUpdateCheck } from './features/update.js';
 import { runStudentTimetableCommand } from './features/student-timetable.js';
+import { showAbout } from './features/about.js';
 
-type CliAction = 'events' | 'status' | 'docs' | 'repair' | 'website' | 'github' | 'roadmap' | 'about';
+type CliAction =
+  'events' | 'status' | 'docs' | 'repair' | 'website' | 'github' | 'roadmap' | 'about';
 
 const ACTION_ALIASES: Record<string, CliAction> = {
   events: 'events',
@@ -36,7 +51,7 @@ const URL_ACTIONS: Partial<Record<CliAction, string>> = {
   repair: URLS.repair,
   website: URLS.homepage,
   github: URLS.github,
-  roadmap: URLS.roadmap
+  roadmap: URLS.roadmap,
 };
 
 interface ParsedArgs {
@@ -46,10 +61,30 @@ interface ParsedArgs {
 }
 
 const KNOWN_FLAGS = new Set([
-  '--help', '--version', '--open', '--json', '--plain', '--no-logo', '--watch', '--today', '--heatmap',
-  '--week', '--month', '--one-shot', '--no-save',
+  '--help',
+  '--version',
+  '--open',
+  '--json',
+  '--plain',
+  '--no-logo',
+  '--watch',
+  '--today',
+  '--heatmap',
+  '--week',
+  '--month',
+  '--one-shot',
+  '--no-save',
 ]);
-const KNOWN_FLAG_PREFIXES = ['--interval=', '--timeout=', '--retries=', '--next=', '--search=', '--term=', '--output=', '--week-one='];
+const KNOWN_FLAG_PREFIXES = [
+  '--interval=',
+  '--timeout=',
+  '--retries=',
+  '--next=',
+  '--search=',
+  '--term=',
+  '--output=',
+  '--week-one=',
+];
 const STATUS_WATCH_INTERVAL_MIN = 3;
 const STATUS_WATCH_INTERVAL_MAX = 300;
 const STATUS_TIMEOUT_MIN = 1000;
@@ -70,14 +105,18 @@ function parseArgs(argv: string[]): ParsedArgs {
   }
 
   return {
-    command: positionals[0]?.toLowerCase(),
+    ...(positionals[0] === undefined ? {} : { command: positionals[0].toLowerCase() }),
     args: positionals.slice(1),
-    flags
+    flags,
   };
 }
 
+function isTty(value: unknown): boolean {
+  return value === true;
+}
+
 function hasInteractiveTerminal(): boolean {
-  return !!process.stdin.isTTY && !!process.stdout.isTTY;
+  return isTty(process.stdin.isTTY) && isTty(process.stdout.isTTY);
 }
 
 function getAllowedFlagsFor(command?: string): Set<string> {
@@ -137,26 +176,26 @@ function getAllowedFlagPrefixesFor(command?: string): string[] {
 }
 
 function validateFlags(command: string | undefined, flags: Set<string>): void {
-  const unknown = Array.from(flags).filter((flag) => {
+  const unknownFlag = Array.from(flags).find((flag) => {
     if (KNOWN_FLAGS.has(flag)) return false;
     return !KNOWN_FLAG_PREFIXES.some((prefix) => flag.startsWith(prefix));
   });
-  if (unknown.length > 0) {
+  if (unknownFlag) {
     const trans0 = t();
-    console.error(chalk.red(fmt(trans0.cli.unknownFlag, { flag: unknown[0]! })));
+    console.error(chalk.red(fmt(trans0.cli.unknownFlag, { flag: unknownFlag })));
     console.error(chalk.dim(trans0.cli.unknownFlagHint));
     process.exit(1);
   }
 
   const allowed = getAllowedFlagsFor(command);
   const allowedPrefixes = getAllowedFlagPrefixesFor(command);
-  const disallowed = Array.from(flags).filter((flag) => {
+  const disallowedFlag = Array.from(flags).find((flag) => {
     if (allowed.has(flag)) return false;
     return !allowedPrefixes.some((prefix) => flag.startsWith(prefix));
   });
-  if (disallowed.length > 0) {
+  if (disallowedFlag) {
     const trans1 = t();
-    console.error(chalk.red(fmt(trans1.cli.invalidFlag, { flag: disallowed[0]! })));
+    console.error(chalk.red(fmt(trans1.cli.invalidFlag, { flag: disallowedFlag })));
     console.error(chalk.dim(trans1.cli.invalidFlagHint));
     process.exit(1);
   }
@@ -215,7 +254,7 @@ async function runEventsCommand(flags: Set<string>): Promise<void> {
     if (flags.has('--json')) {
       process.stdout.write(JSON.stringify(buckets, null, 2) + '\n');
     } else {
-      const useColor = !flags.has('--plain') && !!process.stdout.isTTY;
+      const useColor = !flags.has('--plain') && isTty(process.stdout.isTTY);
       console.log(renderHeatmap(buckets, new Date(), { color: useColor }));
     }
     return;
@@ -235,25 +274,27 @@ async function runEventsCommand(flags: Set<string>): Promise<void> {
     events = await fetchEvents();
   }
 
-  const searchFlag = Array.from(flags).find(f => f.startsWith('--search='));
+  const searchFlag = Array.from(flags).find((f) => f.startsWith('--search='));
   if (searchFlag) {
     const q = searchFlag.slice('--search='.length).toLowerCase();
-    events = events.filter(e => `${e.title} ${e.location}`.toLowerCase().includes(q));
+    events = events.filter((e) => `${e.title} ${e.location}`.toLowerCase().includes(q));
   }
 
   if (flags.has('--today')) {
     const now = new Date();
-    events = events.filter(e => {
+    events = events.filter((e) => {
       const d = e.startDate;
-      return d.getFullYear() === now.getFullYear() &&
-             d.getMonth() === now.getMonth() &&
-             d.getDate() === now.getDate();
+      return (
+        d.getFullYear() === now.getFullYear() &&
+        d.getMonth() === now.getMonth() &&
+        d.getDate() === now.getDate()
+      );
     });
   }
 
-  const nextFlag = Array.from(flags).find(f => f.startsWith('--next='));
+  const nextFlag = Array.from(flags).find((f) => f.startsWith('--next='));
   if (nextFlag) {
-    const n = Number.parseInt(nextFlag.split('=')[1] || '', 10);
+    const n = Number.parseInt(nextFlag.slice('--next='.length), 10);
     if (!Number.isInteger(n) || n < 1) {
       console.error(chalk.red(t().cli.invalidNext));
       process.exit(1);
@@ -266,7 +307,7 @@ async function runEventsCommand(flags: Set<string>): Promise<void> {
     return;
   }
 
-  const useColor = !flags.has('--plain') && !!process.stdout.isTTY;
+  const useColor = !flags.has('--plain') && isTty(process.stdout.isTTY);
   console.log(renderEventsTable(events, { color: useColor }));
 }
 
@@ -276,34 +317,56 @@ async function runStatusCommand(flags: Set<string>): Promise<boolean> {
   const intervalFlag = Array.from(flags).find((flag) => flag.startsWith('--interval='));
   const timeoutFlag = Array.from(flags).find((flag) => flag.startsWith('--timeout='));
   const retriesFlag = Array.from(flags).find((flag) => flag.startsWith('--retries='));
-  const intervalSeconds = intervalFlag ? Number.parseInt(intervalFlag.split('=')[1] || '', 10) : 10;
-  const timeoutMs = timeoutFlag ? Number.parseInt(timeoutFlag.split('=')[1] || '', 10) : 6000;
-  const retries = retriesFlag ? Number.parseInt(retriesFlag.split('=')[1] || '', 10) : 1;
+  const intervalSeconds = intervalFlag
+    ? Number.parseInt(intervalFlag.slice('--interval='.length), 10)
+    : 10;
+  const timeoutMs = timeoutFlag
+    ? Number.parseInt(timeoutFlag.slice('--timeout='.length), 10)
+    : 6000;
+  const retries = retriesFlag ? Number.parseInt(retriesFlag.slice('--retries='.length), 10) : 1;
 
   if (!watch && intervalFlag) {
     console.error(chalk.red(trans.status.intervalNeedsWatch));
     process.exit(1);
   }
-  if (!Number.isInteger(timeoutMs) || timeoutMs < STATUS_TIMEOUT_MIN || timeoutMs > STATUS_TIMEOUT_MAX) {
-    console.error(chalk.red(
-      fmt(trans.status.invalidTimeout, { min: STATUS_TIMEOUT_MIN, max: STATUS_TIMEOUT_MAX })
-    ));
+  if (
+    !Number.isInteger(timeoutMs) ||
+    timeoutMs < STATUS_TIMEOUT_MIN ||
+    timeoutMs > STATUS_TIMEOUT_MAX
+  ) {
+    console.error(
+      chalk.red(
+        fmt(trans.status.invalidTimeout, { min: STATUS_TIMEOUT_MIN, max: STATUS_TIMEOUT_MAX }),
+      ),
+    );
     process.exit(1);
   }
   if (!Number.isInteger(retries) || retries < STATUS_RETRIES_MIN || retries > STATUS_RETRIES_MAX) {
-    console.error(chalk.red(
-      fmt(trans.status.invalidRetries, { min: STATUS_RETRIES_MIN, max: STATUS_RETRIES_MAX })
-    ));
+    console.error(
+      chalk.red(
+        fmt(trans.status.invalidRetries, { min: STATUS_RETRIES_MIN, max: STATUS_RETRIES_MAX }),
+      ),
+    );
     process.exit(1);
   }
   if (watch && flags.has('--json')) {
     console.error(chalk.red(trans.status.watchJsonConflict));
     process.exit(1);
   }
-  if (watch && (!Number.isInteger(intervalSeconds) || intervalSeconds < STATUS_WATCH_INTERVAL_MIN || intervalSeconds > STATUS_WATCH_INTERVAL_MAX)) {
-    console.error(chalk.red(
-      fmt(trans.status.invalidInterval, { min: STATUS_WATCH_INTERVAL_MIN, max: STATUS_WATCH_INTERVAL_MAX })
-    ));
+  if (
+    watch &&
+    (!Number.isInteger(intervalSeconds) ||
+      intervalSeconds < STATUS_WATCH_INTERVAL_MIN ||
+      intervalSeconds > STATUS_WATCH_INTERVAL_MAX)
+  ) {
+    console.error(
+      chalk.red(
+        fmt(trans.status.invalidInterval, {
+          min: STATUS_WATCH_INTERVAL_MIN,
+          max: STATUS_WATCH_INTERVAL_MAX,
+        }),
+      ),
+    );
     process.exit(1);
   }
   if (watch && !hasInteractiveTerminal()) {
@@ -312,24 +375,32 @@ async function runStatusCommand(flags: Set<string>): Promise<boolean> {
   }
 
   if (watch) {
-    let stopped = false;
-    const onSigint = () => { stopped = true; };
+    const stopController = new AbortController();
+    const onSigint = () => {
+      stopController.abort();
+    };
     process.once('SIGINT', onSigint);
 
-    console.log(chalk.dim(
-      `${fmt(trans.status.watchStarted, { seconds: intervalSeconds })} | ${trans.status.watchHint}`
-    ));
+    console.log(
+      chalk.dim(
+        `${fmt(trans.status.watchStarted, { seconds: intervalSeconds })} | ${trans.status.watchHint}`,
+      ),
+    );
 
     try {
-      while (!stopped) {
+      while (!stopController.signal.aborted) {
         const services = await checkServices({ timeoutMs, retries });
         const hasFailures = hasServiceFailures(services);
         const health = countServiceHealth(services);
         clearScreen();
         console.log(chalk.bold(`${trans.status.watchUpdated}: ${new Date().toLocaleString()}`));
-        console.log(chalk.dim(`${trans.status.up}: ${health.up} | ${trans.status.down}: ${health.down} | ${trans.status.watchHint}`));
+        console.log(
+          chalk.dim(
+            `${trans.status.up}: ${health.up} | ${trans.status.down}: ${health.down} | ${trans.status.watchHint}`,
+          ),
+        );
         console.log();
-        const useColor = !flags.has('--plain') && !!process.stdout.isTTY;
+        const useColor = !flags.has('--plain') && isTty(process.stdout.isTTY);
         console.log(renderServiceStatusTable(services, { color: useColor }));
         if (hasFailures) {
           console.log(chalk.yellow(trans.status.summaryFail));
@@ -340,12 +411,12 @@ async function runStatusCommand(flags: Set<string>): Promise<boolean> {
         await new Promise<void>((resolve) => {
           const stopWait = () => {
             clearTimeout(timer);
-            process.removeListener('SIGINT', stopWait);
+            stopController.signal.removeEventListener('abort', stopWait);
             resolve();
           };
           const timer = setTimeout(stopWait, intervalSeconds * 1000);
-          process.once('SIGINT', stopWait);
-          if (stopped) stopWait();
+          stopController.signal.addEventListener('abort', stopWait, { once: true });
+          if (stopController.signal.aborted) stopWait();
         });
       }
     } finally {
@@ -362,7 +433,7 @@ async function runStatusCommand(flags: Set<string>): Promise<boolean> {
   if (flags.has('--json')) {
     process.stdout.write(JSON.stringify(serializeServiceStatus(services), null, 2) + '\n');
   } else {
-    const useColor = !flags.has('--plain') && !!process.stdout.isTTY;
+    const useColor = !flags.has('--plain') && isTty(process.stdout.isTTY);
     console.log(renderServiceStatusTable(services, { color: useColor }));
     if (hasFailures) {
       console.error(chalk.yellow(t().status.summaryFail));
@@ -381,7 +452,12 @@ async function runCommandMode(argv: string[]): Promise<void> {
   const { command, args, flags } = parseArgs(argv);
   maybeDisableColor(flags);
 
-  if (flags.has('--version') || command === '--version' || command === '-v' || command === 'version') {
+  if (
+    flags.has('--version') ||
+    command === '--version' ||
+    command === '-v' ||
+    command === 'version'
+  ) {
     console.log(APP_INFO.version);
     return;
   }
@@ -405,7 +481,7 @@ async function runCommandMode(argv: string[]): Promise<void> {
   }
 
   if (command === 'lang' || command === 'language') {
-    const language = (args[0] || '').toLowerCase() as Language;
+    const language = (args[0] ?? '').toLowerCase();
     if (language !== 'zh' && language !== 'en') {
       console.error(chalk.red(t().cli.invalidLang));
       process.exit(1);
@@ -481,24 +557,7 @@ async function runCommandMode(argv: string[]): Promise<void> {
   }
 
   if (action === 'about') {
-    const { note } = await import('./core/components/note.js');
-    const { padEndV } = await import('./core/text.js');
-    const pad = 12;
-    const row  = (label: string, value: string) => `${chalk.dim(padEndV(label, pad))}${value}`;
-    const link = (label: string, url: string)   => row(label, chalk.cyan(url));
-    const trans = t();
-    const content = [
-      row(trans.about.project, APP_INFO.name),
-      row(trans.about.version, `v${APP_INFO.version}`),
-      row(trans.about.description, trans.about.descriptionText),
-      '',
-      link(trans.about.github, APP_INFO.repository),
-      link(trans.about.website, URLS.homepage),
-      link(trans.about.email, URLS.email),
-      '',
-      row(trans.about.license, `MIT  |  ${trans.about.author}: m1ngsama`),
-    ].join('\n');
-    note(content, trans.about.title);
+    showAbout();
     return;
   }
 

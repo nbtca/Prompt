@@ -15,32 +15,67 @@ beforeAll(() => {
   resetIconCache();
 });
 
+function defined<T>(value: T | undefined): T {
+  if (value === undefined) throw new Error('Expected fixture value');
+  return value;
+}
+
 const timetable: Timetable = {
   term: { academicYear: '2026', semester: '3' },
-  meetings: [{
-    sourceId: null, courseName: 'Math', teacherNames: ['Dr Li'], location: 'Room 201',
-    weekday: 1, startPeriod: 1, endPeriod: 2, weeks: [1], kind: 'regular',
-  }],
+  meetings: [
+    {
+      sourceId: null,
+      courseName: 'Math',
+      teacherNames: ['Dr Li'],
+      location: 'Room 201',
+      weekday: 1,
+      startPeriod: 1,
+      endPeriod: 2,
+      weeks: [1],
+      kind: 'regular',
+    },
+  ],
   unresolvedItems: [{ kind: 'practice', itemIndex: 0, sourceFields: { kcmc: 'Fitness test' } }],
-  periods: [{ period: 1, label: null, start: '08:00', end: '08:45' }],
+  periods: [
+    { period: 1, label: null, start: '08:00', end: '08:45' },
+    { period: 2, label: null, start: '08:55', end: '09:40' },
+  ],
   calendarDays: [],
   warnings: [],
   fetchedAt: new Date('2026-09-07T00:00:00Z'),
 };
 
-// A realistic full-day period table (matches the real campus period system,
-// which defines up to 12 periods/day) — the single-period `timetable`
-// fixture above is too small to ever exercise the "doesn't fit, fall back
-// to the strip" branch of the adaptive hub.
 const busyTimetable: Timetable = {
   ...timetable,
   meetings: [
-    { sourceId: null, courseName: 'Math', teacherNames: ['Dr Li'], location: 'Room 201', weekday: 1, startPeriod: 1, endPeriod: 1, weeks: [1], kind: 'regular' },
-    { sourceId: null, courseName: 'Physics', teacherNames: ['Dr Wu'], location: 'Room 105', weekday: 1, startPeriod: 3, endPeriod: 3, weeks: [1], kind: 'regular' },
+    {
+      sourceId: null,
+      courseName: 'Math',
+      teacherNames: ['Dr Li'],
+      location: 'Room 201',
+      weekday: 1,
+      startPeriod: 1,
+      endPeriod: 1,
+      weeks: [1],
+      kind: 'regular',
+    },
+    {
+      sourceId: null,
+      courseName: 'Physics',
+      teacherNames: ['Dr Wu'],
+      location: 'Room 105',
+      weekday: 1,
+      startPeriod: 3,
+      endPeriod: 3,
+      weeks: [1],
+      kind: 'regular',
+    },
   ],
   periods: Array.from({ length: 12 }, (_, i) => ({
-    period: i + 1, label: null,
-    start: `${String(8 + i).padStart(2, '0')}:00`, end: `${String(8 + i).padStart(2, '0')}:45`,
+    period: i + 1,
+    label: null,
+    start: `${String(8 + i).padStart(2, '0')}:00`,
+    end: `${String(8 + i).padStart(2, '0')}:45`,
   })),
 };
 
@@ -55,9 +90,7 @@ describe('renderSchedule', () => {
     '教务系统暂时无法完成课表身份验证请稍后重试',
   ])('wraps complete error feedback at twenty columns', (message) => {
     const lines = renderSchedule({ mode: 'error', errorMessage: message }, new Date(), 100, 20);
-    const text = lines
-      .map((line) => stripAnsi(line).trim())
-      .join(message.includes(' ') ? ' ' : '');
+    const text = lines.map((line) => stripAnsi(line).trim()).join(message.includes(' ') ? ' ' : '');
 
     expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
     expect(text).toBe(message);
@@ -65,7 +98,12 @@ describe('renderSchedule', () => {
 
   it('wraps authenticating status feedback at twenty columns', () => {
     const message = 'Refreshing timetable data from the academic system';
-    const lines = renderSchedule({ mode: 'authenticating', statusMessage: message }, new Date(), 100, 20);
+    const lines = renderSchedule(
+      { mode: 'authenticating', statusMessage: message },
+      new Date(),
+      100,
+      20,
+    );
     const text = lines.map(stripAnsi).join(' ').replace(/\s+/g, ' ').trim();
 
     expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
@@ -75,9 +113,16 @@ describe('renderSchedule', () => {
   it('wraps login errors without displacing the input field', () => {
     const message = 'The saved session expired and requires authentication again';
     const idField = new TextField({ message: 'ID' });
-    const lines = renderSchedule({
-      mode: 'needsLoginId', errorMessage: message, idField,
-    }, new Date(), 100, 20);
+    const lines = renderSchedule(
+      {
+        mode: 'needsLoginId',
+        errorMessage: message,
+        idField,
+      },
+      new Date(),
+      100,
+      20,
+    );
     const text = lines.map(stripAnsi).join(' ').replace(/\s+/g, ' ').trim();
 
     expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
@@ -107,17 +152,46 @@ describe('renderSchedule', () => {
   });
 
   it('hub mode shows the next-class banner, today, and the unresolved badge', () => {
-    const out = stripAnsi(renderSchedule({
-      mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable,
-    }, new Date('2026-09-07T07:00:00')).join('\n'));
+    const out = stripAnsi(
+      renderSchedule(
+        {
+          mode: 'hub',
+          key: '2026-3',
+          weekOne: '2026-09-07',
+          timetable,
+        },
+        new Date('2026-09-07T07:00:00'),
+      ).join('\n'),
+    );
     expect(out).toContain('Math');
     expect(out).toContain('⚠ 1');
   });
 
+  it('keeps the hub usable when an incomplete period table cannot produce occurrences', () => {
+    const incomplete = { ...timetable, periods: timetable.periods.slice(0, 1) };
+    const out = stripAnsi(
+      renderSchedule(
+        { mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: incomplete },
+        new Date('2026-09-07T07:00:00'),
+      ).join('\n'),
+    );
+
+    expect(out).toContain('No upcoming class');
+    expect(out).toContain('Math');
+  });
+
   it('fits the next-class banner to the terminal width', () => {
-    const lines = renderSchedule({
-      mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable,
-    }, new Date('2026-09-07T07:00:00'), 19, 40);
+    const lines = renderSchedule(
+      {
+        mode: 'hub',
+        key: '2026-3',
+        weekOne: '2026-09-07',
+        timetable,
+      },
+      new Date('2026-09-07T07:00:00'),
+      19,
+      40,
+    );
     const banner = lines.find((line) => stripAnsi(line).includes('Next'));
 
     expect(banner).toBeDefined();
@@ -127,9 +201,17 @@ describe('renderSchedule', () => {
   });
 
   it('hub mode shows the shortcut bar instead of a vertical menu', () => {
-    const out = stripAnsi(renderSchedule({
-      mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable,
-    }, new Date('2026-09-07T07:00:00')).join('\n'));
+    const out = stripAnsi(
+      renderSchedule(
+        {
+          mode: 'hub',
+          key: '2026-3',
+          weekOne: '2026-09-07',
+          timetable,
+        },
+        new Date('2026-09-07T07:00:00'),
+      ).join('\n'),
+    );
     expect(out).toContain('[w] Full grid');
     expect(out).toContain('[t] Term density');
     expect(out).toContain('[s] Switch term');
@@ -139,9 +221,18 @@ describe('renderSchedule', () => {
 
   it('wraps hub status feedback and keeps it in the height budget', () => {
     const message = 'The timetable export completed with a recoverable warning';
-    const lines = renderSchedule({
-      mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable, statusMessage: message,
-    }, new Date('2026-09-07T07:00:00'), 19, 20);
+    const lines = renderSchedule(
+      {
+        mode: 'hub',
+        key: '2026-3',
+        weekOne: '2026-09-07',
+        timetable,
+        statusMessage: message,
+      },
+      new Date('2026-09-07T07:00:00'),
+      19,
+      20,
+    );
     const text = lines.map(stripAnsi).join(' ').replace(/\s+/g, ' ').trim();
 
     expect(lines.length).toBeLessThanOrEqual(19);
@@ -150,15 +241,17 @@ describe('renderSchedule', () => {
   });
 
   it('hub mode shows a "term not started" state instead of a negative week when weekOne is in the future', () => {
-    // Regression: weekOne can be auto-inferred *ahead* of `now` while on
-    // break (it deliberately points at the upcoming term so it's ready
-    // once classes start — see academic-calendar.ts). Rendering the
-    // today/timeline/week-strip section anyway against a future weekOne
-    // produced a nonsensical negative week number and an empty class grid
-    // that read as "there are classes right now."
-    const out = stripAnsi(renderSchedule({
-      mode: 'hub', key: '2026-3', weekOne: '2099-01-05', timetable,
-    }, new Date('2026-09-07T07:00:00')).join('\n'));
+    const out = stripAnsi(
+      renderSchedule(
+        {
+          mode: 'hub',
+          key: '2026-3',
+          weekOne: '2099-01-05',
+          timetable,
+        },
+        new Date('2026-09-07T07:00:00'),
+      ).join('\n'),
+    );
     expect(out).toContain("Term hasn't started yet");
     expect(out).toContain('2099-01-05');
     expect(out).not.toMatch(/Week -\d/);
@@ -166,9 +259,19 @@ describe('renderSchedule', () => {
 
   describe('term-not-started week-1 preview', () => {
     it('shows a week-1 preview grid on a tall, wide terminal even though the term has not started', () => {
-      const out = stripAnsi(renderSchedule({
-        mode: 'hub', key: '2026-3', weekOne: '2099-01-05', timetable: busyTimetable,
-      }, new Date('2026-09-07T07:00:00'), 45, 150).join('\n'));
+      const out = stripAnsi(
+        renderSchedule(
+          {
+            mode: 'hub',
+            key: '2026-3',
+            weekOne: '2099-01-05',
+            timetable: busyTimetable,
+          },
+          new Date('2026-09-07T07:00:00'),
+          45,
+          150,
+        ).join('\n'),
+      );
       expect(out).toContain("Term hasn't started yet");
       expect(out).toContain('Week 1 preview');
       expect(out).toContain('Room 105');
@@ -176,18 +279,38 @@ describe('renderSchedule', () => {
     });
 
     it('falls back to the single-day view on a short terminal even though the term has not started', () => {
-      const out = stripAnsi(renderSchedule({
-        mode: 'hub', key: '2026-3', weekOne: '2099-01-05', timetable: busyTimetable,
-      }, new Date('2026-09-07T07:00:00'), 19, 150).join('\n'));
+      const out = stripAnsi(
+        renderSchedule(
+          {
+            mode: 'hub',
+            key: '2026-3',
+            weekOne: '2099-01-05',
+            timetable: busyTimetable,
+          },
+          new Date('2026-09-07T07:00:00'),
+          19,
+          150,
+        ).join('\n'),
+      );
       expect(out).toContain('Week 1 preview');
       expect(out).not.toContain('19:00'); // the full grid's own period-12 row, not shown in the day view
       expect(out).toContain('Room 201'); // the single-day view's own location column
     });
 
     it('falls back to the single-day view on a narrow terminal even though the term has not started', () => {
-      const out = stripAnsi(renderSchedule({
-        mode: 'hub', key: '2026-3', weekOne: '2099-01-05', timetable: busyTimetable,
-      }, new Date('2026-09-07T07:00:00'), 45, 80).join('\n'));
+      const out = stripAnsi(
+        renderSchedule(
+          {
+            mode: 'hub',
+            key: '2026-3',
+            weekOne: '2099-01-05',
+            timetable: busyTimetable,
+          },
+          new Date('2026-09-07T07:00:00'),
+          45,
+          80,
+        ).join('\n'),
+      );
       expect(out).toContain('Week 1 preview');
       expect(out).not.toContain('19:00');
       expect(out).toContain('Room 201');
@@ -195,20 +318,48 @@ describe('renderSchedule', () => {
 
     it('shows an empty week-1 preview without crashing when there are no meetings at all', () => {
       const emptyTimetable: Timetable = { ...timetable, meetings: [] };
-      expect(() => renderSchedule({
-        mode: 'hub', key: '2026-3', weekOne: '2099-01-05', timetable: emptyTimetable,
-      }, new Date('2026-09-07T07:00:00'), 45, 150)).not.toThrow();
-      const out = stripAnsi(renderSchedule({
-        mode: 'hub', key: '2026-3', weekOne: '2099-01-05', timetable: emptyTimetable,
-      }, new Date('2026-09-07T07:00:00'), 45, 150).join('\n'));
+      expect(() =>
+        renderSchedule(
+          {
+            mode: 'hub',
+            key: '2026-3',
+            weekOne: '2099-01-05',
+            timetable: emptyTimetable,
+          },
+          new Date('2026-09-07T07:00:00'),
+          45,
+          150,
+        ),
+      ).not.toThrow();
+      const out = stripAnsi(
+        renderSchedule(
+          {
+            mode: 'hub',
+            key: '2026-3',
+            weekOne: '2099-01-05',
+            timetable: emptyTimetable,
+          },
+          new Date('2026-09-07T07:00:00'),
+          45,
+          150,
+        ).join('\n'),
+      );
       expect(out).toContain('Week 1 preview');
       expect(out).not.toContain('Math');
     });
 
     it('never collapses the week-1 preview into one array entry', () => {
-      const lines = renderSchedule({
-        mode: 'hub', key: '2026-3', weekOne: '2099-01-05', timetable: busyTimetable,
-      }, new Date('2026-09-07T07:00:00'), 45, 150);
+      const lines = renderSchedule(
+        {
+          mode: 'hub',
+          key: '2026-3',
+          weekOne: '2099-01-05',
+          timetable: busyTimetable,
+        },
+        new Date('2026-09-07T07:00:00'),
+        45,
+        150,
+      );
       for (const line of lines) {
         expect(line).not.toContain('\n');
       }
@@ -216,9 +367,15 @@ describe('renderSchedule', () => {
   });
 
   it('hub mode never collapses a multi-line renderer output into one array entry', () => {
-    const lines = renderSchedule({
-      mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable,
-    }, new Date('2026-09-07T07:00:00'));
+    const lines = renderSchedule(
+      {
+        mode: 'hub',
+        key: '2026-3',
+        weekOne: '2026-09-07',
+        timetable,
+      },
+      new Date('2026-09-07T07:00:00'),
+    );
     for (const line of lines) {
       expect(line).not.toContain('\n');
     }
@@ -226,42 +383,88 @@ describe('renderSchedule', () => {
 
   describe('adaptive week section', () => {
     it('shows the full week grid inline on a tall, wide terminal, with the shortcut bar still reachable', () => {
-      const out = stripAnsi(renderSchedule({
-        mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: busyTimetable,
-      }, new Date('2026-09-07T07:00:00'), 45, 150).join('\n'));
+      const out = stripAnsi(
+        renderSchedule(
+          {
+            mode: 'hub',
+            key: '2026-3',
+            weekOne: '2026-09-07',
+            timetable: busyTimetable,
+          },
+          new Date('2026-09-07T07:00:00'),
+          45,
+          150,
+        ).join('\n'),
+      );
       expect(out).toContain('Physics'); // only the full grid places period-3 courses distinctly
       expect(out).toContain('19:00'); // busyTimetable's 12-period table starts period 12 at 19:00
       expect(out).toContain('Log out'); // shortcut bar still rendered underneath
     });
 
     it('falls back to the single-day view on a short terminal', () => {
-      const out = stripAnsi(renderSchedule({
-        mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: busyTimetable,
-      }, new Date('2026-09-07T07:00:00'), 19, 150).join('\n'));
+      const out = stripAnsi(
+        renderSchedule(
+          {
+            mode: 'hub',
+            key: '2026-3',
+            weekOne: '2026-09-07',
+            timetable: busyTimetable,
+          },
+          new Date('2026-09-07T07:00:00'),
+          19,
+          150,
+        ).join('\n'),
+      );
       expect(out).not.toContain('19:00'); // the full grid's own period-12 row
       expect(out).toContain('Room 201'); // the single-day view's own location column
     });
 
     it('falls back to the single-day view on a narrow terminal, even with plenty of height', () => {
-      const out = stripAnsi(renderSchedule({
-        mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: busyTimetable,
-      }, new Date('2026-09-07T07:00:00'), 45, 80).join('\n'));
+      const out = stripAnsi(
+        renderSchedule(
+          {
+            mode: 'hub',
+            key: '2026-3',
+            weekOne: '2026-09-07',
+            timetable: busyTimetable,
+          },
+          new Date('2026-09-07T07:00:00'),
+          45,
+          80,
+        ).join('\n'),
+      );
       expect(out).not.toContain('19:00');
       expect(out).toContain('Room 201');
     });
 
     it('does not render today twice when the hub falls back to the single-day view', () => {
-      const lines = renderSchedule({
-        mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: busyTimetable,
-      }, new Date('2026-09-07T07:00:00'), 19, 80).map(stripAnsi);
+      const lines = renderSchedule(
+        {
+          mode: 'hub',
+          key: '2026-3',
+          weekOne: '2026-09-07',
+          timetable: busyTimetable,
+        },
+        new Date('2026-09-07T07:00:00'),
+        19,
+        80,
+      ).map(stripAnsi);
 
       expect(lines.filter((line) => line.includes('08:00'))).toHaveLength(1);
     });
 
     it('wraps the full shortcut bar within a narrow terminal', () => {
-      const lines = renderSchedule({
-        mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable,
-      }, new Date('2026-09-07T07:00:00'), 19, 40);
+      const lines = renderSchedule(
+        {
+          mode: 'hub',
+          key: '2026-3',
+          weekOne: '2026-09-07',
+          timetable,
+        },
+        new Date('2026-09-07T07:00:00'),
+        19,
+        40,
+      );
       const shortcutLines = lines.filter((line) => /\[(?:w|t|s|e|x)\]/.test(stripAnsi(line)));
       const text = stripAnsi(shortcutLines.join('\n'));
 
@@ -275,9 +478,17 @@ describe('renderSchedule', () => {
     });
 
     it('keeps every shortcut key visible in a five-row body', () => {
-      const lines = renderSchedule({
-        mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable,
-      }, new Date('2026-09-07T07:00:00'), 5, 40);
+      const lines = renderSchedule(
+        {
+          mode: 'hub',
+          key: '2026-3',
+          weekOne: '2026-09-07',
+          timetable,
+        },
+        new Date('2026-09-07T07:00:00'),
+        5,
+        40,
+      );
       const visible = stripAnsi(lines.slice(0, 5).join('\n'));
 
       expect(lines.length).toBeLessThanOrEqual(5);
@@ -285,10 +496,18 @@ describe('renderSchedule', () => {
     });
 
     it('keeps a late-week cursor visible in the narrow hub switcher', () => {
-      const lines = renderSchedule({
-        mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable,
-        gridCursor: { weekday: 6, period: 1 },
-      }, new Date('2026-09-07T07:00:00'), 15, 40);
+      const lines = renderSchedule(
+        {
+          mode: 'hub',
+          key: '2026-3',
+          weekOne: '2026-09-07',
+          timetable,
+          gridCursor: { weekday: 6, period: 1 },
+        },
+        new Date('2026-09-07T07:00:00'),
+        15,
+        40,
+      );
       const switcher = lines.find((line) => stripAnsi(line).includes('[Sat]'));
 
       expect(switcher).toBeDefined();
@@ -298,11 +517,19 @@ describe('renderSchedule', () => {
     it('fits a long course in the narrow single-day timeline', () => {
       const longCourseTimetable: Timetable = {
         ...timetable,
-        meetings: [{ ...timetable.meetings[0]!, courseName: 'Distributed Systems' }],
+        meetings: [{ ...defined(timetable.meetings[0]), courseName: 'Distributed Systems' }],
       };
-      const lines = renderSchedule({
-        mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: longCourseTimetable,
-      }, new Date('2026-09-07T07:00:00'), 19, 40);
+      const lines = renderSchedule(
+        {
+          mode: 'hub',
+          key: '2026-3',
+          weekOne: '2026-09-07',
+          timetable: longCourseTimetable,
+        },
+        new Date('2026-09-07T07:00:00'),
+        19,
+        40,
+      );
       const timelineLine = lines.find((line) => stripAnsi(line).includes('08:00'));
       const text = stripAnsi(timelineLine ?? '');
 
@@ -313,46 +540,87 @@ describe('renderSchedule', () => {
     });
 
     it('never collapses the inline grid into one array entry', () => {
-      const lines = renderSchedule({
-        mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: busyTimetable,
-      }, new Date('2026-09-07T07:00:00'), 45, 150);
+      const lines = renderSchedule(
+        {
+          mode: 'hub',
+          key: '2026-3',
+          weekOne: '2026-09-07',
+          timetable: busyTimetable,
+        },
+        new Date('2026-09-07T07:00:00'),
+        45,
+        150,
+      );
       for (const line of lines) {
         expect(line).not.toContain('\n');
       }
     });
 
     it('threads the real terminal column width down to the grid, so a wide terminal stops truncating real course names', () => {
-      // 18 CJK chars = 36 display columns -- long enough that even
-      // MIN_GRID_COLS(100) can't fit it without scaling (a shorter name has
-      // enough per-column slack above the floor to fit at 100 already,
-      // which wouldn't demonstrate truncation).
       const longName = '习近平新时代中国特色社会主义思想概论';
       const longNameTimetable: Timetable = {
         ...timetable,
-        meetings: [{ sourceId: null, courseName: longName, teacherNames: ['Dr Wu'], location: 'Room 105', weekday: 1, startPeriod: 1, endPeriod: 1, weeks: [1], kind: 'regular' }],
+        meetings: [
+          {
+            sourceId: null,
+            courseName: longName,
+            teacherNames: ['Dr Wu'],
+            location: 'Room 105',
+            weekday: 1,
+            startPeriod: 1,
+            endPeriod: 1,
+            weeks: [1],
+            kind: 'regular',
+          },
+        ],
       };
-      // "narrow" here means "just wide enough for the grid to render at
-      // all" (>= MIN_GRID_COLS), not "falls back to the single-day view" --
-      // that fallback threshold is covered by the tests above.
-      const narrowLines = renderSchedule({
-        mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: longNameTimetable,
-      }, new Date('2026-09-07T07:00:00'), 45, 100).map((l) => stripAnsi(l));
-      const wideLines = renderSchedule({
-        mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: longNameTimetable,
-      }, new Date('2026-09-07T07:00:00'), 45, 210).map((l) => stripAnsi(l));
+      const narrowLines = renderSchedule(
+        {
+          mode: 'hub',
+          key: '2026-3',
+          weekOne: '2026-09-07',
+          timetable: longNameTimetable,
+        },
+        new Date('2026-09-07T07:00:00'),
+        45,
+        100,
+      ).map((l) => stripAnsi(l));
+      const wideLines = renderSchedule(
+        {
+          mode: 'hub',
+          key: '2026-3',
+          weekOne: '2026-09-07',
+          timetable: longNameTimetable,
+        },
+        new Date('2026-09-07T07:00:00'),
+        45,
+        210,
+      ).map((l) => stripAnsi(l));
       const narrowHeadingIdx = narrowLines.findIndex((l) => l.includes('This week'));
       const wideHeadingIdx = wideLines.findIndex((l) => l.includes('This week'));
-      const narrowGridRow = narrowLines.slice(narrowHeadingIdx).find((l) => l.trim().startsWith('08:00'))!;
-      const wideGridRow = wideLines.slice(wideHeadingIdx).find((l) => l.trim().startsWith('08:00'))!;
+      const narrowGridRow = defined(
+        narrowLines.slice(narrowHeadingIdx).find((l) => l.trim().startsWith('08:00')),
+      );
+      const wideGridRow = defined(
+        wideLines.slice(wideHeadingIdx).find((l) => l.trim().startsWith('08:00')),
+      );
       expect(narrowGridRow).not.toContain(longName);
       expect(wideGridRow).toContain(longName);
     });
   });
 
   it('week mode renders the grid', () => {
-    const out = stripAnsi(renderSchedule({
-      mode: 'week', key: '2026-3', weekOne: '2026-09-07', timetable,
-    }, new Date('2026-09-07T09:00:00')).join('\n'));
+    const out = stripAnsi(
+      renderSchedule(
+        {
+          mode: 'week',
+          key: '2026-3',
+          weekOne: '2026-09-07',
+          timetable,
+        },
+        new Date('2026-09-07T09:00:00'),
+      ).join('\n'),
+    );
     expect(out).toContain('Math');
   });
 
@@ -360,12 +628,25 @@ describe('renderSchedule', () => {
     const level = chalk.level;
     chalk.level = 3;
     try {
-      const withCursor = renderSchedule({
-        mode: 'week', key: '2026-3', weekOne: '2026-09-07', timetable, gridCursor: { weekday: 1, period: 1 },
-      }, new Date('2026-09-07T09:00:00')).join('\n');
-      const without = renderSchedule({
-        mode: 'week', key: '2026-3', weekOne: '2026-09-07', timetable,
-      }, new Date('2026-09-07T09:00:00')).join('\n');
+      const withCursor = renderSchedule(
+        {
+          mode: 'week',
+          key: '2026-3',
+          weekOne: '2026-09-07',
+          timetable,
+          gridCursor: { weekday: 1, period: 1 },
+        },
+        new Date('2026-09-07T09:00:00'),
+      ).join('\n');
+      const without = renderSchedule(
+        {
+          mode: 'week',
+          key: '2026-3',
+          weekOne: '2026-09-07',
+          timetable,
+        },
+        new Date('2026-09-07T09:00:00'),
+      ).join('\n');
       expect(withCursor).not.toBe(without);
     } finally {
       chalk.level = level;
@@ -373,24 +654,41 @@ describe('renderSchedule', () => {
   });
 
   it('meetingDetail mode renders the full meeting detail card', () => {
-    const out = stripAnsi(renderSchedule({
-      mode: 'meetingDetail', key: '2026-3', weekOne: '2026-09-07', timetable, detailMeeting: timetable.meetings[0],
-    }, new Date('2026-09-07T09:00:00')).join('\n'));
+    const out = stripAnsi(
+      renderSchedule(
+        {
+          mode: 'meetingDetail',
+          key: '2026-3',
+          weekOne: '2026-09-07',
+          timetable,
+          detailMeeting: defined(timetable.meetings[0]),
+        },
+        new Date('2026-09-07T09:00:00'),
+      ).join('\n'),
+    );
     expect(out).toContain('Math');
     expect(out).toContain('Room 201');
   });
 
   it('threads terminal width into the meeting detail card', () => {
     const detailMeeting = {
-      ...timetable.meetings[0]!,
+      ...defined(timetable.meetings[0]),
       courseName: 'Advanced Distributed Systems Architecture',
       location: 'International Innovation Center Room 304',
       teacherNames: ['Alexandria Montgomery', 'Bartholomew Richardson'],
     };
-    const lines = renderSchedule({
-      mode: 'meetingDetail', key: '2026-3', weekOne: '2026-09-07',
-      timetable: { ...timetable, meetings: [detailMeeting] }, detailMeeting,
-    }, new Date('2026-09-07T09:00:00'), 100, 20);
+    const lines = renderSchedule(
+      {
+        mode: 'meetingDetail',
+        key: '2026-3',
+        weekOne: '2026-09-07',
+        timetable: { ...timetable, meetings: [detailMeeting] },
+        detailMeeting,
+      },
+      new Date('2026-09-07T09:00:00'),
+      100,
+      20,
+    );
     const text = lines.map(stripAnsi).join(' ').replace(/\s+/g, ' ').trim();
 
     expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
@@ -405,24 +703,42 @@ describe('renderSchedule', () => {
   });
 
   it('unresolved mode lists the unresolved item', () => {
-    const out = stripAnsi(renderSchedule({
-      mode: 'unresolved', key: '2026-3', weekOne: '2026-09-07', timetable,
-    }, new Date()).join('\n'));
+    const out = stripAnsi(
+      renderSchedule(
+        {
+          mode: 'unresolved',
+          key: '2026-3',
+          weekOne: '2026-09-07',
+          timetable,
+        },
+        new Date(),
+      ).join('\n'),
+    );
     expect(out).toContain('Fitness test');
   });
 
   it('threads terminal width into unresolved items', () => {
-    const unresolvedItems = [{
-      kind: 'practice' as const, itemIndex: 0,
-      sourceFields: {
-        kcmc: 'Advanced Physical Education Practice',
-        sjkcgs: 'Campus fitness assessment during teaching week sixteen',
+    const unresolvedItems = [
+      {
+        kind: 'practice' as const,
+        itemIndex: 0,
+        sourceFields: {
+          kcmc: 'Advanced Physical Education Practice',
+          sjkcgs: 'Campus fitness assessment during teaching week sixteen',
+        },
       },
-    }];
-    const lines = renderSchedule({
-      mode: 'unresolved', key: '2026-3', weekOne: '2026-09-07',
-      timetable: { ...timetable, unresolvedItems },
-    }, new Date(), 100, 20);
+    ];
+    const lines = renderSchedule(
+      {
+        mode: 'unresolved',
+        key: '2026-3',
+        weekOne: '2026-09-07',
+        timetable: { ...timetable, unresolvedItems },
+      },
+      new Date(),
+      100,
+      20,
+    );
     const text = lines.map(stripAnsi).join(' ').replace(/\s+/g, ' ').trim();
 
     expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
@@ -431,39 +747,58 @@ describe('renderSchedule', () => {
   });
 
   it('termDensity mode renders the term density strip with its own title', () => {
-    const out = stripAnsi(renderSchedule({
-      mode: 'termDensity', key: '2026-3', weekOne: '2026-09-07', timetable,
-    }, new Date('2026-09-07T09:00:00')).join('\n'));
+    const out = stripAnsi(
+      renderSchedule(
+        {
+          mode: 'termDensity',
+          key: '2026-3',
+          weekOne: '2026-09-07',
+          timetable,
+        },
+        new Date('2026-09-07T09:00:00'),
+      ).join('\n'),
+    );
     expect(out).toContain('Term density');
   });
 
   it.each([
     ['Switch term', '2026-2027 Academic Year Term One', 'Current'],
     ['切换学期', '2026-2027学年第一学期', '当前'],
-  ])('fits a complete term-picker option within five rows and twenty columns', (title, label, current) => {
-    const termField = new ListField({
-      title,
-      options: [{ value: '2026:1', label, hint: current }],
-    });
-    const lines = renderSchedule({ mode: 'termPicker', termField }, new Date(), 5, 20);
-    const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
+  ])(
+    'fits a complete term-picker option within five rows and twenty columns',
+    (title, label, current) => {
+      const termField = new ListField({
+        title,
+        options: [{ value: '2026:1', label, hint: current }],
+      });
+      const lines = renderSchedule({ mode: 'termPicker', termField }, new Date(), 5, 20);
+      const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
 
-    expect(lines.length).toBeLessThanOrEqual(5);
-    expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
-    expect(text).toContain(label.replace(/\s/g, ''));
-    expect(text).toContain(current);
-    expect(lines.filter((line) => /[→>]/u.test(stripAnsi(line)))).toHaveLength(1);
-  });
+      expect(lines.length).toBeLessThanOrEqual(5);
+      expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+      expect(text).toContain(label.replace(/\s/g, ''));
+      expect(text).toContain(current);
+      expect(lines.filter((line) => /[→>]/u.test(stripAnsi(line)))).toHaveLength(1);
+    },
+  );
 
   it('threads terminal width into the term density view', () => {
     const weeks = Array.from({ length: 18 }, (_, index) => index + 1);
     const densityTimetable: Timetable = {
       ...timetable,
-      meetings: [{ ...timetable.meetings[0]!, weeks }],
+      meetings: [{ ...defined(timetable.meetings[0]), weeks }],
     };
-    const lines = renderSchedule({
-      mode: 'termDensity', key: '2026-3', weekOne: '2026-09-07', timetable: densityTimetable,
-    }, new Date('2027-01-04T09:00:00'), 100, 20);
+    const lines = renderSchedule(
+      {
+        mode: 'termDensity',
+        key: '2026-3',
+        weekOne: '2026-09-07',
+        timetable: densityTimetable,
+      },
+      new Date('2027-01-04T09:00:00'),
+      100,
+      20,
+    );
     const plain = lines.map(stripAnsi);
     const densityLines = plain.filter((line) => /^\s*(?:█\s*)+$/.test(line));
 
@@ -474,7 +809,9 @@ describe('renderSchedule', () => {
   });
 
   it('error mode shows the error message', () => {
-    const out = stripAnsi(renderSchedule({ mode: 'error', errorMessage: 'Something broke' }, new Date()).join('\n'));
+    const out = stripAnsi(
+      renderSchedule({ mode: 'error', errorMessage: 'Something broke' }, new Date()).join('\n'),
+    );
     expect(out).toContain('Something broke');
   });
 });
@@ -482,7 +819,10 @@ describe('renderSchedule', () => {
 describe('hubShortcuts', () => {
   const baseTimetable: Omit<Timetable, 'unresolvedItems'> = {
     term: { academicYear: '2026', semester: '3' },
-    meetings: [], periods: [], calendarDays: [], warnings: [],
+    meetings: [],
+    periods: [],
+    calendarDays: [],
+    warnings: [],
     fetchedAt: new Date('2026-09-07T00:00:00Z'),
   };
 
@@ -512,19 +852,22 @@ describe('renderSchedule — public mode', () => {
   it.each([
     ['en', 'Academic calendar not available yet', 'Log in to export your timetable (.ics)'],
     ['zh', '校历数据暂不可用', '登录后可导出课表 (.ics)'],
-  ] as const)('wraps complete %s public hints at twenty columns', (language, unavailable, loginHint) => {
-    setLanguage(language);
-    try {
-      const lines = renderSchedule({ mode: 'public', publicWindow: null }, new Date(), 100, 20);
-      const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
+  ] as const)(
+    'wraps complete %s public hints at twenty columns',
+    (language, unavailable, loginHint) => {
+      setLanguage(language);
+      try {
+        const lines = renderSchedule({ mode: 'public', publicWindow: null }, new Date(), 100, 20);
+        const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
 
-      expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
-      expect(text).toContain(unavailable.replace(/\s/g, ''));
-      expect(text).toContain(loginHint.replace(/\s/g, ''));
-    } finally {
-      setLanguage('en');
-    }
-  });
+        expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+        expect(text).toContain(unavailable.replace(/\s/g, ''));
+        expect(text).toContain(loginHint.replace(/\s/g, ''));
+      } finally {
+        setLanguage('en');
+      }
+    },
+  );
 
   it('shows a loading hint while publicWindow is undefined', () => {
     const out = stripAnsi(renderSchedule({ mode: 'public' }, new Date()).join('\n'));
@@ -532,12 +875,17 @@ describe('renderSchedule — public mode', () => {
   });
 
   it('shows the unavailable hint when publicWindow is null', () => {
-    const out = stripAnsi(renderSchedule({ mode: 'public', publicWindow: null }, new Date()).join('\n'));
+    const out = stripAnsi(
+      renderSchedule({ mode: 'public', publicWindow: null }, new Date()).join('\n'),
+    );
     expect(out).toContain('Academic calendar not available yet');
   });
 
   it('shows the on-break state', () => {
-    const state = { mode: 'public' as const, publicWindow: { status: 'onBreak' as const, breakTitle: '暑假' } };
+    const state = {
+      mode: 'public' as const,
+      publicWindow: { status: 'onBreak' as const, breakTitle: '暑假' },
+    };
     const out = stripAnsi(renderSchedule(state, new Date()).join('\n'));
     expect(out).toContain('On break');
     expect(out).toContain('暑假');
@@ -546,28 +894,41 @@ describe('renderSchedule — public mode', () => {
   it.each([
     ['en', 'Summer research and teaching recess', 'On break · Summer research and teaching recess'],
     ['zh', '暑期科研与教学实践假期', '假期中 · 暑期科研与教学实践假期'],
-  ] as const)('wraps the complete %s break heading at twenty columns', (language, breakTitle, expected) => {
-    setLanguage(language);
-    try {
-      const lines = renderSchedule({
-        mode: 'public', publicWindow: { status: 'onBreak', breakTitle },
-      }, new Date(), 100, 20);
-      const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
+  ] as const)(
+    'wraps the complete %s break heading at twenty columns',
+    (language, breakTitle, expected) => {
+      setLanguage(language);
+      try {
+        const lines = renderSchedule(
+          {
+            mode: 'public',
+            publicWindow: { status: 'onBreak', breakTitle },
+          },
+          new Date(),
+          100,
+          20,
+        );
+        const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
 
-      expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
-      expect(text).toContain(expected.replace(/\s/g, ''));
-    } finally {
-      setLanguage('en');
-    }
-  });
+        expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+        expect(text).toContain(expected.replace(/\s/g, ''));
+      } finally {
+        setLanguage('en');
+      }
+    },
+  );
 
   it('shows term/week and a progress bar when nextBreakStart is known', () => {
     const state = {
       mode: 'public' as const,
       publicWindow: {
-        status: 'inTerm' as const, academicYear: '2026-2027', semester: '1' as const,
-        weekOneMonday: '2026-09-14', currentWeek: 3,
-        nextBreakStart: '2027-01-13', nextBreakTitle: '寒假',
+        status: 'inTerm' as const,
+        academicYear: '2026-2027',
+        semester: '1' as const,
+        weekOneMonday: '2026-09-14',
+        currentWeek: 3,
+        nextBreakStart: '2027-01-13',
+        nextBreakTitle: '寒假',
       },
     };
     const out = stripAnsi(renderSchedule(state, new Date('2026-10-01')).join('\n'));
@@ -579,41 +940,55 @@ describe('renderSchedule — public mode', () => {
 
   it.each([
     [
-      'en', 'Winter break',
+      'en',
+      'Winter break',
       ['2026-2027 · Term 1 · Week 3', 'Week 3/17', '104 days until Winter break'],
     ],
-    [
-      'zh', '寒假',
-      ['2026-2027学年 · 第一学期 · 第 3 周', '第 3/17 周', '距离寒假还有 104 天'],
-    ],
-  ] as const)('fits the complete %s term summary within twenty columns', (language, breakTitle, expected) => {
-    setLanguage(language);
-    try {
-      const lines = renderSchedule({
-        mode: 'public',
-        publicWindow: {
-          status: 'inTerm', academicYear: '2026-2027', semester: '1',
-          weekOneMonday: '2026-09-14', currentWeek: 3,
-          nextBreakStart: '2027-01-13', nextBreakTitle: breakTitle,
-        },
-      }, new Date('2026-10-01'), 100, 20);
-      const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
+    ['zh', '寒假', ['2026-2027学年 · 第一学期 · 第 3 周', '第 3/17 周', '距离寒假还有 104 天']],
+  ] as const)(
+    'fits the complete %s term summary within twenty columns',
+    (language, breakTitle, expected) => {
+      setLanguage(language);
+      try {
+        const lines = renderSchedule(
+          {
+            mode: 'public',
+            publicWindow: {
+              status: 'inTerm',
+              academicYear: '2026-2027',
+              semester: '1',
+              weekOneMonday: '2026-09-14',
+              currentWeek: 3,
+              nextBreakStart: '2027-01-13',
+              nextBreakTitle: breakTitle,
+            },
+          },
+          new Date('2026-10-01'),
+          100,
+          20,
+        );
+        const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
 
-      expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
-      expect(lines.some((line) => /[█░]/u.test(stripAnsi(line)))).toBe(true);
-      for (const value of expected) expect(text).toContain(value.replace(/\s/g, ''));
-    } finally {
-      setLanguage('en');
-    }
-  });
+        expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+        expect(lines.some((line) => /[█░]/u.test(stripAnsi(line)))).toBe(true);
+        for (const value of expected) expect(text).toContain(value.replace(/\s/g, ''));
+      } finally {
+        setLanguage('en');
+      }
+    },
+  );
 
   it('groups the term heading, progress bar, and countdown as one block with no blank lines inside it', () => {
     const state: ScheduleViewState = {
       mode: 'public',
       publicWindow: {
-        status: 'inTerm', academicYear: '2026-2027', semester: '1',
-        weekOneMonday: '2026-09-14', currentWeek: 3,
-        nextBreakStart: '2027-01-13', nextBreakTitle: '寒假',
+        status: 'inTerm',
+        academicYear: '2026-2027',
+        semester: '1',
+        weekOneMonday: '2026-09-14',
+        currentWeek: 3,
+        nextBreakStart: '2027-01-13',
+        nextBreakTitle: '寒假',
       },
     };
     const lines = renderSchedule(state, new Date('2026-10-01')).map((l) => stripAnsi(l));
@@ -627,18 +1002,29 @@ describe('renderSchedule — public mode', () => {
     const state = {
       mode: 'public' as const,
       publicWindow: {
-        status: 'inTerm' as const, academicYear: '2026-2027', semester: '1' as const,
-        weekOneMonday: '2026-09-14', currentWeek: 3,
+        status: 'inTerm' as const,
+        academicYear: '2026-2027',
+        semester: '1' as const,
+        weekOneMonday: '2026-09-14',
+        currentWeek: 3,
       },
     };
     expect(() => renderSchedule(state, new Date('2026-10-01'))).not.toThrow();
   });
 
   it('renders upcoming public events via the shared briefing format', () => {
-    const upcoming: Event[] = [{
-      date: '10-01', time: '', title: 'National Day', location: 'TBD', description: '',
-      startDate: new Date('2026-10-01'), recurring: true, uid: 'nd-1',
-    }];
+    const upcoming: Event[] = [
+      {
+        date: '10-01',
+        time: '',
+        title: 'National Day',
+        location: 'TBD',
+        description: '',
+        startDate: new Date('2026-10-01'),
+        recurring: true,
+        uid: 'nd-1',
+      },
+    ];
     const state = { mode: 'public' as const, publicWindow: null, publicUpcoming: upcoming };
     const out = stripAnsi(renderSchedule(state, new Date()).join('\n'));
     expect(out).toContain('National Day');
@@ -651,12 +1037,25 @@ describe('renderSchedule — public mode', () => {
     setLanguage(language);
     try {
       const event: Event = {
-        date: '10-01', time: '09:30', title, location: 'TBD', description: '',
-        startDate: new Date('2026-10-01T09:30:00'), recurring: true, uid: 'long-event',
+        date: '10-01',
+        time: '09:30',
+        title,
+        location: 'TBD',
+        description: '',
+        startDate: new Date('2026-10-01T09:30:00'),
+        recurring: true,
+        uid: 'long-event',
       };
-      const lines = renderSchedule({
-        mode: 'public', publicWindow: null, publicUpcoming: [event],
-      }, new Date('2026-09-30'), 100, 20);
+      const lines = renderSchedule(
+        {
+          mode: 'public',
+          publicWindow: null,
+          publicUpcoming: [event],
+        },
+        new Date('2026-09-30'),
+        100,
+        20,
+      );
       const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
 
       expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
@@ -669,15 +1068,31 @@ describe('renderSchedule — public mode', () => {
   });
 
   it('omits a wrapped public event rather than showing it partially above a short login field', () => {
-    const publicField = new ListField({ title: 'x', options: [{ value: 'login', label: 'Log in' }] });
+    const publicField = new ListField({
+      title: 'x',
+      options: [{ value: 'login', label: 'Log in' }],
+    });
     const event: Event = {
-      date: '10-01', time: '09:30', title: 'International innovation and entrepreneurship competition',
-      location: 'TBD', description: '', startDate: new Date('2026-10-01T09:30:00'),
-      recurring: true, uid: 'long-event',
+      date: '10-01',
+      time: '09:30',
+      title: 'International innovation and entrepreneurship competition',
+      location: 'TBD',
+      description: '',
+      startDate: new Date('2026-10-01T09:30:00'),
+      recurring: true,
+      uid: 'long-event',
     };
-    const lines = renderSchedule({
-      mode: 'public', publicWindow: null, publicUpcoming: [event], publicField,
-    }, new Date('2026-09-30'), 9, 20);
+    const lines = renderSchedule(
+      {
+        mode: 'public',
+        publicWindow: null,
+        publicUpcoming: [event],
+        publicField,
+      },
+      new Date('2026-09-30'),
+      9,
+      20,
+    );
     const text = stripAnsi(lines.join('\n'));
 
     expect(lines).toHaveLength(9);
@@ -687,7 +1102,10 @@ describe('renderSchedule — public mode', () => {
   });
 
   it('renders the login action field', () => {
-    const publicField = new ListField({ title: 'x', options: [{ value: 'login', label: 'Log in' }] });
+    const publicField = new ListField({
+      title: 'x',
+      options: [{ value: 'login', label: 'Log in' }],
+    });
     const out = stripAnsi(renderSchedule({ mode: 'public', publicField }, new Date()).join('\n'));
     expect(out).toContain('Log in');
   });
@@ -695,21 +1113,31 @@ describe('renderSchedule — public mode', () => {
   it.each([
     ['en', 'Schedule', 'Log in to see my timetable'],
     ['zh', '课表', '登录查看我的完整个人课表'],
-  ] as const)('fits the complete %s public login action within twenty columns', (language, title, label) => {
-    setLanguage(language);
-    try {
-      const publicField = new ListField({ title, options: [{ value: 'login', label }] });
-      const lines = renderSchedule({
-        mode: 'public', publicWindow: null, publicField,
-      }, new Date(), 100, 20);
-      const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
+  ] as const)(
+    'fits the complete %s public login action within twenty columns',
+    (language, title, label) => {
+      setLanguage(language);
+      try {
+        const publicField = new ListField({ title, options: [{ value: 'login', label }] });
+        const lines = renderSchedule(
+          {
+            mode: 'public',
+            publicWindow: null,
+            publicField,
+          },
+          new Date(),
+          100,
+          20,
+        );
+        const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
 
-      expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
-      expect(text).toContain(label.replace(/\s/g, ''));
-    } finally {
-      setLanguage('en');
-    }
-  });
+        expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+        expect(text).toContain(label.replace(/\s/g, ''));
+      } finally {
+        setLanguage('en');
+      }
+    },
+  );
 
   it('keeps the login action visible in a five-row body', () => {
     const label = 'Log in to see my timetable';
@@ -718,14 +1146,30 @@ describe('renderSchedule — public mode', () => {
       options: [{ value: 'login', label }],
       footer: 'Move',
     });
-    const publicUpcoming: Event[] = [{
-      date: '10-01', time: '', title: 'National Day', location: 'TBD', description: '',
-      startDate: new Date('2026-10-01'), recurring: true, uid: 'nd-1',
-    }];
+    const publicUpcoming: Event[] = [
+      {
+        date: '10-01',
+        time: '',
+        title: 'National Day',
+        location: 'TBD',
+        description: '',
+        startDate: new Date('2026-10-01'),
+        recurring: true,
+        uid: 'nd-1',
+      },
+    ];
 
-    const lines = renderSchedule({
-      mode: 'public', publicWindow: { status: 'onBreak', breakTitle: 'Summer' }, publicUpcoming, publicField,
-    }, new Date('2026-08-03'), 5, 20);
+    const lines = renderSchedule(
+      {
+        mode: 'public',
+        publicWindow: { status: 'onBreak', breakTitle: 'Summer' },
+        publicUpcoming,
+        publicField,
+      },
+      new Date('2026-08-03'),
+      5,
+      20,
+    );
     const visible = lines.map(stripAnsi).join('').replace(/\s/g, '');
 
     expect(lines).toHaveLength(5);
@@ -734,18 +1178,33 @@ describe('renderSchedule — public mode', () => {
   });
 
   it('never collapses a multi-line renderer output into one array entry', () => {
-    const publicField = new ListField({ title: 'x', options: [{ value: 'login', label: 'Log in' }] });
+    const publicField = new ListField({
+      title: 'x',
+      options: [{ value: 'login', label: 'Log in' }],
+    });
     const state = {
       mode: 'public' as const,
       publicWindow: {
-        status: 'inTerm' as const, academicYear: '2026-2027', semester: '1' as const,
-        weekOneMonday: '2026-09-14', currentWeek: 3,
-        nextBreakStart: '2027-01-13', nextBreakTitle: '寒假',
+        status: 'inTerm' as const,
+        academicYear: '2026-2027',
+        semester: '1' as const,
+        weekOneMonday: '2026-09-14',
+        currentWeek: 3,
+        nextBreakStart: '2027-01-13',
+        nextBreakTitle: '寒假',
       },
-      publicUpcoming: [{
-        date: '10-01', time: '', title: 'National Day', location: 'TBD', description: '',
-        startDate: new Date('2026-10-01'), recurring: true, uid: 'nd-1',
-      }] as Event[],
+      publicUpcoming: [
+        {
+          date: '10-01',
+          time: '',
+          title: 'National Day',
+          location: 'TBD',
+          description: '',
+          startDate: new Date('2026-10-01'),
+          recurring: true,
+          uid: 'nd-1',
+        },
+      ] as Event[],
       publicField,
     };
     for (const line of renderSchedule(state, new Date('2026-10-01'))) {
@@ -755,15 +1214,33 @@ describe('renderSchedule — public mode', () => {
 
   describe('adaptive public-upcoming count', () => {
     const manyUpcoming: Event[] = Array.from({ length: 12 }, (_, i) => ({
-      date: `07-${17 + i}`, time: '', title: `Event${i}`, location: 'TBD', description: '',
-      startDate: new Date('2026-07-17'), recurring: false, uid: `e-${i}`,
+      date: `07-${String(17 + i)}`,
+      time: '',
+      title: `Event${String(i)}`,
+      location: 'TBD',
+      description: '',
+      startDate: new Date('2026-07-17'),
+      recurring: false,
+      uid: `e-${String(i)}`,
     }));
 
     it('shows only as many public-upcoming events as fit, reserving room for the login field, on a normal terminal', () => {
-      const publicField = new ListField({ title: 'x', options: [{ value: 'login', label: 'Log in' }] });
-      const out = stripAnsi(renderSchedule({
-        mode: 'public', publicWindow: null, publicUpcoming: manyUpcoming, publicField,
-      }, new Date(), 15).join('\n'));
+      const publicField = new ListField({
+        title: 'x',
+        options: [{ value: 'login', label: 'Log in' }],
+      });
+      const out = stripAnsi(
+        renderSchedule(
+          {
+            mode: 'public',
+            publicWindow: null,
+            publicUpcoming: manyUpcoming,
+            publicField,
+          },
+          new Date(),
+          15,
+        ).join('\n'),
+      );
       const visibleCount = manyUpcoming.filter((e) => out.includes(e.title)).length;
       expect(visibleCount).toBeLessThan(manyUpcoming.length);
       expect(visibleCount).toBeGreaterThan(0);
@@ -771,10 +1248,22 @@ describe('renderSchedule — public mode', () => {
     });
 
     it('shows more public-upcoming events on a tall terminal', () => {
-      const publicField = new ListField({ title: 'x', options: [{ value: 'login', label: 'Log in' }] });
-      const out = stripAnsi(renderSchedule({
-        mode: 'public', publicWindow: null, publicUpcoming: manyUpcoming, publicField,
-      }, new Date(), 45).join('\n'));
+      const publicField = new ListField({
+        title: 'x',
+        options: [{ value: 'login', label: 'Log in' }],
+      });
+      const out = stripAnsi(
+        renderSchedule(
+          {
+            mode: 'public',
+            publicWindow: null,
+            publicUpcoming: manyUpcoming,
+            publicField,
+          },
+          new Date(),
+          45,
+        ).join('\n'),
+      );
       for (const e of manyUpcoming) expect(out).toContain(e.title);
     });
   });

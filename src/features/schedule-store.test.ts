@@ -1,10 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, rmSync } from 'fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import {
-  termKey, saveWeekOne, loadWeekOne, saveTimetableCache, loadTimetableCache,
-  saveCurrentPointer, loadCurrentPointer, clearScheduleCache,
+  termKey,
+  saveWeekOne,
+  loadWeekOne,
+  saveTimetableCache,
+  loadTimetableCache,
+  saveCurrentPointer,
+  loadCurrentPointer,
+  clearScheduleCache,
 } from './schedule-store.js';
 
 describe('schedule-store', () => {
@@ -17,14 +23,35 @@ describe('schedule-store', () => {
       saveWeekOne('2026-3', '2026-09-07', dir);
       expect(loadWeekOne('2026-3', dir)).toBe('2026-09-07');
       expect(loadWeekOne('2025-1', dir)).toBeNull();
-    } finally { rmSync(dir, { recursive: true, force: true }); }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
   it('timetable cache round-trips', () => {
     const dir = mkdtempSync(join(tmpdir(), 'sched-'));
     try {
       saveTimetableCache('2026-3', { meetings: [1, 2] }, dir);
       expect(loadTimetableCache('2026-3', dir)).toEqual({ meetings: [1, 2] });
-    } finally { rmSync(dir, { recursive: true, force: true }); }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  it('rejects path traversal in remote and persisted term keys', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'sched-'));
+    try {
+      expect(() => termKey({ academicYear: '../outside', semester: '3' })).toThrow();
+      expect(() => {
+        saveTimetableCache('../outside', {}, dir);
+      }).toThrow();
+      expect(loadTimetableCache('../outside', dir)).toBeNull();
+      writeFileSync(
+        join(dir, 'current-term.json'),
+        JSON.stringify({ termKey: '../outside', weekOneMonday: '2026-09-07' }),
+      );
+      expect(loadCurrentPointer(dir)).toBeNull();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
   it('current-term pointer round-trips', () => {
     const dir = mkdtempSync(join(tmpdir(), 'sched-'));
@@ -32,7 +59,28 @@ describe('schedule-store', () => {
       expect(loadCurrentPointer(dir)).toBeNull();
       saveCurrentPointer('2026-3', '2026-09-07', dir);
       expect(loadCurrentPointer(dir)).toEqual({ termKey: '2026-3', weekOneMonday: '2026-09-07' });
-    } finally { rmSync(dir, { recursive: true, force: true }); }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects invalid or non-Monday week-one dates', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'sched-'));
+    try {
+      expect(() => {
+        saveWeekOne('2026-3', '2026-02-31', dir);
+      }).toThrow();
+      expect(() => {
+        saveWeekOne('2026-3', '2026-09-08', dir);
+      }).toThrow();
+      writeFileSync(
+        join(dir, 'current-term.json'),
+        JSON.stringify({ termKey: '2026-3', weekOneMonday: '2026-09-08' }),
+      );
+      expect(loadCurrentPointer(dir)).toBeNull();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('clearScheduleCache removes cached timetables and the current pointer', () => {
@@ -43,7 +91,8 @@ describe('schedule-store', () => {
       clearScheduleCache(dir);
       expect(loadTimetableCache('2026-3', dir)).toBeNull();
       expect(loadCurrentPointer(dir)).toBeNull();
-    } finally { rmSync(dir, { recursive: true, force: true }); }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
-
 });

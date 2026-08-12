@@ -15,7 +15,9 @@ export function frameRows(frame: string, cols: number): number {
  */
 export function createPainter(
   frame: () => string,
-  write: (s: string) => void = (s) => { process.stdout.write(s); },
+  write: (s: string) => void = (s) => {
+    process.stdout.write(s);
+  },
 ): () => void {
   let painted = 0;
   return () => {
