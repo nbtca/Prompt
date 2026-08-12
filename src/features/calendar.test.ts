@@ -1,10 +1,12 @@
-/**
- * Tests for toDisplayEvent() in calendar.ts
- */
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import type { CalendarEvent } from '@nbtca/nbtcal';
-import { toDisplayEvent, renderEventsTable, renderCountdownBanner, renderEventBrief, exportEventIcs } from './calendar.js';
+import {
+  toDisplayEvent,
+  renderEventsTable,
+  renderCountdownBanner,
+  renderEventBrief,
+  exportEventIcs,
+} from './calendar.js';
 import { setLanguage } from '../i18n/index.js';
 import { stripAnsi, visualWidth } from '../core/text.js';
 import { resetIconCache } from '../core/icons.js';
@@ -58,6 +60,19 @@ describe('toDisplayEvent', () => {
     expect(result.description).toBe('');
   });
 
+  it('sanitizes remote terminal control sequences and single-line fields', () => {
+    const result = toDisplayEvent(
+      makeEvent({
+        title: 'Title\nforged\u001B]52;c;YWJj\u0007',
+        location: 'Room\t1\u001B[31m',
+        description: 'line one\nline two\u001B[2J',
+      }),
+    );
+    expect(result.title).toBe('Title forged');
+    expect(result.location).toBe('Room 1');
+    expect(result.description).toBe('line one\nline two');
+  });
+
   it('all-day event yields empty time string', () => {
     const e = makeEvent({ isAllDay: true });
     const result = toDisplayEvent(e);
@@ -78,7 +93,6 @@ describe('toDisplayEvent', () => {
   });
 
   it('different-year date includes the year in date string', () => {
-    // Use a far-future date so the year differs from "now"
     const futureDate = new Date(2099, 5, 17, 10, 0, 0);
     const e = makeEvent({ start: futureDate, end: futureDate });
     const result = toDisplayEvent(e);
@@ -91,7 +105,6 @@ describe('toDisplayEvent', () => {
     const e = makeEvent({ start: sameYear, end: sameYear });
     const result = toDisplayEvent(e);
     expect(result.date).not.toContain(String(now.getFullYear()));
-    // Should be MM-DD format
     expect(result.date).toMatch(/^\d{2}-\d{2}$/);
   });
 });
@@ -107,24 +120,30 @@ describe('toDisplayEvent recurring/uid', () => {
 
 describe('renderEventsTable recurring marker', () => {
   it('prefixes recurring events with the ascii recurring marker', () => {
-    process.env['NBTCA_ICON_MODE'] = 'ascii'; resetIconCache();
+    process.env['NBTCA_ICON_MODE'] = 'ascii';
+    resetIconCache();
     const events = [toDisplayEvent(makeEvent({ title: 'Weekly Sync', recurring: true }))];
     const out = stripAnsi(renderEventsTable(events, { color: false }));
-    process.env['NBTCA_ICON_MODE'] = 'unicode'; resetIconCache();
+    process.env['NBTCA_ICON_MODE'] = 'unicode';
+    resetIconCache();
     expect(out).toContain('~ Weekly Sync');
   });
   it('does not mark non-recurring events', () => {
-    process.env['NBTCA_ICON_MODE'] = 'ascii'; resetIconCache();
+    process.env['NBTCA_ICON_MODE'] = 'ascii';
+    resetIconCache();
     const events = [toDisplayEvent(makeEvent({ title: 'One Off', recurring: false }))];
     const out = stripAnsi(renderEventsTable(events, { color: false }));
-    process.env['NBTCA_ICON_MODE'] = 'unicode'; resetIconCache();
+    process.env['NBTCA_ICON_MODE'] = 'unicode';
+    resetIconCache();
     expect(out).not.toContain('~ One Off');
     expect(out).toContain('One Off');
   });
 });
 
 describe('renderEventBrief', () => {
-  const e = toDisplayEvent(makeEvent({ title: 'Hack Night', start: new Date('2026-07-15T20:00:00') }));
+  const e = toDisplayEvent(
+    makeEvent({ title: 'Hack Night', start: new Date('2026-07-15T20:00:00') }),
+  );
 
   it('includes the date/time and title', () => {
     const out = stripAnsi(renderEventBrief(e, new Date('2026-07-15T09:00:00')));
@@ -133,24 +152,36 @@ describe('renderEventBrief', () => {
   });
 
   it('marks a recurring event', () => {
-    const recurring = toDisplayEvent(makeEvent({ title: 'Weekly Sync', recurring: true, start: new Date('2026-07-15T20:00:00') }));
+    const recurring = toDisplayEvent(
+      makeEvent({ title: 'Weekly Sync', recurring: true, start: new Date('2026-07-15T20:00:00') }),
+    );
     const out = stripAnsi(renderEventBrief(recurring, new Date('2026-07-15T09:00:00')));
     expect(out).toContain('Weekly Sync');
   });
 
   it('does not throw for an event on a different day than now', () => {
-    const future = toDisplayEvent(makeEvent({ title: 'Next Week', start: new Date('2026-07-22T20:00:00') }));
+    const future = toDisplayEvent(
+      makeEvent({ title: 'Next Week', start: new Date('2026-07-22T20:00:00') }),
+    );
     expect(() => renderEventBrief(future, new Date('2026-07-15T09:00:00'))).not.toThrow();
   });
 });
 
 describe('renderCountdownBanner', () => {
   it('shows the next event title and a d/h countdown', () => {
-    process.env['NBTCA_ICON_MODE'] = 'ascii'; resetIconCache();
+    process.env['NBTCA_ICON_MODE'] = 'ascii';
+    resetIconCache();
     const now = new Date('2026-03-25T12:00:00');
-    const e = toDisplayEvent(makeEvent({ title: 'Hack Night', start: new Date('2026-03-28T16:00:00'), end: new Date('2026-03-28T18:00:00') }));
+    const e = toDisplayEvent(
+      makeEvent({
+        title: 'Hack Night',
+        start: new Date('2026-03-28T16:00:00'),
+        end: new Date('2026-03-28T18:00:00'),
+      }),
+    );
     const out = stripAnsi(renderCountdownBanner(e, now));
-    process.env['NBTCA_ICON_MODE'] = 'unicode'; resetIconCache();
+    process.env['NBTCA_ICON_MODE'] = 'unicode';
+    resetIconCache();
     expect(out).toContain('Next');
     expect(out).toContain('Hack Night');
     expect(out).toMatch(/3d/);
@@ -158,11 +189,13 @@ describe('renderCountdownBanner', () => {
   it('wraps a complete long countdown banner at twenty columns', () => {
     const now = new Date('2026-09-30T09:30:00');
     const title = 'International innovation and entrepreneurship competition';
-    const event = toDisplayEvent(makeEvent({
-      title,
-      start: new Date('2026-10-01T09:30:00'),
-      end: new Date('2026-10-01T11:30:00'),
-    }));
+    const event = toDisplayEvent(
+      makeEvent({
+        title,
+        start: new Date('2026-10-01T09:30:00'),
+        end: new Date('2026-10-01T11:30:00'),
+      }),
+    );
     const lines = renderCountdownBanner(event, now, 20).split('\n');
     const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
 
@@ -181,7 +214,16 @@ describe('exportEventIcs', () => {
   it('writes a valid .ics file and returns its path', () => {
     const dir = mkdtempSync(join(tmpdir(), 'ics-'));
     try {
-      const event = { uid: 'u1', title: 'Hack Night', start: new Date('2026-03-25T12:00:00Z'), end: new Date('2026-03-25T14:00:00Z'), isAllDay: false, location: 'Lab', description: null, recurring: false };
+      const event = {
+        uid: 'u1',
+        title: 'Hack Night',
+        start: new Date('2026-03-25T12:00:00Z'),
+        end: new Date('2026-03-25T14:00:00Z'),
+        isAllDay: false,
+        location: 'Lab',
+        description: null,
+        recurring: false,
+      };
       const res = exportEventIcs(event, dir);
       expect(res.ok).toBe(true);
       expect(res.path).toBe(join(dir, 'Hack-Night.ics'));
@@ -194,7 +236,16 @@ describe('exportEventIcs', () => {
   });
 
   it('returns ok:false on an unwritable directory instead of throwing', () => {
-    const event = { uid: 'u1', title: 'X', start: new Date(), end: null, isAllDay: false, location: null, description: null, recurring: false };
+    const event = {
+      uid: 'u1',
+      title: 'X',
+      start: new Date(),
+      end: null,
+      isAllDay: false,
+      location: null,
+      description: null,
+      recurring: false,
+    };
     const res = exportEventIcs(event, '/nonexistent-dir-xyz-123');
     expect(res.ok).toBe(false);
     expect(res.error).toBeTruthy();
@@ -203,7 +254,16 @@ describe('exportEventIcs', () => {
   it('does not overwrite an existing file — uses a -N suffix', () => {
     const dir = mkdtempSync(join(tmpdir(), 'ics-'));
     try {
-      const event = { uid: 'u1', title: 'Hack Night', start: new Date('2026-03-25T12:00:00Z'), end: null, isAllDay: false, location: null, description: null, recurring: false };
+      const event = {
+        uid: 'u1',
+        title: 'Hack Night',
+        start: new Date('2026-03-25T12:00:00Z'),
+        end: null,
+        isAllDay: false,
+        location: null,
+        description: null,
+        recurring: false,
+      };
       const first = exportEventIcs(event, dir);
       const second = exportEventIcs(event, dir);
       expect(first.path).toBe(join(dir, 'Hack-Night.ics'));

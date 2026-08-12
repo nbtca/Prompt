@@ -1,6 +1,6 @@
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -8,8 +8,10 @@ const __dirname = dirname(__filename);
 function readPackageVersion(): string {
   try {
     const pkgPath = join(__dirname, '..', '..', 'package.json');
-    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
-    return pkg.version ?? '0.0.0';
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as unknown;
+    if (typeof pkg !== 'object' || pkg === null) return '0.0.0';
+    const version = (pkg as Record<string, unknown>)['version'];
+    return typeof version === 'string' ? version : '0.0.0';
   } catch {
     return '0.0.0';
   }
@@ -17,20 +19,14 @@ function readPackageVersion(): string {
 
 export const URLS = {
   homepage: 'https://nbtca.space',
-  github:   'https://github.com/nbtca',
-  roadmap:  'https://github.com/orgs/nbtca/projects/5',
-  docs:     'https://docs.nbtca.space',
-  repair:   'https://nbtca.space/repair',
+  github: 'https://github.com/nbtca',
+  roadmap: 'https://github.com/orgs/nbtca/projects/5',
+  docs: 'https://docs.nbtca.space',
+  repair: 'https://nbtca.space/repair',
   calendar: 'https://ical.nbtca.space',
-  email:    'contact@nbtca.space',
-  cloud:    'https://cloud.nbtca.space',
-  mirror:   'https://i.nbtca.space',
-} as const;
-
-export const GITHUB_REPO = {
-  owner: 'nbtca',
-  repo: 'documents',
-  branch: 'main',
+  email: 'contact@nbtca.space',
+  cloud: 'https://cloud.nbtca.space',
+  mirror: 'https://i.nbtca.space',
 } as const;
 
 export const APP_INFO = {
@@ -39,5 +35,5 @@ export const APP_INFO = {
   description: 'NBTCA community',
   author: 'm1ngsama <contact@m1ng.space>',
   license: 'MIT',
-  repository: 'https://github.com/nbtca/prompt'
+  repository: 'https://github.com/nbtca/Prompt',
 } as const;

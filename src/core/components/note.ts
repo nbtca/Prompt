@@ -6,10 +6,7 @@ export function renderNote(message: string, title?: string): string {
   const lines: string[] = [];
 
   if (title) {
-    const width = Math.max(
-      visualWidth(title),
-      ...bodyLines.map((l) => visualWidth(l)),
-    );
+    const width = Math.max(visualWidth(title), ...bodyLines.map((l) => visualWidth(l)));
     lines.push(space.indent + type.heading(title));
     lines.push(space.indent + type.hint(glyph.rule().repeat(width)));
   }

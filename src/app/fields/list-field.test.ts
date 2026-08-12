@@ -3,7 +3,9 @@ import { ListField, computeMaxVisible, renderListFieldWithContext } from './list
 import { stripAnsi, visualWidth } from '../../core/text.js';
 import { setLanguage } from '../../i18n/index.js';
 
-beforeAll(() => setLanguage('en'));
+beforeAll(() => {
+  setLanguage('en');
+});
 
 describe('ListField', () => {
   const options = [
@@ -23,8 +25,6 @@ describe('ListField', () => {
   });
 
   it('optionCount reflects how many options this specific field has', () => {
-    // Lets a caller reserve exactly enough room for *this* menu instead of
-    // guessing a constant shared with a differently-sized one elsewhere.
     expect(new ListField({ title: 'Pick', options }).optionCount).toBe(3);
     expect(new ListField({ title: 'Pick', options: [] }).optionCount).toBe(0);
   });
@@ -66,7 +66,10 @@ describe('ListField', () => {
 });
 
 describe('ListField scrolling (maxVisible)', () => {
-  const manyOptions = Array.from({ length: 20 }, (_, i) => ({ value: String(i), label: `Item ${i}` }));
+  const manyOptions = Array.from({ length: 20 }, (_, i) => ({
+    value: String(i),
+    label: `Item ${String(i)}`,
+  }));
 
   it('shows every option when maxVisible is not set, however many there are', () => {
     const field = new ListField({ title: 'List', options: manyOptions });
@@ -85,10 +88,6 @@ describe('ListField scrolling (maxVisible)', () => {
   });
 
   it('the more-indicator separator degrades in ASCII icon mode instead of leaking a raw Unicode dot', async () => {
-    // Regression: the "N more below" separator used to hardcode "·"
-    // directly instead of routing through pickIcon, so ASCII fallback mode
-    // (NBTCA_ICON_MODE=ascii, used on terminals without Unicode support)
-    // never degraded it like every other separator dot in the app.
     process.env['NBTCA_ICON_MODE'] = 'ascii';
     const { resetIconCache } = await import('../../core/icons.js');
     resetIconCache();
@@ -113,6 +112,15 @@ describe('ListField scrolling (maxVisible)', () => {
     expect(text).toContain('Item 19');
   });
 
+  it('moves by one visible page with PageUp/PageDown', () => {
+    const field = new ListField({ title: 'List', options: manyOptions, maxVisible: 5 });
+    field.handleKey('\x1b[6~');
+    expect(field.selectedIndex).toBe(4);
+    expect(field.render().join('\n')).toContain('Item 4');
+    field.handleKey('\x1b[5~');
+    expect(field.selectedIndex).toBe(0);
+  });
+
   it('scrolls back to the top when the selection wraps from last to first', () => {
     const field = new ListField({ title: 'List', options: manyOptions, maxVisible: 5 });
     field.handleKey('\x1b[F'); // jump to end
@@ -130,7 +138,10 @@ describe('ListField scrolling (maxVisible)', () => {
 });
 
 describe('ListField.setMaxVisible (live resize)', () => {
-  const manyOptions = Array.from({ length: 20 }, (_, i) => ({ value: String(i), label: `Item ${i}` }));
+  const manyOptions = Array.from({ length: 20 }, (_, i) => ({
+    value: String(i),
+    label: `Item ${String(i)}`,
+  }));
 
   it('re-clamps the scroll window when the selection would fall outside a shrunk window', () => {
     const field = new ListField({ title: 'List', options: manyOptions, maxVisible: 10 });
@@ -161,7 +172,10 @@ describe('ListField.setMaxVisible (live resize)', () => {
 });
 
 describe('ListField row budgets', () => {
-  const manyOptions = Array.from({ length: 20 }, (_, i) => ({ value: String(i), label: `Item ${i}` }));
+  const manyOptions = Array.from({ length: 20 }, (_, i) => ({
+    value: String(i),
+    label: `Item ${String(i)}`,
+  }));
 
   it('keeps the selected option visible in a one-row viewport', () => {
     const field = new ListField({ title: 'List', options: manyOptions });
@@ -187,7 +201,9 @@ describe('ListField row budgets', () => {
 
   it('keeps context and an actionable option in a five-row composite viewport', () => {
     const field = new ListField({ title: 'Actions', options: manyOptions });
-    const lines = renderListFieldWithContext(['Summary', '', 'Recent', 'Event', ''], field, 5).map(stripAnsi);
+    const lines = renderListFieldWithContext(['Summary', '', 'Recent', 'Event', ''], field, 5).map(
+      stripAnsi,
+    );
 
     expect(lines.length).toBeLessThanOrEqual(5);
     expect(lines.join('\n')).toContain('Summary');

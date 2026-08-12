@@ -21,8 +21,7 @@ export function filterEvents(events: CalendarEvent[], query: string): CalendarEv
   if (!q) return events;
   return events.filter(
     (e) =>
-      (e.title ?? '').toLowerCase().includes(q) ||
-      (e.location ?? '').toLowerCase().includes(q),
+      (e.title ?? '').toLowerCase().includes(q) || (e.location ?? '').toLowerCase().includes(q),
   );
 }
 

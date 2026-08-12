@@ -4,8 +4,14 @@ import { stripAnsi } from '../text.js';
 import { resetIconCache } from '../icons.js';
 
 describe('spinner', () => {
-  beforeEach(() => { process.env['NBTCA_ICON_MODE'] = 'ascii'; resetIconCache(); });
-  afterEach(() => { process.env['NBTCA_ICON_MODE'] = 'unicode'; resetIconCache(); });
+  beforeEach(() => {
+    process.env['NBTCA_ICON_MODE'] = 'ascii';
+    resetIconCache();
+  });
+  afterEach(() => {
+    process.env['NBTCA_ICON_MODE'] = 'unicode';
+    resetIconCache();
+  });
 
   it('renderSpinnerFrame places frame then message', () => {
     const out = stripAnsi(renderSpinnerFrame('|', 'loading'));
@@ -15,7 +21,7 @@ describe('spinner', () => {
   it('reduced-motion: start writes nothing, stop writes a success line', () => {
     const out: string[] = [];
     const s = startSpinner('working', { reducedMotion: true, write: (x) => out.push(x) });
-    expect(out).toEqual([]);                       // no animation frames on start
+    expect(out).toEqual([]); // no animation frames on start
     s.stop('finished');
     expect(stripAnsi(out.join(''))).toContain('+ finished');
   });

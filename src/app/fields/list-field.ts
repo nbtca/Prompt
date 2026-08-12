@@ -1,5 +1,9 @@
 import {
-  renderMenu, renderMenuOption, nextIndex, parseKey, type MenuOption,
+  renderMenu,
+  renderMenuOption,
+  nextIndex,
+  parseKey,
+  type MenuOption,
 } from '../../core/components/menu.js';
 import { space, type } from '../../core/theme.js';
 import { pickIcon } from '../../core/icons.js';
@@ -11,10 +15,6 @@ export interface ListFieldConfig {
   options: MenuOption[];
   footer?: string;
   initialIndex?: number;
-  /** Max option rows visible at once. When set and options.length exceeds
-   * it, the field scrolls to keep the selection in view and shows a count
-   * of items above/below. Omit to always render every option — fine for
-   * short, fixed menus that can never overflow the viewport. */
   maxVisible?: number;
 }
 
@@ -23,10 +23,6 @@ export interface ListFieldResult {
   cancelled?: boolean;
 }
 
-/** A conservative rows-to-options budget for a ListField that fills a
- * view's whole body (title + blank + up to N options + an optional
- * more-indicator + footer). Reserves ~4 lines for that non-option chrome
- * so the field never itself overflows `bodyRows`. */
 export function computeMaxVisible(bodyRows: number): number {
   return Math.max(3, bodyRows - 4);
 }
@@ -38,10 +34,6 @@ function renderIndentedOutput(value: string, cols: number): string[] {
   return wrapAnsiToVisualWidth(value, contentWidth).map((line) => `${indent}${line}`);
 }
 
-/** Non-blocking equivalent of `runMenu`: a view holds one of these in its own
- * state and drives it from the app loop's single stdin listener via
- * `handleKey`, instead of `runMenu` attaching a second listener and blocking
- * on a Promise. */
 export class ListField {
   private index: number;
   private scrollTop = 0;
@@ -57,19 +49,10 @@ export class ListField {
     return this.index;
   }
 
-  /** How many options this field actually has — lets a caller reserve
-   * exactly enough room for this specific menu instead of guessing a
-   * shared constant that's wrong for every menu of a different size. */
   get optionCount(): number {
     return this.config.options.length;
   }
 
-  /** Updates the visible-row budget in place (re-clamping the scroll window
-   * so the selection stays visible) instead of losing the field's current
-   * selection/scroll by rebuilding it. Views call this from their own
-   * `render(ctx)` on every frame — cheap, and it's what keeps a field's
-   * window in sync with the *current* terminal size even though the field
-   * itself was constructed against whatever size was current at the time. */
   setMaxVisible(maxVisible: number | undefined): void {
     this.maxVisible = maxVisible;
     this.clampScroll();
@@ -85,15 +68,26 @@ export class ListField {
     const { title, options, footer } = this.config;
     const maxVisible = this.maxVisible;
     if (!maxVisible || options.length <= maxVisible) {
-      return renderMenu({ title, options, selectedIndex: this.index, footer }, cols).split('\n');
+      return renderMenu(
+        {
+          title,
+          options,
+          selectedIndex: this.index,
+          ...(footer === undefined ? {} : { footer }),
+        },
+        cols,
+      ).split('\n');
     }
 
     const visible = options.slice(this.scrollTop, this.scrollTop + maxVisible);
-    const lines = renderMenu({
-      title,
-      options: visible,
-      selectedIndex: this.index - this.scrollTop,
-    }, cols).split('\n');
+    const lines = renderMenu(
+      {
+        title,
+        options: visible,
+        selectedIndex: this.index - this.scrollTop,
+      },
+      cols,
+    ).split('\n');
 
     const above = this.scrollTop;
     const below = options.length - (this.scrollTop + visible.length);
@@ -116,13 +110,18 @@ export class ListField {
       return title ? renderIndentedOutput(type.heading(title), cols).slice(0, maxRows) : [];
     }
 
-    const labelWidth = options.reduce((width, option) => Math.max(width, visualWidth(option.label)), 0);
+    const labelWidth = options.reduce(
+      (width, option) => Math.max(width, visualWidth(option.label)),
+      0,
+    );
     const optionGroups = options.map((option, index) =>
-      renderMenuOption(option, index === this.index, labelWidth, cols));
+      renderMenuOption(option, index === this.index, labelWidth, cols),
+    );
     const selectedLines = optionGroups[this.index] ?? [];
-    const titleValue = options.length > 1
-      ? `${type.heading(title)}${type.hint(`  ${this.index + 1}/${options.length}`)}`
-      : type.heading(title);
+    const titleValue =
+      options.length > 1
+        ? `${type.heading(title)}${type.hint(`  ${this.index + 1}/${options.length}`)}`
+        : type.heading(title);
     const titleLines = title ? renderIndentedOutput(titleValue, cols) : [];
     let header: string[] = [];
     if (titleLines.length + 1 + selectedLines.length <= maxRows) header = [...titleLines, ''];
@@ -158,8 +157,12 @@ export class ListField {
   handleKey(key: string): ListFieldResult {
     const parsed = parseKey(key);
     if (parsed === 'cancel') return { cancelled: true };
-    if (parsed === 'enter') return { selected: this.config.options[this.index]?.value };
-    const next = nextIndex(this.index, parsed, this.config.options.length);
+    if (parsed === 'enter') {
+      const selected = this.config.options[this.index]?.value;
+      return selected === undefined ? {} : { selected };
+    }
+    const pageSize = Math.max(1, (this.maxVisible ?? 6) - 1);
+    const next = nextIndex(this.index, parsed, this.config.options.length, pageSize);
     if (next !== this.index) {
       this.index = next;
       this.clampScroll();
@@ -167,23 +170,30 @@ export class ListField {
     return {};
   }
 
-  /** Keeps `index` within [scrollTop, scrollTop + maxVisible) after any move
-   * or after maxVisible itself changes (e.g. a terminal resize). */
   private clampScroll(): void {
     const maxVisible = this.maxVisible;
-    if (!maxVisible) { this.scrollTop = 0; return; }
+    if (!maxVisible) {
+      this.scrollTop = 0;
+      return;
+    }
     if (this.index < this.scrollTop) this.scrollTop = this.index;
-    else if (this.index >= this.scrollTop + maxVisible) this.scrollTop = this.index - maxVisible + 1;
-    // The window may also need to slide backward if it shrank enough that
-    // scrollTop..scrollTop+maxVisible now runs past the end of the list.
-    this.scrollTop = Math.max(0, Math.min(this.scrollTop, Math.max(0, this.config.options.length - maxVisible)));
+    else if (this.index >= this.scrollTop + maxVisible)
+      this.scrollTop = this.index - maxVisible + 1;
+    this.scrollTop = Math.max(
+      0,
+      Math.min(this.scrollTop, Math.max(0, this.config.options.length - maxVisible)),
+    );
   }
 }
 
 export function renderListFieldWithContext(
-  context: readonly string[], field: ListField, maxRows: number, cols = Number.POSITIVE_INFINITY,
+  context: readonly string[],
+  field: ListField,
+  maxRows: number,
+  cols = Number.POSITIVE_INFINITY,
 ): string[] {
-  if (!Number.isFinite(maxRows)) return [...context, ...field.render(Number.POSITIVE_INFINITY, cols)];
+  if (!Number.isFinite(maxRows))
+    return [...context, ...field.render(Number.POSITIVE_INFINITY, cols)];
   const rows = Math.max(0, Math.floor(maxRows));
   if (rows === 0) return [];
 

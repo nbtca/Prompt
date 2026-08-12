@@ -6,15 +6,19 @@ import { setLanguage, t } from '../../i18n/index.js';
 import { resetIconCache } from '../../core/icons.js';
 import { stripAnsi, visualWidth } from '../../core/text.js';
 import type { AppContext } from '../view.js';
+import type * as CalendarModule from '../../features/calendar.js';
 
 const calendarUpcoming = vi.fn().mockReturnValue([]);
 const calendarInRange = vi.fn().mockReturnValue([]);
 const loadCalendarOrThrowMock = vi.fn().mockResolvedValue({
-  upcoming: calendarUpcoming, inRange: calendarInRange,
-  past: vi.fn().mockReturnValue([]), next: vi.fn().mockReturnValue([]), heatmap: vi.fn().mockReturnValue([]),
+  upcoming: calendarUpcoming,
+  inRange: calendarInRange,
+  past: vi.fn().mockReturnValue([]),
+  next: vi.fn().mockReturnValue([]),
+  heatmap: vi.fn().mockReturnValue([]),
 });
 vi.mock('../../features/calendar.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../features/calendar.js')>();
+  const actual = await importOriginal<typeof CalendarModule>();
   return { ...actual, loadCalendarOrThrow: loadCalendarOrThrowMock };
 });
 
@@ -30,9 +34,14 @@ const noon = new Date('2026-07-15T12:00:00');
 const FIXTURE_TERM_KEY = '2020-1';
 const FIXTURE_WEEK_ONE = '2020-01-06';
 
+function defined<T>(value: T | undefined): T {
+  if (value === undefined) throw new Error('Expected fixture value');
+  return value;
+}
+
 describe('homeView footer', () => {
   it('offers tab switching and quitting without move or open actions', () => {
-    const hint = stripAnsi(homeView.footerHint?.(5) ?? '');
+    const hint = stripAnsi(homeView.footerHint(5, 80));
     expect(hint).toContain('1-5');
     expect(hint).toContain(t().menu.hintQuit);
     expect(hint).not.toContain(t().menu.hintMove);
@@ -42,19 +51,28 @@ describe('homeView footer', () => {
 
 describe('renderHome (schedule-first dashboard)', () => {
   it('shows next class, today classes, and upcoming events', () => {
-    const out = stripAnsi(renderHome({
-      nextClassLine: '  Next class in 2h',
-      todayLines: ['  08:00 Math', '  10:00 Physics'],
-      eventLines: ['  03-25 Hackathon', '  03-28 Study group'],
-      loading: false,
-    }, noon).join('\n'));
+    const out = stripAnsi(
+      renderHome(
+        {
+          nextClassLine: '  Next class in 2h',
+          todayLines: ['  08:00 Math', '  10:00 Physics'],
+          eventLines: ['  03-25 Hackathon', '  03-28 Study group'],
+          loading: false,
+        },
+        noon,
+      ).join('\n'),
+    );
     expect(out).toContain('Next class in 2h');
     expect(out).toContain('08:00 Math');
     expect(out).toContain('Hackathon');
   });
 
   it('falls back to "no class today" and "no upcoming class" when schedule is empty', () => {
-    const out = stripAnsi(renderHome({ nextClassLine: '', todayLines: [], eventLines: [], loading: false }, noon).join('\n'));
+    const out = stripAnsi(
+      renderHome({ nextClassLine: '', todayLines: [], eventLines: [], loading: false }, noon).join(
+        '\n',
+      ),
+    );
     expect(out).toContain('No classes today');
     expect(out).toContain('No upcoming classes');
   });
@@ -81,47 +99,71 @@ describe('renderHome (schedule-first dashboard)', () => {
     expect(out).not.toContain('No upcoming events');
   });
 
-  it.each(['en', 'zh'] as const)('fits every generated home label within twenty columns in %s', (language) => {
-    setLanguage(language);
-    try {
-      const trans = t();
-      const lines = renderHome({ loading: false, unresolvedCount: 123 }, noon, 100, 20);
-      const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
+  it.each(['en', 'zh'] as const)(
+    'fits every generated home label within twenty columns in %s',
+    (language) => {
+      setLanguage(language);
+      try {
+        const trans = t();
+        const lines = renderHome({ loading: false, unresolvedCount: 123 }, noon, 100, 20);
+        const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
 
-      expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
-      for (const label of [
-        trans.timetable.nextClass,
-        trans.timetable.noNextClass,
-        trans.timetable.hubToday,
-        trans.timetable.noClassToday,
-        trans.timetable.hubUnresolved,
-        trans.menu.events,
-        trans.calendar.noEvents,
-      ]) {
-        expect(text).toContain(label.replace(/\s/g, ''));
+        expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+        for (const label of [
+          trans.timetable.nextClass,
+          trans.timetable.noNextClass,
+          trans.timetable.hubToday,
+          trans.timetable.noClassToday,
+          trans.timetable.hubUnresolved,
+          trans.menu.events,
+          trans.calendar.noEvents,
+        ]) {
+          expect(text).toContain(label.replace(/\s/g, ''));
+        }
+      } finally {
+        setLanguage('en');
       }
-    } finally {
-      setLanguage('en');
-    }
-  });
+    },
+  );
 });
 
 describe('renderHome adaptive event count', () => {
-  const manyEventLines = Array.from({ length: 12 }, (_, i) => `  07-${17 + i}  Event ${i}`);
+  const manyEventLines = Array.from(
+    { length: 12 },
+    (_, i) => `  07-${String(17 + i)}  Event ${String(i)}`,
+  );
 
   it('shows only as many events as fit on a normal-size terminal', () => {
-    const out = stripAnsi(renderHome({
-      nextClassLine: '', todayLines: [], eventLines: manyEventLines, loading: false,
-    }, noon, 12).join('\n'));
+    const out = stripAnsi(
+      renderHome(
+        {
+          nextClassLine: '',
+          todayLines: [],
+          eventLines: manyEventLines,
+          loading: false,
+        },
+        noon,
+        12,
+      ).join('\n'),
+    );
     const visibleCount = manyEventLines.filter((l) => out.includes(l.trim())).length;
     expect(visibleCount).toBeLessThan(manyEventLines.length);
     expect(visibleCount).toBeGreaterThan(0);
   });
 
   it('shows more events on a tall terminal, up to everything available', () => {
-    const out = stripAnsi(renderHome({
-      nextClassLine: '', todayLines: [], eventLines: manyEventLines, loading: false,
-    }, noon, 50).join('\n'));
+    const out = stripAnsi(
+      renderHome(
+        {
+          nextClassLine: '',
+          todayLines: [],
+          eventLines: manyEventLines,
+          loading: false,
+        },
+        noon,
+        50,
+      ).join('\n'),
+    );
     for (const l of manyEventLines) expect(out).toContain(l.trim());
   });
 
@@ -136,20 +178,28 @@ describe('renderHome adaptive event count', () => {
       '14:00 社区治理与组织协作专题研讨',
       '08-03 校园组织协调与长期规划工作坊',
     ],
-  ])('reflows complete schedule and event data within twenty columns', (nextClassLine, todayLine, eventLine) => {
-    const lines = renderHome({
-      nextClassLine: `   ${nextClassLine}`,
-      todayLines: [`   ${todayLine}`],
-      eventLines: [`   ${eventLine}`],
-      loading: false,
-    }, noon, 100, 20);
-    const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
+  ])(
+    'reflows complete schedule and event data within twenty columns',
+    (nextClassLine, todayLine, eventLine) => {
+      const lines = renderHome(
+        {
+          nextClassLine: `   ${nextClassLine}`,
+          todayLines: [`   ${todayLine}`],
+          eventLines: [`   ${eventLine}`],
+          loading: false,
+        },
+        noon,
+        100,
+        20,
+      );
+      const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
 
-    expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
-    expect(text).toContain(nextClassLine.replace(/\s/g, ''));
-    expect(text).toContain(todayLine.replace(/\s/g, ''));
-    expect(text).toContain(eventLine.replace(/\s/g, ''));
-  });
+      expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+      expect(text).toContain(nextClassLine.replace(/\s/g, ''));
+      expect(text).toContain(todayLine.replace(/\s/g, ''));
+      expect(text).toContain(eventLine.replace(/\s/g, ''));
+    },
+  );
 
   it('budgets wrapped events by rendered rows without splitting an event', () => {
     const eventLines = [
@@ -157,29 +207,39 @@ describe('renderHome adaptive event count', () => {
       '   08-04 Student organizations coordination meeting',
       '   08-05 Engineering projects presentation evening',
     ];
-    const lines = renderHome({
-      nextClassLine: '',
-      todayLines: [],
-      eventLines,
-      loading: false,
-    }, noon, 12, 20);
+    const lines = renderHome(
+      {
+        nextClassLine: '',
+        todayLines: [],
+        eventLines,
+        loading: false,
+      },
+      noon,
+      12,
+      20,
+    );
     const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
 
     expect(lines.length).toBeLessThanOrEqual(12);
-    expect(text).toContain(eventLines[0]!.replace(/\s/g, ''));
-    expect(text).not.toContain(eventLines[1]!.replace(/\s/g, ''));
+    expect(text).toContain(defined(eventLines[0]).replace(/\s/g, ''));
+    expect(text).not.toContain(defined(eventLines[1]).replace(/\s/g, ''));
   });
 
   it('keeps one complete event scrollable when earlier panels fill the viewport', () => {
     const eventLine = '   08-03 Community planning workshop';
-    const lines = renderHome({
-      weekAhead: {
-        classDays: [true, false, true, false, false, false, false],
-        eventDays: [false, true, false, false, true, false, false],
+    const lines = renderHome(
+      {
+        weekAhead: {
+          classDays: [true, false, true, false, false, false, false],
+          eventDays: [false, true, false, false, true, false, false],
+        },
+        eventLines: [eventLine],
+        loading: false,
       },
-      eventLines: [eventLine],
-      loading: false,
-    }, noon, 12, 20);
+      noon,
+      12,
+      20,
+    );
     const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
 
     expect(lines.length).toBeGreaterThan(12);
@@ -207,8 +267,12 @@ describe('renderHome day-progress bar', () => {
   });
 
   it('shrinks with a twenty-column terminal and grows back with available width', () => {
-    const narrow = renderHome({}, noon, 100, 20).find((line) => stripAnsi(line).includes('50%'))!;
-    const wide = renderHome({}, noon, 100, 40).find((line) => stripAnsi(line).includes('50%'))!;
+    const narrow = defined(
+      renderHome({}, noon, 100, 20).find((line) => stripAnsi(line).includes('50%')),
+    );
+    const wide = defined(
+      renderHome({}, noon, 100, 40).find((line) => stripAnsi(line).includes('50%')),
+    );
 
     expect(visualWidth(narrow)).toBeLessThanOrEqual(20);
     expect(visualWidth(wide)).toBeGreaterThan(visualWidth(narrow));
@@ -224,10 +288,16 @@ describe('renderHome — week overview panel', () => {
   });
 
   it('shows the panel with class/event row labels and a legend when weekAhead data is present', () => {
-    const lines = renderHome({
-      loading: false,
-      weekAhead: { classDays: [true, false, true, false, false, false, false], eventDays: [false, true, false, false, true, false, false] },
-    }, noon).map((l) => stripAnsi(l));
+    const lines = renderHome(
+      {
+        loading: false,
+        weekAhead: {
+          classDays: [true, false, true, false, false, false, false],
+          eventDays: [false, true, false, false, true, false, false],
+        },
+      },
+      noon,
+    ).map((l) => stripAnsi(l));
     const titleIdx = lines.findIndex((l) => l.includes('Week overview'));
     expect(titleIdx).toBeGreaterThanOrEqual(0);
     expect(lines[titleIdx + 2]).toContain('Classes');
@@ -241,12 +311,18 @@ describe('renderHome — week overview panel', () => {
     process.env['NBTCA_ICON_MODE'] = 'unicode';
     resetIconCache();
     try {
-      const lines = renderHome({
-        loading: false,
-        weekAhead: { classDays: [false, false, false, false, false, true, true] },
-      }, noon).map((l) => stripAnsi(l));
+      const lines = renderHome(
+        {
+          loading: false,
+          weekAhead: { classDays: [false, false, false, false, false, true, true] },
+        },
+        noon,
+      ).map((l) => stripAnsi(l));
       const titleIdx = lines.findIndex((l) => l.includes('Week overview'));
-      const classCells = lines[titleIdx + 2]!.trim().split(/\s+/).slice(1);
+      const classCells = defined(lines[titleIdx + 2])
+        .trim()
+        .split(/\s+/)
+        .slice(1);
       expect(classCells[5]).toBe('··');
       expect(classCells[6]).toBe('··');
     } finally {
@@ -259,15 +335,21 @@ describe('renderHome — week overview panel', () => {
     process.env['NBTCA_ICON_MODE'] = 'unicode';
     resetIconCache();
     try {
-      const lines = renderHome({
-        loading: false,
-        weekAhead: {
-          classDays: [false, false, false, false, false, false, false],
-          eventDays: [false, false, false, false, false, true, false],
+      const lines = renderHome(
+        {
+          loading: false,
+          weekAhead: {
+            classDays: [false, false, false, false, false, false, false],
+            eventDays: [false, false, false, false, false, true, false],
+          },
         },
-      }, noon).map((l) => stripAnsi(l));
+        noon,
+      ).map((l) => stripAnsi(l));
       const titleIdx = lines.findIndex((l) => l.includes('Week overview'));
-      const eventCells = lines[titleIdx + 3]!.trim().split(/\s+/).slice(1);
+      const eventCells = defined(lines[titleIdx + 3])
+        .trim()
+        .split(/\s+/)
+        .slice(1);
       const saturday = eventCells[5];
       const sunday = eventCells[6];
       expect(saturday).toBe('▓▓');
@@ -279,51 +361,68 @@ describe('renderHome — week overview panel', () => {
   });
 
   it('renders the event row with no glyphs at all when eventDays is not yet known', () => {
-    const lines = renderHome({
-      loading: false,
-      weekAhead: { classDays: [true, false, false, false, false, false, false] },
-    }, noon).map((l) => stripAnsi(l));
+    const lines = renderHome(
+      {
+        loading: false,
+        weekAhead: { classDays: [true, false, false, false, false, false, false] },
+      },
+      noon,
+    ).map((l) => stripAnsi(l));
     const titleIdx = lines.findIndex((l) => l.includes('Week overview'));
-    const eventLine = lines[titleIdx + 3]!;
+    const eventLine = defined(lines[titleIdx + 3]);
     expect(eventLine).not.toMatch(/[▓░]/);
   });
 
   it('never collapses the grid into one array entry', () => {
-    const lines = renderHome({
-      loading: false,
-      weekAhead: { classDays: [true, false, false, false, false, false, false], eventDays: [false, true, false, false, false, false, false] },
-    }, noon);
+    const lines = renderHome(
+      {
+        loading: false,
+        weekAhead: {
+          classDays: [true, false, false, false, false, false, false],
+          eventDays: [false, true, false, false, false, false, false],
+        },
+      },
+      noon,
+    );
     for (const l of lines) expect(l).not.toContain('\n');
   });
 
-  it.each(['en', 'zh'] as const)('uses a complete vertical week grid at twenty columns in %s', (language) => {
-    setLanguage(language);
-    try {
-      const trans = t();
-      const lines = renderHome({
-        loading: false,
-        weekAhead: {
-          classDays: [true, false, true, false, false, false, false],
-          eventDays: [false, true, false, false, true, true, false],
-        },
-      }, noon, 100, 20);
-      const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
+  it.each(['en', 'zh'] as const)(
+    'uses a complete vertical week grid at twenty columns in %s',
+    (language) => {
+      setLanguage(language);
+      try {
+        const trans = t();
+        const lines = renderHome(
+          {
+            loading: false,
+            weekAhead: {
+              classDays: [true, false, true, false, false, false, false],
+              eventDays: [false, true, false, false, true, true, false],
+            },
+          },
+          noon,
+          100,
+          20,
+        );
+        const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
 
-      expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
-      for (const label of [
-        trans.timetable.weekOverviewTitle,
-        trans.timetable.weekAheadClasses,
-        trans.menu.events,
-        trans.timetable.weekAheadBusy,
-        trans.timetable.weekAheadFree,
-        trans.timetable.weekAheadNone,
-      ]) {
-        expect(text).toContain(label.replace(/\s/g, ''));
+        expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+        for (const label of [
+          trans.timetable.weekOverviewTitle,
+          trans.timetable.weekAheadClasses,
+          trans.menu.events,
+          trans.timetable.weekAheadBusy,
+          trans.timetable.weekAheadFree,
+          trans.timetable.weekAheadNone,
+        ]) {
+          expect(text).toContain(label.replace(/\s/g, ''));
+        }
+      } finally {
+        setLanguage('en');
       }
-    } finally {
-      setLanguage('en');
-    }
-  });
+    },
+  );
 });
 
 describe('renderHome — unresolved items warning', () => {
@@ -339,10 +438,14 @@ describe('renderHome — unresolved items warning', () => {
   });
 
   it('places the warning after Today/Week overview and before Events', () => {
-    const lines = renderHome({
-      loading: false, unresolvedCount: 1,
-      weekAhead: { classDays: [false, false, false, false, false, false, false] },
-    }, noon).map((l) => stripAnsi(l));
+    const lines = renderHome(
+      {
+        loading: false,
+        unresolvedCount: 1,
+        weekAhead: { classDays: [false, false, false, false, false, false, false] },
+      },
+      noon,
+    ).map((l) => stripAnsi(l));
     const todayIdx = lines.findIndex((l) => l.includes('Today'));
     const weekIdx = lines.findIndex((l) => l.includes('Week overview'));
     const warnIdx = lines.findIndex((l) => l.includes('Needs attention'));
@@ -362,8 +465,11 @@ describe('homeView.load()', () => {
     calendarUpcoming.mockReturnValue([]);
     calendarInRange.mockReturnValue([]);
     loadCalendarOrThrowMock.mockResolvedValue({
-      upcoming: calendarUpcoming, inRange: calendarInRange,
-      past: vi.fn().mockReturnValue([]), next: vi.fn().mockReturnValue([]), heatmap: vi.fn().mockReturnValue([]),
+      upcoming: calendarUpcoming,
+      inRange: calendarInRange,
+      past: vi.fn().mockReturnValue([]),
+      next: vi.fn().mockReturnValue([]),
+      heatmap: vi.fn().mockReturnValue([]),
     });
     dir = mkdtempSync(join(tmpdir(), 'home-load-'));
     prevStateHome = process.env['XDG_STATE_HOME'];
@@ -378,18 +484,35 @@ describe('homeView.load()', () => {
 
   function fakeCtx(): AppContext {
     return {
-      size: { rows: 24, cols: 80 }, bodyRows: 19, rerender: vi.fn(), resetScroll: vi.fn(),
-      runClassic: vi.fn(async (fn: () => Promise<void>) => { await fn(); }), quit: vi.fn(),
+      size: { rows: 24, cols: 80 },
+      bodyRows: 19,
+      rerender: vi.fn(),
+      resetScroll: vi.fn(),
+      runClassic: vi.fn(async (fn: () => Promise<void>) => {
+        await fn();
+      }),
+      quit: vi.fn(),
     };
   }
 
   function writeSetUpFixture(dir: string): void {
     mkdirSync(join(dir, 'nbtca'), { recursive: true });
-    writeFileSync(join(dir, 'nbtca', 'current-term.json'), JSON.stringify({ termKey: FIXTURE_TERM_KEY, weekOneMonday: FIXTURE_WEEK_ONE }));
-    writeFileSync(join(dir, 'nbtca', `timetable-${FIXTURE_TERM_KEY}.json`), JSON.stringify({
-      term: { academicYear: '2020', semester: '1' }, meetings: [], unresolvedItems: [],
-      periods: [], calendarDays: [], warnings: [], fetchedAt: `${FIXTURE_WEEK_ONE}T00:00:00Z`,
-    }));
+    writeFileSync(
+      join(dir, 'nbtca', 'current-term.json'),
+      JSON.stringify({ termKey: FIXTURE_TERM_KEY, weekOneMonday: FIXTURE_WEEK_ONE }),
+    );
+    writeFileSync(
+      join(dir, 'nbtca', `timetable-${FIXTURE_TERM_KEY}.json`),
+      JSON.stringify({
+        term: { academicYear: '2020', semester: '1' },
+        meetings: [],
+        unresolvedItems: [],
+        periods: [],
+        calendarDays: [],
+        warnings: [],
+        fetchedAt: `${FIXTURE_WEEK_ONE}T00:00:00Z`,
+      }),
+    );
   }
 
   it('fetches the calendar exactly once and reuses it for both upcoming events and the week-ahead event row', async () => {
@@ -411,17 +534,40 @@ describe('homeView.load()', () => {
 
   it('populates unresolvedCount and weekAhead.classDays synchronously, before the network call resolves', async () => {
     mkdirSync(join(dir, 'nbtca'), { recursive: true });
-    writeFileSync(join(dir, 'nbtca', 'current-term.json'), JSON.stringify({ termKey: FIXTURE_TERM_KEY, weekOneMonday: FIXTURE_WEEK_ONE }));
-    writeFileSync(join(dir, 'nbtca', `timetable-${FIXTURE_TERM_KEY}.json`), JSON.stringify({
-      term: { academicYear: '2020', semester: '1' },
-      meetings: [{ sourceId: null, courseName: 'Math', teacherNames: [], location: null, weekday: 1, startPeriod: 1, endPeriod: 1, weeks: [1], kind: 'regular' }],
-      unresolvedItems: [{ kind: 'practice', itemIndex: 0, sourceFields: { kcmc: 'Fitness test' } }],
-      periods: [{ period: 1, label: null, start: '08:00', end: '08:45' }],
-      calendarDays: [], warnings: [], fetchedAt: `${FIXTURE_WEEK_ONE}T00:00:00Z`,
-    }));
+    writeFileSync(
+      join(dir, 'nbtca', 'current-term.json'),
+      JSON.stringify({ termKey: FIXTURE_TERM_KEY, weekOneMonday: FIXTURE_WEEK_ONE }),
+    );
+    writeFileSync(
+      join(dir, 'nbtca', `timetable-${FIXTURE_TERM_KEY}.json`),
+      JSON.stringify({
+        term: { academicYear: '2020', semester: '1' },
+        meetings: [
+          {
+            sourceId: null,
+            courseName: 'Math',
+            teacherNames: [],
+            location: null,
+            weekday: 1,
+            startPeriod: 1,
+            endPeriod: 1,
+            weeks: [1],
+            kind: 'regular',
+          },
+        ],
+        unresolvedItems: [
+          { kind: 'practice', itemIndex: 0, sourceFields: { kcmc: 'Fitness test' } },
+        ],
+        periods: [{ period: 1, label: null, start: '08:00', end: '08:45' }],
+        calendarDays: [],
+        warnings: [],
+        fetchedAt: `${FIXTURE_WEEK_ONE}T00:00:00Z`,
+      }),
+    );
     let capturedSync = false;
     const ctx: AppContext = {
-      size: { rows: 24, cols: 80 }, bodyRows: 19,
+      size: { rows: 24, cols: 80 },
+      bodyRows: 19,
       rerender: vi.fn(() => {
         if (!capturedSync) {
           capturedSync = true;
@@ -431,7 +577,10 @@ describe('homeView.load()', () => {
         }
       }),
       resetScroll: vi.fn(),
-      runClassic: vi.fn(async (fn: () => Promise<void>) => { await fn(); }), quit: vi.fn(),
+      runClassic: vi.fn(async (fn: () => Promise<void>) => {
+        await fn();
+      }),
+      quit: vi.fn(),
     };
     await homeView.load(ctx);
     expect(capturedSync).toBe(true);
@@ -439,14 +588,16 @@ describe('homeView.load()', () => {
 
   it('fills in weekAhead.eventDays from the real week-of-events after the network call resolves', async () => {
     writeSetUpFixture(dir);
-    calendarInRange.mockReturnValue([{ start: new Date(`${FIXTURE_WEEK_ONE}T18:00:00`), title: 'Club meetup' }]);
+    calendarInRange.mockReturnValue([
+      { start: new Date(`${FIXTURE_WEEK_ONE}T18:00:00`), title: 'Club meetup' },
+    ]);
     const ctx = fakeCtx();
     await homeView.load(ctx);
     const out = stripAnsi(homeView.render(ctx).join('\n'));
     const lines = out.split('\n');
     const titleIdx = lines.findIndex((l) => l.includes('Week overview'));
     expect(titleIdx).toBeGreaterThanOrEqual(0);
-    const eventLine = lines[titleIdx + 3]!;
+    const eventLine = defined(lines[titleIdx + 3]);
     expect(eventLine).toMatch(/[▓░]/);
   });
 });

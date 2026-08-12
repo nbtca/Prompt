@@ -1,23 +1,23 @@
 declare module 'marked-terminal' {
   import type { MarkedExtension } from 'marked';
-  import type { Chalk } from 'chalk';
+  import type { ChalkInstance } from 'chalk';
 
   interface TerminalRendererOptions {
-    code?: Chalk | ((s: string) => string);
-    blockquote?: Chalk | ((s: string) => string);
-    html?: Chalk | ((s: string) => string);
-    heading?: Chalk | ((s: string) => string);
-    firstHeading?: Chalk | ((s: string) => string);
-    hr?: Chalk | ((s: string) => string);
-    listitem?: Chalk | ((s: string) => string);
-    table?: Chalk | ((s: string) => string);
-    paragraph?: Chalk | ((s: string) => string);
-    strong?: Chalk | ((s: string) => string);
-    em?: Chalk | ((s: string) => string);
-    codespan?: Chalk | ((s: string) => string);
-    del?: Chalk | ((s: string) => string);
-    link?: Chalk | ((s: string) => string);
-    href?: Chalk | ((s: string) => string);
+    code?: ChalkInstance | ((s: string) => string);
+    blockquote?: ChalkInstance | ((s: string) => string);
+    html?: ChalkInstance | ((s: string) => string);
+    heading?: ChalkInstance | ((s: string) => string);
+    firstHeading?: ChalkInstance | ((s: string) => string);
+    hr?: ChalkInstance | ((s: string) => string);
+    listitem?: ChalkInstance | ((s: string) => string);
+    table?: ChalkInstance | ((s: string) => string);
+    paragraph?: ChalkInstance | ((s: string) => string);
+    strong?: ChalkInstance | ((s: string) => string);
+    em?: ChalkInstance | ((s: string) => string);
+    codespan?: ChalkInstance | ((s: string) => string);
+    del?: ChalkInstance | ((s: string) => string);
+    link?: ChalkInstance | ((s: string) => string);
+    href?: ChalkInstance | ((s: string) => string);
     list?: (body: string, ordered?: boolean) => string;
     width?: number;
     reflowText?: boolean;

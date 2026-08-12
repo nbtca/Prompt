@@ -19,13 +19,19 @@ describe('renderDocs', () => {
   });
 
   it('sections mode renders the sections list field', () => {
-    const sectionsField = new ListField({ title: 'Docs', options: [{ value: 'tutorial', label: 'Tutorial' }] });
+    const sectionsField = new ListField({
+      title: 'Docs',
+      options: [{ value: 'tutorial', label: 'Tutorial' }],
+    });
     const out = stripAnsi(renderDocs({ mode: 'sections', sectionsField }).join('\n'));
     expect(out).toContain('Tutorial');
   });
 
   it('files mode renders the files list field', () => {
-    const filesField = new ListField({ title: 'Tutorial', options: [{ value: 'a.md', label: 'Getting Started' }] });
+    const filesField = new ListField({
+      title: 'Tutorial',
+      options: [{ value: 'a.md', label: 'Getting Started' }],
+    });
     const out = stripAnsi(renderDocs({ mode: 'files', filesField }).join('\n'));
     expect(out).toContain('Getting Started');
   });
@@ -33,7 +39,10 @@ describe('renderDocs', () => {
   it('keeps the selected document visible in a two-row body', () => {
     const filesField = new ListField({
       title: 'Tutorial',
-      options: [{ value: 'a.md', label: 'Getting Started' }, { value: '__back__', label: 'Back' }],
+      options: [
+        { value: 'a.md', label: 'Getting Started' },
+        { value: '__back__', label: 'Back' },
+      ],
     });
     const lines = renderDocs({ mode: 'files', filesField }, 80, 2);
 
@@ -44,10 +53,11 @@ describe('renderDocs', () => {
     ['Community governance and operations', 'Current'],
     ['社区治理与组织协作运行机制', '当前'],
   ])('fits standalone docs lists within twenty columns', (label, hint) => {
-    const createField = () => new ListField({
-      title: 'Documentation',
-      options: [{ value: 'item', label, hint }],
-    });
+    const createField = () =>
+      new ListField({
+        title: 'Documentation',
+        options: [{ value: 'item', label, hint }],
+      });
     const states: DocsViewState[] = [
       { mode: 'sections', sectionsField: createField() },
       { mode: 'files', filesField: createField() },
@@ -90,7 +100,10 @@ describe('renderDocs', () => {
   });
 
   it('searchResults mode renders the results list field', () => {
-    const searchResultsField = new ListField({ title: 'Results', options: [{ value: 'x.md', label: 'X Doc' }] });
+    const searchResultsField = new ListField({
+      title: 'Results',
+      options: [{ value: 'x.md', label: 'X Doc' }],
+    });
     const out = stripAnsi(renderDocs({ mode: 'searchResults', searchResultsField }).join('\n'));
     expect(out).toContain('X Doc');
   });
@@ -98,26 +111,33 @@ describe('renderDocs', () => {
   it.each([
     ['en', 'Community governance and operations', 'Current', 'No documents match your search'],
     ['zh', '社区治理与组织协作运行机制', '当前', '未找到匹配的文档'],
-  ] as const)('fits empty search results and their action within twenty columns', (language, label, hint, empty) => {
-    setLanguage(language);
-    try {
-      const searchResultsField = new ListField({
-        title: 'Results',
-        options: [{ value: 'item', label, hint }],
-      });
-      const lines = renderDocs({ mode: 'searchResults', searchResultsField, searchResultsEmpty: true }, 20, 9);
-      const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
+  ] as const)(
+    'fits empty search results and their action within twenty columns',
+    (language, label, hint, empty) => {
+      setLanguage(language);
+      try {
+        const searchResultsField = new ListField({
+          title: 'Results',
+          options: [{ value: 'item', label, hint }],
+        });
+        const lines = renderDocs(
+          { mode: 'searchResults', searchResultsField, searchResultsEmpty: true },
+          20,
+          9,
+        );
+        const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
 
-      expect(lines.length).toBeLessThanOrEqual(9);
-      expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
-      expect(text).toContain(empty.replace(/\s/g, ''));
-      expect(text).toContain(label.replace(/\s/g, ''));
-      expect(text).toContain(hint);
-      expect(lines.filter((line) => /[→>]/u.test(stripAnsi(line)))).toHaveLength(1);
-    } finally {
-      setLanguage('en');
-    }
-  });
+        expect(lines.length).toBeLessThanOrEqual(9);
+        expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+        expect(text).toContain(empty.replace(/\s/g, ''));
+        expect(text).toContain(label.replace(/\s/g, ''));
+        expect(text).toContain(hint);
+        expect(lines.filter((line) => /[→>]/u.test(stripAnsi(line)))).toHaveLength(1);
+      } finally {
+        setLanguage('en');
+      }
+    },
+  );
 
   it('error mode shows the error message', () => {
     const out = stripAnsi(renderDocs({ mode: 'error', errorMessage: 'Broke' }).join('\n'));
@@ -127,31 +147,36 @@ describe('renderDocs', () => {
   it.each([
     ['en', 'The documentation service could not complete this request'],
     ['zh', '文档服务暂时无法完成当前请求，请稍后重试'],
-  ] as const)('fits every docs loading and error surface within twenty columns', (language, errorMessage) => {
-    setLanguage(language);
-    try {
-      const sectionsField = new ListField({
-        title: 'Documentation',
-        options: [{ value: 'retry', label: 'Retry' }],
-      });
-      const states: DocsViewState[] = [
-        { mode: 'loading' },
-        { mode: 'readerLoading' },
-        { mode: 'error', errorMessage },
-        { mode: 'sections', errorMessage, sectionsField },
-      ];
+  ] as const)(
+    'fits every docs loading and error surface within twenty columns',
+    (language, errorMessage) => {
+      setLanguage(language);
+      try {
+        const sectionsField = new ListField({
+          title: 'Documentation',
+          options: [{ value: 'retry', label: 'Retry' }],
+        });
+        const states: DocsViewState[] = [
+          { mode: 'loading' },
+          { mode: 'readerLoading' },
+          { mode: 'error', errorMessage },
+          { mode: 'sections', errorMessage, sectionsField },
+        ];
 
-      for (const state of states) {
-        const lines = renderDocs(state, 20, 8);
-        expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+        for (const state of states) {
+          const lines = renderDocs(state, 20, 8);
+          expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+        }
+        const errorText = renderDocs({ mode: 'error', errorMessage }, 20)
+          .map(stripAnsi)
+          .join('')
+          .replace(/\s/g, '');
+        expect(errorText).toContain(errorMessage.replace(/\s/g, ''));
+      } finally {
+        setLanguage('en');
       }
-      const errorText = renderDocs({ mode: 'error', errorMessage }, 20)
-        .map(stripAnsi).join('').replace(/\s/g, '');
-      expect(errorText).toContain(errorMessage.replace(/\s/g, ''));
-    } finally {
-      setLanguage('en');
-    }
-  });
+    },
+  );
 
   it.each([
     ['Documentation request failed', 'Return to document categories'],

@@ -5,7 +5,9 @@ import { resetIconCache } from './icons.js';
 import { stripAnsi } from './text.js';
 
 describe('design tokens', () => {
-  beforeEach(() => { resetIconCache(); });
+  beforeEach(() => {
+    resetIconCache();
+  });
 
   it('cursor glyph is → in unicode mode', () => {
     process.env['NBTCA_ICON_MODE'] = 'unicode';
@@ -95,9 +97,6 @@ describe('design tokens', () => {
     const level = chalk.level;
     chalk.level = 3;
     try {
-      // Background truecolor escape (48;2;...), not type.active's foreground
-      // truecolor (38;2;...) -- the whole point is these read as visually
-      // different mechanisms (fill vs. text color), not just different hues.
       expect(type.cursor('go')).toContain('\x1b[48;2;14;165;233m');
       expect(type.cursor('go')).not.toBe(type.active('go'));
     } finally {

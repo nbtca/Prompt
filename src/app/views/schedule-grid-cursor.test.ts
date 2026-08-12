@@ -1,8 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import type { TimetableMeeting, TimetablePeriod } from '@nbtca/nbtcal/timetable';
+import type { Timetable, TimetableMeeting, TimetablePeriod } from '@nbtca/nbtcal/timetable';
 import {
-  defaultGridCursor, moveCursorWeekday, moveCursorPeriod, handleGridKey,
-  KEY_ARROW_RIGHT, KEY_ENTER_CR,
+  defaultGridCursor,
+  moveCursorWeekday,
+  moveCursorPeriod,
+  handleGridKey,
+  KEY_ARROW_RIGHT,
+  KEY_ENTER_CR,
 } from './schedule-grid-cursor.js';
 
 const periods: TimetablePeriod[] = [
@@ -11,11 +15,22 @@ const periods: TimetablePeriod[] = [
   { period: 3, label: null, start: '10:00', end: '10:45' },
 ];
 function mk(o: Partial<TimetableMeeting>): TimetableMeeting {
-  return { sourceId: null, courseName: 'Math', teacherNames: [], location: null, weekday: 1, startPeriod: 1, endPeriod: 1, weeks: [1], kind: 'regular', ...o };
+  return {
+    sourceId: null,
+    courseName: 'Math',
+    teacherNames: [],
+    location: null,
+    weekday: 1,
+    startPeriod: 1,
+    endPeriod: 1,
+    weeks: [1],
+    kind: 'regular',
+    ...o,
+  };
 }
 
 describe('defaultGridCursor', () => {
-  it('defaults to today\'s weekday and the first defined period', () => {
+  it("defaults to today's weekday and the first defined period", () => {
     expect(defaultGridCursor(3, periods)).toEqual({ weekday: 3, period: 1 });
   });
   it('falls back to Monday on a weekend', () => {
@@ -41,12 +56,24 @@ describe('moveCursorWeekday', () => {
 
 describe('moveCursorPeriod', () => {
   it('moves to the previous/next defined period', () => {
-    expect(moveCursorPeriod({ weekday: 1, period: 2 }, periods, -1)).toEqual({ weekday: 1, period: 1 });
-    expect(moveCursorPeriod({ weekday: 1, period: 2 }, periods, 1)).toEqual({ weekday: 1, period: 3 });
+    expect(moveCursorPeriod({ weekday: 1, period: 2 }, periods, -1)).toEqual({
+      weekday: 1,
+      period: 1,
+    });
+    expect(moveCursorPeriod({ weekday: 1, period: 2 }, periods, 1)).toEqual({
+      weekday: 1,
+      period: 3,
+    });
   });
   it('does not wrap past the first or last period', () => {
-    expect(moveCursorPeriod({ weekday: 1, period: 1 }, periods, -1)).toEqual({ weekday: 1, period: 1 });
-    expect(moveCursorPeriod({ weekday: 1, period: 3 }, periods, 1)).toEqual({ weekday: 1, period: 3 });
+    expect(moveCursorPeriod({ weekday: 1, period: 1 }, periods, -1)).toEqual({
+      weekday: 1,
+      period: 1,
+    });
+    expect(moveCursorPeriod({ weekday: 1, period: 3 }, periods, 1)).toEqual({
+      weekday: 1,
+      period: 3,
+    });
   });
   it('is a no-op when the period table is empty', () => {
     expect(moveCursorPeriod({ weekday: 1, period: 1 }, [], 1)).toEqual({ weekday: 1, period: 1 });
@@ -57,16 +84,27 @@ describe('moveCursorPeriod', () => {
       { period: 3, label: null, start: '10:00', end: '10:45' },
       { period: 5, label: null, start: '13:00', end: '13:45' },
     ];
-    // Moving from period 1 should land on period 3 (the next defined period in the table),
-    // NOT period 2 (which doesn't exist)
-    expect(moveCursorPeriod({ weekday: 1, period: 1 }, nonContiguousPeriods, 1)).toEqual({ weekday: 1, period: 3 });
-    // Moving backward from period 5 should land on period 3, not period 4
-    expect(moveCursorPeriod({ weekday: 1, period: 5 }, nonContiguousPeriods, -1)).toEqual({ weekday: 1, period: 3 });
+    expect(moveCursorPeriod({ weekday: 1, period: 1 }, nonContiguousPeriods, 1)).toEqual({
+      weekday: 1,
+      period: 3,
+    });
+    expect(moveCursorPeriod({ weekday: 1, period: 5 }, nonContiguousPeriods, -1)).toEqual({
+      weekday: 1,
+      period: 3,
+    });
   });
 });
 
 describe('handleGridKey', () => {
-  const tt = { meetings: [mk({ weekday: 1, startPeriod: 1, endPeriod: 2, weeks: [1] })], periods };
+  const tt: Timetable = {
+    term: { academicYear: '2026', semester: '3' },
+    meetings: [mk({ weekday: 1, startPeriod: 1, endPeriod: 2, weeks: [1] })],
+    unresolvedItems: [],
+    periods,
+    calendarDays: [],
+    warnings: [],
+    fetchedAt: new Date('2026-08-01T00:00:00Z'),
+  };
 
   it('moves the cursor on an arrow key', () => {
     const result = handleGridKey(KEY_ARROW_RIGHT, { weekday: 1, period: 1 }, tt, 1);

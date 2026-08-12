@@ -2,7 +2,14 @@ import { glyph, type, space } from '../theme.js';
 import { startRawInput } from './input-session.js';
 import { setVimKeysActive } from '../vim-keys.js';
 import { createPainter } from './painter.js';
-import { visualWidth, wrapAnsiToVisualWidth } from '../text.js';
+import { visualWidth, truncateStart, wrapAnsiToVisualWidth } from '../text.js';
+import { pickIcon } from '../icons.js';
+
+const GRAPHEME_SEGMENTER = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+
+function graphemes(value: string): string[] {
+  return Array.from(GRAPHEME_SEGMENTER.segment(value), ({ segment }) => segment);
+}
 
 export type InputEvent =
   | { type: 'char'; ch: string }
@@ -14,18 +21,19 @@ export type InputEvent =
 export function parseInputData(data: Buffer | string): InputEvent {
   const s = data.toString();
   if (s === '\r' || s === '\n') return { type: 'enter' };
-  if (s === '\x03') return { type: 'cancel' };          // ctrl-c
-  if (s === '\x1b') return { type: 'cancel' };           // bare esc
+  if (s === '\x03') return { type: 'cancel' };
+  if (s === '\x1b') return { type: 'cancel' };
   if (s === '\x7f' || s === '\b') return { type: 'backspace' };
-  if (s.startsWith('\x1b')) return { type: 'none' };     // escape sequence (arrows, etc.)
-  // printable run: drop control chars, keep the rest (supports paste / batched keys)
-  const text = [...s].filter((ch) => ch >= ' ' && ch !== '\x7f').join('');
+  if (s.startsWith('\x1b')) return { type: 'none' };
+  const text = graphemes(s)
+    .filter((ch) => ch >= ' ' && ch !== '\x7f')
+    .join('');
   return text.length > 0 ? { type: 'char', ch: text } : { type: 'none' };
 }
 
 export function applyInputEvent(value: string, ev: InputEvent): string {
   if (ev.type === 'char') return value + ev.ch;
-  if (ev.type === 'backspace') return [...value].slice(0, -1).join('');
+  if (ev.type === 'backspace') return graphemes(value).slice(0, -1).join('');
   return value;
 }
 
@@ -42,21 +50,27 @@ export function renderInput(opts: {
     : Number.POSITIVE_INFINITY;
   const indent = visualWidth(space.indent) < width ? space.indent : '';
   const messageWidth = Math.max(1, width - visualWidth(indent));
-  const messageLines = wrapAnsiToVisualWidth(type.label(opts.message), messageWidth)
-    .map((line) => `${indent}${line}`);
+  const messageLines = wrapAnsiToVisualWidth(type.label(opts.message), messageWidth).map(
+    (line) => `${indent}${line}`,
+  );
   const visibleValue = opts.secret
-    ? (opts.mask ?? '*').repeat([...opts.value].length)
+    ? (opts.mask ?? '*').repeat(graphemes(opts.value).length)
     : opts.value;
-  const shown = opts.value.length > 0
-    ? type.body(visibleValue)
-    : type.hint(opts.placeholder ?? '');
   const cursor = type.active(glyph.cursor());
   const prefixes = [`${space.indent}${cursor} `, `${cursor} `, cursor, ''];
   const prefix = prefixes.find((candidate) => visualWidth(candidate) < width) ?? '';
   const continuation = ' '.repeat(visualWidth(prefix));
   const inputWidth = Math.max(1, width - visualWidth(prefix));
-  const inputLines = wrapAnsiToVisualWidth(shown, inputWidth)
-    .map((line, index) => `${index === 0 ? prefix : continuation}${line}`);
+  const shown =
+    opts.value.length > 0
+      ? type.body(truncateStart(visibleValue, inputWidth, pickIcon('…', '<')))
+      : type.hint(opts.placeholder ?? '');
+  const inputLines =
+    opts.value.length > 0
+      ? [`${prefix}${shown}`]
+      : wrapAnsiToVisualWidth(shown, inputWidth).map(
+          (line, index) => `${index === 0 ? prefix : continuation}${line}`,
+        );
   return [...messageLines, ...inputLines].join('\n');
 }
 
@@ -74,25 +88,32 @@ export function runTextInput(config: RunTextInputConfig): Promise<string | null>
   return new Promise((resolve) => {
     let value = '';
 
-    const frame = () => renderInput({
-      message: config.message,
-      value,
-      placeholder: config.placeholder,
-      secret: config.secret,
-      mask: config.mask,
-    });
+    const frame = () =>
+      renderInput({
+        message: config.message,
+        value,
+        ...(config.placeholder === undefined ? {} : { placeholder: config.placeholder }),
+        ...(config.secret === undefined ? {} : { secret: config.secret }),
+        ...(config.mask === undefined ? {} : { mask: config.mask }),
+      });
 
     const paint = createPainter(frame);
 
     const onData = (data: Buffer) => {
       const ev = parseInputData(data);
-      if (ev.type === 'cancel') { finish(null); return; }
+      if (ev.type === 'cancel') {
+        finish(null);
+        return;
+      }
       if (ev.type === 'enter') {
         if (value.length > 0 || config.allowEmpty !== false) finish(value);
         return;
       }
       const next = applyInputEvent(value, ev);
-      if (next !== value) { value = next; paint(); }
+      if (next !== value) {
+        value = next;
+        paint();
+      }
     };
 
     const finish = (result: string | null) => {
@@ -104,13 +125,15 @@ export function runTextInput(config: RunTextInputConfig): Promise<string | null>
 
     setVimKeysActive(false);
     const handle = startRawInput(onData);
-    if (!handle) { setVimKeysActive(true); resolve(null); return; }
+    if (!handle) {
+      setVimKeysActive(true);
+      resolve(null);
+      return;
+    }
     paint();
   });
 }
 
-export function runSecretInput(
-  config: Omit<RunTextInputConfig, 'secret'>,
-): Promise<string | null> {
+export function runSecretInput(config: Omit<RunTextInputConfig, 'secret'>): Promise<string | null> {
   return runTextInput({ ...config, secret: true });
 }

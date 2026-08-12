@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import chalk from 'chalk';
 import { getConfigDir, getWritableConfigDir } from './paths.js';
 
 export type IconMode = 'auto' | 'ascii' | 'unicode';
@@ -14,6 +15,8 @@ const DEFAULT_PREFERENCES: Preferences = {
   iconMode: 'auto',
   colorMode: 'auto',
 };
+const detectedColorLevel = chalk.level;
+const inheritedNoColor = process.env['NO_COLOR'];
 
 function getPreferencesPath(): string {
   return path.join(getConfigDir(), 'preferences.json');
@@ -67,7 +70,7 @@ export function resetPreferences(): boolean {
 }
 
 export function resolveIconMode(): IconMode {
-  const env = (process.env['NBTCA_ICON_MODE'] || '').toLowerCase();
+  const env = (process.env['NBTCA_ICON_MODE'] ?? '').toLowerCase();
   if (env === 'ascii' || env === 'unicode' || env === 'auto') {
     return env;
   }
@@ -75,7 +78,7 @@ export function resolveIconMode(): IconMode {
 }
 
 export function resolveColorMode(): ColorMode {
-  const env = (process.env['NBTCA_COLOR_MODE'] || '').toLowerCase();
+  const env = (process.env['NBTCA_COLOR_MODE'] ?? '').toLowerCase();
   if (env === 'on' || env === 'off' || env === 'auto') {
     return env;
   }
@@ -83,17 +86,20 @@ export function resolveColorMode(): ColorMode {
 }
 
 export function applyColorModePreference(forcePlain: boolean): void {
-  if (forcePlain) {
+  const mode = forcePlain ? 'off' : resolveColorMode();
+  if (mode === 'off') {
     process.env['NO_COLOR'] = '1';
+    chalk.level = 0;
     return;
   }
 
-  const mode = resolveColorMode();
-  if (mode === 'off') {
-    process.env['NO_COLOR'] = '1';
-    return;
-  }
   if (mode === 'on') {
     delete process.env['NO_COLOR'];
+    chalk.level = 3;
+    return;
   }
+
+  if (inheritedNoColor === undefined) delete process.env['NO_COLOR'];
+  else process.env['NO_COLOR'] = inheritedNoColor;
+  chalk.level = detectedColorLevel;
 }

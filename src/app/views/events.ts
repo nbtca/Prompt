@@ -9,6 +9,7 @@ import { pickIcon } from '../../core/icons.js';
 import { t } from '../../i18n/index.js';
 import { loadCalendarOrThrow, toDisplayEvent, exportEventIcs } from '../../features/calendar.js';
 import { weekRange, monthRange, filterEvents } from '../../features/calendar-query.js';
+import { addLocalDays } from '../../core/calendar-day.js';
 
 let state: EventsViewState = { mode: 'loading' };
 let calendar: Calendar | null = null;
@@ -35,39 +36,46 @@ function buildListField(title: string, events: CalendarEvent[], maxVisible: numb
   const trans = t();
   const display = events.map(toDisplayEvent);
   const options = [
-    ...events.map((_e, i) => ({
-      value: String(i),
-      label: `${display[i]!.date}${display[i]!.time ? ' ' + display[i]!.time : ''}  ${display[i]!.title}`,
-      hint: display[i]!.location,
+    ...display.map((event, index) => ({
+      value: String(index),
+      label: `${event.date}${event.time ? ` ${event.time}` : ''}  ${event.title}`,
+      hint: event.location,
     })),
     { value: '__back__', label: backLabel() },
   ];
   return new ListField({
     title: title || trans.menu.events,
-    options: options.length > 1 ? options : [{ value: '__back__', label: `${trans.calendar.noEvents} — ${backLabel()}` }],
+    options:
+      options.length > 1
+        ? options
+        : [{ value: '__back__', label: `${trans.calendar.noEvents} — ${backLabel()}` }],
     maxVisible,
   });
 }
 
 function showList(title: string, events: CalendarEvent[], ctx: AppContext): void {
   currentList = events;
-  state = { mode: 'list', listField: buildListField(title, events, computeMaxVisible(ctx.bodyRows)) };
+  state = {
+    mode: 'list',
+    listField: buildListField(title, events, computeMaxVisible(ctx.bodyRows)),
+  };
 }
 
-// A glance-panel ceiling, not "browse everything" (this tab's own "Events"
-// list is for that) — just needs to be at least as many as the tallest
-// reasonable terminal could fit; renderHubBody trims further based on the
-// real ctx.bodyRows.
 const RECENT_ACTIVITY_FETCH_CAP = 15;
 
 function goToHub(): void {
   const upcoming = calendar ? calendar.upcoming({ days: 30 }) : [];
+  const nextEvent = upcoming[0];
   state = {
     mode: 'hub',
     hubField: buildHubField(),
-    nextEvent: upcoming[0] ? toDisplayEvent(upcoming[0]) : undefined,
+    ...(nextEvent === undefined ? {} : { nextEvent: toDisplayEvent(nextEvent) }),
     heatmapBuckets: calendar
-      ? calendar.heatmap({ start: new Date(Date.now() - 365 * 86400000), end: new Date(), bucket: 'day' })
+      ? calendar.heatmap({
+          start: addLocalDays(new Date(), -365),
+          end: new Date(),
+          bucket: 'day',
+        })
       : [],
     recentEvents: upcoming.slice(0, RECENT_ACTIVITY_FETCH_CAP).map(toDisplayEvent),
   };
@@ -84,10 +92,6 @@ function showDetail(raw: CalendarEvent): void {
     detailDescription: e.description,
     detailEvent: raw,
     detailField: new ListField({
-      // Empty, not e.title: renderEvents already prints the event title as
-      // its own heading right above (detailTitle) -- giving the field the
-      // same string a second time repeated it verbatim just above the
-      // Export/Back options.
       title: '',
       options: [
         { value: 'export', label: trans.calendar.exportIcs },
@@ -97,7 +101,7 @@ function showDetail(raw: CalendarEvent): void {
   };
 }
 
-export const eventsView: View = {
+export const eventsView = {
   id: 'events',
   title: t().menu.events,
 
@@ -114,9 +118,6 @@ export const eventsView: View = {
   },
 
   render(ctx: AppContext): string[] {
-    // Sync the list's scroll window to the *current* terminal size on every
-    // frame (not just construction time) — this is what keeps a long list
-    // correctly windowed across a live resize.
     state.listField?.setMaxVisible(computeMaxVisible(ctx.bodyRows));
     return renderEvents(state, new Date(), ctx.bodyRows, ctx.size.cols);
   },
@@ -125,18 +126,23 @@ export const eventsView: View = {
     return state.mode === 'search';
   },
 
+  capturesPageKeys(): boolean {
+    return state.mode === 'hub' || state.mode === 'list' || state.mode === 'detail';
+  },
+
   footerHint(tabCount: number, cols = Number.POSITIVE_INFINITY): string | undefined {
     if (state.mode === 'search') return captureFooterHint(cols);
-    // A pure "read this, any key returns to the hub" drill-down (see
-    // handleKey below) -- no field to move a cursor within or open an item
-    // from, so the generic "move · open" hint would promise keys that
-    // don't do that here.
     const passive = state.mode === 'loading' || state.mode === 'error' || state.mode === 'heatmap';
     return passive ? passiveFooterHint(tabCount, cols) : undefined;
   },
 
   handleBack(): boolean {
-    if (state.mode === 'list' || state.mode === 'detail' || state.mode === 'search' || state.mode === 'heatmap') {
+    if (
+      state.mode === 'list' ||
+      state.mode === 'detail' ||
+      state.mode === 'search' ||
+      state.mode === 'heatmap'
+    ) {
       if (state.mode === 'search') setVimKeysActive(true);
       goToHub();
       return true;
@@ -151,19 +157,41 @@ export const eventsView: View = {
         const result = state.hubField?.handleKey(key);
         if (!result?.selected) return;
         const now = new Date();
-        if (result.selected === 'upcoming') { showList(t().menu.events, calendar.upcoming({ days: 30 }), ctx); return; }
-        if (result.selected === 'week') { const r = weekRange(now); showList(t().calendar.thisWeek, calendar.inRange(r.start, r.end), ctx); return; }
-        if (result.selected === 'month') { const r = monthRange(now); showList(t().calendar.thisMonth, calendar.inRange(r.start, r.end), ctx); return; }
-        if (result.selected === 'past') { showList(t().calendar.pastEvents, calendar.past({ days: 30 }).reverse(), ctx); return; }
-        if (result.selected === 'heatmap') { state = { ...state, mode: 'heatmap' }; return; }
+        if (result.selected === 'upcoming') {
+          showList(t().menu.events, calendar.upcoming({ days: 30 }), ctx);
+          return;
+        }
+        if (result.selected === 'week') {
+          const r = weekRange(now);
+          showList(t().calendar.thisWeek, calendar.inRange(r.start, r.end), ctx);
+          return;
+        }
+        if (result.selected === 'month') {
+          const r = monthRange(now);
+          showList(t().calendar.thisMonth, calendar.inRange(r.start, r.end), ctx);
+          return;
+        }
+        if (result.selected === 'past') {
+          showList(t().calendar.pastEvents, calendar.past({ days: 30 }).reverse(), ctx);
+          return;
+        }
+        if (result.selected === 'heatmap') {
+          state = { ...state, mode: 'heatmap' };
+          return;
+        }
         if (result.selected === 'search') {
           setVimKeysActive(false);
-          state = { mode: 'search', searchField: new TextField({ message: t().calendar.searchPrompt, placeholder: t().calendar.searchPlaceholder, allowEmpty: true }) };
+          state = {
+            mode: 'search',
+            searchField: new TextField({
+              message: t().calendar.searchPrompt,
+              placeholder: t().calendar.searchPlaceholder,
+              allowEmpty: true,
+            }),
+          };
         }
         return;
       }
-      // A pure detail/drill-down view with no field of its own — any key
-      // returns to the hub, matching Schedule's 'week'/'unresolved' modes.
       case 'heatmap': {
         goToHub();
         return;
@@ -171,7 +199,10 @@ export const eventsView: View = {
       case 'list': {
         const result = state.listField?.handleKey(key);
         if (!result?.selected) return;
-        if (result.selected === '__back__') { goToHub(); return; }
+        if (result.selected === '__back__') {
+          goToHub();
+          return;
+        }
         const raw = currentList[Number.parseInt(result.selected, 10)];
         if (raw) showDetail(raw);
         return;
@@ -179,29 +210,45 @@ export const eventsView: View = {
       case 'detail': {
         const result = state.detailField?.handleKey(key);
         if (!result?.selected) return;
-        if (result.selected === '__back__') { showList('', currentList, ctx); return; }
+        if (result.selected === '__back__') {
+          showList('', currentList, ctx);
+          return;
+        }
         if (result.selected === 'export' && state.detailEvent) {
           const res = exportEventIcs(state.detailEvent);
-          state = { ...state, statusMessage: res.ok ? `${t().calendar.exportSuccess}: ${res.path}` : `${t().calendar.exportError}: ${res.error ?? ''}` };
+          state = {
+            ...state,
+            statusMessage: res.ok
+              ? `${t().calendar.exportSuccess}: ${res.path}`
+              : `${t().calendar.exportError}: ${res.error ?? ''}`,
+          };
         }
         return;
       }
       case 'search': {
         const result = state.searchField?.handleKey(key);
-        if (result?.cancelled) { setVimKeysActive(true); goToHub(); return; }
+        if (result?.cancelled) {
+          setVimKeysActive(true);
+          goToHub();
+          return;
+        }
         if (result?.submitted !== undefined) {
           setVimKeysActive(true);
           const query = result.submitted.trim();
-          if (!query || !calendar) { goToHub(); return; }
+          if (!query) {
+            goToHub();
+            return;
+          }
           const now = new Date();
-          const pool = calendar.inRange(now, new Date(now.getTime() + 365 * 86400000));
+          const pool = calendar.inRange(now, addLocalDays(now, 365));
           const results = filterEvents(pool, query);
           showList(`${t().calendar.search}: ${query}`, results, ctx);
         }
         return;
       }
-      default:
+      case 'loading':
+      case 'error':
         return;
     }
   },
-};
+} satisfies View;

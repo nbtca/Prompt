@@ -1,15 +1,18 @@
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
+import type * as CalendarModule from '../../features/calendar.js';
 
 const calendarUpcoming = vi.fn().mockReturnValue([]);
 const calendarHeatmap = vi.fn().mockReturnValue([]);
 const exportEventIcsMock = vi.fn().mockReturnValue({ ok: true, path: '/tmp/event.ics' });
 const loadCalendarOrThrowMock = vi.fn().mockResolvedValue({
-  upcoming: calendarUpcoming, past: vi.fn().mockReturnValue([]),
-  next: vi.fn().mockReturnValue([]), inRange: vi.fn().mockReturnValue([]),
+  upcoming: calendarUpcoming,
+  past: vi.fn().mockReturnValue([]),
+  next: vi.fn().mockReturnValue([]),
+  inRange: vi.fn().mockReturnValue([]),
   heatmap: calendarHeatmap,
 });
 vi.mock('../../features/calendar.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../features/calendar.js')>();
+  const actual = await importOriginal<typeof CalendarModule>();
   return {
     ...actual,
     exportEventIcs: exportEventIcsMock,
@@ -36,14 +39,17 @@ beforeEach(() => {
   loadCalendarOrThrowMock.mockClear();
 });
 
-function fakeCtx(): AppContext {
+function fakeCtx() {
   return {
     size: { rows: 24, cols: 80 },
     bodyRows: 19,
-    rerender: vi.fn(), resetScroll: vi.fn(),
-    runClassic: vi.fn(async (fn: () => Promise<void>) => { await fn(); }),
+    rerender: vi.fn(),
+    resetScroll: vi.fn(),
+    runClassic: vi.fn(async (fn: () => Promise<void>) => {
+      await fn();
+    }),
     quit: vi.fn(),
-  };
+  } satisfies AppContext;
 }
 
 describe('eventsView', () => {
@@ -64,17 +70,15 @@ describe('eventsView', () => {
   });
 
   it('capturesInput() returns a boolean and does not throw', () => {
-    expect(typeof eventsView.capturesInput?.()).toBe('boolean');
+    expect(typeof eventsView.capturesInput()).toBe('boolean');
   });
 
   it('handleBack() returns false when there is nothing to step back from', () => {
-    // Fresh module state (no load() has run): not in a list/detail/search
-    // sub-mode, so there is nothing for the view to step back to internally.
-    expect(eventsView.handleBack?.()).toBe(false);
+    expect(eventsView.handleBack()).toBe(false);
   });
 
   it('does not offer move or open actions while loading', () => {
-    const hint = stripAnsi(eventsView.footerHint?.(5) ?? '');
+    const hint = stripAnsi(eventsView.footerHint(5, 80) ?? '');
     expect(hint).toContain('1-5');
     expect(hint).not.toContain(t().menu.hintMove);
     expect(hint).not.toContain(t().menu.hintOpen);
@@ -83,7 +87,7 @@ describe('eventsView', () => {
   it('does not offer move or open actions on an error screen', async () => {
     loadCalendarOrThrowMock.mockRejectedValueOnce(new Error('Broke'));
     await eventsView.load(fakeCtx());
-    const hint = stripAnsi(eventsView.footerHint?.(5) ?? '');
+    const hint = stripAnsi(eventsView.footerHint(5, 80) ?? '');
     expect(hint).toContain('1-5');
     expect(hint).not.toContain(t().menu.hintMove);
     expect(hint).not.toContain(t().menu.hintOpen);
@@ -92,14 +96,18 @@ describe('eventsView', () => {
 
 describe('eventsView detail screen', () => {
   it('shows the event title exactly once, not once as the heading and again as the field title', async () => {
-    // Regression: showDetail() used to pass e.title as the detailField's
-    // own ListField title too, and renderEvents already prints that same
-    // title as its own heading above the field -- so the event name
-    // rendered twice in a row, right above "Export .ics"/"Back".
-    calendarUpcoming.mockReturnValue([{
-      uid: '1', title: 'Hackathon kickoff', start: new Date('2026-07-18T18:00:00'),
-      end: null, isAllDay: false, location: 'Lab 3', description: '', recurring: false,
-    }]);
+    calendarUpcoming.mockReturnValue([
+      {
+        uid: '1',
+        title: 'Hackathon kickoff',
+        start: new Date('2026-07-18T18:00:00'),
+        end: null,
+        isAllDay: false,
+        location: 'Lab 3',
+        description: '',
+        recurring: false,
+      },
+    ]);
     const ctx = fakeCtx();
     await eventsView.load(ctx);
 
@@ -113,12 +121,24 @@ describe('eventsView detail screen', () => {
 
   it('exports the selected event when multiple events have the same title', async () => {
     const first = {
-      uid: 'first', title: 'Weekly meetup', start: new Date('2026-07-18T18:00:00Z'),
-      end: null, isAllDay: false, location: 'Lab 1', description: '', recurring: false,
+      uid: 'first',
+      title: 'Weekly meetup',
+      start: new Date('2026-07-18T18:00:00Z'),
+      end: null,
+      isAllDay: false,
+      location: 'Lab 1',
+      description: '',
+      recurring: false,
     };
     const second = {
-      uid: 'second', title: 'Weekly meetup', start: new Date('2026-07-25T18:00:00Z'),
-      end: null, isAllDay: false, location: 'Lab 2', description: '', recurring: false,
+      uid: 'second',
+      title: 'Weekly meetup',
+      start: new Date('2026-07-25T18:00:00Z'),
+      end: null,
+      isAllDay: false,
+      location: 'Lab 2',
+      description: '',
+      recurring: false,
     };
     calendarUpcoming.mockReturnValue([first, second]);
     const ctx = fakeCtx();
@@ -139,8 +159,6 @@ describe('eventsView heatmap navigation', () => {
     const ctx = fakeCtx();
     await eventsView.load(ctx);
 
-    // Move the hub selection down to the heatmap entry (last of 6 options)
-    // and select it.
     for (let i = 0; i < 5; i++) eventsView.handleKey('\x1b[B', ctx);
     eventsView.handleKey('\r', ctx);
 
@@ -148,10 +166,8 @@ describe('eventsView heatmap navigation', () => {
     expect(out).toContain(t().calendar.heatmap.title);
     expect(out).toContain(t().calendar.heatmap.legendLess);
 
-    // The hub menu itself must not still be showing underneath.
     expect(out).not.toContain(t().calendar.search);
 
-    // Any key returns to the hub (matches Schedule's read-only detail views).
     eventsView.handleKey('x', ctx);
     out = stripAnsi(eventsView.render(ctx).join('\n'));
     expect(out).toContain(t().calendar.search);
@@ -164,7 +180,7 @@ describe('eventsView heatmap navigation', () => {
     for (let i = 0; i < 5; i++) eventsView.handleKey('\x1b[B', ctx);
     eventsView.handleKey('\r', ctx);
 
-    expect(eventsView.handleBack?.(ctx)).toBe(true);
+    expect(eventsView.handleBack()).toBe(true);
     const out = stripAnsi(eventsView.render(ctx).join('\n'));
     expect(out).toContain(t().calendar.search);
   });
@@ -175,7 +191,7 @@ describe('eventsView heatmap navigation', () => {
     for (let i = 0; i < 5; i++) eventsView.handleKey('\x1b[B', ctx);
     eventsView.handleKey('\r', ctx);
 
-    const hint = eventsView.footerHint?.(5);
+    const hint = eventsView.footerHint(5, 80);
     expect(hint).toBeDefined();
     expect(hint).not.toContain(t().menu.hintMove);
     expect(hint).not.toContain(t().menu.hintOpen);

@@ -1,4 +1,3 @@
-import type { DocItem } from '@nbtca/docs';
 import type { AppContext, View } from '../view.js';
 import { captureFooterHint, digitTabHint, fitFooterHint, passiveFooterHint } from '../chrome.js';
 import { ListField, computeMaxVisible } from '../fields/list-field.js';
@@ -7,34 +6,66 @@ import { renderDocs, type DocsViewState } from './docs-render.js';
 import { setVimKeysActive } from '../../core/vim-keys.js';
 import { pickIcon } from '../../core/icons.js';
 import { getCurrentLanguage, t, type Language } from '../../i18n/index.js';
+import { sanitizeTerminalLine, truncate } from '../../core/text.js';
 import {
-  localizeDocSections, fetchSections, fetchAllDocs, getArchivedGroups, cleanFileName, displayDocTitle, loadDocForReader,
-  openDocsInBrowser, clearDocsCache,
-  type DocSection, type DocLink,
+  localizeDocSections,
+  fetchSections,
+  fetchDocMetadata,
+  fetchSectionMetadata,
+  searchDocuments,
+  getArchivedGroups,
+  displayDocTitle,
+  loadDocForReader,
+  openDocsInBrowser,
+  clearDocsCache,
+  type DocSection,
+  type DocLink,
+  type ListedDoc,
+  type SearchDoc,
 } from '../../features/docs.js';
 
 let state: DocsViewState = { mode: 'loading' };
 let sections: DocSection[] = [];
-let archivedGroups: Map<string, DocItem[]> = new Map();
+let archivedGroups = new Map<string, ListedDoc[]>();
 let loaded = false;
 let loadedLanguage: Language | null = null;
 let currentSectionKey: string | null = null;
 let currentArchivedGroupKey: string | null = null;
-let currentSearchResults: DocItem[] = [];
+let currentSearchResults: SearchDoc[] = [];
+let sectionsRequestId = 0;
+let metadataRequestId = 0;
+let searchRequestId = 0;
 
-// In-app reader navigation: readerCurrentPath is the doc on screen right
-// now; readerNavStack holds the paths of docs visited before it (pushed
-// only when following a link forward, popped on Esc); readerPrevState is
-// whichever file-listing state (files/archivedFiles/searchResults) the
-// reader was entered from, restored once the nav stack empties.
 let readerCurrentPath: string | null = null;
 let readerNavStack: string[] = [];
 let readerPrevState: DocsViewState | null = null;
 let readerLoadingPrevState: DocsViewState | null = null;
 let readerRequestId = 0;
 
+const DOC_HINT_WIDTH = 44;
+
 function backLabel(): string {
   return t().common.back;
+}
+
+function optionalHint(hint: string | undefined): { hint?: string } {
+  return hint === undefined ? {} : { hint };
+}
+
+function docHint(value: string | undefined): string | undefined {
+  return value ? truncate(value, DOC_HINT_WIDTH) : undefined;
+}
+
+function withoutReaderLinksField(value: DocsViewState): DocsViewState {
+  const next = { ...value };
+  delete next.readerLinksField;
+  return next;
+}
+
+function withoutErrorMessage(value: DocsViewState): DocsViewState {
+  const next = { ...value };
+  delete next.errorMessage;
+  return next;
 }
 
 function buildSectionsField(): ListField {
@@ -50,18 +81,26 @@ function buildSectionsField(): ListField {
 
 function buildFilesField(section: DocSection, maxVisible: number, initialIndex = 0): ListField {
   const trans = t();
-  const isIndex = (f: DocItem) => f.name === 'index.md' || f.name.startsWith('index.');
+  const isIndex = (file: ListedDoc) => file.name === 'index.md' || file.name.startsWith('index.');
   const index = section.files.find(isIndex);
   const files = section.files.filter((f) => !isIndex(f));
   const options = [
     ...(index ? [{ value: index.path, label: trans.docs.overviewLabel }] : []),
-    ...files.map((f) => ({ value: f.path, label: displayDocTitle(f.path, f.name) })),
+    ...files.map((file) => ({
+      value: file.path,
+      label: displayDocTitle(file.name, file.title),
+      ...optionalHint(docHint(file.summary)),
+    })),
     { value: '__back__', label: backLabel() },
   ];
   return new ListField({ title: section.label, options, maxVisible, initialIndex });
 }
 
-function buildArchivedGroupsField(groups: Map<string, DocItem[]>, maxVisible: number, initialIndex = 0): ListField {
+function buildArchivedGroupsField(
+  groups: Map<string, ListedDoc[]>,
+  maxVisible: number,
+  initialIndex = 0,
+): ListField {
   const trans = t();
   const sortedKeys = [...groups.keys()].sort((a, b) => {
     const aYear = /^\d{4}$/.test(a);
@@ -72,23 +111,43 @@ function buildArchivedGroupsField(groups: Map<string, DocItem[]>, maxVisible: nu
     return a.localeCompare(b);
   });
   const options = [
-    ...sortedKeys.map((k) => ({ value: k, label: k, hint: String(groups.get(k)!.length) })),
+    ...sortedKeys.map((k) => ({ value: k, label: k, hint: String(groups.get(k)?.length ?? 0) })),
     { value: '__back__', label: backLabel() },
   ];
   return new ListField({ title: trans.docs.categoryArchived, options, maxVisible, initialIndex });
 }
 
-function buildArchivedFilesField(groupKey: string, groupFiles: DocItem[], maxVisible: number, initialIndex = 0): ListField {
+function buildArchivedFilesField(
+  groupKey: string,
+  groupFiles: ListedDoc[],
+  maxVisible: number,
+  initialIndex = 0,
+): ListField {
   const trans = t();
   const subDirs = new Set(groupFiles.map((f) => f.path.split('/')[2]).filter(Boolean));
   const options = [
     ...groupFiles.map((f) => {
       const sub = f.path.split('/').slice(2, -1).join('/');
-      return { value: f.path, label: cleanFileName(f.name), hint: subDirs.size > 1 ? sub : undefined };
+      return {
+        value: f.path,
+        label: displayDocTitle(f.name, f.title),
+        ...optionalHint(
+          docHint(
+            subDirs.size > 1
+              ? [sanitizeTerminalLine(sub), f.summary].filter(Boolean).join(' · ')
+              : f.summary,
+          ),
+        ),
+      };
     }),
     { value: '__back__', label: backLabel() },
   ];
-  return new ListField({ title: `${trans.docs.categoryArchived} · ${groupKey}`, options, maxVisible, initialIndex });
+  return new ListField({
+    title: `${trans.docs.categoryArchived} · ${groupKey}`,
+    options,
+    maxVisible,
+    initialIndex,
+  });
 }
 
 function buildReaderLinksField(links: DocLink[], maxVisible: number, initialIndex = 0): ListField {
@@ -100,13 +159,25 @@ function buildReaderLinksField(links: DocLink[], maxVisible: number, initialInde
   return new ListField({ title: trans.docs.readerLinksTitle, options, maxVisible, initialIndex });
 }
 
-function buildSearchResultsField(matches: DocItem[], maxVisible: number, initialIndex = 0): ListField {
+function buildSearchResultsField(
+  matches: SearchDoc[],
+  maxVisible: number,
+  initialIndex = 0,
+): ListField {
   const trans = t();
   const options = [
     ...matches.map((result) => ({
       value: result.path,
-      label: displayDocTitle(result.path, result.name),
-      hint: result.path.includes('/') ? result.path.split('/').slice(0, -1).join('/') : undefined,
+      label: displayDocTitle(result.name, result.title),
+      ...optionalHint(
+        docHint(
+          result.excerpt ||
+            result.summary ||
+            (result.path.includes('/')
+              ? sanitizeTerminalLine(result.path.split('/').slice(0, -1).join('/'))
+              : undefined),
+        ),
+      ),
     })),
     { value: '__back__', label: backLabel() },
   ];
@@ -120,7 +191,10 @@ function relocalizeStateFields(value: DocsViewState, maxVisible: number): DocsVi
   if (value.mode === 'files' && currentSectionKey) {
     const section = sections.find((candidate) => candidate.key === currentSectionKey);
     return section
-      ? { ...value, filesField: buildFilesField(section, maxVisible, value.filesField?.selectedIndex) }
+      ? {
+          ...value,
+          filesField: buildFilesField(section, maxVisible, value.filesField?.selectedIndex),
+        }
       : value;
   }
   if (value.mode === 'archivedGroups') {
@@ -174,10 +248,119 @@ function goToSections(): void {
   state = { mode: 'sections', sectionsField: buildSectionsField() };
 }
 
-/** Enters (or re-enters) the reader on `path`. `pushCurrent` distinguishes
- * following a link forward (push readerCurrentPath so Esc can return to it)
- * from navigating backward or entering fresh from a file list (nothing to
- * push -- the caller has already saved/cleared readerPrevState itself). */
+function replaceSection(section: DocSection): void {
+  sections = sections.map((current) => (current.key === section.key ? section : current));
+}
+
+async function openSectionFiles(ctx: AppContext, section: DocSection): Promise<void> {
+  const requestId = ++metadataRequestId;
+  currentSectionKey = section.key;
+  state = {
+    mode: 'files',
+    filesField: buildFilesField(section, computeMaxVisible(ctx.bodyRows)),
+  };
+  ctx.rerender();
+  try {
+    const hydrated = await fetchSectionMetadata(section);
+    if (
+      requestId !== metadataRequestId ||
+      state.mode !== 'files' ||
+      currentSectionKey !== section.key
+    )
+      return;
+    const localized = localizeDocSections([hydrated], t())[0] ?? hydrated;
+    replaceSection(localized);
+    state = {
+      mode: 'files',
+      filesField: buildFilesField(
+        localized,
+        computeMaxVisible(ctx.bodyRows),
+        state.filesField?.selectedIndex,
+      ),
+    };
+  } catch {
+    if (
+      requestId !== metadataRequestId ||
+      state.mode !== 'files' ||
+      currentSectionKey !== section.key
+    )
+      return;
+    state = { ...state, errorMessage: t().docs.loadError };
+  }
+  ctx.rerender();
+}
+
+async function openArchivedFiles(
+  ctx: AppContext,
+  groupKey: string,
+  groupFiles: ListedDoc[],
+): Promise<void> {
+  const requestId = ++metadataRequestId;
+  currentArchivedGroupKey = groupKey;
+  state = {
+    mode: 'archivedFiles',
+    archivedFilesField: buildArchivedFilesField(
+      groupKey,
+      groupFiles,
+      computeMaxVisible(ctx.bodyRows),
+    ),
+  };
+  ctx.rerender();
+  try {
+    const hydrated = await fetchDocMetadata(groupFiles);
+    if (
+      requestId !== metadataRequestId ||
+      state.mode !== 'archivedFiles' ||
+      currentArchivedGroupKey !== groupKey
+    )
+      return;
+    archivedGroups.set(groupKey, hydrated);
+    state = {
+      mode: 'archivedFiles',
+      archivedFilesField: buildArchivedFilesField(
+        groupKey,
+        hydrated,
+        computeMaxVisible(ctx.bodyRows),
+        state.archivedFilesField?.selectedIndex,
+      ),
+    };
+  } catch {
+    if (
+      requestId !== metadataRequestId ||
+      state.mode !== 'archivedFiles' ||
+      currentArchivedGroupKey !== groupKey
+    )
+      return;
+    state = {
+      ...state,
+      errorMessage: t().docs.loadError,
+    };
+  }
+  ctx.rerender();
+}
+
+async function runSearch(ctx: AppContext, query: string): Promise<void> {
+  const requestId = ++searchRequestId;
+  state = { mode: 'searchLoading' };
+  ctx.rerender();
+  try {
+    const matches = await searchDocuments(query);
+    if (requestId !== searchRequestId) return;
+    currentSearchResults = matches;
+    state = {
+      mode: 'searchResults',
+      searchResultsEmpty: matches.length === 0,
+      searchResultsField: buildSearchResultsField(matches, computeMaxVisible(ctx.bodyRows)),
+    };
+  } catch {
+    if (requestId !== searchRequestId) return;
+    currentSearchResults = [];
+    goToSections();
+    state = { ...state, errorMessage: t().docs.loadError };
+  }
+  ctx.rerender();
+}
+
 async function openInReader(ctx: AppContext, path: string, pushCurrent: boolean): Promise<void> {
   const requestId = ++readerRequestId;
   const previousState = state;
@@ -191,22 +374,25 @@ async function openInReader(ctx: AppContext, path: string, pushCurrent: boolean)
     if (pushCurrent && previousPath) readerNavStack.push(previousPath);
     readerCurrentPath = path;
     readerLoadingPrevState = null;
-    state = { mode: 'reader', readerTitle: doc.title, readerLines: doc.lines, readerLinks: doc.links };
+    state = {
+      mode: 'reader',
+      readerTitle: doc.title,
+      readerLines: doc.lines,
+      readerLinks: doc.links,
+    };
     ctx.resetScroll();
   } catch {
     if (requestId !== readerRequestId) return;
     readerLoadingPrevState = null;
-    const fallbackState = pushCurrent && previousState.mode === 'reader'
-      ? { ...previousState, readerLinksField: undefined }
-      : previousState;
+    const fallbackState =
+      pushCurrent && previousState.mode === 'reader'
+        ? withoutReaderLinksField(previousState)
+        : previousState;
     state = { ...fallbackState, errorMessage: t().docs.loadError };
   }
   ctx.rerender();
 }
 
-/** Enters the reader from a file-listing mode (files/archivedFiles/
- * searchResults) -- saves that listing so Esc can restore it once the nav
- * stack (built by following links from here) empties back out. */
 function enterReaderFrom(ctx: AppContext, path: string): void {
   readerPrevState = state;
   readerNavStack = [];
@@ -214,7 +400,7 @@ function enterReaderFrom(ctx: AppContext, path: string): void {
   void openInReader(ctx, path, false);
 }
 
-export const docsView: View = {
+export const docsView = {
   id: 'docs',
   title: t().menu.docs,
 
@@ -231,23 +417,24 @@ export const docsView: View = {
       }
       return;
     }
+    const requestId = ++sectionsRequestId;
     state = { mode: 'loading' };
     ctx.rerender();
     try {
-      sections = await fetchSections();
+      const nextSections = await fetchSections();
+      if (requestId !== sectionsRequestId) return;
+      sections = nextSections;
       loaded = true;
       loadedLanguage = getCurrentLanguage();
       goToSections();
     } catch {
+      if (requestId !== sectionsRequestId) return;
       state = { mode: 'error', errorMessage: t().docs.loadError };
     }
     ctx.rerender();
   },
 
   render(ctx: AppContext): string[] {
-    // Sync every visible field's scroll window to the *current* terminal
-    // size on every frame (not just construction time) — this is what
-    // keeps a long list correctly windowed across a live resize.
     const maxVisible = computeMaxVisible(ctx.bodyRows);
     state.filesField?.setMaxVisible(maxVisible);
     state.archivedGroupsField?.setMaxVisible(maxVisible);
@@ -261,11 +448,28 @@ export const docsView: View = {
     return state.mode === 'search';
   },
 
+  capturesPageKeys(): boolean {
+    return (
+      state.mode === 'sections' ||
+      state.mode === 'files' ||
+      state.mode === 'archivedGroups' ||
+      state.mode === 'archivedFiles' ||
+      state.mode === 'searchResults' ||
+      (state.mode === 'reader' && state.readerLinksField !== undefined)
+    );
+  },
+
   footerHint(tabCount: number, cols = Number.POSITIVE_INFINITY): string | undefined {
     if (state.mode === 'search') return captureFooterHint(cols);
-    if (state.mode === 'loading' || state.mode === 'error') return passiveFooterHint(tabCount, cols);
+    if (state.mode === 'loading' || state.mode === 'searchLoading' || state.mode === 'error')
+      return passiveFooterHint(tabCount, cols);
     if (state.mode === 'readerLoading') {
-      return fitFooterHint(cols, `${digitTabHint(tabCount)}q ${t().menu.hintQuit}`, `${digitTabHint(tabCount)}q`, 'q');
+      return fitFooterHint(
+        cols,
+        `${digitTabHint(tabCount)}q ${t().menu.hintQuit}`,
+        `${digitTabHint(tabCount)}q`,
+        'q',
+      );
     }
     if (state.mode === 'reader' && !state.readerLinksField) {
       const trans = t();
@@ -289,6 +493,11 @@ export const docsView: View = {
   },
 
   handleBack(ctx: AppContext): boolean {
+    if (state.mode === 'searchLoading') {
+      searchRequestId++;
+      goToSections();
+      return true;
+    }
     if (state.mode === 'reader' || state.mode === 'readerLoading') {
       if (state.mode === 'readerLoading') {
         const previousState = readerLoadingPrevState;
@@ -299,7 +508,7 @@ export const docsView: View = {
         return true;
       }
       if (state.readerLinksField) {
-        state = { ...state, readerLinksField: undefined };
+        state = withoutReaderLinksField(state);
         return true;
       }
       const prevPath = readerNavStack.pop();
@@ -316,7 +525,13 @@ export const docsView: View = {
       return false;
     }
     if (state.mode === 'archivedFiles') {
-      state = { mode: 'archivedGroups', archivedGroupsField: buildArchivedGroupsField(archivedGroups, computeMaxVisible(ctx.bodyRows)) };
+      state = {
+        mode: 'archivedGroups',
+        archivedGroupsField: buildArchivedGroupsField(
+          archivedGroups,
+          computeMaxVisible(ctx.bodyRows),
+        ),
+      };
       return true;
     }
     if (state.mode === 'search') {
@@ -324,7 +539,11 @@ export const docsView: View = {
       goToSections();
       return true;
     }
-    if (state.mode === 'files' || state.mode === 'archivedGroups' || state.mode === 'searchResults') {
+    if (
+      state.mode === 'files' ||
+      state.mode === 'archivedGroups' ||
+      state.mode === 'searchResults'
+    ) {
       goToSections();
       return true;
     }
@@ -332,18 +551,28 @@ export const docsView: View = {
   },
 
   handleKey(key: string, ctx: AppContext): void {
-    if (state.mode !== 'error' && state.errorMessage) state = { ...state, errorMessage: undefined };
+    if (state.mode !== 'error' && state.errorMessage) state = withoutErrorMessage(state);
     switch (state.mode) {
       case 'sections': {
         const result = state.sectionsField?.handleKey(key);
         if (!result?.selected) return;
         if (result.selected === '__search__') {
           setVimKeysActive(false);
-          state = { mode: 'search', searchField: new TextField({ message: t().docs.searchPrompt, placeholder: t().docs.searchPlaceholder, allowEmpty: true }) };
+          state = {
+            mode: 'search',
+            searchField: new TextField({
+              message: t().docs.searchPrompt,
+              placeholder: t().docs.searchPlaceholder,
+              allowEmpty: true,
+            }),
+          };
           return;
         }
         if (result.selected === '__refresh__') {
           clearDocsCache();
+          sectionsRequestId++;
+          metadataRequestId++;
+          searchRequestId++;
           loaded = false;
           loadedLanguage = null;
           sections = [];
@@ -356,7 +585,7 @@ export const docsView: View = {
           readerPrevState = null;
           readerLoadingPrevState = null;
           readerRequestId++;
-          void docsView.load?.(ctx);
+          void docsView.load(ctx);
           return;
         }
         if (result.selected === '__browser__') {
@@ -366,30 +595,41 @@ export const docsView: View = {
         const section = sections.find((s) => s.key === result.selected);
         if (!section) return;
         if (section.key === 'archived') {
+          metadataRequestId++;
           currentSectionKey = null;
           currentArchivedGroupKey = null;
           archivedGroups = getArchivedGroups(section.files);
-          state = { mode: 'archivedGroups', archivedGroupsField: buildArchivedGroupsField(archivedGroups, computeMaxVisible(ctx.bodyRows)) };
+          state = {
+            mode: 'archivedGroups',
+            archivedGroupsField: buildArchivedGroupsField(
+              archivedGroups,
+              computeMaxVisible(ctx.bodyRows),
+            ),
+          };
         } else {
-          currentSectionKey = section.key;
-          state = { mode: 'files', filesField: buildFilesField(section, computeMaxVisible(ctx.bodyRows)) };
+          void openSectionFiles(ctx, section);
         }
         return;
       }
       case 'files': {
         const result = state.filesField?.handleKey(key);
         if (!result?.selected) return;
-        if (result.selected === '__back__') { goToSections(); return; }
+        if (result.selected === '__back__') {
+          goToSections();
+          return;
+        }
         enterReaderFrom(ctx, result.selected);
         return;
       }
       case 'archivedGroups': {
         const result = state.archivedGroupsField?.handleKey(key);
         if (!result?.selected) return;
-        if (result.selected === '__back__') { goToSections(); return; }
-        currentArchivedGroupKey = result.selected;
+        if (result.selected === '__back__') {
+          goToSections();
+          return;
+        }
         const groupFiles = archivedGroups.get(result.selected) ?? [];
-        state = { mode: 'archivedFiles', archivedFilesField: buildArchivedFilesField(result.selected, groupFiles, computeMaxVisible(ctx.bodyRows)) };
+        void openArchivedFiles(ctx, result.selected, groupFiles);
         return;
       }
       case 'archivedFiles': {
@@ -397,7 +637,13 @@ export const docsView: View = {
         if (!result?.selected) return;
         if (result.selected === '__back__') {
           currentArchivedGroupKey = null;
-          state = { mode: 'archivedGroups', archivedGroupsField: buildArchivedGroupsField(archivedGroups, computeMaxVisible(ctx.bodyRows)) };
+          state = {
+            mode: 'archivedGroups',
+            archivedGroupsField: buildArchivedGroupsField(
+              archivedGroups,
+              computeMaxVisible(ctx.bodyRows),
+            ),
+          };
           return;
         }
         enterReaderFrom(ctx, result.selected);
@@ -405,31 +651,29 @@ export const docsView: View = {
       }
       case 'search': {
         const result = state.searchField?.handleKey(key);
-        if (result?.cancelled) { setVimKeysActive(true); goToSections(); return; }
+        if (result?.cancelled) {
+          setVimKeysActive(true);
+          goToSections();
+          return;
+        }
         if (result?.submitted !== undefined) {
           const query = result.submitted.trim().toLowerCase();
           setVimKeysActive(true);
-          if (!query) { goToSections(); return; }
-          void fetchAllDocs().then((all) => {
-            const matches = all.filter((item) => item.path.toLowerCase().includes(query));
-            currentSearchResults = matches;
-            state = {
-              mode: 'searchResults',
-              searchResultsEmpty: matches.length === 0,
-              searchResultsField: buildSearchResultsField(matches, computeMaxVisible(ctx.bodyRows)),
-            };
-            ctx.rerender();
-          }).catch(() => {
-            state = { mode: 'error', errorMessage: t().docs.loadError };
-            ctx.rerender();
-          });
+          if (!query) {
+            goToSections();
+            return;
+          }
+          void runSearch(ctx, query);
         }
         return;
       }
       case 'searchResults': {
         const result = state.searchResultsField?.handleKey(key);
         if (!result?.selected) return;
-        if (result.selected === '__back__') { goToSections(); return; }
+        if (result.selected === '__back__') {
+          goToSections();
+          return;
+        }
         enterReaderFrom(ctx, result.selected);
         return;
       }
@@ -437,18 +681,20 @@ export const docsView: View = {
         if (state.readerLinksField) {
           const result = state.readerLinksField.handleKey(key);
           if (result.cancelled || result.selected === '__back__') {
-            state = { ...state, readerLinksField: undefined };
+            state = withoutReaderLinksField(state);
             return;
           }
           if (result.selected) void openInReader(ctx, result.selected, true);
           return;
         }
-        // 'f' (Vimium/vim-browser-extension convention: "follow a link"),
-        // not 'l' -- core/vim-keys.ts already reserves 'l' globally,
-        // ranger-style, as an alias for Enter/confirm (vimActive defaults
-        // to true), so a literal 'l' keypress never even reaches here.
         if (key === 'f' && (state.readerLinks?.length ?? 0) > 0) {
-          state = { ...state, readerLinksField: buildReaderLinksField(state.readerLinks ?? [], computeMaxVisible(ctx.bodyRows)) };
+          state = {
+            ...state,
+            readerLinksField: buildReaderLinksField(
+              state.readerLinks ?? [],
+              computeMaxVisible(ctx.bodyRows),
+            ),
+          };
           return;
         }
         if (key === 'b') {
@@ -457,8 +703,11 @@ export const docsView: View = {
         }
         return;
       }
-      default:
+      case 'error':
+      case 'loading':
+      case 'readerLoading':
+      case 'searchLoading':
         return;
     }
   },
-};
+} satisfies View;

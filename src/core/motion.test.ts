@@ -27,7 +27,10 @@ describe('materializeBraille', () => {
 
   it('with no braille content, falls back to a single write regardless of motion', async () => {
     const out: string[] = [];
-    await materializeBraille('plain text', (s) => s, { reducedMotion: false, write: (s) => out.push(s) });
+    await materializeBraille('plain text', (s) => s, {
+      reducedMotion: false,
+      write: (s) => out.push(s),
+    });
     expect(out).toEqual(['plain text\n']);
   });
 
@@ -54,12 +57,13 @@ describe('materializeBraille', () => {
       random: () => 0.5,
       write: (s) => out.push(s),
     });
-    const dotsIn = (frame: string) => stripAnsi(frame).split('').filter((ch) => {
-      const code = ch.codePointAt(0) ?? 0;
-      return code > 0x2800 && code <= 0x28ff;
-    }).length;
-    // Frame writes always end in '\n'; the cursor-reposition writes between
-    // them don't, so filtering on that isolates the actual frames.
+    const dotsIn = (frame: string) =>
+      stripAnsi(frame)
+        .split('')
+        .filter((ch) => {
+          const code = ch.codePointAt(0) ?? 0;
+          return code > 0x2800 && code <= 0x28ff;
+        }).length;
     const counts = out.filter((s) => s.endsWith('\n')).map(dotsIn);
     for (let i = 1; i < counts.length; i++) {
       expect(counts[i]).toBeGreaterThanOrEqual(counts[i - 1] ?? 0);

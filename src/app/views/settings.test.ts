@@ -15,8 +15,11 @@ function fakeCtx(): AppContext {
   return {
     size: { rows: 24, cols: 80 },
     bodyRows: 19,
-    rerender: vi.fn(), resetScroll: vi.fn(),
-    runClassic: vi.fn(async (fn: () => Promise<void>) => { await fn(); }),
+    rerender: vi.fn(),
+    resetScroll: vi.fn(),
+    runClassic: vi.fn(async (fn: () => Promise<void>) => {
+      await fn();
+    }),
     quit: vi.fn(),
   };
 }
@@ -34,25 +37,25 @@ describe('settingsView', () => {
 
   it('load() then render() shows the settings menu', async () => {
     const ctx = fakeCtx();
-    await settingsView.load?.(ctx);
+    await settingsView.load();
     const out = stripAnsi(settingsView.render(ctx).join('\n'));
     expect(out.trim().length).toBeGreaterThan(0);
   });
 
   it('capturesInput is false or absent (no text fields in this view)', () => {
-    expect(settingsView.capturesInput?.() ?? false).toBe(false);
+    expect(settingsView.capturesInput()).toBe(false);
   });
 
   it('handleBack() is false at the top-level menu, true after entering a sub-list, and returns you to the menu', async () => {
     const ctx = fakeCtx();
-    await settingsView.load?.(ctx);
-    expect(settingsView.handleBack?.()).toBe(false);
+    await settingsView.load();
+    expect(settingsView.handleBack()).toBe(false);
 
-    settingsView.handleKey?.('\r', ctx); // Enter on the first menu item (Language)
+    settingsView.handleKey('\r'); // Enter on the first menu item (Language)
     const subListOut = stripAnsi(settingsView.render(ctx).join('\n'));
     expect(subListOut).toContain('English');
 
-    expect(settingsView.handleBack?.()).toBe(true);
+    expect(settingsView.handleBack()).toBe(true);
     const menuOut = stripAnsi(settingsView.render(ctx).join('\n'));
     expect(menuOut).toContain('Icon mode');
   });
@@ -61,15 +64,14 @@ describe('settingsView', () => {
     const ctx = fakeCtx();
     setLanguage('zh');
     try {
-      await settingsView.load?.(ctx);
-      settingsView.handleKey?.('\x1b[F', ctx);
-      settingsView.handleKey?.('\r', ctx);
+      await settingsView.load();
+      settingsView.handleKey('\x1b[F');
+      settingsView.handleKey('\r');
       const lines = settingsView.render(ctx).map(stripAnsi);
-      const labels = [
-        '项目', '版本', '描述', 'GitHub', '网站', '邮箱', '许可证',
-      ];
+      const labels = ['项目', '版本', '描述', 'GitHub', '网站', '邮箱', '许可证'];
       const starts = labels.map((label) => {
-        const line = lines.find((candidate) => candidate.trimStart().startsWith(label))!;
+        const line = lines.find((candidate) => candidate.trimStart().startsWith(label));
+        if (line === undefined) throw new Error(`Missing ${label} setting`);
         const labelEnd = line.indexOf(label) + label.length;
         const valueOffset = line.slice(labelEnd).search(/\S/u);
         return visualWidth(line.slice(0, labelEnd + valueOffset));
@@ -78,7 +80,7 @@ describe('settingsView', () => {
       expect(new Set(starts)).toEqual(new Set([15]));
     } finally {
       setLanguage('en');
-      await settingsView.load?.(ctx);
+      await settingsView.load();
     }
   });
 });

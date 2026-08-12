@@ -34,7 +34,9 @@ export class AuthError extends Error {
 
 export class SessionExpiredError extends AuthError {
   constructor() {
-    super('SESSION_EXPIRED', 'session', 'The campus login session has expired.', { retryable: true });
+    super('SESSION_EXPIRED', 'session', 'The campus login session has expired.', {
+      retryable: true,
+    });
     this.name = 'SessionExpiredError';
   }
 }

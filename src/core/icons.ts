@@ -1,7 +1,7 @@
 import { resolveIconMode } from '../config/preferences.js';
 
 function localeSupportsUnicode(): boolean {
-  const locale = `${process.env['LC_ALL'] || ''} ${process.env['LANG'] || ''}`.toLowerCase();
+  const locale = `${process.env['LC_ALL'] ?? ''} ${process.env['LANG'] ?? ''}`.toLowerCase();
   return locale.includes('utf-8') || locale.includes('utf8');
 }
 
@@ -11,11 +11,20 @@ export function useUnicodeIcons(): boolean {
   if (cachedUseUnicode !== null) return cachedUseUnicode;
 
   const configured = resolveIconMode();
-  if (configured === 'ascii') { cachedUseUnicode = false; return false; }
-  if (configured === 'unicode') { cachedUseUnicode = true; return true; }
+  if (configured === 'ascii') {
+    cachedUseUnicode = false;
+    return false;
+  }
+  if (configured === 'unicode') {
+    cachedUseUnicode = true;
+    return true;
+  }
 
-  const term = (process.env['TERM'] || '').toLowerCase();
-  if (!process.stdout.isTTY || term === 'dumb') { cachedUseUnicode = false; return false; }
+  const term = (process.env['TERM'] ?? '').toLowerCase();
+  if (!process.stdout.isTTY || term === 'dumb') {
+    cachedUseUnicode = false;
+    return false;
+  }
   cachedUseUnicode = localeSupportsUnicode();
   return cachedUseUnicode;
 }

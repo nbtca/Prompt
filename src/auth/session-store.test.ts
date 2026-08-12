@@ -22,7 +22,12 @@ function fixture(overrides: Partial<PersistedNbtSession> = {}): PersistedNbtSess
   return {
     version: 1,
     provider: 'nbt-webvpn',
-    jar: { version: 'tough-cookie@6.0.0', storeType: 'MemoryCookieStore', rejectPublicSuffixes: true, cookies: [] },
+    jar: {
+      version: 'tough-cookie@6.0.0',
+      storeType: 'MemoryCookieStore',
+      rejectPublicSuffixes: true,
+      cookies: [],
+    },
     accountHint: '••••••••00',
     authenticatedAt: '2026-07-10T08:00:00.000Z',
     validatedAt: '2026-07-10T08:00:00.000Z',

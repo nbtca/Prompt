@@ -6,6 +6,7 @@ import { useUnicodeIcons } from './icons.js';
 import { APP_INFO } from '../config/data.js';
 import { typeReveal, materializeBraille } from './motion.js';
 import { brandGradient as brand } from './theme.js';
+import { visualWidth } from './text.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -26,8 +27,8 @@ const LOGO_TIERS = [
 ] as const;
 
 function dotmatrixFile(): string {
-  const cols = process.stdout.columns ?? 0;
-  const rows = process.stdout.rows ?? 0;
+  const cols = process.stdout.columns;
+  const rows = process.stdout.rows;
   const tier = LOGO_TIERS.find((t) => cols >= t.minCols && rows >= t.minRows);
   return tier?.file ?? 'ca-dotmatrix-small.txt';
 }
@@ -37,12 +38,26 @@ function paint(text: string, color: boolean): string {
   const fn = brand as unknown as { multiline?: (s: string) => string };
   return typeof fn.multiline === 'function'
     ? fn.multiline(text)
-    : text.split('\n').map((line) => brand(line)).join('\n');
+    : text
+        .split('\n')
+        .map((line) => brand(line))
+        .join('\n');
 }
 
 function loadArt(): string {
   const art = useUnicodeIcons() ? readArt(dotmatrixFile()) : readArt('ascii-logo.txt');
   return art ?? 'NBTCA';
+}
+
+export function startupFitsTerminal(
+  rows: number | undefined,
+  cols: number | undefined,
+  art: string,
+): boolean {
+  const lines = art.split('\n');
+  const fitsRows = rows === undefined || rows >= lines.length + 5;
+  const fitsCols = cols === undefined || lines.every((line) => visualWidth(line) <= cols);
+  return fitsRows && fitsCols;
 }
 
 export function buildLogoLines(): string[] {
@@ -61,8 +76,15 @@ export function buildLogoLines(): string[] {
 
 export async function runStartup(): Promise<void> {
   if (!process.stdout.isTTY) return;
+  const art = loadArt();
+  if (!startupFitsTerminal(process.stdout.rows, process.stdout.columns, art)) return;
   const color = !process.env['NO_COLOR'];
   process.stdout.write('\n');
-  await materializeBraille(loadArt(), (s) => paint(s, color));
-  await typeReveal(['', color ? brand(TAGLINE) : TAGLINE, chalk.dim(`@nbtca/prompt  v${APP_INFO.version}`), '']);
+  await materializeBraille(art, (s) => paint(s, color));
+  await typeReveal([
+    '',
+    color ? brand(TAGLINE) : TAGLINE,
+    chalk.dim(`@nbtca/prompt  v${APP_INFO.version}`),
+    '',
+  ]);
 }

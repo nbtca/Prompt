@@ -8,7 +8,8 @@ describe('renderMessage', () => {
     process.env['NBTCA_ICON_MODE'] = 'ascii';
     resetIconCache();
     const out = stripAnsi(renderMessage(kind, msg));
-    process.env['NBTCA_ICON_MODE'] = 'unicode'; resetIconCache();
+    process.env['NBTCA_ICON_MODE'] = 'unicode';
+    resetIconCache();
     return out;
   }
 

@@ -8,6 +8,10 @@ export interface Capabilities {
   reducedMotion: boolean;
 }
 
+function isTty(value: unknown): boolean {
+  return value === true;
+}
+
 export function deriveReducedMotion(o: {
   isTTY: boolean;
   color: boolean;
@@ -18,7 +22,7 @@ export function deriveReducedMotion(o: {
   if (!o.isTTY) return true;
   if (env['NBTCA_NO_MOTION']) return true;
   if (env['CI']) return true;
-  if ((env['TERM'] || '').toLowerCase() === 'dumb') return true;
+  if ((env['TERM'] ?? '').toLowerCase() === 'dumb') return true;
   if (!o.color) return true;
   if (!o.unicode) return true;
   return false;
@@ -29,14 +33,14 @@ function detectColor(): boolean {
   const mode = resolveColorMode();
   if (mode === 'off') return false;
   if (mode === 'on') return true;
-  return !!process.stdout.isTTY;
+  return isTty(process.stdout.isTTY);
 }
 
 let cached: Capabilities | null = null;
 
 export function getCapabilities(): Capabilities {
   if (cached) return cached;
-  const isTTY = !!process.stdout.isTTY && !!process.stdin.isTTY;
+  const isTTY = isTty(process.stdout.isTTY) && isTty(process.stdin.isTTY);
   const unicode = useUnicodeIcons();
   const color = detectColor();
   const reducedMotion = deriveReducedMotion({ isTTY, color, unicode });

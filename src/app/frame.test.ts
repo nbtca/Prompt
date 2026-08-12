@@ -10,17 +10,25 @@ describe('fitLine', () => {
   it('clips an over-wide line to cols visual width', () => {
     expect(visualWidth(fitLine('abcdefgh', 4))).toBeLessThanOrEqual(4);
   });
+  it('does not split joined emoji while clipping', () => {
+    expect(
+      fitLine('a👨‍👩‍👧b', 2)
+        .replace(/\x1b\[[0-9;]*m/g, '')
+        .trim(),
+    ).toBe('a');
+  });
 });
 
 describe('fitBody', () => {
   it('slices to height and pads short content', () => {
     const b = fitBody(['a', 'b'], 4, 0, 3);
     expect(b).toHaveLength(4);
-    expect(b[0]).toBe('a  '); expect(b[3]).toBe('   ');
+    expect(b[0]).toBe('a  ');
+    expect(b[3]).toBe('   ');
   });
   it('scrolls and clamps past the end', () => {
     const b = fitBody(['a', 'b', 'c', 'd'], 2, 10, 1);
-    expect(b.map(s => s.trim())).toEqual(['c', 'd']); // clamped to last window
+    expect(b.map((s) => s.trim())).toEqual(['c', 'd']); // clamped to last window
   });
 });
 
@@ -29,7 +37,8 @@ describe('composeFrame', () => {
     const f = composeFrame(['H'], ['x', 'y'], ['F'], 5, 3, 0).split('\n');
     expect(f).toHaveLength(5);
     for (const line of f) expect(visualWidth(line)).toBe(3);
-    expect(f[0]!.trim()).toBe('H'); expect(f[4]!.trim()).toBe('F');
+    expect(f[0]?.trim()).toBe('H');
+    expect(f[4]?.trim()).toBe('F');
   });
 });
 

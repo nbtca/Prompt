@@ -4,57 +4,92 @@ import { t } from '../i18n/index.js';
 import type { ViewId } from './keys.js';
 import { visualWidth } from '../core/text.js';
 
-/** `renderHeader` always returns exactly this many lines (brand, tabs, rule). */
 export const HEADER_LINES = 3;
-/** `renderFooter` always returns exactly this many lines (rule, keyhints). */
 export const FOOTER_LINES = 2;
+
+export interface ChromeLayout {
+  headerLines: 0 | 1 | 2 | 3;
+  footerLines: 0 | 1 | 2;
+}
+
+export function resolveChromeLayout(rows: number): ChromeLayout {
+  const height = Math.max(0, Math.floor(rows));
+  if (height >= 11) return { headerLines: 3, footerLines: 2 };
+  if (height >= 9) return { headerLines: 3, footerLines: 1 };
+  if (height >= 7) return { headerLines: 2, footerLines: 1 };
+  if (height >= 4) return { headerLines: 1, footerLines: 1 };
+  if (height >= 2) return { headerLines: 1, footerLines: 0 };
+  return { headerLines: 0, footerLines: 0 };
+}
+
+function renderRule(cols: number): string {
+  const width = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : 80;
+  const indent = visualWidth(space.indent) < width ? space.indent : '';
+  const ruleWidth = Math.max(1, width - visualWidth(indent) * 2);
+  return indent + type.hint(glyph.rule().repeat(ruleWidth));
+}
 
 function renderTabs(views: { id: ViewId; title: string }[], active: ViewId, cols: number): string {
   const dot = pickIcon('·', '-');
-  const full = space.indent + views
-    .map((view) => view.id === active ? type.active(`[${view.title}]`) : type.hint(view.title))
-    .join(`  ${dot}  `);
+  const full =
+    space.indent +
+    views
+      .map((view) => (view.id === active ? type.active(`[${view.title}]`) : type.hint(view.title)))
+      .join(`  ${dot}  `);
   if (visualWidth(full) <= cols) return full;
 
-  const compact = space.indent + views
-    .map((view, index) => view.id === active
-      ? type.active(`[${index + 1} ${view.title}]`)
-      : type.hint(String(index + 1)))
-    .join(` ${dot} `);
+  const compact =
+    space.indent +
+    views
+      .map((view, index) =>
+        view.id === active
+          ? type.active(`[${index + 1} ${view.title}]`)
+          : type.hint(String(index + 1)),
+      )
+      .join(` ${dot} `);
   if (visualWidth(compact) <= cols) return compact;
 
-  return space.indent + views
-    .map((view, index) => view.id === active
-      ? type.active(`[${index + 1}]`)
-      : type.hint(String(index + 1)))
-    .join(' ');
+  const numeric =
+    space.indent +
+    views
+      .map((view, index) =>
+        view.id === active ? type.active(`[${index + 1}]`) : type.hint(String(index + 1)),
+      )
+      .join(' ');
+  if (visualWidth(numeric) <= cols) return numeric;
+
+  const activeIndex = views.findIndex((view) => view.id === active);
+  const activeView = views[activeIndex];
+  if (!activeView) return '';
+  const activeWithTitle = `${space.indent}${type.active(`[${activeIndex + 1} ${activeView.title}]`)}`;
+  if (visualWidth(activeWithTitle) <= cols) return activeWithTitle;
+  const activeNumber = `${space.indent}${type.active(`[${activeIndex + 1}]`)}`;
+  if (visualWidth(activeNumber) <= cols) return activeNumber;
+  return type.active(String(activeIndex + 1));
 }
 
-// The header's persistent brand mark. A literal shrunk-down copy of the
-// emblem doesn't survive down to header height (verified: even the boldest
-// inner icon alone dissolves into noise below ~12 character-rows), so this
-// is a wordmark painted in the same gradient as the startup logo instead --
-// ties the two together by color, the one dimension that still reads at
-// one line tall, rather than attempting a shape reproduction this small
-// can't carry.
-export function renderHeader(views: { id: ViewId; title: string }[], active: ViewId, cols: number): string[] {
-  const brand = `${space.indent}${brandMark('nbtca')}`;
+export function renderHeader(
+  views: { id: ViewId; title: string }[],
+  active: ViewId,
+  cols: number,
+  lineCount: ChromeLayout['headerLines'] = HEADER_LINES,
+): string[] {
+  if (lineCount === 0) return [];
+  const mark = brandMark('nbtca');
+  const brand = `${visualWidth(space.indent + mark) <= cols ? space.indent : ''}${mark}`;
   const tabs = renderTabs(views, active, cols);
-  const rule = space.indent + type.hint(glyph.rule().repeat(Math.max(1, cols - 6)));
+  const rule = renderRule(cols);
+  if (lineCount === 1) return [tabs];
+  if (lineCount === 2) return [brand, tabs];
   return [brand, tabs, rule];
 }
 
-/** Shared footer hint for any view mode that captures all input (a focused
- * text field or a modal-like list) — the only keys that still do something
- * are Ctrl-C/Esc/Enter, so this is what every such view's `footerHint()`
- * should return instead of each re-declaring an identical string. Digits/Tab
- * are deliberately absent: while input is captured they're typed into the
- * field, not routed to global tab-switching, so promising them would itself
- * be the false-promise this hint exists to avoid. */
 export function fitFooterHint(cols: number, ...candidates: string[]): string {
-  return candidates.find((candidate) => visualWidth(space.indent + candidate) <= cols)
-    ?? candidates[candidates.length - 1]
-    ?? '';
+  return (
+    candidates.find((candidate) => visualWidth(space.indent + candidate) <= cols) ??
+    candidates[candidates.length - 1] ??
+    ''
+  );
 }
 
 export function captureFooterHint(cols = Number.POSITIVE_INFINITY): string {
@@ -69,17 +104,11 @@ export function captureFooterHint(cols = Number.POSITIVE_INFINITY): string {
   );
 }
 
-/** The "1-N / Tab" tab-switch prefix, factored out so a view's own
- * `footerHint()` override can still include it accurately (tab count isn't
- * knowable inside a view module otherwise) instead of either hardcoding a
- * digit range that goes stale, or dropping a still-true promise entirely. */
 export function digitTabHint(tabCount: number): string {
   const dot = pickIcon('·', '-');
   return tabCount > 1 ? `1-${tabCount} / Tab ${dot} ` : '';
 }
 
-/** Shared hint for a non-interactive state: digits/Tab still switch tabs,
- * while move/open do nothing and must not be advertised. */
 export function passiveFooterHint(tabCount: number, cols = Number.POSITIVE_INFINITY): string {
   const trans = t();
   const dot = pickIcon('·', '-');
@@ -113,14 +142,17 @@ function interactiveFooterHint(tabCount: number, cols: number): string {
   return fitFooterHint(cols, ...candidates);
 }
 
-/** `overrideHint`: a view supplies this (via `View.footerHint()`) when the
- * generic tab-switching hint would be false — e.g. while a text field has
- * focus, digits/Tab/q are typed characters, not shortcuts, and only Ctrl-C/
- * Esc/Enter actually do anything. The footer must never promise a key that
- * doesn't work. */
-export function renderFooter(_active: ViewId, cols: number, tabCount: number, overrideHint?: string): string[] {
-  const rule = space.indent + type.hint(glyph.rule().repeat(Math.max(1, cols - 6)));
+export function renderFooter(
+  _active: ViewId,
+  cols: number,
+  tabCount: number,
+  overrideHint?: string,
+  lineCount: ChromeLayout['footerLines'] = FOOTER_LINES,
+): string[] {
+  if (lineCount === 0) return [];
+  const rule = renderRule(cols);
   const hintText = overrideHint ?? interactiveFooterHint(tabCount, cols);
-  const hint = space.indent + type.hint(hintText);
-  return [rule, hint];
+  const indent = visualWidth(space.indent + hintText) <= cols ? space.indent : '';
+  const hint = indent + type.hint(hintText);
+  return lineCount === 1 ? [hint] : [rule, hint];
 }

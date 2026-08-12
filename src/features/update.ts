@@ -5,32 +5,27 @@ import { t, fmt } from '../i18n/index.js';
 const NPM_REGISTRY_URL = `https://registry.npmjs.org/@nbtca/prompt/latest`;
 
 interface NpmLatest {
-  version: string;
+  version?: unknown;
 }
 
-/**
- * Fetch latest version from npm registry.
- * Returns null on any failure (network, timeout, parse, or `signal` aborting
- * the request — e.g. the caller quit before this settled).
- */
-async function fetchLatestVersion(signal?: AbortSignal): Promise<string | null> {
+async function fetchLatestVersion(): Promise<string | null> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 3000);
-  const onExternalAbort = () => controller.abort();
-  signal?.addEventListener('abort', onExternalAbort);
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, 3000);
+  timeout.unref();
   try {
     const res = await fetch(NPM_REGISTRY_URL, {
       signal: controller.signal,
-      headers: { 'Accept': 'application/json' },
+      headers: { Accept: 'application/json' },
     });
     if (!res.ok) return null;
     const data = (await res.json()) as NpmLatest;
-    return data.version ?? null;
+    return typeof data.version === 'string' ? data.version : null;
   } catch {
     return null;
   } finally {
     clearTimeout(timeout);
-    signal?.removeEventListener('abort', onExternalAbort);
   }
 }
 
@@ -45,19 +40,6 @@ function isNewer(local: string, remote: string): boolean {
   return false;
 }
 
-/**
- * Non-blocking update check for TUI startup.
- * Resolves to a notification string or null. Pass `signal` so a caller that
- * quits before this settles can cancel the in-flight request instead of
- * leaving it to hold the process open.
- */
-export async function checkForUpdate(signal?: AbortSignal): Promise<string | null> {
-  const latest = await fetchLatestVersion(signal);
-  if (!latest || !isNewer(APP_INFO.version, latest)) return null;
-  const trans = t();
-  return `${fmt(trans.update.available, { latest, current: APP_INFO.version })}  ${chalk.dim(trans.update.command)}`;
-}
-
 export async function runUpdateCheck(): Promise<void> {
   const trans = t();
   const latest = await fetchLatestVersion();
@@ -68,9 +50,9 @@ export async function runUpdateCheck(): Promise<void> {
   }
 
   if (isNewer(APP_INFO.version, latest)) {
-    console.log(chalk.yellow(`${fmt(trans.update.available, { latest, current: APP_INFO.version })}`));
+    console.log(chalk.yellow(fmt(trans.update.available, { latest, current: APP_INFO.version })));
     console.log(chalk.dim(trans.update.command));
   } else {
-    console.log(chalk.green(`${fmt(trans.update.upToDate, { version: APP_INFO.version })}`));
+    console.log(chalk.green(fmt(trans.update.upToDate, { version: APP_INFO.version })));
   }
 }

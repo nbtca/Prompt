@@ -124,7 +124,7 @@
     "githubTokenHint": "提示: 设置 GITHUB_TOKEN 环境变量可获得更高的速率限制。",
     "fetchDirFailed": "无法获取目录内容: {error}",
     "fetchFileFailed": "无法获取文件内容: {error}",
-    "searchPrompt": "按标题搜索文档:",
+    "searchPrompt": "搜索文档:",
     "searchPlaceholder": "输入关键词...",
     "searching": "正在搜索文档...",
     "searchResults": "个结果",

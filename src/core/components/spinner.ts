@@ -23,7 +23,11 @@ export function renderSpinnerFrame(frame: string, msg: string): string {
 }
 
 export function startSpinner(msg = '', opts: SpinnerOptions = {}): Spinner {
-  const write = opts.write ?? ((s: string) => { process.stdout.write(s); });
+  const write =
+    opts.write ??
+    ((s: string) => {
+      process.stdout.write(s);
+    });
   const reduced = opts.reducedMotion ?? getCapabilities().reducedMotion;
   const frames = pickIcon('u', 'a') === 'u' ? FRAMES_UNICODE : FRAMES_ASCII;
 
@@ -31,11 +35,13 @@ export function startSpinner(msg = '', opts: SpinnerOptions = {}): Spinner {
   let timer: ReturnType<typeof setInterval> | null = null;
   let i = 0;
 
-  const clearLine = () => write(ansi.cursorToCol0 + ansi.eraseDown);
+  const clearLine = () => {
+    write(ansi.cursorToCol0 + ansi.eraseDown);
+  };
 
   const paint = () => {
     clearLine();
-    write(renderSpinnerFrame(frames[i % frames.length]!, current));
+    write(renderSpinnerFrame(frames.at(i % frames.length) ?? '|', current));
     i++;
   };
 
@@ -47,14 +53,26 @@ export function startSpinner(msg = '', opts: SpinnerOptions = {}): Spinner {
   }
 
   const finish = (line: string | null) => {
-    if (timer) { clearInterval(timer); timer = null; }
-    if (!reduced) { clearLine(); write(ansi.showCursor); }
+    if (timer) {
+      clearInterval(timer);
+      timer = null;
+    }
+    if (!reduced) {
+      clearLine();
+      write(ansi.showCursor);
+    }
     if (line) write(line + '\n');
   };
 
   return {
-    message: (m: string) => { current = m; },
-    stop: (m?: string) => finish(m ? renderMessage('success', m) : null),
-    error: (m?: string) => finish(m ? renderMessage('error', m) : null),
+    message: (m: string) => {
+      current = m;
+    },
+    stop: (m?: string) => {
+      finish(m ? renderMessage('success', m) : null);
+    },
+    error: (m?: string) => {
+      finish(m ? renderMessage('error', m) : null);
+    },
   };
 }
