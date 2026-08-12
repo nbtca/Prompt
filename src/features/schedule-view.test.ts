@@ -12,6 +12,10 @@ import { setLanguage } from '../i18n/index.js';
 import { resetIconCache } from '../core/icons.js';
 import { stripAnsi } from '../core/text.js';
 
+function campusDateTime(value: string): Date {
+  return new Date(`${value}+08:00`);
+}
+
 describe('peekNextClassLine', () => {
   let dir: string;
   let prevStateHome: string | undefined;
@@ -91,7 +95,7 @@ describe('peekTodayLines', () => {
       }),
     );
 
-    const monday = new Date('2026-09-14T20:00:00'); // week 1, Monday, well after the class ends
+    const monday = campusDateTime('2026-09-14T20:00:00');
     const lines = peekTodayLines(monday);
     const out = stripAnsi(lines.join('\n'));
     expect(out).toContain('Math');
@@ -138,7 +142,7 @@ describe('peekWeekAheadInfo', () => {
         fetchedAt: '2026-09-14T00:00:00Z',
       }),
     );
-    expect(peekWeekAheadInfo(new Date('2026-09-14T12:00:00'))).toBeNull();
+    expect(peekWeekAheadInfo(campusDateTime('2026-09-14T12:00:00'))).toBeNull();
   });
 
   it('computes raw per-day classDays with no weekend override applied', () => {
@@ -182,7 +186,7 @@ describe('peekWeekAheadInfo', () => {
         fetchedAt: '2026-09-14T00:00:00Z',
       }),
     );
-    const info = peekWeekAheadInfo(new Date('2026-09-14T12:00:00')); // Monday of week 1
+    const info = peekWeekAheadInfo(campusDateTime('2026-09-14T12:00:00'));
     expect(info).not.toBeNull();
     expect(info?.classDays).toEqual([true, false, false, false, false, true, false]);
   });
@@ -205,7 +209,7 @@ describe('peekWeekAheadInfo', () => {
         fetchedAt: '2026-09-14T00:00:00Z',
       }),
     );
-    const info = peekWeekAheadInfo(new Date('2026-09-23T12:00:00'));
+    const info = peekWeekAheadInfo(campusDateTime('2026-09-23T12:00:00'));
     expect(info).not.toBeNull();
     expect(info?.weekStartDate.getFullYear()).toBe(2026);
     expect(info?.weekStartDate.getMonth()).toBe(8); // September, 0-indexed

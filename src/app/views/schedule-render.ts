@@ -170,7 +170,7 @@ function hubPreGridLines(
     next = schedule.next(now);
   } catch {}
   const banner = renderNextClassBanner(next, now, cols);
-  lines.push(banner || hint(trans.timetable.noNextClass));
+  lines.push(...(banner ? [banner] : hintLines(trans.timetable.noNextClass, cols)));
   lines.push('');
   const todayWd = schedule.weekdayAt(now);
   if (week < 1) {
