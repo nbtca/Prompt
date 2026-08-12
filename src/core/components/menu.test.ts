@@ -24,6 +24,14 @@ describe('parseKey', () => {
     expect(parseKey('\x03')).toBe('cancel');
     expect(parseKey('\x1b')).toBe('cancel');
   });
+  it('maps the Vim keys advertised by classic menus without ambient input wrapping', () => {
+    expect(parseKey('j')).toBe('down');
+    expect(parseKey('k')).toBe('up');
+    expect(parseKey('l')).toBe('enter');
+    expect(parseKey('g')).toBe('home');
+    expect(parseKey('G')).toBe('end');
+    expect(parseKey('q')).toBe('cancel');
+  });
   it('unknown input is none', () => {
     expect(parseKey('x')).toBe('none');
   });

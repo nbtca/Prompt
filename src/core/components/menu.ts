@@ -1,7 +1,7 @@
 import { glyph, type, space } from '../theme.js';
 import { visualWidth, padEndV, wrapAnsiToVisualWidth } from '../text.js';
-import { ansi, ensureCursorRestored } from '../canvas.js';
 import { createPainter } from './painter.js';
+import { startRawInput } from './input-session.js';
 import { t } from '../../i18n/index.js';
 
 export type MenuKey =
@@ -11,8 +11,10 @@ export function parseKey(data: Buffer | string): MenuKey {
   const s = data.toString();
   switch (s) {
     case '\x1b[A':
+    case 'k':
       return 'up';
     case '\x1b[B':
+    case 'j':
       return 'down';
     case '\x1b[5~':
       return 'pageUp';
@@ -21,16 +23,20 @@ export function parseKey(data: Buffer | string): MenuKey {
     case '\x1b[H':
     case '\x1b[1~':
     case '\x1bOH':
+    case 'g':
       return 'home';
     case '\x1b[F':
     case '\x1b[4~':
     case '\x1bOF':
+    case 'G':
       return 'end';
     case '\r':
     case '\n':
+    case 'l':
       return 'enter';
     case '\x03':
     case '\x1b':
+    case 'q':
       return 'cancel';
     default:
       return 'none';
@@ -146,17 +152,10 @@ export interface RunMenuConfig {
   initialIndex?: number;
 }
 
-// Note: runMenu relies on ambient vim-key translation (j/k/l/g/G/q) being ACTIVE.
-// Callers must not invoke it with setVimKeysActive(false) still in effect.
 export function runMenu(config: RunMenuConfig): Promise<string | null> {
   return new Promise((resolve) => {
-    const stdin = process.stdin;
-    if (!stdin.isTTY || !process.stdout.isTTY) {
-      resolve(null);
-      return;
-    }
-
     let index = config.initialIndex ?? 0;
+    let finished = false;
 
     const paint = createPainter(() =>
       renderMenu({
@@ -167,22 +166,22 @@ export function runMenu(config: RunMenuConfig): Promise<string | null> {
       }),
     );
 
-    const cleanup = () => {
-      stdin.removeListener('data', onData);
-      if (stdin.isTTY) stdin.setRawMode(false);
-      process.stdout.write('\n' + ansi.showCursor);
+    const finish = (result: string | null) => {
+      if (finished) return;
+      finished = true;
+      handle?.stop();
+      process.stdout.write('\n');
+      resolve(result);
     };
 
     const onData = (data: Buffer) => {
       const key = parseKey(data);
       if (key === 'cancel') {
-        cleanup();
-        resolve(null);
+        finish(null);
         return;
       }
       if (key === 'enter') {
-        cleanup();
-        resolve(config.options[index]?.value ?? null);
+        finish(config.options[index]?.value ?? null);
         return;
       }
       const next = nextIndex(index, key, config.options.length);
@@ -192,11 +191,12 @@ export function runMenu(config: RunMenuConfig): Promise<string | null> {
       }
     };
 
-    ensureCursorRestored();
-    stdin.setRawMode(true);
-    stdin.resume();
-    process.stdout.write(ansi.hideCursor);
+    const handle = startRawInput(onData);
+    if (!handle) {
+      finished = true;
+      resolve(null);
+      return;
+    }
     paint();
-    stdin.on('data', onData);
   });
 }

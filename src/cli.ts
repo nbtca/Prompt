@@ -1,5 +1,4 @@
 import chalk from 'chalk';
-import open from 'open';
 import { main } from './main.js';
 import {
   fetchEvents,
@@ -26,6 +25,7 @@ import { APP_INFO, URLS } from './config/data.js';
 import { runUpdateCheck } from './features/update.js';
 import { runStudentTimetableCommand } from './features/student-timetable.js';
 import { showAbout } from './features/about.js';
+import { openUrlInBrowser } from './features/links.js';
 
 type CliAction =
   'events' | 'status' | 'docs' | 'repair' | 'website' | 'github' | 'roadmap' | 'about';
@@ -275,7 +275,21 @@ function printHelp(): void {
 }
 
 async function runEventsCommand(flags: Set<string>): Promise<void> {
+  const searchFlag = Array.from(flags).find((flag) => flag.startsWith('--search='));
   const nextFlag = Array.from(flags).find((flag) => flag.startsWith('--next='));
+  const rangeFlags = ['--today', '--week', '--month'].filter((flag) => flags.has(flag));
+  if (
+    flags.has('--heatmap') &&
+    (rangeFlags.length > 0 || nextFlag !== undefined || searchFlag !== undefined)
+  ) {
+    console.error(chalk.red(t().cli.eventsHeatmapConflict));
+    process.exit(1);
+  }
+  if (rangeFlags.length > 1) {
+    console.error(chalk.red(t().cli.eventsRangeConflict));
+    process.exit(1);
+  }
+
   const next = nextFlag ? parseAsciiDecimalInteger(nextFlag.slice('--next='.length)) : undefined;
   if (nextFlag && (next === undefined || next < 1)) {
     console.error(chalk.red(t().cli.invalidNext));
@@ -307,7 +321,6 @@ async function runEventsCommand(flags: Set<string>): Promise<void> {
     events = await fetchEvents();
   }
 
-  const searchFlag = Array.from(flags).find((f) => f.startsWith('--search='));
   if (searchFlag) {
     const q = searchFlag.slice('--search='.length).toLowerCase();
     events = events.filter((e) => `${e.title} ${e.location}`.toLowerCase().includes(q));
@@ -537,7 +550,7 @@ async function runCommandMode(argv: string[]): Promise<void> {
     if (args.length > 2 || (themeScope === 'reset' && args.length > 1)) {
       rejectUnexpectedArguments(command, args.slice(themeScope === 'reset' ? 1 : 2));
     }
-    const result = runThemeCommand(args);
+    const result = runThemeCommand(args, { forcePlain: flags.has('--plain') });
     if (!result.ok) {
       console.error(chalk.red(result.message));
       process.exit(1);
@@ -550,7 +563,7 @@ async function runCommandMode(argv: string[]): Promise<void> {
 
   if (command === 'update') {
     rejectUnexpectedArguments(command, args);
-    await runUpdateCheck();
+    if (!(await runUpdateCheck())) process.exitCode = 1;
     return;
   }
 
@@ -607,7 +620,7 @@ async function runCommandMode(argv: string[]): Promise<void> {
   const mappedUrl = URL_ACTIONS[action];
   if (mappedUrl) {
     if (flags.has('--open')) {
-      await open(mappedUrl);
+      if (!(await openUrlInBrowser(mappedUrl))) process.exitCode = 1;
     } else {
       process.stdout.write(mappedUrl + '\n');
     }

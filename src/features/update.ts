@@ -40,13 +40,13 @@ function isNewer(local: string, remote: string): boolean {
   return false;
 }
 
-export async function runUpdateCheck(): Promise<void> {
+export async function runUpdateCheck(): Promise<boolean> {
   const trans = t();
   const latest = await fetchLatestVersion();
 
   if (!latest) {
-    console.log(chalk.yellow(trans.update.checkFailed));
-    return;
+    console.error(chalk.yellow(trans.update.checkFailed));
+    return false;
   }
 
   if (isNewer(APP_INFO.version, latest)) {
@@ -55,4 +55,5 @@ export async function runUpdateCheck(): Promise<void> {
   } else {
     console.log(chalk.green(fmt(trans.update.upToDate, { version: APP_INFO.version })));
   }
+  return true;
 }

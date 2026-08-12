@@ -17,6 +17,8 @@ export async function runApp(): Promise<void> {
   let scroll = 0;
   let running = true;
   let suspended = false;
+  let entered = false;
+  const lifecycle = new AbortController();
   const keyDecoder = new KeyStreamDecoder();
   let keyFlushTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -46,6 +48,7 @@ export async function runApp(): Promise<void> {
   }
 
   const ctx: AppContext = {
+    signal: lifecycle.signal,
     get size(): AppSize {
       return size();
     },
@@ -91,6 +94,7 @@ export async function runApp(): Promise<void> {
 
   function dispatchKey(key: string): void {
     if (key === '\x03') {
+      process.exitCode = 130;
       quit();
       return;
     } // Ctrl-C always quits, even mid-capture.
@@ -170,15 +174,24 @@ export async function runApp(): Promise<void> {
   }
 
   function enter(): void {
+    if (entered || lifecycle.signal.aborted) return;
+    entered = true;
     keyDecoder.reset();
     ensureCursorRestored();
-    process.stdout.write(ansi.enterAlt + ansi.hideCursor);
-    if (process.stdin.isTTY) process.stdin.setRawMode(true);
-    process.stdin.resume();
-    process.stdin.on('data', onKey);
+    try {
+      process.stdout.write(ansi.enterAlt + ansi.hideCursor);
+      if (process.stdin.isTTY) process.stdin.setRawMode(true);
+      process.stdin.resume();
+      process.stdin.on('data', onKey);
+    } catch (error) {
+      leave();
+      throw error;
+    }
   }
 
   function leave(): void {
+    if (!entered) return;
+    entered = false;
     clearKeyFlush();
     keyDecoder.reset();
     process.stdin.removeListener('data', onKey);
@@ -217,6 +230,17 @@ export async function runApp(): Promise<void> {
   }
 
   function onSigint(): void {
+    process.exitCode = 130;
+    quit();
+  }
+
+  function onSigterm(): void {
+    process.exitCode = 143;
+    quit();
+  }
+
+  function onSighup(): void {
+    process.exitCode = 129;
     quit();
   }
 
@@ -228,12 +252,15 @@ export async function runApp(): Promise<void> {
   function quit(): void {
     if (!running) return;
     running = false;
+    lifecycle.abort();
     try {
       leave();
     } finally {
       process.stdout.removeListener('resize', onResize);
       process.removeListener('exit', onExit);
       process.removeListener('SIGINT', onSigint);
+      process.removeListener('SIGTERM', onSigterm);
+      process.removeListener('SIGHUP', onSighup);
       resolveRun();
     }
   }
@@ -241,6 +268,8 @@ export async function runApp(): Promise<void> {
   process.on('exit', onExit);
   process.stdout.on('resize', onResize);
   process.once('SIGINT', onSigint);
+  process.once('SIGTERM', onSigterm);
+  process.once('SIGHUP', onSighup);
 
   try {
     enter();

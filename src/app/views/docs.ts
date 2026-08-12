@@ -5,7 +5,7 @@ import { TextField } from '../fields/text-field.js';
 import { renderDocs, type DocsViewState } from './docs-render.js';
 import { setVimKeysActive } from '../../core/vim-keys.js';
 import { pickIcon } from '../../core/icons.js';
-import { getCurrentLanguage, t, type Language } from '../../i18n/index.js';
+import { fmt, getCurrentLanguage, t, type Language } from '../../i18n/index.js';
 import { sanitizeTerminalLine, truncate } from '../../core/text.js';
 import {
   localizeDocSections,
@@ -17,6 +17,7 @@ import {
   displayDocTitle,
   loadDocForReader,
   openDocsInBrowser,
+  docsUrlFromPath,
   clearDocsCache,
   type DocSection,
   type DocLink,
@@ -41,8 +42,13 @@ let readerNavStack: string[] = [];
 let readerPrevState: DocsViewState | null = null;
 let readerLoadingPrevState: DocsViewState | null = null;
 let readerRequestId = 0;
+let lifecycleGeneration = 0;
 
 const DOC_HINT_WIDTH = 44;
+
+function isLifecycleActive(ctx: AppContext, generation: number): boolean {
+  return generation === lifecycleGeneration && ctx.signal?.aborted !== true;
+}
 
 function backLabel(): string {
   return t().common.back;
@@ -66,6 +72,35 @@ function withoutErrorMessage(value: DocsViewState): DocsViewState {
   const next = { ...value };
   delete next.errorMessage;
   return next;
+}
+
+async function runBrowserOpen(ctx: AppContext, path?: string): Promise<boolean | undefined> {
+  let opened: boolean | undefined;
+  await ctx.runClassic(async () => {
+    opened =
+      path === undefined
+        ? await openDocsInBrowser(undefined, ctx.signal)
+        : await openDocsInBrowser(path, ctx.signal);
+  });
+  return opened;
+}
+
+async function openBrowserFromView(
+  ctx: AppContext,
+  path?: string,
+  generation = lifecycleGeneration,
+): Promise<void> {
+  const opened = await runBrowserOpen(ctx, path);
+  if (!isLifecycleActive(ctx, generation) || opened === true) return;
+
+  const url = docsUrlFromPath(path);
+  state = {
+    ...state,
+    errorMessage: sanitizeTerminalLine(
+      `${t().docs.browserError}. ${fmt(t().links.openManually, { url })}`,
+    ),
+  };
+  ctx.rerender();
 }
 
 function buildSectionsField(): ListField {
@@ -253,6 +288,8 @@ function replaceSection(section: DocSection): void {
 }
 
 async function openSectionFiles(ctx: AppContext, section: DocSection): Promise<void> {
+  const generation = lifecycleGeneration;
+  if (!isLifecycleActive(ctx, generation)) return;
   const requestId = ++metadataRequestId;
   currentSectionKey = section.key;
   state = {
@@ -261,8 +298,9 @@ async function openSectionFiles(ctx: AppContext, section: DocSection): Promise<v
   };
   ctx.rerender();
   try {
-    const hydrated = await fetchSectionMetadata(section);
+    const hydrated = await fetchSectionMetadata(section, ctx.signal);
     if (
+      !isLifecycleActive(ctx, generation) ||
       requestId !== metadataRequestId ||
       state.mode !== 'files' ||
       currentSectionKey !== section.key
@@ -280,6 +318,7 @@ async function openSectionFiles(ctx: AppContext, section: DocSection): Promise<v
     };
   } catch {
     if (
+      !isLifecycleActive(ctx, generation) ||
       requestId !== metadataRequestId ||
       state.mode !== 'files' ||
       currentSectionKey !== section.key
@@ -287,7 +326,7 @@ async function openSectionFiles(ctx: AppContext, section: DocSection): Promise<v
       return;
     state = { ...state, errorMessage: t().docs.loadError };
   }
-  ctx.rerender();
+  if (isLifecycleActive(ctx, generation)) ctx.rerender();
 }
 
 async function openArchivedFiles(
@@ -295,6 +334,8 @@ async function openArchivedFiles(
   groupKey: string,
   groupFiles: ListedDoc[],
 ): Promise<void> {
+  const generation = lifecycleGeneration;
+  if (!isLifecycleActive(ctx, generation)) return;
   const requestId = ++metadataRequestId;
   currentArchivedGroupKey = groupKey;
   state = {
@@ -307,8 +348,9 @@ async function openArchivedFiles(
   };
   ctx.rerender();
   try {
-    const hydrated = await fetchDocMetadata(groupFiles);
+    const hydrated = await fetchDocMetadata(groupFiles, ctx.signal);
     if (
+      !isLifecycleActive(ctx, generation) ||
       requestId !== metadataRequestId ||
       state.mode !== 'archivedFiles' ||
       currentArchivedGroupKey !== groupKey
@@ -326,6 +368,7 @@ async function openArchivedFiles(
     };
   } catch {
     if (
+      !isLifecycleActive(ctx, generation) ||
       requestId !== metadataRequestId ||
       state.mode !== 'archivedFiles' ||
       currentArchivedGroupKey !== groupKey
@@ -336,16 +379,18 @@ async function openArchivedFiles(
       errorMessage: t().docs.loadError,
     };
   }
-  ctx.rerender();
+  if (isLifecycleActive(ctx, generation)) ctx.rerender();
 }
 
 async function runSearch(ctx: AppContext, query: string): Promise<void> {
+  const generation = lifecycleGeneration;
+  if (!isLifecycleActive(ctx, generation)) return;
   const requestId = ++searchRequestId;
   state = { mode: 'searchLoading' };
   ctx.rerender();
   try {
-    const matches = await searchDocuments(query);
-    if (requestId !== searchRequestId) return;
+    const matches = await searchDocuments(query, ctx.signal);
+    if (!isLifecycleActive(ctx, generation) || requestId !== searchRequestId) return;
     currentSearchResults = matches;
     state = {
       mode: 'searchResults',
@@ -353,15 +398,17 @@ async function runSearch(ctx: AppContext, query: string): Promise<void> {
       searchResultsField: buildSearchResultsField(matches, computeMaxVisible(ctx.bodyRows)),
     };
   } catch {
-    if (requestId !== searchRequestId) return;
+    if (!isLifecycleActive(ctx, generation) || requestId !== searchRequestId) return;
     currentSearchResults = [];
     goToSections();
     state = { ...state, errorMessage: t().docs.loadError };
   }
-  ctx.rerender();
+  if (isLifecycleActive(ctx, generation)) ctx.rerender();
 }
 
 async function openInReader(ctx: AppContext, path: string, pushCurrent: boolean): Promise<void> {
+  const generation = lifecycleGeneration;
+  if (!isLifecycleActive(ctx, generation)) return;
   const requestId = ++readerRequestId;
   const previousState = state;
   const previousPath = readerCurrentPath;
@@ -369,8 +416,8 @@ async function openInReader(ctx: AppContext, path: string, pushCurrent: boolean)
   state = { mode: 'readerLoading' };
   ctx.rerender();
   try {
-    const doc = await loadDocForReader(path);
-    if (requestId !== readerRequestId) return;
+    const doc = await loadDocForReader(path, ctx.signal);
+    if (!isLifecycleActive(ctx, generation) || requestId !== readerRequestId) return;
     if (pushCurrent && previousPath) readerNavStack.push(previousPath);
     readerCurrentPath = path;
     readerLoadingPrevState = null;
@@ -382,7 +429,7 @@ async function openInReader(ctx: AppContext, path: string, pushCurrent: boolean)
     };
     ctx.resetScroll();
   } catch {
-    if (requestId !== readerRequestId) return;
+    if (!isLifecycleActive(ctx, generation) || requestId !== readerRequestId) return;
     readerLoadingPrevState = null;
     const fallbackState =
       pushCurrent && previousState.mode === 'reader'
@@ -390,7 +437,7 @@ async function openInReader(ctx: AppContext, path: string, pushCurrent: boolean)
         : previousState;
     state = { ...fallbackState, errorMessage: t().docs.loadError };
   }
-  ctx.rerender();
+  if (isLifecycleActive(ctx, generation)) ctx.rerender();
 }
 
 function enterReaderFrom(ctx: AppContext, path: string): void {
@@ -405,6 +452,8 @@ export const docsView = {
   title: t().menu.docs,
 
   async load(ctx: AppContext): Promise<void> {
+    const generation = loaded ? lifecycleGeneration : ++lifecycleGeneration;
+    if (!isLifecycleActive(ctx, generation)) return;
     if (loaded) {
       const language = getCurrentLanguage();
       if (loadedLanguage !== language) {
@@ -421,17 +470,27 @@ export const docsView = {
     state = { mode: 'loading' };
     ctx.rerender();
     try {
-      const nextSections = await fetchSections();
-      if (requestId !== sectionsRequestId) return;
+      const nextSections = await fetchSections(ctx.signal);
+      if (!isLifecycleActive(ctx, generation) || requestId !== sectionsRequestId) return;
       sections = nextSections;
       loaded = true;
       loadedLanguage = getCurrentLanguage();
       goToSections();
     } catch {
-      if (requestId !== sectionsRequestId) return;
+      if (!isLifecycleActive(ctx, generation) || requestId !== sectionsRequestId) return;
       state = { mode: 'error', errorMessage: t().docs.loadError };
     }
-    ctx.rerender();
+    if (isLifecycleActive(ctx, generation)) ctx.rerender();
+  },
+
+  dispose(): void {
+    lifecycleGeneration += 1;
+    sectionsRequestId += 1;
+    metadataRequestId += 1;
+    searchRequestId += 1;
+    readerRequestId += 1;
+    clearDocsCache();
+    setVimKeysActive(true);
   },
 
   render(ctx: AppContext): string[] {
@@ -589,9 +648,7 @@ export const docsView = {
           return;
         }
         if (result.selected === '__browser__') {
-          void ctx.runClassic(async () => {
-            await openDocsInBrowser();
-          });
+          void openBrowserFromView(ctx);
           return;
         }
         const section = sections.find((s) => s.key === result.selected);
@@ -700,9 +757,7 @@ export const docsView = {
           return;
         }
         if (key === 'b') {
-          void ctx.runClassic(async () => {
-            await openDocsInBrowser(readerCurrentPath ?? undefined);
-          });
+          void openBrowserFromView(ctx, readerCurrentPath ?? undefined);
           return;
         }
         return;

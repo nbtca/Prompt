@@ -8,6 +8,7 @@ export interface AppSize {
 export interface AppContext {
   size: AppSize;
   bodyRows: number;
+  signal?: AbortSignal;
   rerender(): void;
   resetScroll(): void;
   runClassic(fn: () => Promise<void>): Promise<void>;

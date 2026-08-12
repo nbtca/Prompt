@@ -38,8 +38,19 @@ const loadDocForReaderMock = vi.fn((path: string) => Promise.resolve(readerDoc(p
 const fetchDocMetadataMock = vi.fn((files: ListedDoc[]) => Promise.resolve(files));
 const fetchSectionMetadataMock = vi.fn((section: DocSection) => Promise.resolve(section));
 const searchDocumentsMock = vi.fn().mockResolvedValue([]);
-const openDocsInBrowserMock = vi.fn().mockResolvedValue(undefined);
+const openDocsInBrowserMock = vi.fn().mockResolvedValue(true);
 const clearDocsCacheMock = vi.fn();
+
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+} {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((complete) => {
+    resolve = complete;
+  });
+  return { promise, resolve };
+}
 
 vi.mock('../../features/docs.js', async (importOriginal) => {
   const actual = await importOriginal<typeof DocsModule>();
@@ -69,6 +80,7 @@ beforeAll(() => {
 
 function fakeCtx() {
   return {
+    signal: new AbortController().signal,
     size: { rows: 24, cols: 80 },
     bodyRows: 19,
     rerender: vi.fn(),
@@ -278,7 +290,7 @@ describe('docsView', () => {
       expect(out).toContain('Choose a document or directory:');
       const selected = out.split('\n').find((line) => line.includes('Back'));
       expect(selected?.trim().startsWith('→')).toBe(true);
-      expect(searchDocumentsMock).toHaveBeenCalledWith('o');
+      expect(searchDocumentsMock).toHaveBeenCalledWith('o', ctx.signal);
       expect(fetchSectionsMock).toHaveBeenCalledTimes(1);
     } finally {
       setFreshLanguage('en');
@@ -314,11 +326,12 @@ describe('docsView native reader (no shell-out to less/glow)', () => {
   let freshDocsView: typeof docsView;
 
   beforeEach(async () => {
+    fetchSectionsMock.mockClear();
     loadDocForReaderMock.mockClear();
     fetchDocMetadataMock.mockReset().mockImplementation((files) => Promise.resolve(files));
     fetchSectionMetadataMock.mockReset().mockImplementation((section) => Promise.resolve(section));
     searchDocumentsMock.mockReset().mockResolvedValue([]);
-    openDocsInBrowserMock.mockClear();
+    openDocsInBrowserMock.mockReset().mockResolvedValue(true);
     clearDocsCacheMock.mockClear();
     vi.resetModules();
     const { setLanguage: setFreshLanguage } = await import('../../i18n/index.js');
@@ -342,10 +355,117 @@ describe('docsView native reader (no shell-out to less/glow)', () => {
     freshDocsView.handleKey('\r', ctx); // select it
     await flush();
 
-    expect(loadDocForReaderMock).toHaveBeenCalledWith('tutorial/manual/os-skills.md');
+    expect(loadDocForReaderMock).toHaveBeenCalledWith('tutorial/manual/os-skills.md', ctx.signal);
     expect(ctx.runClassic).not.toHaveBeenCalled();
     const out = stripAnsi(freshDocsView.render(ctx).join('\n'));
     expect(out).toContain('OS Skills content');
+  });
+
+  it('ignores a deferred section response after abort', async () => {
+    const pending = deferred<DocSection[]>();
+    fetchSectionsMock.mockReturnValueOnce(pending.promise);
+    vi.resetModules();
+    const { docsView: loadingView } = await import('./docs.js');
+    const lifecycle = new AbortController();
+    const ctx = { ...fakeCtx(), signal: lifecycle.signal } satisfies AppContext;
+    const loading = loadingView.load(ctx);
+    const renders = ctx.rerender.mock.calls.length;
+
+    lifecycle.abort();
+    pending.resolve([
+      {
+        key: 'guide',
+        label: 'Late guide',
+        count: 0,
+        files: [],
+      },
+    ]);
+    await loading;
+
+    expect(ctx.rerender).toHaveBeenCalledTimes(renders);
+    expect(stripAnsi(loadingView.render(ctx).join('\n'))).not.toContain('Late guide');
+  });
+
+  it('ignores deferred metadata after abort', async () => {
+    const pending = deferred<DocSection>();
+    fetchSectionMetadataMock.mockReturnValueOnce(pending.promise);
+    const lifecycle = new AbortController();
+    const ctx = { ...fakeCtx(), signal: lifecycle.signal } satisfies AppContext;
+    await freshDocsView.load(ctx);
+    freshDocsView.handleKey('\r', ctx);
+    const renders = ctx.rerender.mock.calls.length;
+
+    lifecycle.abort();
+    pending.resolve({
+      key: 'guide',
+      label: 'Guide',
+      count: 1,
+      files: [
+        {
+          name: 'os-skills.md',
+          path: 'tutorial/manual/os-skills.md',
+          type: 'file',
+          title: 'Late metadata',
+          summary: 'Late summary',
+        },
+      ],
+    });
+    await flush();
+
+    expect(ctx.rerender).toHaveBeenCalledTimes(renders);
+    const out = stripAnsi(freshDocsView.render(ctx).join('\n'));
+    expect(out).not.toContain('Late metadata');
+    expect(out).not.toContain('Late summary');
+  });
+
+  it('ignores deferred search results after abort', async () => {
+    const pending = deferred<SearchDoc[]>();
+    searchDocumentsMock.mockReturnValueOnce(pending.promise);
+    const lifecycle = new AbortController();
+    const ctx = { ...fakeCtx(), signal: lifecycle.signal } satisfies AppContext;
+    await freshDocsView.load(ctx);
+    freshDocsView.handleKey('\x1b[B', ctx);
+    freshDocsView.handleKey('\r', ctx);
+    freshDocsView.handleKey('late', ctx);
+    freshDocsView.handleKey('\r', ctx);
+    const renders = ctx.rerender.mock.calls.length;
+
+    lifecycle.abort();
+    pending.resolve([
+      {
+        name: 'late.md',
+        path: 'tutorial/late.md',
+        type: 'file',
+        title: 'Late result',
+        summary: '',
+        excerpt: '',
+        route: '/tutorial/late',
+        score: 1,
+        section: 'tutorial',
+      },
+    ]);
+    await flush();
+
+    expect(ctx.rerender).toHaveBeenCalledTimes(renders);
+    expect(stripAnsi(freshDocsView.render(ctx).join('\n'))).not.toContain('Late result');
+  });
+
+  it('ignores a deferred reader response after abort', async () => {
+    const pending = deferred<ReaderDoc>();
+    loadDocForReaderMock.mockReturnValueOnce(pending.promise);
+    const lifecycle = new AbortController();
+    const ctx = { ...fakeCtx(), signal: lifecycle.signal } satisfies AppContext;
+    await openTutorialFiles(ctx);
+    freshDocsView.handleKey('\x1b[B', ctx);
+    freshDocsView.handleKey('\r', ctx);
+    const renders = ctx.rerender.mock.calls.length;
+
+    lifecycle.abort();
+    pending.resolve(readerDoc('tutorial/manual/os-skills.md'));
+    await flush();
+
+    expect(ctx.rerender).toHaveBeenCalledTimes(renders);
+    expect(stripAnsi(freshDocsView.render(ctx).join('\n'))).not.toContain('OS Skills content');
   });
 
   it('replaces filename fallbacks with document titles without moving the selection', async () => {
@@ -459,7 +579,7 @@ describe('docsView native reader (no shell-out to less/glow)', () => {
     await flush();
 
     expect(ctx.runClassic).toHaveBeenCalledTimes(1);
-    expect(openDocsInBrowserMock).toHaveBeenCalledWith();
+    expect(openDocsInBrowserMock).toHaveBeenCalledWith(undefined, ctx.signal);
   });
 
   it('clears caches and reloads the document tree from the root menu', async () => {
@@ -486,7 +606,43 @@ describe('docsView native reader (no shell-out to less/glow)', () => {
     await flush();
 
     expect(ctx.runClassic).toHaveBeenCalledTimes(1);
-    expect(openDocsInBrowserMock).toHaveBeenCalledWith('tutorial/manual/os-skills.md');
+    expect(openDocsInBrowserMock).toHaveBeenCalledWith('tutorial/manual/os-skills.md', ctx.signal);
+  });
+
+  it('keeps the reader and a manual URL visible when the browser fails', async () => {
+    openDocsInBrowserMock.mockResolvedValueOnce(false);
+    const ctx = fakeCtx();
+    await openTutorialFiles(ctx);
+    freshDocsView.handleKey('\x1b[B', ctx);
+    freshDocsView.handleKey('\r', ctx);
+    await flush();
+    freshDocsView.handleKey('b', ctx);
+    await flush();
+
+    const out = stripAnsi(freshDocsView.render(ctx).join('\n'));
+    expect(out).toContain('Failed to open browser');
+    expect(out).toContain('https://docs.nbtca.space/tutorial/manual/os-skills');
+    expect(out).toContain('OS Skills content');
+  });
+
+  it('ignores a late browser failure after the view lifecycle is aborted', async () => {
+    const lifecycle = new AbortController();
+    openDocsInBrowserMock.mockImplementationOnce(() => {
+      lifecycle.abort();
+      return Promise.resolve(false);
+    });
+    const ctx = { ...fakeCtx(), signal: lifecycle.signal } satisfies AppContext;
+    await openTutorialFiles(ctx);
+    freshDocsView.handleKey('\x1b[B', ctx);
+    freshDocsView.handleKey('\r', ctx);
+    await flush();
+    freshDocsView.handleKey('b', ctx);
+    await flush();
+
+    const out = stripAnsi(freshDocsView.render(ctx).join('\n'));
+    expect(out).not.toContain('Failed to open browser');
+    expect(out).not.toContain('Open manually');
+    expect(out).toContain('OS Skills content');
   });
 
   it('Esc cancels an in-flight reader load and keeps the restored file list', async () => {
@@ -526,7 +682,7 @@ describe('docsView native reader (no shell-out to less/glow)', () => {
 
     freshDocsView.handleKey('\r', ctx); // link picker's only real option, selected by default
     await flush();
-    expect(loadDocForReaderMock).toHaveBeenCalledWith('tutorial/manual/other-doc.md');
+    expect(loadDocForReaderMock).toHaveBeenCalledWith('tutorial/manual/other-doc.md', ctx.signal);
     out = stripAnsi(freshDocsView.render(ctx).join('\n'));
     expect(out).toContain('Other doc content, no further links.');
   });

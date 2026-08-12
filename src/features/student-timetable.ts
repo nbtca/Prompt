@@ -146,11 +146,10 @@ async function interactiveLogin(isInteractive: boolean): Promise<AuthenticatedNb
       'Interactive login requires a terminal.',
     );
   }
-  const username = await runSecretInput({
+  const username = await runTextInput({
     message: trans.studentId,
     placeholder: trans.studentIdHint,
     allowEmpty: false,
-    mask: '•',
   });
   if (!username)
     throw new AuthError('INVALID_CREDENTIALS', 'credentials', 'Student id is required.');

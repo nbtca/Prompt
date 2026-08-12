@@ -16,6 +16,10 @@ export interface ThemeCommandResult {
   message: string;
 }
 
+export interface ThemeCommandOptions {
+  forcePlain?: boolean;
+}
+
 const ICON_MODES: IconMode[] = ['auto', 'ascii', 'unicode'];
 const COLOR_MODES: ColorMode[] = ['auto', 'on', 'off'];
 
@@ -25,7 +29,10 @@ function formatThemeSummary(): string {
   return `${trans.theme.iconMode}: ${prefs.iconMode}, ${trans.theme.colorMode}: ${prefs.colorMode}`;
 }
 
-export function runThemeCommand(args: string[]): ThemeCommandResult {
+export function runThemeCommand(
+  args: string[],
+  options: ThemeCommandOptions = {},
+): ThemeCommandResult {
   const trans = t();
   const [scope, value] = args;
 
@@ -36,7 +43,7 @@ export function runThemeCommand(args: string[]): ThemeCommandResult {
   if (scope === 'reset') {
     const saved = resetPreferences();
     resetIconCache();
-    applyColorModePreference(false);
+    applyColorModePreference(options.forcePlain === true);
     resetCapabilities();
     const message = saved ? trans.theme.reset : trans.theme.resetSessionOnly;
     return { ok: true, message };
@@ -59,7 +66,7 @@ export function runThemeCommand(args: string[]): ThemeCommandResult {
       return { ok: false, message: `${trans.theme.invalidValue} auto, on, off` };
     }
     const saved = setColorMode(mode);
-    applyColorModePreference(false);
+    applyColorModePreference(options.forcePlain === true);
     resetCapabilities();
     return { ok: true, message: saved ? trans.theme.updated : trans.theme.updatedSessionOnly };
   }

@@ -56,9 +56,9 @@ function formatTime(date: Date): string {
   return `${hours}:${minutes}`;
 }
 
-export async function loadCalendarOrThrow(): Promise<Calendar> {
+export async function loadCalendarOrThrow(signal?: AbortSignal): Promise<Calendar> {
   try {
-    return await loadCalendar({ timeoutMs: 15000 });
+    return await loadCalendar({ timeoutMs: 15000, ...(signal === undefined ? {} : { signal }) });
   } catch (err) {
     const detail = sanitizeTerminalLine(
       err instanceof FeedFetchError || err instanceof FeedParseError ? err.message : String(err),

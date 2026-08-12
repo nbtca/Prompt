@@ -1,7 +1,6 @@
 import { marked } from 'marked';
 import { markedTerminal } from 'marked-terminal';
 import chalk from 'chalk';
-import open from 'open';
 import { createHash } from 'node:crypto';
 import { runMenu, menuFooter } from '../core/components/menu.js';
 import { runTextInput } from '../core/components/text-input.js';
@@ -12,8 +11,9 @@ import { spawn, execFileSync } from 'child_process';
 import { URLS } from '../config/data.js';
 import { t, fmt, getCurrentLanguage, type Translations } from '../i18n/index.js';
 import { enterScreen, breadcrumb } from '../core/transitions.js';
-import { sanitizeTerminalLine, sanitizeTerminalText, truncate } from '../core/text.js';
-import { createDocsClient } from '@nbtca/docs';
+import { sanitizeTerminalLine, sanitizeTerminalText, stripAnsi, truncate } from '../core/text.js';
+import { clearDocsClients, runDocsClientOperation } from './docs-client.js';
+import { launchBrowserUrl } from './links.js';
 import type { DocItem, DocPage, DocsSearchResult } from '@nbtca/docs';
 
 type TerminalType = 'basic' | 'enhanced' | 'advanced';
@@ -72,7 +72,8 @@ let _markedConfigured = false;
 export function ensureMarkedConfigured(): void {
   if (_markedConfigured) return;
   _markedConfigured = true;
-  const extension = markedTerminal(getRendererOptions(getTerminalType()));
+  const terminalType = getTerminalType();
+  const extension = markedTerminal(getRendererOptions(terminalType));
   const renderer = extension.renderer ?? (extension.renderer = {});
 
   const renderExternalLink = renderer.link;
@@ -186,10 +187,7 @@ interface DocMetadata {
 }
 
 const metadataCache = new Map<string, CacheEntry<DocMetadata>>();
-const metadataRequests = new Map<string, Promise<DocMetadata>>();
 let cacheGeneration = 0;
-
-const docsClient = createDocsClient();
 
 function getFreshRender(key: string): RenderedDoc | null {
   const entry = renderCache.get(key);
@@ -220,15 +218,14 @@ function renderCacheKey(filePath: string): string {
 
 export function clearDocsCache(): void {
   cacheGeneration += 1;
-  docsClient.clear();
+  clearDocsClients();
   renderCache.clear();
   metadataCache.clear();
-  metadataRequests.clear();
 }
 
-async function fetchDocument(path: string): Promise<DocPage> {
+async function fetchDocument(path: string, signal?: AbortSignal): Promise<DocPage> {
   try {
-    return await docsClient.getDocument(path);
+    return await runDocsClientOperation(signal, (client) => client.getDocument(path));
   } catch (err) {
     const trans = t();
     throw new Error(fmt(trans.docs.fetchFileFailed, { error: sanitizeTerminalLine(String(err)) }));
@@ -264,32 +261,39 @@ function setMetadata(path: string, value: DocMetadata): void {
   }
 }
 
-function loadDocMetadata(path: string): Promise<DocMetadata> {
+function loadDocMetadata(path: string, signal?: AbortSignal): Promise<DocMetadata> {
   const cached = getFreshMetadata(path);
   if (cached) return Promise.resolve(cached);
-  const pending = metadataRequests.get(path);
-  if (pending) return pending;
 
   const generation = cacheGeneration;
-  const request = fetchDocument(path).then((page) => {
+  return fetchDocument(path, signal).then((page) => {
     const metadata = metadataFromPage(page);
     if (generation === cacheGeneration) setMetadata(path, metadata);
     return metadata;
   });
-  metadataRequests.set(path, request);
-  const release = () => {
-    if (metadataRequests.get(path) === request) metadataRequests.delete(path);
-  };
-  void request.then(release, release);
-  return request;
 }
 
-async function loadRenderedDoc(filePath: string): Promise<{
+function normalizeRenderedTasks(content: string, type: TerminalType): string {
+  if (type !== 'basic') return content;
+  return content
+    .split('\n')
+    .map((line) =>
+      /^\s*(?:[-*+]|\d+[.)])\s+\[X\](?:\s|$)/.test(stripAnsi(line))
+        ? line.replace('[X]', '[x]')
+        : line,
+    )
+    .join('\n');
+}
+
+async function loadRenderedDoc(
+  filePath: string,
+  signal?: AbortSignal,
+): Promise<{
   rawContent: string;
   renderedDoc: RenderedDoc;
 }> {
   const generation = cacheGeneration;
-  const page = await fetchDocument(filePath);
+  const page = await fetchDocument(filePath, signal);
   if (generation === cacheGeneration) setMetadata(filePath, metadataFromPage(page));
   const rawContent = page.content;
   const fingerprint = contentFingerprint(rawContent);
@@ -297,10 +301,11 @@ async function loadRenderedDoc(filePath: string): Promise<{
   const cached = getFreshRender(cacheKey);
   if (cached?.fingerprint === fingerprint) return { rawContent, renderedDoc: cached };
 
-  const cleaned = cleanMarkdownContent(rawContent, getTerminalType());
+  const terminalType = getTerminalType();
+  const cleaned = cleanMarkdownContent(rawContent, terminalType);
   const title =
     sanitizeTerminalLine(page.title) || cleanFileName(filePath.split('/').pop() ?? filePath);
-  const markedOutput = await marked(cleaned);
+  const markedOutput = normalizeRenderedTasks(await marked(cleaned), terminalType);
   const renderedDoc = {
     fingerprint,
     cleaned,
@@ -447,15 +452,109 @@ function replaceDocumentComponents(content: string): string {
   return result;
 }
 
-export function cleanMarkdownContent(
+function replaceHtmlCheckboxes(content: string, type: TerminalType): string {
+  return content.replace(/<input\b([^>]*)\/?\s*>/gi, (tag: string, attributes: string) => {
+    const typeMatch = /(?:^|\s)type\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>/]+))/i.exec(attributes);
+    const inputType = (typeMatch?.[1] ?? typeMatch?.[2] ?? typeMatch?.[3] ?? '')
+      .trim()
+      .toLowerCase();
+    if (inputType !== 'checkbox') return tag;
+
+    const checked = /(?:^|\s)checked(?=\s|=|\/|$)/i.test(attributes);
+    if (type === 'basic') return checked ? '[x]' : '[ ]';
+    return checked ? '☑' : '☐';
+  });
+}
+
+function expandHtmlDetails(content: string): string {
+  return content
+    .replace(/<summary\b[^>]*>([\s\S]*?)<\/summary\s*>/gi, (_match: string, label: string) => {
+      const summary = sanitizeTerminalLine(label);
+      return summary ? `\n\n### ${summary}\n\n` : '\n';
+    })
+    .replace(/<\/?(?:details|summary)\b[^>]*>/gi, '');
+}
+
+function transformOutsideFencedCodeBlocks(
   content: string,
-  type: TerminalType = getTerminalType(),
+  transform: (value: string) => string,
 ): string {
-  let c = sanitizeTerminalText(content);
+  const output: string[] = [];
+  let plain: string[] = [];
+  let fenceCharacter = '';
+  let fenceWidth = 0;
+  let listIndent = 0;
+  let listQuoteDepth = 0;
 
-  c = c.replace(/^---\n[\s\S]*?\n---(?:\n|$)/, '');
+  const flushPlain = () => {
+    if (plain.length === 0) return;
+    output.push(transform(plain.join('\n')));
+    plain = [];
+  };
 
-  c = processFencedCodeBlocks(c);
+  const lineContext = (line: string): { quoteDepth: number; rest: string } => {
+    let rest = line;
+    let quoteDepth = 0;
+    for (;;) {
+      const quote = /^[ \t]{0,3}>[ \t]?/.exec(rest)?.[0];
+      if (!quote) break;
+      quoteDepth += 1;
+      rest = rest.slice(quote.length);
+    }
+    return { quoteDepth, rest };
+  };
+
+  const fenceMarker = (line: string): string | undefined => {
+    let { rest } = lineContext(line);
+    const list = /^[ \t]*(?:[-+*]|\d+[.)])[ \t]+/.exec(rest)?.[0];
+    if (list) rest = rest.slice(list.length);
+    else if (listIndent > 0 && rest.startsWith(' '.repeat(listIndent))) {
+      rest = rest.slice(listIndent);
+    }
+    return /^ {0,3}(`{3,}|~{3,})/.exec(rest)?.[1];
+  };
+
+  for (const line of content.split('\n')) {
+    if (fenceWidth === 0) {
+      const { quoteDepth, rest } = lineContext(line);
+      const list = /^([ ]*)(?:[-+*]|\d+[.)])([ \t]+)/.exec(rest);
+      if (list) {
+        listIndent = list[0].length;
+        listQuoteDepth = quoteDepth;
+      } else if (rest.trim() && (quoteDepth !== listQuoteDepth || rest.search(/\S/) < listIndent)) {
+        listIndent = 0;
+        listQuoteDepth = quoteDepth;
+      }
+      const opening = fenceMarker(line);
+      if (!opening) {
+        plain.push(line);
+        continue;
+      }
+      flushPlain();
+      fenceCharacter = opening[0] ?? '';
+      fenceWidth = opening.length;
+      output.push(line);
+      continue;
+    }
+
+    output.push(line);
+    const closing = fenceMarker(line);
+    const closingSuffix = closing ? line.slice(line.lastIndexOf(closing) + closing.length) : line;
+    if (
+      closing?.[0] === fenceCharacter &&
+      closing.length >= fenceWidth &&
+      closingSuffix.trim() === ''
+    ) {
+      fenceCharacter = '';
+      fenceWidth = 0;
+    }
+  }
+  flushPlain();
+  return output.join('\n');
+}
+
+function cleanMarkdownOutsideFences(content: string, terminalType: TerminalType): string {
+  let c = content;
 
   c = c.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
   c = c.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
@@ -487,7 +586,7 @@ export function cleanMarkdownContent(
 
   c = c.replace(/==([^=\n]+)==/g, '**$1**');
 
-  if (type === 'basic') {
+  if (terminalType === 'basic') {
     c = c.replace(
       /!\[([^\]]*)\]\([^)]+\)/g,
       (_match: string, alt: string) =>
@@ -503,16 +602,32 @@ export function cleanMarkdownContent(
 
   c = c.replace(/<!--[\s\S]*?-->/g, '');
 
-  c = c.replace(/<br\s*\/?>/gi, '\n'); // void: line break
-  c = c.replace(/<(?:hr|input|link|meta)\b[^>]*\/?>/gi, ''); // void: discard
+  c = replaceHtmlCheckboxes(c, terminalType);
+  c = expandHtmlDetails(c);
+  c = c.replace(/<br\s*\/?>/gi, '\n');
+  c = c.replace(/<(?:hr|input|link|meta)\b[^>]*\/?>/gi, '');
   c = c.replace(/<([a-z][a-z0-9]*)\b[^>]*>([\s\S]*?)<\/\1>/gi, '$2');
   c = c.replace(/<[a-z][a-z0-9]*\b[^>]*\/>/gi, '');
   c = c.replace(/<\/(?:Split|TimelineEntry)>/gi, '');
 
-  c = c.replace(/^(\s*[-*+] )\[x\] /gim, '$1☑ ');
-  c = c.replace(/^(\s*[-*+] )\[ \] /gm, '$1☐ ');
+  if (terminalType === 'basic') {
+    c = c.replace(/^(\s*(?:[-*+]|\d+[.)]) )\[x\]/gim, '$1[x]');
+  } else {
+    c = c.replace(/^(\s*(?:[-*+]|\d+[.)]) )\[x\] /gim, '$1☑ ');
+    c = c.replace(/^(\s*(?:[-*+]|\d+[.)]) )\[ \] /gm, '$1☐ ');
+  }
 
-  c = c.replace(/\n{3,}/g, '\n\n');
+  return c.replace(/\n{3,}/g, '\n\n');
+}
+
+export function cleanMarkdownContent(
+  content: string,
+  type: TerminalType = getTerminalType(),
+): string {
+  let c = sanitizeTerminalText(content);
+  c = c.replace(/^---\n[\s\S]*?\n---(?:\n|$)/, '');
+  c = processFencedCodeBlocks(c);
+  c = transformOutsideFencedCodeBlocks(c, (value) => cleanMarkdownOutsideFences(value, type));
 
   return c.trim();
 }
@@ -590,9 +705,9 @@ export interface ReaderDoc {
   links: DocLink[];
 }
 
-export async function loadDocForReader(filePath: string): Promise<ReaderDoc> {
+export async function loadDocForReader(filePath: string, signal?: AbortSignal): Promise<ReaderDoc> {
   ensureMarkedConfigured();
-  const { renderedDoc } = await loadRenderedDoc(filePath);
+  const { renderedDoc } = await loadRenderedDoc(filePath, signal);
 
   const seen = new Set<string>();
   const links: DocLink[] = [];
@@ -668,7 +783,10 @@ function listedDoc(item: DocItem, metadata?: DocMetadata): ListedDoc {
   };
 }
 
-export async function fetchDocMetadata(items: readonly DocItem[]): Promise<ListedDoc[]> {
+export async function fetchDocMetadata(
+  items: readonly DocItem[],
+  signal?: AbortSignal,
+): Promise<ListedDoc[]> {
   const results = items.map((item) => listedDoc(item));
   let nextIndex = 0;
 
@@ -679,9 +797,15 @@ export async function fetchDocMetadata(items: readonly DocItem[]): Promise<Liste
       if (index >= items.length) return;
       const item = items[index];
       if (!item) continue;
+      if (signal?.aborted) {
+        throw signal.reason instanceof Error
+          ? signal.reason
+          : new DOMException('Aborted', 'AbortError');
+      }
       try {
-        results[index] = listedDoc(item, await loadDocMetadata(item.path));
-      } catch {
+        results[index] = listedDoc(item, await loadDocMetadata(item.path, signal));
+      } catch (error) {
+        if (signal?.aborted) throw error;
         results[index] = listedDoc(item);
       }
     }
@@ -692,8 +816,11 @@ export async function fetchDocMetadata(items: readonly DocItem[]): Promise<Liste
   return results;
 }
 
-export async function fetchSectionMetadata(section: DocSection): Promise<DocSection> {
-  const files = await fetchDocMetadata(section.files);
+export async function fetchSectionMetadata(
+  section: DocSection,
+  signal?: AbortSignal,
+): Promise<DocSection> {
+  const files = await fetchDocMetadata(section.files, signal);
   return { ...section, count: files.length, files };
 }
 
@@ -711,8 +838,10 @@ function searchDoc(result: DocsSearchResult): SearchDoc {
   };
 }
 
-export async function searchDocuments(query: string): Promise<SearchDoc[]> {
-  return (await docsClient.search(query, { limit: 20 })).map(searchDoc);
+export async function searchDocuments(query: string, signal?: AbortSignal): Promise<SearchDoc[]> {
+  return (
+    await runDocsClientOperation(signal, (client) => client.search(query, { limit: 20 }))
+  ).map(searchDoc);
 }
 
 export function buildSections(all: DocItem[]): DocSection[] {
@@ -749,12 +878,12 @@ export function getArchivedGroups(files: ListedDoc[]): Map<string, ListedDoc[]> 
   return groups;
 }
 
-export async function fetchAllDocs(): Promise<DocItem[]> {
-  return docsClient.listAll();
+export async function fetchAllDocs(signal?: AbortSignal): Promise<DocItem[]> {
+  return runDocsClientOperation(signal, (client) => client.listAll());
 }
 
-export async function fetchSections(): Promise<DocSection[]> {
-  return buildSections(await fetchAllDocs());
+export async function fetchSections(signal?: AbortSignal): Promise<DocSection[]> {
+  return buildSections(await fetchAllDocs(signal));
 }
 
 async function loadSections(): Promise<DocSection[] | null> {
@@ -1014,33 +1143,58 @@ async function viewMarkdownFile(filePath: string): Promise<void> {
   }
 }
 
-export async function openDocsInBrowser(path?: string): Promise<boolean> {
+export async function openDocsInBrowser(path?: string, signal?: AbortSignal): Promise<boolean> {
   const trans = t();
   const s = createSpinner(trans.docs.opening);
+  let url = docsUrlFromPath(path);
   try {
-    let route = path ? docsRouteFromPath(path) : '';
     if (path) {
       try {
-        route = (await loadDocMetadata(path)).route;
+        url = docsUrlFromRoute((await loadDocMetadata(path, signal)).route);
       } catch {
-        route = docsRouteFromPath(path);
+        if (signal?.aborted) {
+          s.stop();
+          return false;
+        }
+        url = docsUrlFromPath(path);
       }
     }
-    const encodedRoute = route
-      .split('/')
-      .map((segment) => encodeURIComponent(segment))
-      .join('/');
-    const url = path ? `${URLS.docs}${encodedRoute}` : URLS.docs;
-    await open(url);
+    if (signal?.aborted) {
+      s.stop();
+      return false;
+    }
+    if (!(await launchBrowserUrl(url))) throw new Error('Browser launcher failed');
+    if (signal?.aborted) {
+      s.stop();
+      return false;
+    }
     s.stop(trans.docs.browserOpened);
     console.log();
     return true;
   } catch {
+    if (signal?.aborted) {
+      s.stop();
+      return false;
+    }
     s.error(trans.docs.browserError);
-    console.log(chalk.gray(`  ${trans.docs.browserErrorHint}`));
+    console.log(chalk.gray(`  ${fmt(t().links.openManually, { url })}`));
     console.log();
     return false;
   }
+}
+
+function docsUrlFromRoute(route: string): string {
+  const safeRoute = sanitizeTerminalLine(route);
+  if (!safeRoute) return URLS.docs;
+  const encodedRoute = safeRoute
+    .split('/')
+    .map((segment) => encodeURIComponent(segment))
+    .join('/');
+  return `${URLS.docs}${encodedRoute}`;
+}
+
+export function docsUrlFromPath(path?: string): string {
+  return path ? docsUrlFromRoute(docsRouteFromPath(sanitizeTerminalLine(path))) : URLS.docs;
 }
 
 export function docsRouteFromPath(path: string): string {

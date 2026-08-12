@@ -4,7 +4,6 @@ const VIM_TO_SEQ: Record<string, Buffer> = {
   l: Buffer.from('\r'),
   g: Buffer.from('\u001b[H'),
   G: Buffer.from('\u001b[F'),
-  q: Buffer.from('\u0003'),
 };
 
 type StreamEmit = (event: string | symbol, ...args: unknown[]) => boolean;

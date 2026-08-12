@@ -21,6 +21,19 @@ assert_fails_with() {
   fi
 }
 
+assert_plain_output() {
+  local label="$1"
+  shift
+  local stdout_file="$cli_test_root/$label.out"
+  local stderr_file="$cli_test_root/$label.stderr"
+
+  "$@" > "$stdout_file" 2> "$stderr_file"
+  if [[ -s "$stderr_file" ]] || LC_ALL=C grep -q $'\033' "$stdout_file"; then
+    echo "$label emitted color or an unexpected warning" >&2
+    exit 1
+  fi
+}
+
 node dist/index.js lang en > /dev/null
 
 version_output="$(node dist/index.js --version)"
@@ -39,14 +52,10 @@ if [[ "$help_output" != *"Usage:"* || "$help_output" != *"--heatmap"* ]]; then
   exit 1
 fi
 
-plain_output_file="$cli_test_root/plain.out"
-plain_stderr_file="$cli_test_root/plain.stderr"
-NO_COLOR=1 FORCE_COLOR=3 node dist/index.js about --plain \
-  > "$plain_output_file" 2> "$plain_stderr_file"
-if [[ -s "$plain_stderr_file" ]] || LC_ALL=C grep -q $'\033' "$plain_output_file"; then
-  echo "plain mode emitted color or a color-environment warning" >&2
-  exit 1
-fi
+assert_plain_output plain env NO_COLOR=1 FORCE_COLOR=3 node dist/index.js about --plain
+assert_plain_output theme-color-plain node dist/index.js theme color on --plain
+assert_plain_output stored-color-plain node dist/index.js about --plain
+assert_plain_output theme-reset-plain env NBTCA_COLOR_MODE=on node dist/index.js theme reset --plain
 
 if [[ "$(node dist/index.js roadmap)" != "https://github.com/orgs/nbtca/projects/5" ]]; then
   echo "roadmap output mismatch" >&2
@@ -56,6 +65,11 @@ if [[ "$(node dist/index.js docs)" != "https://docs.nbtca.space" ]]; then
   echo "docs output mismatch" >&2
   exit 1
 fi
+open_down_import='--import=data:text/javascript,import%20cp%20from%20%22node:child_process%22;cp.spawn=()=>{throw%20Error(%22blocked%22)}'
+assert_fails_with browser-website 'Open manually: https://nbtca.space' env NODE_OPTIONS="$open_down_import" node dist/index.js website --open --plain
+assert_fails_with browser-github 'Open manually: https://github.com/nbtca' env NODE_OPTIONS="$open_down_import" node dist/index.js github --open --plain
+assert_fails_with browser-roadmap 'Open manually: https://github.com/orgs/nbtca/projects/5' env NODE_OPTIONS="$open_down_import" node dist/index.js roadmap --open --plain
+assert_fails_with browser-repair 'Open manually: https://nbtca.space/repair' env NODE_OPTIONS="$open_down_import" node dist/index.js repair --open --plain
 
 node dist/index.js theme icon ascii > /dev/null
 if ! grep -Fq '"iconMode": "ascii"' "$cli_test_root/config/nbtca/preferences.json"; then
@@ -70,6 +84,23 @@ assert_fails_with status-interval-bounds '--interval=<' node dist/index.js statu
 assert_fails_with status-timeout-bounds '--timeout=<' node dist/index.js status --timeout=500
 assert_fails_with status-retries-bounds '--retries=<' node dist/index.js status --retries=9
 assert_fails_with events-next-format '--next=<number>' node dist/index.js events --next=1x
+assert_fails_with events-heatmap-today '--heatmap cannot be combined' node dist/index.js events --heatmap --today
+assert_fails_with events-heatmap-week '--heatmap cannot be combined' node dist/index.js events --heatmap --week
+assert_fails_with events-heatmap-month '--heatmap cannot be combined' node dist/index.js events --heatmap --month
+assert_fails_with events-heatmap-next '--heatmap cannot be combined' node dist/index.js events --heatmap --next=1
+assert_fails_with events-heatmap-search '--heatmap cannot be combined' node dist/index.js events --heatmap --search=ca
+assert_fails_with events-range-today-week 'Choose only one event range' node dist/index.js events --today --week
+assert_fails_with events-range-today-month 'Choose only one event range' node dist/index.js events --today --month
+assert_fails_with events-range-week-month 'Choose only one event range' node dist/index.js events --week --month
+future_date="$(node -e 'const value = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10).replaceAll("-", ""); process.stdout.write(value)')"
+legal_events_import="--import=data:text/javascript,globalThis.fetch=async()=>new%20Response(%22BEGIN:VCALENDAR%5CnVERSION:2.0%5CnPRODID:-//nbtca//contract//EN%5CnBEGIN:VEVENT%5CnUID:cli-contract-sentinel%5CnDTSTART;VALUE=DATE:$future_date%5CnSUMMARY:CLI%20contract%20sentinel%5CnLOCATION:fixture%5CnEND:VEVENT%5CnEND:VCALENDAR%22,{status:200})"
+legal_events_file="$cli_test_root/legal-events.json"
+NODE_OPTIONS="$legal_events_import" node dist/index.js events --search=sentinel --next=1 --json > "$legal_events_file"
+node -e '
+  const fs = require("node:fs");
+  const events = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+  if (events.length !== 1 || events[0]?.uid !== "cli-contract-sentinel") process.exit(1);
+' "$legal_events_file"
 assert_fails_with status-interval-format '--interval=<' node dist/index.js status --watch --interval=3.5
 assert_fails_with status-timeout-format '--timeout=<' node dist/index.js status --timeout=1000ms
 assert_fails_with status-retries-format '--retries=<' node dist/index.js status --retries=1x
@@ -80,6 +111,10 @@ assert_fails_with url-arguments 'Unexpected arguments for roadmap.' node dist/in
 assert_fails_with lang-arguments 'Unexpected arguments for lang.' node dist/index.js lang en extra
 assert_fails_with theme-arguments 'Unexpected arguments for theme.' node dist/index.js theme reset extra
 assert_fails_with update-arguments 'Unexpected arguments for update.' node dist/index.js update extra
+update_down_import='--import=data:text/javascript,globalThis.fetch=async()=>new%20Response(null,{status:503})'
+assert_fails_with update-network 'Could not check for updates' env NODE_OPTIONS="$update_down_import" node dist/index.js update --plain
+update_reject_import='--import=data:text/javascript,globalThis.fetch=async()=>{throw%20Error(%22offline%22)}'
+assert_fails_with update-reject 'Could not check for updates' env NODE_OPTIONS="$update_reject_import" node dist/index.js update --plain
 assert_fails_with version-arguments 'Unexpected arguments for version.' node dist/index.js version extra
 assert_fails_with help-arguments 'Unexpected arguments for help.' node dist/index.js help extra
 

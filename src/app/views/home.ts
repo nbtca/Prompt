@@ -215,6 +215,7 @@ export const homeView = {
   },
 
   async load(ctx: AppContext): Promise<void> {
+    if (ctx.signal?.aborted) return;
     const weekAheadInfo = peekWeekAheadInfo();
     try {
       data = {
@@ -227,11 +228,13 @@ export const homeView = {
     } catch {
       data = { loading: true };
     }
+    if (ctx.signal?.aborted) return;
     ctx.rerender();
 
     const HOME_EVENT_FETCH_CAP = 15;
     try {
-      const cal = await loadCalendarOrThrow();
+      const cal = await loadCalendarOrThrow(ctx.signal);
+      if (ctx.signal?.aborted) return;
       const now = new Date();
       const items = cal.upcoming({ days: 30 }).slice(0, HOME_EVENT_FETCH_CAP).map(toDisplayEvent);
       const eventLines = items.map((e) => renderEventBrief(e, now));
@@ -248,10 +251,13 @@ export const homeView = {
       }
       data = weekAhead ? { ...data, eventLines, weekAhead } : { ...data, eventLines };
     } catch {
+      if (ctx.signal?.aborted) return;
       data = { ...data, eventsLoadFailed: true };
     } finally {
-      data = { ...data, loading: false };
-      ctx.rerender();
+      if (!ctx.signal?.aborted) {
+        data = { ...data, loading: false };
+        ctx.rerender();
+      }
     }
   },
 

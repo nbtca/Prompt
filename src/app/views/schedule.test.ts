@@ -8,6 +8,10 @@ import type * as CalendarModule from '../../features/calendar.js';
 
 const sessionStoreClear = vi.fn();
 const sessionStoreLoad = vi.fn();
+const sessionStoreSave = vi.fn();
+const restoreNbtSessionMock = vi.fn();
+const loginWithStudentPasswordMock = vi.fn();
+const sessionClose = vi.fn();
 const setVimKeysActiveMock = vi.hoisted(() => vi.fn());
 const currentAcademicWindowMock = vi.hoisted(() => vi.fn().mockReturnValue(null));
 const inferWeekOneMondayMock = vi.hoisted(() => vi.fn().mockReturnValue(null));
@@ -31,7 +35,7 @@ vi.mock('../../auth/session-store.js', () => ({
   createSessionStore: () => ({
     filePath: '/tmp/fake-session.json',
     load: sessionStoreLoad,
-    save: vi.fn(),
+    save: sessionStoreSave,
     clear: sessionStoreClear,
   }),
 }));
@@ -40,22 +44,25 @@ vi.mock('../../auth/nbt-auth.js', async (importOriginal) => {
   const actual = await importOriginal<typeof NbtAuthModule>();
   return {
     ...actual,
-    restoreNbtSession: vi.fn().mockResolvedValue({
-      timetableTransport: {},
-      snapshot: vi.fn(),
-      close: vi.fn(),
-    }),
+    restoreNbtSession: restoreNbtSessionMock,
+    loginWithStudentPassword: loginWithStudentPasswordMock,
   };
 });
 
 const listTerms = vi.fn();
+const fetchTerm = vi.fn();
 vi.mock('@nbtca/nbtcal/timetable', async (importOriginal) => {
   const actual = await importOriginal<typeof TimetableModule>();
   return {
     ...actual,
-    createNbtTimetableClient: () => ({ listTerms, fetchTerm: vi.fn() }),
+    createNbtTimetableClient: () => ({ listTerms, fetchTerm }),
   };
 });
+
+const loadWeekOneMock = vi.fn();
+const saveWeekOneMock = vi.fn();
+const saveTimetableCacheMock = vi.fn();
+const saveCurrentPointerMock = vi.fn();
 
 vi.mock('../../features/schedule-store.js', async (importOriginal) => {
   const actual = await importOriginal<typeof ScheduleStoreModule>();
@@ -63,6 +70,10 @@ vi.mock('../../features/schedule-store.js', async (importOriginal) => {
     ...actual,
     loadCurrentPointer: vi.fn().mockReturnValue(null),
     loadTimetableCache: vi.fn().mockReturnValue(null),
+    loadWeekOne: loadWeekOneMock,
+    saveWeekOne: saveWeekOneMock,
+    saveTimetableCache: saveTimetableCacheMock,
+    saveCurrentPointer: saveCurrentPointerMock,
   };
 });
 
@@ -89,7 +100,7 @@ const { stripAnsi, visualWidth } = await import('../../core/text.js');
 const { loadCurrentPointer, loadTimetableCache } = await import('../../features/schedule-store.js');
 const { t } = await import('../../i18n/index.js');
 import type { AppContext } from '../view.js';
-import type { Timetable } from '@nbtca/nbtcal/timetable';
+import type { AcademicTerm, Timetable } from '@nbtca/nbtcal/timetable';
 
 beforeAll(() => {
   setLanguage('en');
@@ -99,6 +110,11 @@ beforeAll(() => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  restoreNbtSessionMock.mockResolvedValue({
+    timetableTransport: {},
+    snapshot: vi.fn(),
+    close: sessionClose,
+  });
 });
 
 function fakeCtx(): AppContext {
@@ -534,5 +550,184 @@ describe('scheduleView — hub navigation', () => {
       const out = stripAnsi(scheduleView.render(ctx).join('\n'));
       expect(out).toContain(t().timetable.hubWeek); // standalone full-screen week mode
     });
+  });
+});
+
+describe('scheduleView lifecycle', () => {
+  const persisted = {
+    version: 1 as const,
+    provider: 'nbt-webvpn' as const,
+    jar: { cookies: [] },
+    authenticatedAt: '2026-01-01T00:00:00Z',
+    validatedAt: '2026-01-01T00:00:00Z',
+  };
+  const term: AcademicTerm = {
+    academicYear: '2026',
+    academicYearLabel: '2026-2027',
+    semester: '3',
+    semesterLabel: '1',
+    current: true,
+  };
+  const timetable: Timetable = {
+    term,
+    meetings: [],
+    periods: [],
+    calendarDays: [],
+    warnings: [],
+    unresolvedItems: [],
+    fetchedAt: new Date('2026-09-07T00:00:00Z'),
+  };
+
+  function deferred<T>(): {
+    promise: Promise<T>;
+    resolve(value: T): void;
+    reject(error: unknown): void;
+  } {
+    let resolve!: (value: T) => void;
+    let reject!: (error: unknown) => void;
+    const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+      resolve = resolvePromise;
+      reject = rejectPromise;
+    });
+    return { promise, resolve, reject };
+  }
+
+  function abortableCtx(controller: AbortController) {
+    const rerender = vi.fn();
+    const ctx: AppContext = {
+      size: { rows: 24, cols: 80 },
+      bodyRows: 19,
+      signal: controller.signal,
+      rerender,
+      resetScroll: vi.fn(),
+      runClassic: vi.fn(async (fn: () => Promise<void>) => {
+        await fn();
+      }),
+      quit: vi.fn(),
+    };
+    return { ctx, rerender };
+  }
+
+  function preparePersistedSession(): void {
+    vi.mocked(loadCurrentPointer).mockReturnValue(null);
+    vi.mocked(loadTimetableCache).mockReturnValue(null);
+    sessionStoreLoad.mockReturnValue(persisted);
+    loadWeekOneMock.mockReturnValue('2026-09-07');
+  }
+
+  it('aborts listTerms without late state or session writes', async () => {
+    preparePersistedSession();
+    const pendingTerms = deferred<AcademicTerm[]>();
+    listTerms.mockImplementationOnce(() => pendingTerms.promise);
+    const controller = new AbortController();
+    const { ctx, rerender } = abortableCtx(controller);
+    const loading = scheduleView.load(ctx);
+    await vi.waitFor(() => {
+      expect(listTerms).toHaveBeenCalledWith({ signal: controller.signal });
+    });
+    const rendersBeforeAbort = rerender.mock.calls.length;
+
+    controller.abort();
+    const disposing = scheduleView.dispose();
+    pendingTerms.reject(new DOMException('Aborted', 'AbortError'));
+    await Promise.allSettled([loading, disposing]);
+
+    expect(sessionStoreSave).not.toHaveBeenCalled();
+    expect(saveTimetableCacheMock).not.toHaveBeenCalled();
+    expect(saveCurrentPointerMock).not.toHaveBeenCalled();
+    expect(rerender).toHaveBeenCalledTimes(rendersBeforeAbort);
+    expect(sessionClose).toHaveBeenCalledOnce();
+  });
+
+  it('invalidates a pending refresh when the cached hub logs out', async () => {
+    preparePersistedSession();
+    vi.mocked(loadCurrentPointer).mockReturnValue({
+      termKey: '2026-3',
+      weekOneMonday: '2026-09-07',
+    });
+    vi.mocked(loadTimetableCache).mockReturnValue(timetable);
+    const pendingTerms = deferred<AcademicTerm[]>();
+    listTerms.mockImplementationOnce(() => pendingTerms.promise);
+    const controller = new AbortController();
+    const { ctx } = abortableCtx(controller);
+    const loading = scheduleView.load(ctx);
+    await vi.waitFor(() => {
+      expect(listTerms).toHaveBeenCalledWith({ signal: controller.signal });
+    });
+
+    scheduleView.handleKey('x', ctx);
+    pendingTerms.resolve([term]);
+    await loading;
+    await vi.waitFor(() => {
+      expect(sessionClose).toHaveBeenCalledOnce();
+    });
+
+    expect(sessionStoreClear).toHaveBeenCalledOnce();
+    expect(fetchTerm).not.toHaveBeenCalled();
+    expect(sessionStoreSave).not.toHaveBeenCalled();
+    expect(saveTimetableCacheMock).not.toHaveBeenCalled();
+    expect(saveCurrentPointerMock).not.toHaveBeenCalled();
+  });
+
+  it('does not persist a timetable that resolves after fetchTerm was aborted', async () => {
+    preparePersistedSession();
+    listTerms.mockResolvedValueOnce([term]);
+    const pendingTimetable = deferred<Timetable>();
+    fetchTerm.mockImplementationOnce(() => pendingTimetable.promise);
+    const controller = new AbortController();
+    const { ctx, rerender } = abortableCtx(controller);
+    const loading = scheduleView.load(ctx);
+    await vi.waitFor(() => {
+      expect(fetchTerm).toHaveBeenCalledWith(term, { signal: controller.signal });
+    });
+    const rendersBeforeAbort = rerender.mock.calls.length;
+
+    controller.abort();
+    const disposing = scheduleView.dispose();
+    pendingTimetable.resolve(timetable);
+    await Promise.allSettled([loading, disposing]);
+
+    expect(saveTimetableCacheMock).not.toHaveBeenCalled();
+    expect(saveCurrentPointerMock).not.toHaveBeenCalled();
+    expect(rerender).toHaveBeenCalledTimes(rendersBeforeAbort);
+    expect(sessionClose).toHaveBeenCalledOnce();
+  });
+
+  it('closes a login that resolves after abort without saving its session', async () => {
+    vi.mocked(loadCurrentPointer).mockReturnValue(null);
+    vi.mocked(loadTimetableCache).mockReturnValue(null);
+    sessionStoreLoad.mockReturnValue(null);
+    const pendingLogin = deferred<{
+      timetableTransport: Record<string, never>;
+      snapshot: ReturnType<typeof vi.fn>;
+      close: ReturnType<typeof vi.fn>;
+    }>();
+    loginWithStudentPasswordMock.mockImplementationOnce(() => pendingLogin.promise);
+    const controller = new AbortController();
+    const { ctx, rerender } = abortableCtx(controller);
+    await scheduleView.load(ctx);
+    scheduleView.handleKey('\r', ctx);
+    scheduleView.handleKey('20260001', ctx);
+    scheduleView.handleKey('\r', ctx);
+    scheduleView.handleKey('password', ctx);
+    scheduleView.handleKey('\r', ctx);
+    expect(loginWithStudentPasswordMock).toHaveBeenCalledWith('20260001', 'password', {
+      signal: controller.signal,
+    });
+    const rendersBeforeAbort = rerender.mock.calls.length;
+
+    controller.abort();
+    await scheduleView.dispose();
+    pendingLogin.resolve({
+      timetableTransport: {},
+      snapshot: vi.fn(),
+      close: sessionClose,
+    });
+    await vi.waitFor(() => {
+      expect(sessionClose).toHaveBeenCalledOnce();
+    });
+
+    expect(sessionStoreSave).not.toHaveBeenCalled();
+    expect(rerender).toHaveBeenCalledTimes(rendersBeforeAbort);
   });
 });

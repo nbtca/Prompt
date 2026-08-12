@@ -124,7 +124,6 @@ export interface Translations {
     opening: string;
     browserOpened: string;
     browserError: string;
-    browserErrorHint: string;
     retry: string;
     endOfDocument: string;
     githubRateLimited: string;
@@ -154,6 +153,7 @@ export interface Translations {
     opening: string;
     opened: string;
     error: string;
+    openManually: string;
   };
   status: {
     checking: string;
@@ -373,6 +373,8 @@ export interface Translations {
     invalidFlagHint: string;
     invalidLang: string;
     invalidNext: string;
+    eventsHeatmapConflict: string;
+    eventsRangeConflict: string;
     unexpectedArguments: string;
     requiresTty: string;
     requiresTtyHint: string;

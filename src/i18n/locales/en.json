@@ -113,7 +113,6 @@
     "opening": "Opening browser...",
     "browserOpened": "Knowledge base opened in browser",
     "browserError": "Failed to open browser",
-    "browserErrorHint": "Please visit manually: https://docs.nbtca.space",
     "retry": "Retry?",
     "tocTitle": "Table of Contents",
     "tableHint": "diagrams and tables render better in browser",
@@ -142,7 +141,8 @@
     "repair": "Repair Service",
     "opening": "Opening...",
     "opened": "Opened in browser",
-    "error": "Failed to open browser"
+    "error": "Failed to open browser",
+    "openManually": "Open manually: {url}"
   },
   "status": {
     "checking": "Checking service status...",
@@ -362,6 +362,8 @@
     "invalidFlagHint": "Run `nbtca --help` to see command usage.",
     "invalidLang": "Invalid language. Use `zh` or `en`.",
     "invalidNext": "Invalid --next value. Use --next=<number> (>= 1).",
+    "eventsHeatmapConflict": "--heatmap cannot be combined with --today, --week, --month, --next, or --search.",
+    "eventsRangeConflict": "Choose only one event range: --today, --week, or --month.",
     "unexpectedArguments": "Unexpected arguments for {command}.",
     "requiresTty": "Interactive mode requires a TTY terminal.",
     "requiresTtyHint": "Use `nbtca --help` for command mode."

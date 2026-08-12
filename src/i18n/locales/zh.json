@@ -113,7 +113,6 @@
     "opening": "正在打开浏览器...",
     "browserOpened": "已在浏览器中打开知识库",
     "browserError": "无法打开浏览器",
-    "browserErrorHint": "请手动访问: https://docs.nbtca.space",
     "retry": "是否重试？",
     "tocTitle": "目录",
     "tableHint": "图表与表格在浏览器中效果更佳",
@@ -142,7 +141,8 @@
     "repair": "维修服务",
     "opening": "正在打开...",
     "opened": "已在浏览器中打开",
-    "error": "无法打开浏览器"
+    "error": "无法打开浏览器",
+    "openManually": "请手动打开: {url}"
   },
   "status": {
     "checking": "正在检查服务状态...",
@@ -362,6 +362,8 @@
     "invalidFlagHint": "运行 `nbtca --help` 查看命令用法。",
     "invalidLang": "无效语言。请使用 `zh` 或 `en`。",
     "invalidNext": "无效的 --next 值。请使用 --next=<数字>（>= 1）。",
+    "eventsHeatmapConflict": "--heatmap 不能与 --today、--week、--month、--next 或 --search 同时使用。",
+    "eventsRangeConflict": "活动时间范围只能选择一个: --today、--week 或 --month。",
     "unexpectedArguments": "{command} 不接受多余参数。",
     "requiresTty": "交互模式需要 TTY 终端。",
     "requiresTtyHint": "使用 `nbtca --help` 查看命令模式。"

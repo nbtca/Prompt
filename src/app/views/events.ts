@@ -106,15 +106,19 @@ export const eventsView = {
   title: t().menu.events,
 
   async load(ctx: AppContext): Promise<void> {
+    if (ctx.signal?.aborted) return;
     state = { mode: 'loading' };
     ctx.rerender();
     try {
-      calendar = await loadCalendarOrThrow();
+      const loadedCalendar = await loadCalendarOrThrow(ctx.signal);
+      if (ctx.signal?.aborted) return;
+      calendar = loadedCalendar;
       goToHub();
     } catch {
+      if (ctx.signal?.aborted) return;
       state = { mode: 'error', errorMessage: t().calendar.error };
     }
-    ctx.rerender();
+    if (!ctx.signal?.aborted) ctx.rerender();
   },
 
   render(ctx: AppContext): string[] {

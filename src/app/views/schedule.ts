@@ -57,6 +57,23 @@ let session: AuthenticatedNbtSession | null = null;
 let client: NbtTimetableClient | null = null;
 let catalog: AcademicTerm[] = [];
 let pendingId = '';
+let lifecycleGeneration = 0;
+const closingSessions = new WeakMap<AuthenticatedNbtSession, Promise<void>>();
+
+function isLifecycleActive(ctx: AppContext, generation: number): boolean {
+  return generation === lifecycleGeneration && ctx.signal?.aborted !== true;
+}
+
+async function closeSession(target: AuthenticatedNbtSession): Promise<void> {
+  let closing = closingSessions.get(target);
+  if (!closing) {
+    closing = Promise.resolve()
+      .then(() => target.close())
+      .catch(() => undefined);
+    closingSessions.set(target, closing);
+  }
+  await closing;
+}
 
 async function releaseSession(target: AuthenticatedNbtSession | null = session): Promise<void> {
   if (!target) return;
@@ -64,9 +81,7 @@ async function releaseSession(target: AuthenticatedNbtSession | null = session):
     session = null;
     client = null;
   }
-  try {
-    await target.close();
-  } catch {}
+  await closeSession(target);
 }
 
 function isTimetableLike(value: unknown): value is Timetable {
@@ -130,12 +145,14 @@ function buildPublicField(): ListField {
 
 const PUBLIC_UPCOMING_FETCH_CAP = 15;
 
-async function goToPublic(ctx: AppContext): Promise<void> {
+async function goToPublic(ctx: AppContext, generation = lifecycleGeneration): Promise<void> {
+  if (!isLifecycleActive(ctx, generation)) return;
   setVimKeysActive(true);
   state = { mode: 'public', publicField: buildPublicField() };
   ctx.rerender();
   try {
-    const cal = await loadCalendarOrThrow();
+    const cal = await loadCalendarOrThrow(ctx.signal);
+    if (!isLifecycleActive(ctx, generation)) return;
     const now = new Date();
     const windowEvents = cal.inRange(addLocalDays(now, -400), addLocalDays(now, 400));
     const publicWindow: AcademicWindow | OnBreak | null = currentAcademicWindow(windowEvents, now);
@@ -146,14 +163,16 @@ async function goToPublic(ctx: AppContext): Promise<void> {
       .map(toDisplayEvent);
     state = { ...state, publicWindow, publicUpcoming };
   } catch {
+    if (!isLifecycleActive(ctx, generation)) return;
     state = { ...state, publicWindow: null };
   }
-  ctx.rerender();
+  if (isLifecycleActive(ctx, generation)) ctx.rerender();
 }
 
-async function tryInferWeekOne(): Promise<string | null> {
+async function tryInferWeekOne(ctx: AppContext, generation: number): Promise<string | null> {
   try {
-    const cal = await loadCalendarOrThrow();
+    const cal = await loadCalendarOrThrow(ctx.signal);
+    if (!isLifecycleActive(ctx, generation)) return null;
     const now = new Date();
     const events = cal.inRange(addLocalDays(now, -400), addLocalDays(now, 400));
     return inferWeekOneMonday(events, now);
@@ -162,18 +181,35 @@ async function tryInferWeekOne(): Promise<string | null> {
   }
 }
 
-async function afterAuthenticated(ctx: AppContext, s: AuthenticatedNbtSession): Promise<void> {
+async function afterAuthenticated(
+  ctx: AppContext,
+  s: AuthenticatedNbtSession,
+  generation: number,
+): Promise<void> {
+  if (!isLifecycleActive(ctx, generation)) {
+    await closeSession(s);
+    return;
+  }
   const hadCache = state.mode === 'hub';
   if (session && session !== s) await releaseSession(session);
+  if (!isLifecycleActive(ctx, generation)) {
+    await closeSession(s);
+    return;
+  }
   session = s;
   client = createNbtTimetableClient(s.timetableTransport, { baseUrl: JWXT_ORIGIN });
   try {
-    catalog = (await client.listTerms()).map(sanitizeAcademicTerm);
+    const nextCatalog = (
+      await client.listTerms(ctx.signal === undefined ? {} : { signal: ctx.signal })
+    ).map(sanitizeAcademicTerm);
+    if (!isLifecycleActive(ctx, generation)) return;
+    catalog = nextCatalog;
     const term = resolveTerm(catalog);
     const key = termKey(term);
     let weekOne = loadWeekOne(key);
     if (!weekOne) {
-      weekOne = await tryInferWeekOne();
+      weekOne = await tryInferWeekOne(ctx, generation);
+      if (!isLifecycleActive(ctx, generation)) return;
       if (weekOne) saveWeekOne(key, weekOne);
     }
     if (!weekOne) {
@@ -191,8 +227,9 @@ async function afterAuthenticated(ctx: AppContext, s: AuthenticatedNbtSession): 
       ctx.rerender();
       return;
     }
-    await fetchAndShowHub(ctx, term, key, weekOne);
+    await fetchAndShowHub(ctx, term, key, weekOne, generation);
   } catch (err) {
+    if (!isLifecycleActive(ctx, generation)) return;
     if (isSessionExpired(err)) {
       createSessionStore().clear();
       await releaseSession(s);
@@ -210,12 +247,16 @@ async function fetchAndShowHub(
   term: AcademicTerm,
   key: string,
   weekOne: string,
+  generation = lifecycleGeneration,
 ): Promise<void> {
-  if (!client) return;
+  if (!client || !isLifecycleActive(ctx, generation)) return;
   state = { mode: 'loading', statusMessage: t().calendar.loading };
   ctx.rerender();
   try {
-    const timetable = sanitizeTimetable(await client.fetchTerm(term));
+    const timetable = sanitizeTimetable(
+      await client.fetchTerm(term, ctx.signal === undefined ? {} : { signal: ctx.signal }),
+    );
+    if (!isLifecycleActive(ctx, generation)) return;
     const schedule = createTimetableSchedule(timetable, { weekOneMonday: weekOne });
     saveTimetableCache(key, timetable);
     saveCurrentPointer(key, weekOne);
@@ -228,6 +269,7 @@ async function fetchAndShowHub(
       gridCursor: defaultGridCursor(schedule.weekdayAt(new Date()), timetable.periods),
     };
   } catch (err) {
+    if (!isLifecycleActive(ctx, generation)) return;
     if (isSessionExpired(err)) {
       createSessionStore().clear();
       await releaseSession();
@@ -236,26 +278,32 @@ async function fetchAndShowHub(
       state = { mode: 'error', errorMessage: safeMessage(err) };
     }
   }
-  ctx.rerender();
+  if (isLifecycleActive(ctx, generation)) ctx.rerender();
 }
 
-async function refreshFromNetwork(ctx: AppContext): Promise<void> {
+async function refreshFromNetwork(ctx: AppContext, generation: number): Promise<void> {
+  if (!isLifecycleActive(ctx, generation)) return;
   const hadCache = state.mode === 'hub';
   try {
     const store = createSessionStore();
     const persisted = store.load();
     if (!persisted) {
-      if (!hadCache) await goToPublic(ctx);
+      if (!hadCache) await goToPublic(ctx, generation);
       return;
     }
     const restored = await restoreNbtSession(persisted);
-    await afterAuthenticated(ctx, restored);
+    if (!isLifecycleActive(ctx, generation)) {
+      await closeSession(restored);
+      return;
+    }
+    await afterAuthenticated(ctx, restored, generation);
   } catch (err) {
+    if (!isLifecycleActive(ctx, generation)) return;
     if (!hadCache) {
       if (err instanceof AuthError && isSessionExpired(err)) {
         createSessionStore().clear();
       }
-      await goToPublic(ctx);
+      await goToPublic(ctx, generation);
     }
   }
 }
@@ -265,6 +313,8 @@ export const scheduleView = {
   title: t().timetable.menuEntry,
 
   async load(ctx: AppContext): Promise<void> {
+    const generation = ++lifecycleGeneration;
+    if (!isLifecycleActive(ctx, generation)) return;
     const ptr = loadCurrentPointer();
     const cached = readCachedTimetable(ptr ? loadTimetableCache(ptr.termKey) : null);
     if (ptr && cached) {
@@ -280,10 +330,12 @@ export const scheduleView = {
       state = { mode: 'loading' };
     }
     ctx.rerender();
-    await refreshFromNetwork(ctx);
+    await refreshFromNetwork(ctx, generation);
   },
 
   async dispose(): Promise<void> {
+    lifecycleGeneration += 1;
+    setVimKeysActive(true);
     await releaseSession();
   },
 
@@ -381,21 +433,35 @@ export const scheduleView = {
         }
         if (result?.submitted !== undefined) {
           const password = result.submitted;
+          const generation = lifecycleGeneration;
           setVimKeysActive(true);
           state = { mode: 'authenticating', statusMessage: t().timetable.loginWillSave };
           ctx.rerender();
-          void loginWithStudentPassword(pendingId, password)
+          void loginWithStudentPassword(
+            pendingId,
+            password,
+            ctx.signal === undefined ? {} : { signal: ctx.signal },
+          )
             .then(async (s) => {
-              let handedOff = false;
               try {
-                createSessionStore().save(await s.snapshot());
-                handedOff = true;
-                await afterAuthenticated(ctx, s);
-              } finally {
-                if (!handedOff) await releaseSession(s);
+                if (!isLifecycleActive(ctx, generation)) {
+                  await closeSession(s);
+                  return;
+                }
+                const snapshot = await s.snapshot();
+                if (!isLifecycleActive(ctx, generation)) {
+                  await closeSession(s);
+                  return;
+                }
+                createSessionStore().save(snapshot);
+                await afterAuthenticated(ctx, s, generation);
+              } catch (error) {
+                await closeSession(s);
+                throw error;
               }
             })
             .catch((err: unknown) => {
+              if (!isLifecycleActive(ctx, generation)) return;
               goToLoginId(safeMessage(err));
               ctx.rerender();
             });
@@ -424,7 +490,7 @@ export const scheduleView = {
           }
           saveWeekOne(targetKey, trimmed);
           setVimKeysActive(true);
-          void fetchAndShowHub(ctx, targetTerm, targetKey, trimmed);
+          void fetchAndShowHub(ctx, targetTerm, targetKey, trimmed, lifecycleGeneration);
         }
         return;
       }
@@ -501,10 +567,11 @@ export const scheduleView = {
           return;
         }
         if (shortcut.key === 'x') {
+          const generation = ++lifecycleGeneration;
           createSessionStore().clear();
           clearScheduleCache();
           void releaseSession();
-          void goToPublic(ctx);
+          void goToPublic(ctx, generation);
         }
         return;
       }
@@ -572,7 +639,7 @@ export const scheduleView = {
           };
           return;
         }
-        void fetchAndShowHub(ctx, term, newTermKey, weekOne);
+        void fetchAndShowHub(ctx, term, newTermKey, weekOne, lifecycleGeneration);
         return;
       }
       case 'loading':

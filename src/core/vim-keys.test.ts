@@ -30,14 +30,14 @@ describe('vim-keys global reservations', () => {
     return captureTranslatedChunks([raw]);
   }
 
-  it('reserves j/k/l/g/G/q while vim keys are active -- a view must not bind these to anything else', () => {
+  it('translates navigation keys and preserves q as a normal quit key', () => {
     setVimKeysActive(true);
     expect(captureTranslatedKeys('j')).toEqual(['\x1b[B']); // down
     expect(captureTranslatedKeys('k')).toEqual(['\x1b[A']); // up
     expect(captureTranslatedKeys('l')).toEqual(['\r']); // enter/confirm, NOT literal 'l'
     expect(captureTranslatedKeys('g')).toEqual(['\x1b[H']); // home
     expect(captureTranslatedKeys('G')).toEqual(['\x1b[F']); // end
-    expect(captureTranslatedKeys('q')).toEqual(['\x03']); // quit (Ctrl-C)
+    expect(captureTranslatedKeys('q')).toEqual(['q']);
   });
 
   it('translates coalesced Vim keys into separate data events', () => {

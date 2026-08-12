@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
+import type { ChildProcess } from 'node:child_process';
 import { marked } from 'marked';
 import chalk from 'chalk';
 import open from 'open';
@@ -12,16 +13,25 @@ import {
   ensureMarkedConfigured,
   resolveInternalHref,
   docsRouteFromPath,
+  docsUrlFromPath,
   openDocsInBrowser,
   clearDocsCache,
   displayWithGlow,
   loadDocForReader,
+  fetchAllDocs,
 } from './docs.js';
 import { setLanguage } from '../i18n/index.js';
 import { stripAnsi } from '../core/text.js';
 import type { DocItem } from '@nbtca/docs';
 
 const spawnMock = vi.hoisted(() => vi.fn());
+
+function completedLauncher(): ChildProcess {
+  const child = new EventEmitter() as unknown as ChildProcess;
+  Object.defineProperty(child, 'exitCode', { value: 0, configurable: true });
+  Object.defineProperty(child, 'signalCode', { value: null, configurable: true });
+  return child;
+}
 
 vi.mock('open', () => ({ default: vi.fn() }));
 vi.mock('child_process', () => ({
@@ -35,6 +45,7 @@ beforeAll(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.useRealTimers();
   vi.mocked(open).mockClear();
   spawnMock.mockReset();
   clearDocsCache();
@@ -179,6 +190,74 @@ describe('cleanMarkdownContent', () => {
     expect(out).toContain('**Founded:** 2001');
     expect(out).not.toMatch(/<(?:PageHero|LinkCard|Split|Timeline|Figure|FactStrip)/);
   });
+
+  it('preserves budget checkboxes and expanded invoice details', () => {
+    const source = [
+      '| Item | Purchased | Paid |',
+      '| --- | --- | --- |',
+      '| Server | <input type="checkbox" checked disabled> | <input disabled type=checkbox/> |',
+      '',
+      '<details>',
+      '<summary>Invoice information (from Excel)</summary>',
+      '',
+      '| Field | Value |',
+      '| --- | --- |',
+      '| Tax ID | 123456 |',
+      '',
+      '</details>',
+    ].join('\n');
+
+    const basic = cleanMarkdownContent(source, 'basic');
+    expect(basic).toContain('| Server | [x] | [ ] |');
+    expect(basic).toContain('### Invoice information (from Excel)');
+    expect(basic).toContain('| Tax ID | 123456 |');
+    expect(basic).not.toMatch(/<\/?(?:input|details|summary)\b/i);
+
+    const enhanced = cleanMarkdownContent(source, 'enhanced');
+    expect(enhanced).toContain('| Server | ☑ | ☐ |');
+
+    expect(
+      cleanMarkdownContent(
+        '- <input type="checkbox" checked> Ordered\n- <input type="checkbox"> Pending',
+        'basic',
+      ),
+    ).toBe('- [x] Ordered\n- [ ] Pending');
+  });
+
+  it('does not rewrite HTML examples inside fenced code', () => {
+    const sources = [
+      { bodyPrefix: '', closing: '```', opening: '```html' },
+      { bodyPrefix: '', closing: '~~~', opening: '~~~html' },
+      { bodyPrefix: '   ', closing: '   ```', opening: '   ```html' },
+      { bodyPrefix: '> ', closing: '> ```', opening: '> ```html' },
+      { bodyPrefix: '  ', closing: '  ```', opening: '- ```html' },
+      {
+        bodyPrefix: '    ',
+        closing: '    ~~~',
+        opening: '- item\n\n    ~~~html',
+      },
+    ];
+
+    for (const { bodyPrefix, closing, opening } of sources) {
+      const source = [
+        opening,
+        `${bodyPrefix}<input type="checkbox" checked>`,
+        `${bodyPrefix}<details><summary>Invoice</summary>Body</details>`,
+        closing,
+      ].join('\n');
+      const output = cleanMarkdownContent(source, 'basic');
+      expect(output).toContain('<input type="checkbox" checked>');
+      expect(output).toContain('<details><summary>Invoice</summary>Body</details>');
+      expect(output).not.toContain('[x]');
+      expect(output).not.toContain('### Invoice');
+    }
+  });
+
+  it('does not treat an indented code line as an opening fence', () => {
+    const source = 'Intro\n\n    ```\n\n<input type="checkbox" checked>';
+
+    expect(cleanMarkdownContent(source, 'basic')).toContain('[x]');
+  });
 });
 
 describe('resolveInternalHref', () => {
@@ -195,7 +274,18 @@ describe('docsRouteFromPath', () => {
     expect(docsRouteFromPath('concepts/school.md')).toBe('/concepts/school');
   });
 
+  it('builds an encoded, terminal-safe manual URL', () => {
+    expect(docsUrlFromPath('tutorial/manual/team guide\u001B]0;bad\u0007.md')).toBe(
+      'https://docs.nbtca.space/tutorial/manual/team%20guide',
+    );
+    expect(docsUrlFromPath('tutorial/manual/topic?draft#intro')).toBe(
+      'https://docs.nbtca.space/tutorial/manual/topic%3Fdraft%23intro',
+    );
+    expect(docsUrlFromPath('')).toBe('https://docs.nbtca.space');
+  });
+
   it('opens an index document with the route returned by the docs client', async () => {
+    vi.mocked(open).mockResolvedValueOnce(completedLauncher());
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
@@ -217,6 +307,41 @@ describe('docsRouteFromPath', () => {
     await expect(openDocsInBrowser()).resolves.toBe(false);
 
     log.mockRestore();
+  });
+});
+
+describe('docs request cancellation', () => {
+  it('aborts the underlying client fetch and releases its timeout', async () => {
+    vi.useFakeTimers();
+    let requestSignal: AbortSignal | null | undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_input: string | URL | Request, init?: RequestInit) => {
+        requestSignal = init?.signal;
+        return new Promise<Response>((_resolve, reject) => {
+          requestSignal?.addEventListener(
+            'abort',
+            () => {
+              reject(new DOMException('Aborted', 'AbortError'));
+            },
+            { once: true },
+          );
+        });
+      }),
+    );
+    const lifecycle = new AbortController();
+    const request = fetchAllDocs(lifecycle.signal);
+    await Promise.resolve();
+
+    expect(requestSignal?.aborted).toBe(false);
+    expect(vi.getTimerCount()).toBe(1);
+    lifecycle.abort();
+    await expect(request).rejects.toMatchObject({ name: 'AbortError' });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(requestSignal?.aborted).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
   });
 });
 
