@@ -98,7 +98,7 @@ node -e '
   }
 ' "$status_json_file"
 
-intranet_down_import="--import=data:text/javascript,globalThis.fetch=async(input)=>new%20Response(null,{status:['cloud.nbtca.space','i.nbtca.space'].includes(new%20URL(String(input)).hostname)?503:200})"
+intranet_down_import="--import=data:text/javascript,globalThis.fetch=async(input)=>new%20Response(null,{status:['cloud.nbtca.space','i.nbtca.space'].includes(new%20URL(String(input)).hostname)%3F503%3A200})"
 intranet_output="$(NODE_OPTIONS="$intranet_down_import" node dist/index.js status --plain --timeout=1000 --retries=0)"
 if [[ "$intranet_output" != *"Public services are healthy; intranet availability depends on your network"* ]]; then
   echo "intranet-only failure returned the wrong summary" >&2
