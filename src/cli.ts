@@ -417,7 +417,9 @@ async function runStatusCommand(flags: Set<string>): Promise<boolean> {
     }
 
     const stopController = new AbortController();
+    const isStopped = () => stopController.signal.aborted;
     const onSigint = () => {
+      process.exitCode = 130;
       stopController.abort();
     };
     process.once('SIGINT', onSigint);
@@ -429,8 +431,15 @@ async function runStatusCommand(flags: Set<string>): Promise<boolean> {
     );
 
     try {
-      while (!stopController.signal.aborted) {
-        const services = await checkServices({ timeoutMs, retries });
+      while (!isStopped()) {
+        let services;
+        try {
+          services = await checkServices({ timeoutMs, retries, signal: stopController.signal });
+        } catch (error) {
+          if (isStopped()) break;
+          throw error;
+        }
+        if (isStopped()) break;
         const hasFailures = hasServiceFailures(services);
         const hasIntranetFailures = services.some((service) => service.intranet && !service.ok);
         const health = countServiceHealth(services);

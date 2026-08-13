@@ -29,6 +29,72 @@ export interface ServiceStatus {
 export interface StatusCheckOptions {
   timeoutMs?: number;
   retries?: number;
+  signal?: AbortSignal;
+}
+
+function abortError(signal: AbortSignal): Error {
+  return signal.reason instanceof Error
+    ? signal.reason
+    : new DOMException('The status check was aborted.', 'AbortError');
+}
+
+function cancelResponseBody(response: Response | undefined): void {
+  try {
+    const body = response?.body;
+    if (!body) return;
+    void body.cancel().catch(() => {
+      // Cancellation is best-effort and must not delay status results.
+    });
+  } catch {
+    // A custom transport may expose an inaccessible, locked, or closed body.
+  }
+}
+
+function raceWithSignal<T>(
+  operation: Promise<T>,
+  signal: AbortSignal,
+  onLateValue?: (value: T) => void,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const cleanup = () => {
+      signal.removeEventListener('abort', onAbort);
+    };
+    const onAbort = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(abortError(signal));
+    };
+
+    signal.addEventListener('abort', onAbort, { once: true });
+    void operation
+      .then(
+        (value) => {
+          if (settled) {
+            try {
+              onLateValue?.(value);
+            } catch {
+              // Late cleanup is best-effort.
+            }
+            return;
+          }
+          settled = true;
+          cleanup();
+          resolve(value);
+        },
+        (error: unknown) => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          reject(error instanceof Error ? error : new Error(String(error)));
+        },
+      )
+      .catch(() => {
+        // Both operation outcomes are handled above. This only guards cleanup code.
+      });
+    if (signal.aborted) onAbort();
+  });
 }
 
 function getServiceTargets(): ServiceTarget[] {
@@ -49,24 +115,35 @@ async function checkService(
   name: string,
   url: string,
   timeoutMs: number,
+  signal?: AbortSignal,
 ): Promise<Omit<ServiceStatus, 'group' | 'intranet'>> {
   const start = Date.now();
   const controller = new AbortController();
+  const onAbort = () => {
+    controller.abort(signal?.reason);
+  };
+  signal?.addEventListener('abort', onAbort, { once: true });
+  if (signal?.aborted) onAbort();
   const timeout = setTimeout(() => {
     controller.abort();
   }, timeoutMs);
-  timeout.unref();
   let response: Response | undefined;
   try {
-    response = await fetch(url, {
-      signal: controller.signal,
-      redirect: 'follow',
-      headers: { 'User-Agent': `NBTCA-CLI/${APP_INFO.version}` },
-    });
+    response = await raceWithSignal(
+      fetch(url, {
+        signal: controller.signal,
+        redirect: 'follow',
+        headers: { 'User-Agent': `NBTCA-CLI/${APP_INFO.version}` },
+      }),
+      controller.signal,
+      cancelResponseBody,
+    );
+    if (signal?.aborted) throw abortError(signal);
     const latencyMs = Date.now() - start;
     const ok = response.status >= 200 && response.status < 400;
     return { name, url, ok, statusCode: response.status, latencyMs };
   } catch (err: unknown) {
+    if (signal?.aborted) throw abortError(signal);
     const latencyMs = Date.now() - start;
     const error = sanitizeTerminalLine(
       err instanceof Error
@@ -78,11 +155,8 @@ async function checkService(
     return { name, url, ok: false, latencyMs, error };
   } finally {
     clearTimeout(timeout);
-    try {
-      await response?.body?.cancel();
-    } catch {
-      // The response may already be closed by the runtime.
-    }
+    signal?.removeEventListener('abort', onAbort);
+    cancelResponseBody(response);
   }
 }
 
@@ -90,13 +164,15 @@ async function checkServiceWithRetry(
   target: ServiceTarget,
   timeoutMs: number,
   retries: number,
+  signal?: AbortSignal,
 ): Promise<ServiceStatus> {
-  let lastResult = await checkService(target.name, target.url, timeoutMs);
+  let lastResult = await checkService(target.name, target.url, timeoutMs, signal);
   if (!lastResult.ok) {
     for (let attempt = 0; attempt < retries; attempt++) {
       if (!lastResult.error && !(lastResult.statusCode != null && lastResult.statusCode >= 500))
         break;
-      lastResult = await checkService(target.name, target.url, timeoutMs);
+      if (signal?.aborted) throw abortError(signal);
+      lastResult = await checkService(target.name, target.url, timeoutMs, signal);
       if (lastResult.ok) break;
     }
   }
@@ -110,7 +186,12 @@ async function checkServiceWithRetry(
 export async function checkServices(options: StatusCheckOptions = {}): Promise<ServiceStatus[]> {
   const timeoutMs = options.timeoutMs ?? 6000;
   const retries = options.retries ?? 1;
-  return Promise.all(getServiceTargets().map((t) => checkServiceWithRetry(t, timeoutMs, retries)));
+  if (options.signal?.aborted) throw abortError(options.signal);
+  return Promise.all(
+    getServiceTargets().map((target) =>
+      checkServiceWithRetry(target, timeoutMs, retries, options.signal),
+    ),
+  );
 }
 
 export function serializeServiceStatus(items: ServiceStatus[]) {

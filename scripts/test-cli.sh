@@ -34,6 +34,29 @@ assert_plain_output() {
   fi
 }
 
+assert_plain_exit_code() {
+  local label="$1"
+  local expected_exit_code="$2"
+  shift 2
+  local stdout_file="$cli_test_root/$label.out"
+  local stderr_file="$cli_test_root/$label.stderr"
+  local actual_exit_code
+
+  if "$@" > "$stdout_file" 2> "$stderr_file"; then
+    actual_exit_code=0
+  else
+    actual_exit_code=$?
+  fi
+  if [[ "$actual_exit_code" -ne "$expected_exit_code" ]]; then
+    echo "$label exited with $actual_exit_code, expected $expected_exit_code" >&2
+    exit 1
+  fi
+  if [[ -s "$stderr_file" ]] || LC_ALL=C grep -q $'\033' "$stdout_file"; then
+    echo "$label emitted color or an unexpected warning" >&2
+    exit 1
+  fi
+}
+
 node dist/index.js lang en > /dev/null
 
 version_output="$(node dist/index.js --version)"
@@ -83,6 +106,8 @@ assert_fails_with status-interval '--interval' node dist/index.js status --inter
 assert_fails_with status-interval-bounds '--interval=<' node dist/index.js status --watch --interval=1
 assert_fails_with status-timeout-bounds '--timeout=<' node dist/index.js status --timeout=500
 assert_fails_with status-retries-bounds '--retries=<' node dist/index.js status --retries=9
+watch_cancel_import='--import=data:text/javascript,Object.defineProperty(process.stdin,%22isTTY%22,{value:true,configurable:true});Object.defineProperty(process.stdout,%22isTTY%22,{value:true,configurable:true});setTimeout(()=>process.exit(70),1500).unref();let%20stopped=false;globalThis.fetch=(_input,init)=>{if(!stopped){stopped=true;queueMicrotask(()=>process.emit(%22SIGINT%22))}return%20new%20Promise((_resolve,reject)=>{const%20abort=()=>reject(init.signal.reason);if(init.signal.aborted)abort();else%20init.signal.addEventListener(%22abort%22,abort,{once:true})})}'
+assert_plain_exit_code status-watch-cancel 130 env NODE_OPTIONS="$watch_cancel_import" node dist/index.js status --watch --interval=3 --timeout=20000 --retries=5 --plain
 assert_fails_with events-next-format '--next=<number>' node dist/index.js events --next=1x
 assert_fails_with events-heatmap-today '--heatmap cannot be combined' node dist/index.js events --heatmap --today
 assert_fails_with events-heatmap-week '--heatmap cannot be combined' node dist/index.js events --heatmap --week
@@ -132,6 +157,26 @@ node -e '
     process.exit(1);
   }
 ' "$status_json_file"
+
+ignored_status_import='--import=data:text/javascript,setTimeout(()=>process.exit(70),2500).unref();globalThis.fetch=()=>new%20Promise(()=>{})'
+ignored_status_file="$cli_test_root/status-ignored-signal.json"
+if NODE_OPTIONS="$ignored_status_import" node dist/index.js status --json --timeout=1000 --retries=0 \
+  > "$ignored_status_file" 2> "$cli_test_root/status-ignored-signal.stderr"; then
+  echo "status unexpectedly succeeded when fetch ignored its timeout signal" >&2
+  exit 1
+fi
+node -e '
+  const fs = require("node:fs");
+  const statuses = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+  if (
+    statuses.length !== 8 ||
+    statuses.some((item) => item.ok || item.error !== "Request timed out")
+  ) process.exit(1);
+' "$ignored_status_file"
+if [[ -s "$cli_test_root/status-ignored-signal.stderr" ]]; then
+  echo "status timeout emitted an unexpected warning" >&2
+  exit 1
+fi
 
 intranet_down_import="--import=data:text/javascript,globalThis.fetch=async(input)=>new%20Response(null,{status:['cloud.nbtca.space','i.nbtca.space'].includes(new%20URL(String(input)).hostname)%3F503%3A200})"
 intranet_output="$(NODE_OPTIONS="$intranet_down_import" node dist/index.js status --plain --timeout=1000 --retries=0)"

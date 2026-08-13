@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { cp, copyFile, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -21,6 +21,7 @@ function run(command, args, cwd, options = {}) {
   });
   if (result.error) throw result.error;
   if (result.status !== 0) {
+    process.stdout.write(result.stdout ?? '');
     process.stderr.write(result.stderr ?? '');
     throw new Error(`${command} exited with status ${result.status}`);
   }
@@ -54,11 +55,29 @@ try {
   );
   const dependencyTarballs = ['NBTCA_DOCS_TARBALL', 'NBTCA_NBTCAL_TARBALL'].flatMap((name) => {
     const value = process.env[name];
-    return value ? [value] : [];
+    return value ? [resolve(root, value)] : [];
   });
   run(
     'npm',
     ['install', '--ignore-scripts', ...dependencyTarballs, join(temporaryDirectory, tarballs[0])],
+    temporaryDirectory,
+  );
+
+  // Compile the real Prompt sources against the packages installed above. This
+  // turns NBTCA_DOCS_TARBALL/NBTCA_NBTCAL_TARBALL into a full source contract
+  // check instead of only proving that the CLI can print its version.
+  await cp(join(root, 'src'), join(temporaryDirectory, 'src'), { recursive: true });
+  await copyFile(join(root, 'tsconfig.json'), join(temporaryDirectory, 'tsconfig.json'));
+  run(
+    process.execPath,
+    [
+      join(root, 'node_modules/typescript/bin/tsc'),
+      '--project',
+      'tsconfig.json',
+      '--noEmit',
+      '--typeRoots',
+      join(root, 'node_modules/@types'),
+    ],
     temporaryDirectory,
   );
 

@@ -6,13 +6,23 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
+    name: Check (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     strategy:
+      fail-fast: false
       matrix:
-        node-version: [20, 22]
+        node-version: ['20.12.0', '22', '24']
 
     steps:
       - name: Checkout
@@ -29,3 +39,65 @@ jobs:
 
       - name: Check
         run: npm run check
+
+  package-integration:
+    name: Local package integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout Prompt
+        uses: actions/checkout@v7
+
+      - name: Checkout docs
+        uses: actions/checkout@v7
+        with:
+          repository: nbtca/docs
+          ref: main
+          path: integration/docs
+
+      - name: Checkout nbtcal
+        uses: actions/checkout@v7
+        with:
+          repository: nbtca/nbtcal
+          ref: main
+          path: integration/nbtcal
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '20.12.0'
+          cache: npm
+
+      - name: Install Prompt dependencies
+        run: npm ci
+
+      - name: Pack docs
+        id: docs-package
+        working-directory: integration/docs
+        run: |
+          npm ci
+          npm run build
+          tarball=$(npm pack --silent --pack-destination "$RUNNER_TEMP")
+          echo "tarball=$RUNNER_TEMP/$tarball" >> "$GITHUB_OUTPUT"
+
+      - name: Pack nbtcal
+        id: nbtcal-package
+        working-directory: integration/nbtcal
+        run: |
+          npm ci
+          npm run build
+          tarball=$(npm pack --silent --pack-destination "$RUNNER_TEMP")
+          echo "tarball=$RUNNER_TEMP/$tarball" >> "$GITHUB_OUTPUT"
+
+      - name: Check Prompt against local packages
+        env:
+          NBTCA_DOCS_TARBALL: ${{ steps.docs-package.outputs.tarball }}
+          NBTCA_NBTCAL_TARBALL: ${{ steps.nbtcal-package.outputs.tarball }}
+        run: |
+          npm install --ignore-scripts --no-save --package-lock=false \
+            "$NBTCA_DOCS_TARBALL" "$NBTCA_NBTCAL_TARBALL"
+          npm run typecheck
+          npx vitest run --root src
+          npm run test:cli
+          npm run check:package
