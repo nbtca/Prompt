@@ -77,6 +77,19 @@ describe('renderHeader', () => {
 });
 
 describe('renderFooter', () => {
+  it('right-aligns a scroll position against the same margin as the rule', () => {
+    const line = renderFooter('docs', 80, 5, 'PgUp/PgDn', 1, '40%')[0] ?? '';
+    const plain = stripAnsi(line);
+    expect(plain).toContain('PgUp/PgDn');
+    expect(plain.endsWith('40%   ')).toBe(true);
+    expect(visualWidth(line)).toBe(80);
+  });
+
+  it('drops the position rather than crowding the hint', () => {
+    const narrow = renderFooter('docs', 18, 5, 'PgUp/PgDn', 1, '40%')[0] ?? '';
+    expect(stripAnsi(narrow)).not.toContain('40%');
+  });
+
   it('renders a keyhint line', () => {
     const f = renderFooter('home', 40, 5).map(stripAnsi).join(' ');
     expect(f).toMatch(/q/);
