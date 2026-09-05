@@ -57,6 +57,7 @@ export interface Translations {
     loading: string;
     noEvents: string;
     error: string;
+    stale: string;
     errorHint: string;
     eventsFound: string;
     dateTime: string;

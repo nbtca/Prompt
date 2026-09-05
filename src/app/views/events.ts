@@ -126,6 +126,10 @@ export const eventsView = {
     return renderEvents(state, new Date(), ctx.bodyRows, ctx.size.cols);
   },
 
+  isBusy(): boolean {
+    return state.mode === 'loading';
+  },
+
   capturesInput(): boolean {
     return state.mode === 'search';
   },

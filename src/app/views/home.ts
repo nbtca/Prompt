@@ -20,6 +20,7 @@ import { addLocalDays } from '../../core/calendar-day.js';
 import type { View, AppContext } from '../view.js';
 import { passiveFooterHint } from '../chrome.js';
 import { campusWeekday } from '@nbtca/nbtcal/timetable';
+import { loadingLines } from '../../core/components/spinner.js';
 import type { Calendar } from '@nbtca/nbtcal';
 const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const;
 
@@ -43,10 +44,6 @@ function wrappedIndentedLines(
 
 function panelHeading(label: string, cols: number): string[] {
   return wrappedIndentedLines(label, cols, type.heading);
-}
-
-function loadingLines(cols: number): string[] {
-  return wrappedIndentedLines(t().common.loading, cols, type.hint);
 }
 
 function wrappedRenderedLines(line: string, cols: number): string[] {
@@ -185,7 +182,16 @@ export function renderHome(data: HomeData, now: Date, bodyRows = 100, cols = 80)
     lines.push('');
   }
 
-  lines.push(...panelHeading(trans.menu.events, cols));
+  const eventsStale = data.eventsLoadFailed === true && (data.eventLines?.length ?? 0) > 0;
+  lines.push(
+    ...(eventsStale
+      ? wrappedIndentedLines(
+          `${type.heading(trans.menu.events)}  ${type.hint(`${pickIcon('·', '-')} ${trans.calendar.stale}`)}`,
+          cols,
+          (value) => value,
+        )
+      : panelHeading(trans.menu.events, cols)),
+  );
   if (data.eventLines && data.eventLines.length > 0) {
     const remaining = Number.isFinite(bodyRows)
       ? Math.max(0, Math.floor(bodyRows) - lines.length)
@@ -201,7 +207,7 @@ export function renderHome(data: HomeData, now: Date, bodyRows = 100, cols = 80)
       usedRows += wrapped.length;
     }
   } else if (data.loading) {
-    lines.push(...loadingLines(cols));
+    lines.push(...loadingLines(trans.common.loading, cols));
   } else if (data.eventsLoadFailed) {
     lines.push(...wrappedIndentedLines(trans.calendar.error, cols, type.hint));
   } else {
@@ -278,6 +284,10 @@ export const homeView = {
         ctx.rerender();
       }
     }
+  },
+
+  isBusy(): boolean {
+    return data.loading === true;
   },
 
   render(ctx: AppContext): string[] {

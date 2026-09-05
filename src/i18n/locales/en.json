@@ -46,6 +46,7 @@
     "loading": "Loading event calendar...",
     "noEvents": "No upcoming events",
     "error": "Failed to load event calendar",
+    "stale": "offline, showing last known",
     "errorHint": "Please try again later or visit https://nbtca.space",
     "eventsFound": "events found",
     "dateTime": "Date & Time",

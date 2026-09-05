@@ -22,6 +22,7 @@ export interface View {
   dispose?(): Promise<void> | void;
   render(ctx: AppContext): string[];
   handleKey?(key: string, ctx: AppContext): void;
+  isBusy?(): boolean;
   capturesInput?(): boolean;
   capturesPageKeys?(): boolean;
   handleBack?(ctx: AppContext): boolean;

@@ -503,6 +503,12 @@ export const docsView = {
     return renderDocs(state, ctx.size.cols, ctx.bodyRows);
   },
 
+  isBusy(): boolean {
+    return (
+      state.mode === 'loading' || state.mode === 'searchLoading' || state.mode === 'readerLoading'
+    );
+  },
+
   capturesInput(): boolean {
     return state.mode === 'search';
   },
