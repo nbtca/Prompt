@@ -4,6 +4,7 @@ set -euo pipefail
 cli_test_root="$(mktemp -d)"
 trap 'rm -rf "$cli_test_root"' EXIT
 export XDG_CONFIG_HOME="$cli_test_root/config"
+export XDG_STATE_HOME="$cli_test_root/state"
 
 assert_fails_with() {
   local label="$1"
