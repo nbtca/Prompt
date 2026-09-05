@@ -1,4 +1,11 @@
-import { loadCalendar, FeedFetchError, FeedParseError, eventToICS } from '@nbtca/nbtcal';
+import {
+  fetchFeed,
+  parseCalendar,
+  createCalendar,
+  FeedFetchError,
+  FeedParseError,
+  eventToICS,
+} from '@nbtca/nbtcal';
 import type { Calendar, CalendarEvent, HeatmapBucket } from '@nbtca/nbtcal';
 import chalk from 'chalk';
 import { c, type, space, glyph } from '../core/theme.js';
@@ -15,6 +22,7 @@ import {
 import { t } from '../i18n/index.js';
 import { addLocalDays } from '../core/calendar-day.js';
 import { countdownParts, isCountdownUrgent, buildExportFilename } from './calendar-query.js';
+import { loadFeedCache, saveFeedCache } from './calendar-store.js';
 import { writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 
@@ -56,15 +64,46 @@ function formatTime(date: Date): string {
   return `${hours}:${minutes}`;
 }
 
-export async function loadCalendarOrThrow(signal?: AbortSignal): Promise<Calendar> {
+const MEMO_TTL_MS = 5 * 60 * 1000;
+
+let memo: { calendar: Calendar; fetchedAt: number } | undefined;
+let inFlight: Promise<Calendar> | undefined;
+
+export function peekCalendar(): Calendar | undefined {
+  if (memo) return memo.calendar;
+  const text = loadFeedCache();
+  if (text === null) return undefined;
   try {
-    return await loadCalendar({ timeoutMs: 15000, ...(signal === undefined ? {} : { signal }) });
+    memo = { calendar: createCalendar(parseCalendar(text)), fetchedAt: 0 };
+    return memo.calendar;
+  } catch {
+    return undefined;
+  }
+}
+
+async function refetchCalendar(signal?: AbortSignal): Promise<Calendar> {
+  try {
+    const text = await fetchFeed(undefined, {
+      timeoutMs: 15000,
+      ...(signal === undefined ? {} : { signal }),
+    });
+    memo = { calendar: createCalendar(parseCalendar(text)), fetchedAt: Date.now() };
+    saveFeedCache(text);
+    return memo.calendar;
   } catch (err) {
     const detail = sanitizeTerminalLine(
       err instanceof FeedFetchError || err instanceof FeedParseError ? err.message : String(err),
     );
     throw new Error(`${t().calendar.error}: ${detail}`);
   }
+}
+
+export async function loadCalendarOrThrow(signal?: AbortSignal): Promise<Calendar> {
+  if (memo && Date.now() - memo.fetchedAt < MEMO_TTL_MS) return memo.calendar;
+  inFlight ??= refetchCalendar(signal).finally(() => {
+    inFlight = undefined;
+  });
+  return inFlight;
 }
 
 export function toDisplayEvent(e: CalendarEvent): Event {

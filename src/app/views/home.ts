@@ -7,13 +7,20 @@ import {
   peekTodayLines,
   peekWeekAheadInfo,
   peekUnresolvedCount,
+  type WeekAheadInfo,
 } from '../../features/schedule-view.js';
-import { loadCalendarOrThrow, toDisplayEvent, renderEventBrief } from '../../features/calendar.js';
+import {
+  loadCalendarOrThrow,
+  peekCalendar,
+  toDisplayEvent,
+  renderEventBrief,
+} from '../../features/calendar.js';
 import { weekdayShortLabel } from '../../features/schedule-render.js';
 import { addLocalDays } from '../../core/calendar-day.js';
 import type { View, AppContext } from '../view.js';
 import { passiveFooterHint } from '../chrome.js';
 import { campusWeekday } from '@nbtca/nbtcal/timetable';
+import type { Calendar } from '@nbtca/nbtcal';
 const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const;
 
 export interface HomeData {
@@ -204,6 +211,31 @@ export function renderHome(data: HomeData, now: Date, bodyRows = 100, cols = 80)
   return lines;
 }
 
+const HOME_EVENT_FETCH_CAP = 15;
+
+function calendarSnapshot(
+  cal: Calendar,
+  weekAheadInfo: WeekAheadInfo | null,
+): Pick<HomeData, 'eventLines' | 'weekAhead'> {
+  const now = new Date();
+  const eventLines = cal
+    .upcoming({ days: 30 })
+    .slice(0, HOME_EVENT_FETCH_CAP)
+    .map((event) => renderEventBrief(toDisplayEvent(event), now));
+  if (!weekAheadInfo) return { eventLines };
+  const weekEnd = addLocalDays(weekAheadInfo.weekStartDate, 7);
+  const daySet = new Set(
+    cal.inRange(weekAheadInfo.weekStartDate, weekEnd).map((event) => campusWeekday(event.start)),
+  );
+  return {
+    eventLines,
+    weekAhead: {
+      classDays: weekAheadInfo.classDays,
+      eventDays: WEEKDAYS.map((weekday) => daySet.has(weekday)),
+    },
+  };
+}
+
 let data: HomeData = { loading: true };
 
 export const homeView = {
@@ -228,28 +260,15 @@ export const homeView = {
     } catch {
       data = { loading: true };
     }
+    const cached = peekCalendar();
+    if (cached) data = { ...data, ...calendarSnapshot(cached, weekAheadInfo) };
     if (ctx.signal?.aborted) return;
     ctx.rerender();
 
-    const HOME_EVENT_FETCH_CAP = 15;
     try {
       const cal = await loadCalendarOrThrow(ctx.signal);
       if (ctx.signal?.aborted) return;
-      const now = new Date();
-      const items = cal.upcoming({ days: 30 }).slice(0, HOME_EVENT_FETCH_CAP).map(toDisplayEvent);
-      const eventLines = items.map((e) => renderEventBrief(e, now));
-
-      let weekAhead = data.weekAhead;
-      if (weekAheadInfo) {
-        const weekEnd = addLocalDays(weekAheadInfo.weekStartDate, 7);
-        const weekEvents = cal.inRange(weekAheadInfo.weekStartDate, weekEnd);
-        const daySet = new Set(weekEvents.map((event) => campusWeekday(event.start)));
-        weekAhead = {
-          classDays: weekAheadInfo.classDays,
-          eventDays: WEEKDAYS.map((weekday) => daySet.has(weekday)),
-        };
-      }
-      data = weekAhead ? { ...data, eventLines, weekAhead } : { ...data, eventLines };
+      data = { ...data, ...calendarSnapshot(cal, weekAheadInfo) };
     } catch {
       if (ctx.signal?.aborted) return;
       data = { ...data, eventsLoadFailed: true };
