@@ -31,6 +31,17 @@ describe('routeGlobalKey', () => {
     expect(routeGlobalKey('\x1b[5~', ids, 'events')).toEqual({ scrollBy: -1, handled: true });
     expect(routeGlobalKey('\x1b[6~', ids, 'events')).toEqual({ scrollBy: 1, handled: true });
   });
+  it('Space pages down, like every other terminal reader', () => {
+    expect(routeGlobalKey(' ', ids, 'docs')).toEqual({ scrollBy: 1, handled: true });
+  });
+  it('arrows scroll by a line (vim-keys already maps j/k onto them)', () => {
+    expect(routeGlobalKey('\x1b[A', ids, 'docs')).toEqual({ scrollLines: -1, handled: true });
+    expect(routeGlobalKey('\x1b[B', ids, 'docs')).toEqual({ scrollLines: 1, handled: true });
+  });
+  it('Home/End jump to the ends (vim-keys maps g/G onto them)', () => {
+    expect(routeGlobalKey('\x1b[H', ids, 'docs')).toEqual({ scrollTo: 'top', handled: true });
+    expect(routeGlobalKey('\x1b[F', ids, 'docs')).toEqual({ scrollTo: 'end', handled: true });
+  });
 });
 
 describe('KeyStreamDecoder', () => {

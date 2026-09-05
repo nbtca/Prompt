@@ -148,11 +148,28 @@ export function renderFooter(
   tabCount: number,
   overrideHint?: string,
   lineCount: ChromeLayout['footerLines'] = FOOTER_LINES,
+  position?: string,
 ): string[] {
   if (lineCount === 0) return [];
   const rule = renderRule(cols);
   const hintText = overrideHint ?? interactiveFooterHint(tabCount, cols);
   const indent = visualWidth(space.indent + hintText) <= cols ? space.indent : '';
   const hint = indent + type.hint(hintText);
-  return lineCount === 1 ? [hint] : [rule, hint];
+  return lineCount === 1
+    ? [withPosition(hint, hintText, indent, position, cols)]
+    : [rule, withPosition(hint, hintText, indent, position, cols)];
+}
+
+function withPosition(
+  hint: string,
+  hintText: string,
+  indent: string,
+  position: string | undefined,
+  cols: number,
+): string {
+  if (position === undefined) return hint;
+  const margin = visualWidth(space.indent) < cols ? space.indent : '';
+  const gap = cols - visualWidth(indent + hintText) - visualWidth(position) - visualWidth(margin);
+  if (gap < 2) return hint;
+  return hint + ' '.repeat(gap) + type.hint(position) + margin;
 }

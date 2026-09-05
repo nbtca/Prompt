@@ -819,6 +819,7 @@ describe('docsView native reader (no shell-out to less/glow)', () => {
     const readingHint = freshDocsView.footerHint(5, 80);
     expect(readingHint).toContain(t().docs.readerLinksHint);
     expect(readingHint).toContain('PgUp/PgDn');
+    expect(readingHint).toContain('\u2191\u2193');
     expect(readingHint).not.toContain(t().menu.hintMove);
 
     const compactHint = freshDocsView.footerHint(5, 40) ?? '';

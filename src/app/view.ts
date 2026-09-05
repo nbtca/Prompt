@@ -23,6 +23,8 @@ export interface View {
   render(ctx: AppContext): string[];
   handleKey?(key: string, ctx: AppContext): void;
   isBusy?(): boolean;
+  /** The body is a plain scrollable document right now, with no cursor of its own. */
+  scrollsBody?(): boolean;
   capturesInput?(): boolean;
   capturesPageKeys?(): boolean;
   handleBack?(ctx: AppContext): boolean;

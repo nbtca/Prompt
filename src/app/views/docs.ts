@@ -5,6 +5,7 @@ import { TextField } from '../fields/text-field.js';
 import { renderDocs, type DocsViewState } from './docs-render.js';
 import { setVimKeysActive } from '../../core/vim-keys.js';
 import { pickIcon } from '../../core/icons.js';
+import { glyph } from '../../core/theme.js';
 import { fmt, getCurrentLanguage, t, type Language } from '../../i18n/index.js';
 import { sanitizeTerminalLine, truncate } from '../../core/text.js';
 import {
@@ -513,6 +514,10 @@ export const docsView = {
     return state.mode === 'search';
   },
 
+  scrollsBody(): boolean {
+    return state.mode === 'reader' && state.readerLinksField === undefined;
+  },
+
   capturesPageKeys(): boolean {
     return (
       state.mode === 'sections' ||
@@ -541,7 +546,7 @@ export const docsView = {
       const dot = pickIcon('·', '-');
       const hasLinks = (state.readerLinks?.length ?? 0) > 0;
       const linkHint = hasLinks ? `f ${trans.docs.readerLinksHint} ${dot} ` : '';
-      const pageHint = `PgUp/PgDn ${dot} `;
+      const pageHint = `${glyph.updown()} PgUp/PgDn ${dot} `;
       const localFull = `${pageHint}${linkHint}b ${trans.docs.openBrowser} ${dot} Esc ${dot} q ${trans.menu.hintQuit}`;
       const localCompact = `${pageHint}${hasLinks ? `f ${dot} ` : ''}b ${dot} Esc ${dot} q`;
       return fitFooterHint(

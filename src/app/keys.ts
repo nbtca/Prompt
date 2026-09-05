@@ -5,6 +5,8 @@ export interface GlobalKeyResult {
   back?: boolean;
   quit?: boolean;
   scrollBy?: -1 | 1;
+  scrollLines?: -1 | 1;
+  scrollTo?: 'top' | 'end';
   handled: boolean;
 }
 
@@ -141,7 +143,11 @@ export function routeGlobalKey(
     return switchResult(viewIds[previous]);
   }
   if (key === '\x1b[5~') return { scrollBy: -1, handled: true };
-  if (key === '\x1b[6~') return { scrollBy: 1, handled: true };
+  if (key === '\x1b[6~' || key === ' ') return { scrollBy: 1, handled: true };
+  if (key === '\x1b[A') return { scrollLines: -1, handled: true };
+  if (key === '\x1b[B') return { scrollLines: 1, handled: true };
+  if (key === '\x1b[H') return { scrollTo: 'top', handled: true };
+  if (key === '\x1b[F') return { scrollTo: 'end', handled: true };
   if (/^[1-9]$/.test(key)) {
     const idx = Number(key) - 1;
     if (idx < viewIds.length) return switchResult(viewIds[idx]);

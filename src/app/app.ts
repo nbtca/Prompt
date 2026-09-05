@@ -25,6 +25,7 @@ export async function runApp(): Promise<void> {
   let clockTimer: ReturnType<typeof setTimeout> | undefined;
   let busyTimer: ReturnType<typeof setTimeout> | undefined;
   let painted: { cols: number; lines: string[] } | undefined;
+  let lastBody = { length: 0, height: 0 };
 
   const viewIds = getAppTabs().map((tab) => tab.id);
 
@@ -82,20 +83,38 @@ export async function runApp(): Promise<void> {
     const tabs = getAppTabs();
     const chrome = resolveChromeLayout(rows);
     const header = renderHeader(tabs, view, cols, chrome.headerLines);
+    const body = active?.render(ctx) ?? [];
+    const bodyScroll = active?.capturesInput?.() ? Number.MAX_SAFE_INTEGER : scroll;
+    const height = computeBodyRows(rows, chrome.headerLines, chrome.footerLines);
+    lastBody = { length: body.length, height };
     const footer = renderFooter(
       view,
       cols,
       tabs.length,
       active?.footerHint?.(tabs.length, cols),
       chrome.footerLines,
+      active?.scrollsBody?.() === true ? scrollPercent() : undefined,
     );
-    const body = active?.render(ctx) ?? [];
-    const bodyScroll = active?.capturesInput?.() ? Number.MAX_SAFE_INTEGER : scroll;
     const lines = composeFrameLines(header, body, footer, rows, cols, bodyScroll);
     const patch = diffFrame(painted?.cols === cols ? painted.lines : undefined, lines);
     painted = { cols, lines };
     if (patch) process.stdout.write(patch);
     scheduleBusyTick(active?.isBusy?.() === true);
+  }
+
+  function maxScroll(): number {
+    return Math.max(0, lastBody.length - lastBody.height);
+  }
+
+  function scrollPercent(): string | undefined {
+    const max = maxScroll();
+    if (max === 0) return undefined;
+    return `${Math.round((Math.min(scroll, max) / max) * 100)}%`;
+  }
+
+  function scrollTo(next: number): void {
+    scroll = Math.min(Math.max(0, next), maxScroll());
+    render();
   }
 
   function scheduleBusyTick(busy: boolean): void {
@@ -151,8 +170,13 @@ export async function runApp(): Promise<void> {
         return;
       }
       const page = Math.max(1, ctx.bodyRows - 2);
-      scroll = Math.max(0, scroll + g.scrollBy * page);
-      render();
+      scrollTo(scroll + g.scrollBy * page);
+      return;
+    }
+    if ((g.scrollLines !== undefined || g.scrollTo !== undefined) && active?.scrollsBody?.()) {
+      if (g.scrollTo === 'top') scrollTo(0);
+      else if (g.scrollTo === 'end') scrollTo(maxScroll());
+      else scrollTo(scroll + (g.scrollLines ?? 0));
       return;
     }
     active?.handleKey?.(key, ctx);
