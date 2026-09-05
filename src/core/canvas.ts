@@ -9,6 +9,7 @@ export const ansi = {
   enterAlt: `${CSI}?1049h`,
   leaveAlt: `${CSI}?1049l`,
   home: `${CSI}H`,
+  cursorToRow: (row: number): string => `${CSI}${row};1H`,
   clearAll: `${CSI}2J`,
 };
 
