@@ -71,3 +71,37 @@ describe('materializeBraille', () => {
     expect(counts[counts.length - 1]).toBe(dotsIn(art + '\n'));
   });
 });
+
+describe('materializeBraille painters', () => {
+  const art = '⠋⠉\n⢀⣀';
+
+  it('paints the in-between frames cheaply and only the last one in full', async () => {
+    const out: string[] = [];
+    await materializeBraille(art, (s) => `FULL<${s}>`, {
+      paintProgress: (s) => `FLAT<${s}>`,
+      reducedMotion: false,
+      frames: 4,
+      frameMs: 0,
+      write: (s) => out.push(s),
+      random: () => 0,
+    });
+    const painted = out.filter((line) => line.includes('<'));
+    expect(painted).toHaveLength(4);
+    for (const frame of painted.slice(0, -1)) expect(frame.startsWith('FLAT<')).toBe(true);
+    expect(painted[painted.length - 1]?.startsWith('FULL<')).toBe(true);
+  });
+
+  it('falls back to the full painter when no progress painter is given', async () => {
+    const out: string[] = [];
+    await materializeBraille(art, (s) => `FULL<${s}>`, {
+      reducedMotion: false,
+      frames: 3,
+      frameMs: 0,
+      write: (s) => out.push(s),
+      random: () => 0,
+    });
+    for (const frame of out.filter((line) => line.includes('<'))) {
+      expect(frame.startsWith('FULL<')).toBe(true);
+    }
+  });
+});
