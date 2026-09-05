@@ -72,7 +72,7 @@ export interface MenuOption {
 }
 
 export interface MenuState {
-  title: string;
+  title?: string;
   options: MenuOption[];
   selectedIndex: number;
   footer?: string;
@@ -124,8 +124,7 @@ export function renderMenu(state: MenuState, cols = Number.POSITIVE_INFINITY): s
     0,
   );
 
-  const lines = renderIndentedText(state.title, cols, type.heading);
-  lines.push('');
+  const lines = state.title ? [...renderIndentedText(state.title, cols, type.heading), ''] : [];
 
   state.options.forEach((option, index) => {
     lines.push(...renderMenuOption(option, index === state.selectedIndex, labelWidth, cols));

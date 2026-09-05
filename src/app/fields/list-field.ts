@@ -11,7 +11,7 @@ import { t, fmt } from '../../i18n/index.js';
 import { visualWidth, wrapAnsiToVisualWidth } from '../../core/text.js';
 
 export interface ListFieldConfig {
-  title: string;
+  title?: string;
   options: MenuOption[];
   footer?: string;
   initialIndex?: number;
@@ -70,7 +70,7 @@ export class ListField {
     if (!maxVisible || options.length <= maxVisible) {
       return renderMenu(
         {
-          title,
+          ...(title === undefined ? {} : { title }),
           options,
           selectedIndex: this.index,
           ...(footer === undefined ? {} : { footer }),
@@ -82,7 +82,7 @@ export class ListField {
     const visible = options.slice(this.scrollTop, this.scrollTop + maxVisible);
     const lines = renderMenu(
       {
-        title,
+        ...(title === undefined ? {} : { title }),
         options: visible,
         selectedIndex: this.index - this.scrollTop,
       },
@@ -118,13 +118,15 @@ export class ListField {
       renderMenuOption(option, index === this.index, labelWidth, cols),
     );
     const selectedLines = optionGroups[this.index] ?? [];
-    const titleValue =
-      options.length > 1
+    const titleValue = !title
+      ? ''
+      : options.length > 1
         ? `${type.heading(title)}${type.hint(`  ${this.index + 1}/${options.length}`)}`
         : type.heading(title);
     const titleLines = title ? renderIndentedOutput(titleValue, cols) : [];
     let header: string[] = [];
-    if (titleLines.length + 1 + selectedLines.length <= maxRows) header = [...titleLines, ''];
+    if (titleLines.length === 0) header = [];
+    else if (titleLines.length + 1 + selectedLines.length <= maxRows) header = [...titleLines, ''];
     else if (titleLines.length + selectedLines.length <= maxRows) header = titleLines;
 
     const optionBudget = maxRows - header.length;
