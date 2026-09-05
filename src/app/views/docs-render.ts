@@ -4,6 +4,7 @@ import { type ListField, renderListFieldWithContext } from '../fields/list-field
 import type { TextField } from '../fields/text-field.js';
 import type { DocLink } from '../../features/docs.js';
 import { visualWidth, wrapAnsiToVisualWidth, wrapAnsiWithIndent } from '../../core/text.js';
+import { loadingLines } from '../../core/components/spinner.js';
 
 export type DocsMode =
   | 'loading'
@@ -77,7 +78,7 @@ export function renderDocs(
   let lines: string[];
   switch (state.mode) {
     case 'loading':
-      lines = hintLines(trans.common.loading, cols);
+      lines = loadingLines(trans.common.loading, cols);
       break;
     case 'sections':
       lines = state.sectionsField?.render(bodyRows, cols) ?? [];
@@ -112,7 +113,7 @@ export function renderDocs(
         : [];
       break;
     case 'readerLoading':
-      lines = hintLines(trans.docs.loadingFile, cols);
+      lines = loadingLines(trans.docs.loadingFile, cols);
       break;
     case 'reader':
       lines = state.readerLinksField

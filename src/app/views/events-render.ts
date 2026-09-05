@@ -6,6 +6,7 @@ import type { TextField } from '../fields/text-field.js';
 import { renderCountdownBanner, renderEventBrief, type Event } from '../../features/calendar.js';
 import { renderHeatmap } from '../../features/calendar-heatmap.js';
 import { wrapAnsiWithIndent } from '../../core/text.js';
+import { loadingLines } from '../../core/components/spinner.js';
 
 export type EventsMode = 'loading' | 'hub' | 'heatmap' | 'list' | 'detail' | 'search' | 'error';
 
@@ -103,7 +104,7 @@ export function renderEvents(
   const trans = t();
   switch (state.mode) {
     case 'loading':
-      return wrappedIndentedLines(trans.calendar.loading, cols, type.hint);
+      return loadingLines(trans.calendar.loading, cols);
     case 'hub':
       return renderHubBody(state, now, bodyRows, cols);
     case 'heatmap':

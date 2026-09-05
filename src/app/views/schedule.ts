@@ -344,6 +344,10 @@ export const scheduleView = {
     return renderSchedule(state, new Date(), ctx.bodyRows, ctx.size.cols);
   },
 
+  isBusy(): boolean {
+    return state.mode === 'loading';
+  },
+
   capturesInput(): boolean {
     return (
       state.mode === 'needsLoginId' ||

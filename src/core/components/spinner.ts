@@ -2,7 +2,8 @@ import { getCapabilities } from '../capabilities.js';
 import { ansi, ensureCursorRestored } from '../canvas.js';
 import { renderMessage } from './messages.js';
 import { pickIcon } from '../icons.js';
-import { c, space } from '../theme.js';
+import { c, space, type } from '../theme.js';
+import { visualWidth, wrapAnsiWithIndent } from '../text.js';
 
 export interface Spinner {
   message(msg: string): void;
@@ -17,9 +18,29 @@ export interface SpinnerOptions {
 
 const FRAMES_UNICODE = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 const FRAMES_ASCII = ['|', '/', '-', '\\'];
+export const SPINNER_FRAME_MS = 80;
 
 export function renderSpinnerFrame(frame: string, msg: string): string {
   return `${space.indent}${c.accent(frame)} ${msg}`;
+}
+
+export function spinnerFrame(at: number = Date.now()): string {
+  const frames = pickIcon('u', 'a') === 'u' ? FRAMES_UNICODE : FRAMES_ASCII;
+  const index = getCapabilities().reducedMotion
+    ? 0
+    : Math.floor(at / SPINNER_FRAME_MS) % frames.length;
+  return frames[index] ?? '|';
+}
+
+export function loadingLines(
+  label: string,
+  cols: number = Number.POSITIVE_INFINITY,
+  at: number = Date.now(),
+): string[] {
+  const message = type.hint(label);
+  const spun = `${space.indent}${c.accent(spinnerFrame(at))} ${message}`;
+  if (visualWidth(spun) <= cols) return [spun];
+  return wrapAnsiWithIndent(message, cols, space.indent);
 }
 
 export function startSpinner(msg = '', opts: SpinnerOptions = {}): Spinner {

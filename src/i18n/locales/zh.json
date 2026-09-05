@@ -46,6 +46,7 @@
     "loading": "正在获取活动日历...",
     "noEvents": "近期暂无活动安排",
     "error": "无法获取活动日历",
+    "stale": "离线，显示上次获取的数据",
     "errorHint": "请稍后重试或访问 https://nbtca.space",
     "eventsFound": "个活动",
     "dateTime": "日期时间",

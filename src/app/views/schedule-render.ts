@@ -26,6 +26,7 @@ import { renderEventBrief, type Event } from '../../features/calendar.js';
 import type { GridCursor } from './schedule-grid-cursor.js';
 import { sanitizeTerminalLine, visualWidth, wrapAnsiWithIndent } from '../../core/text.js';
 import { localDayDifference, parseLocalDate, parseLocalMonday } from '../../core/calendar-day.js';
+import { loadingLines } from '../../core/components/spinner.js';
 
 export type ScheduleMode =
   | 'loading'
@@ -341,7 +342,7 @@ function renderPublicBody(
   const w = state.publicWindow;
 
   if (w === undefined) {
-    lines.push(...hintLines(trans.common.loading, cols));
+    lines.push(...loadingLines(trans.common.loading, cols));
   } else if (w === null) {
     lines.push(...hintLines(trans.timetable.publicUnavailable, cols));
   } else if (w.status === 'onBreak') {
@@ -414,7 +415,7 @@ export function renderSchedule(
   const trans = t();
   switch (state.mode) {
     case 'loading':
-      return hintLines(trans.common.loading, cols);
+      return loadingLines(trans.common.loading, cols);
     case 'public':
       return renderPublicBody(state, now, bodyRows, cols);
     case 'needsLoginId':
@@ -425,7 +426,7 @@ export function renderSchedule(
     case 'needsLoginPassword':
       return state.passwordField?.render(cols) ?? [];
     case 'authenticating':
-      return hintLines(state.statusMessage ?? trans.common.loading, cols);
+      return loadingLines(state.statusMessage ?? trans.common.loading, cols);
     case 'needsWeekOne':
       return [
         ...(state.errorMessage ? [...hintLines(state.errorMessage, cols), ''] : []),

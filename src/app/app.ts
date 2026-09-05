@@ -9,6 +9,7 @@ import { docsView } from './views/docs.js';
 import { eventsView } from './views/events.js';
 import { settingsView } from './views/settings.js';
 import { getAppTabs } from './tabs.js';
+import { SPINNER_FRAME_MS } from '../core/components/spinner.js';
 
 export async function runApp(): Promise<void> {
   if (!process.stdin.isTTY || !process.stdout.isTTY) return;
@@ -22,6 +23,7 @@ export async function runApp(): Promise<void> {
   const keyDecoder = new KeyStreamDecoder();
   let keyFlushTimer: ReturnType<typeof setTimeout> | undefined;
   let clockTimer: ReturnType<typeof setTimeout> | undefined;
+  let busyTimer: ReturnType<typeof setTimeout> | undefined;
   let painted: { cols: number; lines: string[] } | undefined;
 
   const viewIds = getAppTabs().map((tab) => tab.id);
@@ -93,6 +95,20 @@ export async function runApp(): Promise<void> {
     const patch = diffFrame(painted?.cols === cols ? painted.lines : undefined, lines);
     painted = { cols, lines };
     if (patch) process.stdout.write(patch);
+    scheduleBusyTick(active?.isBusy?.() === true);
+  }
+
+  function scheduleBusyTick(busy: boolean): void {
+    if (busy && running && busyTimer === undefined) {
+      busyTimer = setTimeout(() => {
+        busyTimer = undefined;
+        render();
+      }, SPINNER_FRAME_MS);
+      return;
+    }
+    if (busy || busyTimer === undefined) return;
+    clearTimeout(busyTimer);
+    busyTimer = undefined;
   }
 
   function dispatchKey(key: string): void {
@@ -273,6 +289,7 @@ export async function runApp(): Promise<void> {
       clearTimeout(clockTimer);
       clockTimer = undefined;
     }
+    scheduleBusyTick(false);
     try {
       leave();
     } finally {
