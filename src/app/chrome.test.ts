@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import {
   captureFooterHint,
   renderHeader,
+  renderContextPath,
   renderFooter,
   passiveFooterHint,
   resolveChromeLayout,
@@ -73,6 +74,36 @@ describe('renderHeader', () => {
   it('keeps compact chrome meaningful at one column', () => {
     expect(stripAnsi(renderHeader(fiveViews, 'settings', 1, 1)[0] ?? '')).toBe('5');
     expect(stripAnsi(renderFooter('settings', 1, 5, undefined, 1)[0] ?? '')).toBe('q');
+  });
+});
+
+describe('renderContextPath', () => {
+  it('joins the segments and keeps them inside the width', () => {
+    const line = renderContextPath(['Docs', 'Guides', 'Second classroom'], 60);
+    expect(stripAnsi(line)).toBe('   Docs > Guides > Second classroom');
+    expect(visualWidth(line)).toBeLessThanOrEqual(60);
+  });
+
+  it('drops leading segments before truncating the tail', () => {
+    const line = stripAnsi(renderContextPath(['Docs', 'Guides', 'Second classroom'], 30));
+    expect(line).toContain('Second classroom');
+    expect(line).not.toContain('Docs');
+    expect(line.trimStart().startsWith('...')).toBe(true);
+  });
+
+  it('keeps the indent when even the tail has to be clipped', () => {
+    const line = renderContextPath(['Docs', 'A very long trailing segment'], 14);
+    expect(line.startsWith('   ')).toBe(true);
+    expect(visualWidth(line)).toBeLessThanOrEqual(14);
+  });
+
+  it('replaces the wordmark in the header rather than adding a row', () => {
+    const plain = renderHeader(views, 'docs', 60, 3);
+    const withPath = renderHeader(views, 'docs', 60, 3, ['Docs', 'Guides']);
+    expect(withPath).toHaveLength(plain.length);
+    expect(stripAnsi(plain[0] ?? '')).toContain('nbtca');
+    expect(stripAnsi(withPath[0] ?? '')).toContain('Guides');
+    expect(stripAnsi(withPath[1] ?? '')).toBe(stripAnsi(plain[1] ?? ''));
   });
 });
 

@@ -82,7 +82,7 @@ export async function runApp(): Promise<void> {
     const active = nativeViews[view];
     const tabs = getAppTabs();
     const chrome = resolveChromeLayout(rows);
-    const header = renderHeader(tabs, view, cols, chrome.headerLines);
+    const header = renderHeader(tabs, view, cols, chrome.headerLines, active?.contextPath?.());
     const body = active?.render(ctx) ?? [];
     const bodyScroll = active?.capturesInput?.() ? Number.MAX_SAFE_INTEGER : scroll;
     const height = computeBodyRows(rows, chrome.headerLines, chrome.footerLines);
