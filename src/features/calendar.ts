@@ -20,7 +20,7 @@ import {
   wrapAnsiToVisualWidth,
 } from '../core/text.js';
 import { t } from '../i18n/index.js';
-import { addLocalDays } from '../core/calendar-day.js';
+import { addLocalDays, localDayDifference } from '../core/calendar-day.js';
 import { countdownParts, isCountdownUrgent, buildExportFilename } from './calendar-query.js';
 import { loadFeedCache, saveFeedCache } from './calendar-store.js';
 import { writeFileSync, existsSync } from 'fs';
@@ -212,18 +212,41 @@ export function renderEventsTable(
   return lines.join('\n');
 }
 
+export type EventProximity = 'today' | 'tomorrow' | 'week' | 'later';
+
+export function eventProximity(startDate: Date, now: Date): EventProximity {
+  const days = localDayDifference(now, startDate);
+  if (days <= 0) return 'today';
+  if (days === 1) return 'tomorrow';
+  if (days <= 7) return 'week';
+  return 'later';
+}
+
+const SOURCE_TAG = /^(\[[^\]]{1,16}\])(\s+)(?=\S)/;
+
+function styleTitle(title: string, style: (value: string) => string): string {
+  const match = SOURCE_TAG.exec(title);
+  if (!match?.[1] || !match[2]) return style(title);
+  return `${type.hint(match[1])}${match[2]}${style(title.slice(match[0].length))}`;
+}
+
 export function renderEventBrief(e: Event, now: Date): string {
   const dot = pickIcon('·', '-');
-  const isToday =
-    e.startDate.getFullYear() === now.getFullYear() &&
-    e.startDate.getMonth() === now.getMonth() &&
-    e.startDate.getDate() === now.getDate();
+  const proximity = eventProximity(e.startDate, now);
+  const dateStyle =
+    proximity === 'today'
+      ? type.active
+      : proximity === 'tomorrow'
+        ? c.brand
+        : proximity === 'week'
+          ? type.body
+          : type.hint;
   const dateTime = `${e.date}${e.time ? ' ' + e.time : ''}`;
-  const marker = isToday ? type.active(pickIcon('●', '*')) : type.hint(pickIcon('·', '-'));
-  const dateStyled = isToday ? type.active(dateTime) : type.hint(dateTime);
-  const titleStyled = isToday ? type.active(e.title) : type.body(e.title);
-  const recurringMark = e.recurring ? ` ${pickIcon('↻', '~')}` : '';
-  return `${space.indent}${marker} ${dateStyled}  ${dot}  ${titleStyled}${recurringMark}`;
+  const marker =
+    proximity === 'today' ? type.active(pickIcon('●', '*')) : dateStyle(pickIcon('·', '-'));
+  const titleStyled = styleTitle(e.title, proximity === 'today' ? type.active : type.body);
+  const recurringMark = e.recurring ? ` ${type.hint(pickIcon('↻', '~'))}` : '';
+  return `${space.indent}${marker} ${dateStyle(dateTime)}  ${type.hint(dot)}  ${titleStyled}${recurringMark}`;
 }
 
 export function renderCountdownBanner(
