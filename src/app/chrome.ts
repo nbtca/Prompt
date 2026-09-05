@@ -2,7 +2,7 @@ import { type, space, glyph, brandMark } from '../core/theme.js';
 import { pickIcon } from '../core/icons.js';
 import { t } from '../i18n/index.js';
 import type { ViewId } from './keys.js';
-import { visualWidth } from '../core/text.js';
+import { clipAnsiToVisualWidth, visualWidth } from '../core/text.js';
 
 export const HEADER_LINES = 3;
 export const FOOTER_LINES = 2;
@@ -68,15 +68,39 @@ function renderTabs(views: { id: ViewId; title: string }[], active: ViewId, cols
   return type.active(String(activeIndex + 1));
 }
 
+export function renderContextPath(segments: readonly string[], cols: number): string {
+  const chevron = pickIcon('›', '>');
+  const ellipsis = pickIcon('…', '...');
+  const width = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : Number.POSITIVE_INFINITY;
+  for (let start = 0; start < segments.length; start += 1) {
+    const shown = segments.slice(start);
+    const last = shown.length - 1;
+    const plain = [...(start > 0 ? [ellipsis] : []), ...shown].join(` ${chevron} `);
+    if (visualWidth(space.indent + plain) > width) continue;
+    const styled = shown
+      .map((segment, index) => (index === last ? type.label(segment) : type.hint(segment)))
+      .join(type.hint(` ${chevron} `));
+    return space.indent + (start > 0 ? type.hint(`${ellipsis} ${chevron} `) : '') + styled;
+  }
+  const leaf = segments[segments.length - 1] ?? '';
+  const indent = visualWidth(space.indent) < width ? space.indent : '';
+  const room = Math.max(1, width - visualWidth(indent));
+  return indent + type.label(clipAnsiToVisualWidth(leaf, room));
+}
+
 export function renderHeader(
   views: { id: ViewId; title: string }[],
   active: ViewId,
   cols: number,
   lineCount: ChromeLayout['headerLines'] = HEADER_LINES,
+  contextPath?: readonly string[],
 ): string[] {
   if (lineCount === 0) return [];
   const mark = brandMark('nbtca');
-  const brand = `${visualWidth(space.indent + mark) <= cols ? space.indent : ''}${mark}`;
+  const brand =
+    contextPath && contextPath.length > 0
+      ? renderContextPath(contextPath, cols)
+      : `${visualWidth(space.indent + mark) <= cols ? space.indent : ''}${mark}`;
   const tabs = renderTabs(views, active, cols);
   const rule = renderRule(cols);
   if (lineCount === 1) return [tabs];

@@ -51,6 +51,10 @@ function isLifecycleActive(ctx: AppContext, generation: number): boolean {
   return generation === lifecycleGeneration && ctx.signal?.aborted !== true;
 }
 
+function dedupeAdjacent(segments: string[]): string[] {
+  return segments.filter((segment, index) => segment !== segments[index - 1]);
+}
+
 function backLabel(): string {
   return t().common.back;
 }
@@ -512,6 +516,37 @@ export const docsView = {
 
   capturesInput(): boolean {
     return state.mode === 'search';
+  },
+
+  contextPath(): readonly string[] | undefined {
+    const trans = t();
+    const section = sections.find((candidate) => candidate.key === currentSectionKey);
+    const branch =
+      currentArchivedGroupKey !== null
+        ? [trans.docs.categoryArchived, currentArchivedGroupKey]
+        : section
+          ? [section.label]
+          : [];
+    switch (state.mode) {
+      case 'reader':
+      case 'readerLoading':
+        return dedupeAdjacent([
+          trans.menu.docs,
+          ...branch,
+          ...(state.readerTitle ? [state.readerTitle] : []),
+        ]);
+      case 'files':
+      case 'archivedFiles':
+      case 'archivedGroups':
+        return [trans.menu.docs, ...branch];
+      case 'sections':
+      case 'search':
+      case 'searchLoading':
+      case 'searchResults':
+      case 'loading':
+      case 'error':
+        return undefined;
+    }
   },
 
   scrollsBody(): boolean {

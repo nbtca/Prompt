@@ -22,6 +22,8 @@ export interface View {
   dispose?(): Promise<void> | void;
   render(ctx: AppContext): string[];
   handleKey?(key: string, ctx: AppContext): void;
+  /** Where the user is, outermost first; replaces the wordmark in the header. */
+  contextPath?(): readonly string[] | undefined;
   isBusy?(): boolean;
   /** The body is a plain scrollable document right now, with no cursor of its own. */
   scrollsBody?(): boolean;
