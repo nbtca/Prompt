@@ -41,6 +41,8 @@ function brailleMask(ch: string): number {
 }
 
 export interface MaterializeOptions {
+  /** Painter for the in-between frames; the gradient is wasted on a scatter of dots. */
+  paintProgress?: (s: string) => string;
   reducedMotion?: boolean;
   frames?: number;
   frameMs?: number;
@@ -117,7 +119,8 @@ export async function materializeBraille(
       }
       shown++;
     }
-    write(paint(renderFrame()) + '\n');
+    const painter = f === frameCount ? paint : (opts.paintProgress ?? paint);
+    write(painter(renderFrame()) + '\n');
     if (f < frameCount) {
       await sleep(frameMs);
       write(ansi.cursorUp(lines.length) + ansi.cursorToCol0 + ansi.eraseDown);

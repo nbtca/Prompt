@@ -5,7 +5,7 @@ import chalk from 'chalk';
 import { useUnicodeIcons } from './icons.js';
 import { APP_INFO } from '../config/data.js';
 import { typeReveal, materializeBraille } from './motion.js';
-import { brandGradient as brand } from './theme.js';
+import { brandGradient as brand, c } from './theme.js';
 import { visualWidth } from './text.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -80,7 +80,9 @@ export async function runStartup(): Promise<void> {
   if (!startupFitsTerminal(process.stdout.rows, process.stdout.columns, art)) return;
   const color = !process.env['NO_COLOR'];
   process.stdout.write('\n');
-  await materializeBraille(art, (s) => paint(s, color));
+  await materializeBraille(art, (s) => paint(s, color), {
+    paintProgress: (s) => (color ? c.brand(s) : s),
+  });
   await typeReveal([
     '',
     color ? brand(TAGLINE) : TAGLINE,
