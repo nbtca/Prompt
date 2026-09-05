@@ -77,6 +77,24 @@ describe('renderHeader', () => {
   });
 });
 
+describe('frame width', () => {
+  it('stops the rules growing once the terminal is wider than the app', () => {
+    const at = (cols: number) =>
+      visualWidth(stripAnsi(renderHeader(views, 'docs', cols, 3)[2] ?? ''));
+    expect(at(60)).toBe(57);
+    expect(at(100)).toBe(97);
+    expect(at(180)).toBe(at(100));
+  });
+
+  it('keeps the scroll position on the same edge as the rule', () => {
+    for (const cols of [60, 100, 180]) {
+      const rule = stripAnsi(renderHeader(views, 'docs', cols, 3)[2] ?? '');
+      const footer = stripAnsi(renderFooter('docs', cols, 2, 'PgUp/PgDn', 1, '40%')[0] ?? '');
+      expect(footer.trimEnd().length).toBe(visualWidth(rule));
+    }
+  });
+});
+
 describe('renderContextPath', () => {
   it('joins the segments and keeps them inside the width', () => {
     const line = renderContextPath(['Docs', 'Guides', 'Second classroom'], 60);
