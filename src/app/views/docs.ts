@@ -11,6 +11,7 @@ import { sanitizeTerminalLine, truncate } from '../../core/text.js';
 import {
   localizeDocSections,
   fetchSections,
+  peekSections,
   fetchDocMetadata,
   fetchSectionMetadata,
   searchDocuments,
@@ -49,6 +50,10 @@ const DOC_HINT_WIDTH = 44;
 
 function isLifecycleActive(ctx: AppContext, generation: number): boolean {
   return generation === lifecycleGeneration && ctx.signal?.aborted !== true;
+}
+
+function sectionsSignature(value: readonly DocSection[]): string {
+  return value.map((section) => `${section.key}:${String(section.files.length)}`).join('|');
 }
 
 function dedupeAdjacent(segments: string[]): string[] {
@@ -472,15 +477,24 @@ export const docsView = {
       return;
     }
     const requestId = ++sectionsRequestId;
-    state = { mode: 'loading' };
+    const cached = peekSections();
+    if (cached) {
+      sections = localizeDocSections(cached, t());
+      loadedLanguage = getCurrentLanguage();
+      goToSections();
+    } else {
+      state = { mode: 'loading' };
+    }
     ctx.rerender();
     try {
       const nextSections = await fetchSections(ctx.signal);
       if (!isLifecycleActive(ctx, generation) || requestId !== sectionsRequestId) return;
-      sections = nextSections;
+      const localized = localizeDocSections(nextSections, t());
+      const changed = sectionsSignature(localized) !== sectionsSignature(sections);
+      sections = localized;
       loaded = true;
       loadedLanguage = getCurrentLanguage();
-      goToSections();
+      if (!cached || changed || state.mode !== 'sections') goToSections();
     } catch {
       if (!isLifecycleActive(ctx, generation) || requestId !== sectionsRequestId) return;
       state = { mode: 'error', errorMessage: t().docs.loadError };

@@ -11,6 +11,7 @@ import { spawn, execFileSync } from 'child_process';
 import { URLS } from '../config/data.js';
 import { t, fmt, getCurrentLanguage, type Translations } from '../i18n/index.js';
 import { enterScreen, breadcrumb } from '../core/transitions.js';
+import { loadDocsIndex, saveDocsIndex } from './docs-store.js';
 import { sanitizeTerminalLine, sanitizeTerminalText, stripAnsi, truncate } from '../core/text.js';
 import { clearDocsClients, runDocsClientOperation } from './docs-client.js';
 import { launchBrowserUrl } from './links.js';
@@ -883,7 +884,19 @@ export async function fetchAllDocs(signal?: AbortSignal): Promise<DocItem[]> {
 }
 
 export async function fetchSections(signal?: AbortSignal): Promise<DocSection[]> {
-  return buildSections(await fetchAllDocs(signal));
+  const docs = await fetchAllDocs(signal);
+  saveDocsIndex(docs);
+  return buildSections(docs);
+}
+
+export function peekSections(): DocSection[] | null {
+  const docs = loadDocsIndex();
+  if (!docs) return null;
+  try {
+    return buildSections(docs);
+  } catch {
+    return null;
+  }
 }
 
 async function loadSections(): Promise<DocSection[] | null> {
