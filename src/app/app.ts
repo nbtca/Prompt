@@ -21,6 +21,7 @@ export async function runApp(): Promise<void> {
   const lifecycle = new AbortController();
   const keyDecoder = new KeyStreamDecoder();
   let keyFlushTimer: ReturnType<typeof setTimeout> | undefined;
+  let clockTimer: ReturnType<typeof setTimeout> | undefined;
   let painted: { cols: number; lines: string[] } | undefined;
 
   const viewIds = getAppTabs().map((tab) => tab.id);
@@ -159,6 +160,18 @@ export async function runApp(): Promise<void> {
     }
   }
 
+  function scheduleClock(): void {
+    if (!running) return;
+    clockTimer = setTimeout(
+      () => {
+        clockTimer = undefined;
+        render();
+        scheduleClock();
+      },
+      60_000 - (Date.now() % 60_000),
+    );
+  }
+
   function clearKeyFlush(): void {
     if (keyFlushTimer === undefined) return;
     clearTimeout(keyFlushTimer);
@@ -256,6 +269,10 @@ export async function runApp(): Promise<void> {
     if (!running) return;
     running = false;
     lifecycle.abort();
+    if (clockTimer !== undefined) {
+      clearTimeout(clockTimer);
+      clockTimer = undefined;
+    }
     try {
       leave();
     } finally {
@@ -278,6 +295,7 @@ export async function runApp(): Promise<void> {
     enter();
     loadView('home');
     render();
+    scheduleClock();
     await done;
   } finally {
     quit();
