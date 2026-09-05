@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { fitLine, fitBody, composeFrame, computeBodyRows } from './frame.js';
+import { fitLine, fitBody, composeFrameLines, computeBodyRows, diffFrame } from './frame.js';
 import { visualWidth } from '../core/text.js';
 
 describe('fitLine', () => {
@@ -32,13 +32,31 @@ describe('fitBody', () => {
   });
 });
 
-describe('composeFrame', () => {
+describe('composeFrameLines', () => {
   it('produces exactly rows lines, each cols wide', () => {
-    const f = composeFrame(['H'], ['x', 'y'], ['F'], 5, 3, 0).split('\n');
+    const f = composeFrameLines(['H'], ['x', 'y'], ['F'], 5, 3, 0);
     expect(f).toHaveLength(5);
     for (const line of f) expect(visualWidth(line)).toBe(3);
     expect(f[0]?.trim()).toBe('H');
     expect(f[4]?.trim()).toBe('F');
+  });
+});
+
+describe('diffFrame', () => {
+  it('repaints in full when there is no previous frame', () => {
+    expect(diffFrame(undefined, ['a', 'b'])).toBe('\x1b[Ha\nb\x1b[0J');
+  });
+  it('repaints in full when the row count changes', () => {
+    expect(diffFrame(['a'], ['a', 'b'])).toBe('\x1b[Ha\nb\x1b[0J');
+  });
+  it('writes nothing when the frame is unchanged', () => {
+    expect(diffFrame(['a', 'b'], ['a', 'b'])).toBe('');
+  });
+  it('addresses only the rows that changed, 1-indexed', () => {
+    expect(diffFrame(['a', 'b', 'c'], ['a', 'B', 'c'])).toBe('\x1b[2;1HB');
+  });
+  it('emits one cursor address per changed row', () => {
+    expect(diffFrame(['a', 'b', 'c'], ['A', 'b', 'C'])).toBe('\x1b[1;1HA\x1b[3;1HC');
   });
 });
 

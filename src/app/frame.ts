@@ -1,3 +1,4 @@
+import { ansi } from '../core/canvas.js';
 import { clipAnsiToVisualWidth, visualWidth } from '../core/text.js';
 
 export function clipToWidth(line: string, cols: number): string {
@@ -19,19 +20,29 @@ export function fitBody(lines: string[], height: number, scroll: number, cols: n
   return out;
 }
 
-export function composeFrame(
+export function composeFrameLines(
   header: string[],
   body: string[],
   footer: string[],
   rows: number,
   cols: number,
   scroll: number,
-): string {
+): string[] {
   const h = header.map((l) => fitLine(l, cols));
   const f = footer.map((l) => fitLine(l, cols));
   const bodyH = Math.max(0, rows - h.length - f.length);
   const b = fitBody(body, bodyH, scroll, cols);
-  return [...h, ...b, ...f].slice(0, rows).join('\n');
+  return [...h, ...b, ...f].slice(0, rows);
+}
+
+export function diffFrame(prev: readonly string[] | undefined, next: readonly string[]): string {
+  if (prev?.length !== next.length) return ansi.home + next.join('\n') + ansi.eraseDown;
+  let out = '';
+  for (let row = 0; row < next.length; row += 1) {
+    const line = next[row];
+    if (line !== undefined && prev[row] !== line) out += ansi.cursorToRow(row + 1) + line;
+  }
+  return out;
 }
 
 export function computeBodyRows(rows: number, headerLines: number, footerLines: number): number {

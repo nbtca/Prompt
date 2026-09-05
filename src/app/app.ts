@@ -1,5 +1,5 @@
 import { ansi, ensureCursorRestored } from '../core/canvas.js';
-import { composeFrame, computeBodyRows } from './frame.js';
+import { composeFrameLines, computeBodyRows, diffFrame } from './frame.js';
 import { isPrintableKey, KeyStreamDecoder, routeGlobalKey, type ViewId } from './keys.js';
 import { renderHeader, renderFooter, resolveChromeLayout } from './chrome.js';
 import type { AppContext, AppSize, View } from './view.js';
@@ -21,6 +21,7 @@ export async function runApp(): Promise<void> {
   const lifecycle = new AbortController();
   const keyDecoder = new KeyStreamDecoder();
   let keyFlushTimer: ReturnType<typeof setTimeout> | undefined;
+  let painted: { cols: number; lines: string[] } | undefined;
 
   const viewIds = getAppTabs().map((tab) => tab.id);
 
@@ -87,9 +88,10 @@ export async function runApp(): Promise<void> {
     );
     const body = active?.render(ctx) ?? [];
     const bodyScroll = active?.capturesInput?.() ? Number.MAX_SAFE_INTEGER : scroll;
-    process.stdout.write(
-      ansi.home + composeFrame(header, body, footer, rows, cols, bodyScroll) + ansi.eraseDown,
-    );
+    const lines = composeFrameLines(header, body, footer, rows, cols, bodyScroll);
+    const patch = diffFrame(painted?.cols === cols ? painted.lines : undefined, lines);
+    painted = { cols, lines };
+    if (patch) process.stdout.write(patch);
   }
 
   function dispatchKey(key: string): void {
@@ -176,6 +178,7 @@ export async function runApp(): Promise<void> {
   function enter(): void {
     if (entered || lifecycle.signal.aborted) return;
     entered = true;
+    painted = undefined;
     keyDecoder.reset();
     ensureCursorRestored();
     try {
