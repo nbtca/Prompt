@@ -3,7 +3,7 @@ import { t } from '../../i18n/index.js';
 import { type ListField, renderListFieldWithContext } from '../fields/list-field.js';
 import type { TextField } from '../fields/text-field.js';
 import type { DocLink } from '../../features/docs.js';
-import { visualWidth, wrapAnsiToVisualWidth, wrapAnsiWithIndent } from '../../core/text.js';
+import { visualWidth, wrapAnsiHanging, wrapAnsiWithIndent } from '../../core/text.js';
 import { loadingLines } from '../../core/components/spinner.js';
 
 export type DocsMode =
@@ -42,7 +42,7 @@ function hintLines(label: string, cols: number): string[] {
 function renderReader(lines: string[], cols: number): string[] {
   const contentWidth = Math.max(1, Math.min(80, cols - visualWidth(space.indent)));
   return lines.flatMap((line) =>
-    wrapAnsiToVisualWidth(line, contentWidth).map((part) => `${space.indent}${part}`),
+    wrapAnsiHanging(line, contentWidth).map((part) => `${space.indent}${part}`),
   );
 }
 
