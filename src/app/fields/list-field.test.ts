@@ -219,3 +219,17 @@ describe('computeMaxVisible', () => {
     expect(computeMaxVisible(2)).toBe(3);
   });
 });
+
+describe('ListField without a title', () => {
+  const options = [{ value: 'login', label: 'Log in to see my timetable' }];
+
+  it('renders straight to the options, expanded and compact alike', () => {
+    const field = new ListField({ options });
+    const expanded = field.render(Number.POSITIVE_INFINITY, 60).map(stripAnsi);
+    expect(expanded[0]).toContain('Log in');
+
+    const compact = field.render(1, 60).map(stripAnsi);
+    expect(compact).toHaveLength(1);
+    expect(compact[0]).toContain('Log in');
+  });
+});

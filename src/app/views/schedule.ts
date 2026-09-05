@@ -133,10 +133,8 @@ function goToLoginId(errorMessage?: string): void {
 }
 
 function buildPublicField(): ListField {
-  const trans = t();
   return new ListField({
-    title: trans.timetable.menuEntry,
-    options: [{ value: 'login', label: trans.timetable.publicLoginAction }],
+    options: [{ value: 'login', label: t().timetable.publicLoginAction }],
   });
 }
 

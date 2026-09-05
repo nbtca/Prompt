@@ -140,3 +140,18 @@ describe('runMenu', () => {
     expect(result).toBeNull();
   });
 });
+
+describe('renderMenu without a title', () => {
+  const options = [
+    { value: 'a', label: 'Log in' },
+    { value: 'b', label: 'Cancel' },
+  ];
+
+  it('omits the heading and the blank line that followed it', () => {
+    const withTitle = renderMenu({ title: 'Schedule', options, selectedIndex: 0 }).split('\n');
+    const without = renderMenu({ options, selectedIndex: 0 }).split('\n');
+    expect(without).toHaveLength(withTitle.length - 2);
+    expect(stripAnsi(without[0] ?? '')).toContain('Log in');
+    expect(stripAnsi(without.join('\n'))).not.toContain('Schedule');
+  });
+});
