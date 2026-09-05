@@ -7,6 +7,7 @@ import {
   renderEventBrief,
   exportEventIcs,
 } from './calendar.js';
+import chalk from 'chalk';
 import { setLanguage } from '../i18n/index.js';
 import { stripAnsi, visualWidth } from '../core/text.js';
 import { resetIconCache } from '../core/icons.js';
@@ -202,6 +203,40 @@ describe('renderEventBrief', () => {
     );
     const out = stripAnsi(renderEventBrief(recurring, new Date('2026-07-15T09:00:00')));
     expect(out).toContain('Weekly Sync');
+  });
+
+  it('grades the date by how close the event is', () => {
+    const now = new Date('2026-07-15T09:00:00');
+    const level = chalk.level;
+    chalk.level = 3;
+    try {
+      const at = (iso: string) =>
+        renderEventBrief(toDisplayEvent(makeEvent({ title: 'X', start: new Date(iso) })), now);
+      expect(at('2026-07-15T20:00:00')).toMatch(/\x1b\[1m/);
+      expect(at('2026-07-16T20:00:00')).toMatch(/38;2;14;165;233/);
+      expect(at('2026-07-16T20:00:00')).not.toMatch(/\x1b\[1m/);
+      const thisWeek = at('2026-07-18T20:00:00');
+      expect(thisWeek.slice(0, thisWeek.indexOf('X'))).not.toMatch(/\x1b\[2m\d/);
+      expect(at('2026-08-20T20:00:00')).toMatch(/\x1b\[2m0/);
+    } finally {
+      chalk.level = level;
+    }
+  });
+
+  it('dims a leading source tag but leaves the title alone', () => {
+    const now = new Date('2026-07-15T09:00:00');
+    const tagged = toDisplayEvent(
+      makeEvent({ title: '[NBT] Exam week', start: new Date('2026-08-20T20:00:00') }),
+    );
+    expect(stripAnsi(renderEventBrief(tagged, now))).toContain('[NBT] Exam week');
+  });
+
+  it('leaves a bracket that is not a separated tag exactly as written', () => {
+    const now = new Date('2026-07-15T09:00:00');
+    const odd = toDisplayEvent(
+      makeEvent({ title: '[NBT]squashed', start: new Date('2026-08-20T20:00:00') }),
+    );
+    expect(stripAnsi(renderEventBrief(odd, now))).toContain('[NBT]squashed');
   });
 
   it('does not throw for an event on a different day than now', () => {
