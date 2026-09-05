@@ -12,6 +12,21 @@
     "moreAbove": "{count} more above",
     "moreBelow": "{count} more below"
   },
+  "help": {
+    "title": "Keys",
+    "sectionGlobal": "Anywhere",
+    "sectionView": "Here",
+    "tabs": "Switch tab",
+    "nextTab": "Next tab",
+    "scroll": "Scroll a line",
+    "page": "Scroll a page",
+    "ends": "Jump to top or bottom",
+    "open": "Open",
+    "back": "Back",
+    "quit": "Quit",
+    "close": "Esc or ? to close",
+    "hint": "? keys"
+  },
   "menu": {
     "events": "Events",
     "eventsDesc": "",

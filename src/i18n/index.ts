@@ -53,6 +53,21 @@ export interface Translations {
     license: string;
     author: string;
   };
+  help: {
+    title: string;
+    sectionGlobal: string;
+    sectionView: string;
+    tabs: string;
+    nextTab: string;
+    scroll: string;
+    page: string;
+    ends: string;
+    open: string;
+    back: string;
+    quit: string;
+    close: string;
+    hint: string;
+  };
   calendar: {
     loading: string;
     noEvents: string;
