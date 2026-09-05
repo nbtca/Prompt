@@ -40,12 +40,10 @@ import {
   loadTimetableCache,
   clearScheduleCache,
 } from '../../features/schedule-store.js';
-import { loadCalendarOrThrow, toDisplayEvent } from '../../features/calendar.js';
-import type { Event } from '../../features/calendar.js';
+import { loadCalendarOrThrow } from '../../features/calendar.js';
 import {
   currentAcademicWindow,
   inferWeekOneMonday,
-  isAcademicBreakEvent,
   type AcademicWindow,
   type OnBreak,
 } from '@nbtca/nbtcal';
@@ -139,11 +137,8 @@ function buildPublicField(): ListField {
   return new ListField({
     title: trans.timetable.menuEntry,
     options: [{ value: 'login', label: trans.timetable.publicLoginAction }],
-    footer: trans.menu.hintMove,
   });
 }
-
-const PUBLIC_UPCOMING_FETCH_CAP = 15;
 
 async function goToPublic(ctx: AppContext, generation = lifecycleGeneration): Promise<void> {
   if (!isLifecycleActive(ctx, generation)) return;
@@ -156,12 +151,7 @@ async function goToPublic(ctx: AppContext, generation = lifecycleGeneration): Pr
     const now = new Date();
     const windowEvents = cal.inRange(addLocalDays(now, -400), addLocalDays(now, 400));
     const publicWindow: AcademicWindow | OnBreak | null = currentAcademicWindow(windowEvents, now);
-    const publicUpcoming: Event[] = cal
-      .upcoming({ days: 30 })
-      .filter((e) => !isAcademicBreakEvent(e))
-      .slice(0, PUBLIC_UPCOMING_FETCH_CAP)
-      .map(toDisplayEvent);
-    state = { ...state, publicWindow, publicUpcoming };
+    state = { ...state, publicWindow };
   } catch {
     if (!isLifecycleActive(ctx, generation)) return;
     state = { ...state, publicWindow: null };

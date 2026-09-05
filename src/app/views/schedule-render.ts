@@ -22,7 +22,6 @@ import {
   renderDaySwitcher,
 } from '../../features/schedule-render.js';
 import type { AcademicWindow, OnBreak } from '@nbtca/nbtcal';
-import { renderEventBrief, type Event } from '../../features/calendar.js';
 import type { GridCursor } from './schedule-grid-cursor.js';
 import { sanitizeTerminalLine, visualWidth, wrapAnsiWithIndent } from '../../core/text.js';
 import { localDayDifference, parseLocalDate, parseLocalMonday } from '../../core/calendar-day.js';
@@ -57,7 +56,6 @@ export interface ScheduleViewState {
   timetable?: Timetable;
   publicField?: ListField;
   publicWindow?: AcademicWindow | OnBreak | null;
-  publicUpcoming?: Event[];
   gridCursor?: GridCursor;
   detailMeeting?: TimetableMeeting;
   detailFrom?: 'hub' | 'week';
@@ -85,11 +83,6 @@ function headingLines(label: string, cols: number): string[] {
 
 function hintLines(label: string, cols: number): string[] {
   return wrappedIndentedLines(label, cols, type.hint);
-}
-
-function wrappedRenderedLine(line: string, cols: number): string[] {
-  const content = line.startsWith(space.indent) ? line.slice(space.indent.length) : line;
-  return wrappedIndentedLines(content, cols, (value) => value);
 }
 
 export interface HubShortcut {
@@ -376,31 +369,7 @@ function renderPublicBody(
     }
   }
   lines.push('');
-
-  const loginLines = [...hintLines(trans.timetable.publicLoginHint, cols), ''];
-  const rows = Number.isFinite(bodyRows)
-    ? Math.max(0, Math.floor(bodyRows))
-    : Number.POSITIVE_INFINITY;
-  const fieldRows = state.publicField
-    ? Math.min(3, rows, state.publicField.render(Number.POSITIVE_INFINITY, cols).length)
-    : 0;
-
-  if (state.publicUpcoming && state.publicUpcoming.length > 0) {
-    const activityHeading = headingLines(trans.calendar.recentActivity, cols);
-    const eventBudget = Math.max(
-      0,
-      rows - lines.length - activityHeading.length - 1 - loginLines.length - fieldRows,
-    );
-    const eventLines: string[] = [];
-    for (const event of state.publicUpcoming) {
-      const wrapped = wrappedRenderedLine(renderEventBrief(event, now), cols);
-      if (eventLines.length + wrapped.length > eventBudget) break;
-      eventLines.push(...wrapped);
-    }
-    if (eventLines.length > 0) lines.push(...activityHeading, ...eventLines, '');
-  }
-
-  lines.push(...loginLines);
+  lines.push(...hintLines(trans.timetable.publicLoginHint, cols), '');
   return state.publicField
     ? renderListFieldWithContext(lines, state.publicField, bodyRows, cols)
     : lines;
