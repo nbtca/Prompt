@@ -239,8 +239,44 @@ function renderWrappedSegment(
   return osc8AtEnd ? `${withReset}${OSC8_CLOSE}` : withReset;
 }
 
-export function wrapAnsiToVisualWidth(str: string, maxWidth: number): string[] {
+const NO_LINE_START = /^[。．、，；：？！）］｝〉》」』】〕・ー～…‥%‰°℃,.;:?!)\]}>]$/u;
+const NO_LINE_END = /^[（［｛〈《「『【〔([{<]$/u;
+
+function visibleAt(tokens: readonly WrapToken[], index: number): WrapToken | undefined {
+  const token = tokens[index];
+  return token && !token.sgr && token.width > 0 ? token : undefined;
+}
+
+/**
+ * Pulls a break earlier so a line never begins with closing punctuation or ends
+ * with an opening bracket. Moving the break back keeps every line inside the
+ * width, which letting the character hang past the edge would not.
+ */
+function applyKinsoku(tokens: readonly WrapToken[], start: number, end: number): number {
+  let candidate = end;
+  while (candidate > start + 1) {
+    const opensNext = visibleAt(tokens, candidate);
+    const closesLine = visibleAt(tokens, candidate - 1);
+    if (opensNext && NO_LINE_START.test(opensNext.raw)) {
+      candidate -= 1;
+      continue;
+    }
+    if (closesLine && NO_LINE_END.test(closesLine.raw)) {
+      candidate -= 1;
+      continue;
+    }
+    return candidate;
+  }
+  return end;
+}
+
+export function wrapAnsiToVisualWidth(
+  str: string,
+  maxWidth: number,
+  continuationWidth = maxWidth,
+): string[] {
   const widthLimit = Math.max(1, Math.floor(maxWidth));
+  const nextLimit = Math.max(1, Math.floor(continuationWidth));
   if (!Number.isFinite(maxWidth) || visualWidth(str) <= widthLimit) return [str];
 
   const tokens = tokenizeForWrapping(str);
@@ -262,7 +298,8 @@ export function wrapAnsiToVisualWidth(str: string, maxWidth: number): string[] {
         index += 1;
         continue;
       }
-      if (width + token.width > widthLimit && hasVisible) break;
+      const limit = lines.length === 0 ? widthLimit : nextLimit;
+      if (width + token.width > limit && hasVisible) break;
       width += token.width;
       hasVisible = true;
       if (token.whitespace) lastWhitespace = index;
@@ -289,6 +326,12 @@ export function wrapAnsiToVisualWidth(str: string, maxWidth: number): string[] {
       next = end;
     }
 
+    if (end === next) {
+      const adjusted = applyKinsoku(tokens, start, end);
+      end = adjusted;
+      next = adjusted;
+    }
+
     lines.push(renderWrappedSegment(tokens, start, end, activeSgr, activeOsc8));
     activeSgr = advanceSgr(activeSgr, tokens, start, next);
     activeOsc8 = advanceOsc8(activeOsc8, tokens, start, next);
@@ -296,6 +339,22 @@ export function wrapAnsiToVisualWidth(str: string, maxWidth: number): string[] {
   }
 
   return lines.length > 0 ? lines : [''];
+}
+
+const LEADING_MARKER = /^(\s*)((?:[-*+•]|\d{1,3}[.)])\s+)?/u;
+
+export function wrapAnsiHanging(str: string, maxWidth: number): string[] {
+  const width = Number.isFinite(maxWidth)
+    ? Math.max(1, Math.floor(maxWidth))
+    : Number.POSITIVE_INFINITY;
+  const match = LEADING_MARKER.exec(stripAnsi(str));
+  const hang = visualWidth((match?.[1] ?? '') + (match?.[2] ?? ''));
+  if (hang === 0 || hang >= width) return wrapAnsiToVisualWidth(str, width);
+
+  const continuation = ' '.repeat(hang);
+  return wrapAnsiToVisualWidth(str, width, width - hang).map((line, index) =>
+    index === 0 ? line : continuation + line,
+  );
 }
 
 export function wrapAnsiWithIndent(str: string, maxWidth: number, preferredIndent = ''): string[] {
