@@ -12,6 +12,21 @@
     "moreAbove": "上方还有 {count} 项",
     "moreBelow": "下方还有 {count} 项"
   },
+  "help": {
+    "title": "快捷键",
+    "sectionGlobal": "全局",
+    "sectionView": "当前页",
+    "tabs": "切换标签页",
+    "nextTab": "下一个标签页",
+    "scroll": "滚动一行",
+    "page": "翻页",
+    "ends": "跳到开头或结尾",
+    "open": "打开",
+    "back": "返回",
+    "quit": "退出",
+    "close": "Esc 或 ? 关闭",
+    "hint": "? 快捷键"
+  },
   "menu": {
     "events": "活动",
     "eventsDesc": "",

@@ -140,8 +140,10 @@ export function passiveFooterHint(tabCount: number, cols = Number.POSITIVE_INFIN
   const compactTabs = tabCount > 1 ? `1-${tabCount}/Tab ${dot} ` : '';
   return fitFooterHint(
     cols,
+    `${digitTabHint(tabCount)}Esc ${dot} q ${trans.menu.hintQuit} ${dot} ${trans.help.hint}`,
     `${digitTabHint(tabCount)}Esc ${dot} q ${trans.menu.hintQuit}`,
-    `${compactTabs}Esc ${dot} q`,
+    `${compactTabs}Esc ${dot} q ${dot} ?`,
+    `Esc ${dot} q ${dot} ?`,
     `Esc ${dot} q`,
     'q',
   );
@@ -155,6 +157,7 @@ function interactiveFooterHint(tabCount: number, cols: number): string {
   const localFull = `${trans.menu.hintMove} ${dot} ${trans.menu.hintOpen} ${dot} Esc ${dot} q ${trans.menu.hintQuit}`;
   const localCompact = `${trans.menu.hintMove} ${trans.menu.hintOpen} Esc q`;
   const candidates = [
+    `${fullTabs}${localFull} ${dot} ${trans.help.hint}`,
     `${fullTabs}${localFull}`,
     `${compactTabs}${localFull}`,
     localFull,

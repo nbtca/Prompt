@@ -9,6 +9,8 @@ import { docsView } from './views/docs.js';
 import { eventsView } from './views/events.js';
 import { settingsView } from './views/settings.js';
 import { getAppTabs } from './tabs.js';
+import { renderHelp } from './help.js';
+import { t } from '../i18n/index.js';
 import { SPINNER_FRAME_MS } from '../core/components/spinner.js';
 
 export async function runApp(): Promise<void> {
@@ -24,6 +26,7 @@ export async function runApp(): Promise<void> {
   let keyFlushTimer: ReturnType<typeof setTimeout> | undefined;
   let clockTimer: ReturnType<typeof setTimeout> | undefined;
   let busyTimer: ReturnType<typeof setTimeout> | undefined;
+  let helpOpen = false;
   let painted: { cols: number; lines: string[] } | undefined;
   let lastBody = { length: 0, height: 0 };
 
@@ -83,17 +86,20 @@ export async function runApp(): Promise<void> {
     const tabs = getAppTabs();
     const chrome = resolveChromeLayout(rows);
     const header = renderHeader(tabs, view, cols, chrome.headerLines, active?.contextPath?.());
-    const body = active?.render(ctx) ?? [];
-    const bodyScroll = active?.capturesInput?.() ? Number.MAX_SAFE_INTEGER : scroll;
+    const activeTab = tabs.find((tab) => tab.id === view);
+    const body = helpOpen
+      ? renderHelp(activeTab?.title ?? '', active?.shortcuts?.() ?? [], tabs.length, cols)
+      : (active?.render(ctx) ?? []);
+    const bodyScroll = !helpOpen && active?.capturesInput?.() ? Number.MAX_SAFE_INTEGER : scroll;
     const height = computeBodyRows(rows, chrome.headerLines, chrome.footerLines);
     lastBody = { length: body.length, height };
     const footer = renderFooter(
       view,
       cols,
       tabs.length,
-      active?.footerHint?.(tabs.length, cols),
+      helpOpen ? t().help.close : active?.footerHint?.(tabs.length, cols),
       chrome.footerLines,
-      active?.scrollsBody?.() === true ? scrollPercent() : undefined,
+      !helpOpen && active?.scrollsBody?.() === true ? scrollPercent() : undefined,
     );
     const lines = composeFrameLines(header, body, footer, rows, cols, bodyScroll);
     const patch = diffFrame(painted?.cols === cols ? painted.lines : undefined, lines);
@@ -139,6 +145,19 @@ export async function runApp(): Promise<void> {
     const active = nativeViews[view];
     if (active?.capturesInput?.() && key !== '\x1b') {
       active.handleKey?.(key, ctx);
+      render();
+      return;
+    }
+    if (helpOpen) {
+      if (key === '?' || key === '\x1b') {
+        helpOpen = false;
+        render();
+      }
+      return;
+    }
+    if (key === '?') {
+      helpOpen = true;
+      scroll = 0;
       render();
       return;
     }

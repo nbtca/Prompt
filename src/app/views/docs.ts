@@ -563,6 +563,17 @@ export const docsView = {
     }
   },
 
+  shortcuts(): readonly { key: string; label: string }[] {
+    const trans = t();
+    if (state.mode !== 'reader') return [];
+    return [
+      ...((state.readerLinks?.length ?? 0) > 0
+        ? [{ key: 'f', label: trans.docs.readerLinksHint }]
+        : []),
+      { key: 'b', label: trans.docs.openBrowser },
+    ];
+  },
+
   scrollsBody(): boolean {
     return state.mode === 'reader' && state.readerLinksField === undefined;
   },

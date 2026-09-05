@@ -336,6 +336,12 @@ export const scheduleView = {
     return state.mode === 'loading';
   },
 
+  shortcuts(): readonly { key: string; label: string }[] {
+    return state.mode === 'hub' && state.timetable
+      ? hubShortcuts(state.timetable).map(({ key, label }) => ({ key, label }))
+      : [];
+  },
+
   capturesInput(): boolean {
     return (
       state.mode === 'needsLoginId' ||

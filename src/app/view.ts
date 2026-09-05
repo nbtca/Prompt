@@ -24,6 +24,8 @@ export interface View {
   handleKey?(key: string, ctx: AppContext): void;
   /** Where the user is, outermost first; replaces the wordmark in the header. */
   contextPath?(): readonly string[] | undefined;
+  /** Keys this view adds on top of the global ones, for the help overlay. */
+  shortcuts?(): readonly { key: string; label: string }[];
   isBusy?(): boolean;
   /** The body is a plain scrollable document right now, with no cursor of its own. */
   scrollsBody?(): boolean;
