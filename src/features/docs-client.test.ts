@@ -6,7 +6,7 @@ interface PendingFetch {
   resolve: (response: Response) => void;
 }
 
-function pendingFetches(): { fetchMock: ReturnType<typeof vi.fn>; pending: PendingFetch[] } {
+function pendingFetches() {
   const pending: PendingFetch[] = [];
   const fetchMock = vi.fn((_input: string | URL | Request, init?: RequestInit) => {
     return new Promise<Response>((resolve, reject) => {
