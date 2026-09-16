@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, beforeAll, beforeEach, vi } from 'vitest';
 import { SessionExpiredError } from '../../auth/errors.js';
 import type * as NbtcalModule from '@nbtca/nbtcal';
 import type * as TimetableModule from '@nbtca/nbtcal/timetable';
@@ -323,6 +323,17 @@ describe('scheduleView.load() with no session — public view', () => {
 });
 
 describe('scheduleView — hub navigation', () => {
+  // These render the week around "today"; unpinned they go empty once the wall
+  // clock leaves the fixture's week one.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 8, 7, 9, 0));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   function fakeCtx(): AppContext {
     return {
       size: { rows: 24, cols: 80 },

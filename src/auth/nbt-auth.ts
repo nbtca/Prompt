@@ -152,13 +152,6 @@ function classifyRejectedLogin(html: string): AuthError {
       'The campus account is temporarily locked.',
     );
   }
-  if (/激活|未启用/.test(visibleError)) {
-    return new AuthError(
-      'ACCOUNT_INACTIVE',
-      'credentials',
-      'The campus account must be activated first.',
-    );
-  }
   if (/验证码|滑块|captcha/i.test(visibleError)) {
     return new AuthError(
       'INTERACTIVE_CHALLENGE',
@@ -166,11 +159,20 @@ function classifyRejectedLogin(html: string): AuthError {
       'The campus login requires an interactive browser challenge.',
     );
   }
-  if (/用户名|账号|密码|credential|password/i.test(visibleError)) {
+  // Key `accountLogin_account_pwd_error`; localized it also tells first-time users
+  // to activate, so it must be classified before the activation branch below.
+  if (/用户名|密码|credential|password|pwd/i.test(visibleError)) {
     return new AuthError(
       'INVALID_CREDENTIALS',
       'credentials',
       'The student id or password was rejected.',
+    );
+  }
+  if (/激活|未启用/.test(visibleError)) {
+    return new AuthError(
+      'ACCOUNT_INACTIVE',
+      'credentials',
+      'The campus account must be activated first.',
     );
   }
   return new AuthError(
@@ -183,8 +185,9 @@ function classifyRejectedLogin(html: string): AuthError {
 async function readText(
   response: Response,
   stage: 'login-page' | 'challenge-check' | 'credentials' | 'sso',
+  toleratedStatus?: number,
 ): Promise<string> {
-  if (response.status < 200 || response.status >= 300) {
+  if ((response.status < 200 || response.status >= 300) && response.status !== toleratedStatus) {
     throw new AuthError('HTTP_ERROR', stage, 'The campus service returned an error.', {
       retryable: response.status >= 500,
     });
@@ -373,6 +376,8 @@ export async function loginWithStudentPassword(
         method: 'POST',
         headers: {
           Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          // No Accept-Language on purpose: unresolved, the campus renders the bare
+          // message key, which is the only unambiguous error id this login offers.
           'Content-Type': 'application/x-www-form-urlencoded',
           Referer: loginResponse.url,
         },
@@ -381,8 +386,12 @@ export async function loginWithStudentPassword(
       },
       'credentials',
     );
-    const credentialHtml = await readText(credentialResponse, 'credentials');
+    // A rejected login is a 401 carrying the login page; classify it, don't report HTTP_ERROR.
+    const credentialHtml = await readText(credentialResponse, 'credentials', 401);
     if (hasLoginFingerprint(credentialHtml)) throw classifyRejectedLogin(credentialHtml);
+    if (credentialResponse.status === 401) {
+      throw new AuthError('HTTP_ERROR', 'credentials', 'The campus service returned an error.');
+    }
 
     await verifyJwxtSession(cookies, options.signal);
     const authenticatedAt = (options.now ?? (() => new Date()))().toISOString();

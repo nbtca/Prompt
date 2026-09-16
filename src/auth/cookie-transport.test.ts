@@ -81,6 +81,19 @@ describe('campus URL policy', () => {
       assertAllowedCampusUrl(new URL(url));
     }, 'UNTRUSTED_URL');
   });
+
+  // CAS sends accounts owing a profile here instead of issuing a ticket. It stays
+  // blocked -- the page is a form no headless login can finish -- but a bare
+  // "untrusted redirect" tells the student nothing about what to go and do.
+  it('names the profile gate rather than reporting an untrusted redirect', () => {
+    expectAuthError(() => {
+      assertAllowedCampusUrl(
+        new URL(
+          'https://authserver-443.webvpn.nbt.edu.cn/authserver/improveInfo/improveUserInfo.do?service=https%3A%2F%2Fwebvpn.nbt.edu.cn%2Fusers%2Fauth%2Fcas%2Fcallback%3Furl',
+        ),
+      );
+    }, 'PROFILE_INCOMPLETE');
+  });
 });
 
 describe('cookie transport', () => {

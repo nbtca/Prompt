@@ -129,8 +129,85 @@ describe('loginWithStudentPassword', () => {
     expect(postedCredentials).toBe(false);
   });
 
+  // The campus authserver answers a rejected login with HTTP 401, never 200.
+  function rejectingFetch(
+    tip: string,
+    init: ResponseInit = { status: 401 },
+  ): { baseFetch: typeof fetch; credentialHeaders: Headers[] } {
+    const credentialHeaders: Headers[] = [];
+    const baseFetch = vi.fn((input: string | URL | Request, requestInit?: RequestInit) => {
+      const url = inputUrl(input);
+      if (url.hostname === 'webvpn.nbt.edu.cn') {
+        return Promise.resolve(
+          mockResponse(
+            'https://authserver-443.webvpn.nbt.edu.cn/authserver/login?service=https%3A%2F%2Fwebvpn.nbt.edu.cn%2Fusers%2Fauth%2Fcas%2Fcallback',
+            loginPage,
+          ),
+        );
+      }
+      if (url.pathname.endsWith('/checkNeedCaptcha.htl')) {
+        return Promise.resolve(mockResponse(url.href, '{"isNeed":false}'));
+      }
+      credentialHeaders.push(new Headers(requestInit?.headers));
+      return Promise.resolve(
+        mockResponse(
+          url.href,
+          loginPage.replace('<div id="showErrorTip"></div>', `<div id="showErrorTip">${tip}</div>`),
+          init,
+        ),
+      );
+    }) as unknown as typeof fetch;
+    return { baseFetch, credentialHeaders };
+  }
+
+  async function rejectionCode(tip: string, init?: ResponseInit): Promise<unknown> {
+    const { baseFetch } = rejectingFetch(tip, init);
+    try {
+      await loginWithStudentPassword('3240000000', 'wrong', { baseFetch });
+    } catch (error) {
+      return error;
+    }
+    return null;
+  }
+
   it('classifies a credential rejection without returning remote HTML', async () => {
     const marker = 'private-remote-marker';
+    const caught = await rejectionCode(`用户名或密码错误 ${marker}`);
+    expect(caught).toMatchObject({ code: 'INVALID_CREDENTIALS' });
+    expect(String(caught)).not.toContain(marker);
+  });
+
+  it('still reports a lockout that mentions the password', async () => {
+    await expect(rejectionCode('密码错误次数过多，账户已被锁定')).resolves.toMatchObject({
+      code: 'ACCOUNT_LOCKED',
+    });
+  });
+
+  it('reports an inactive account that carries no credential wording', async () => {
+    await expect(rejectionCode('该帐号尚未激活')).resolves.toMatchObject({
+      code: 'ACCOUNT_INACTIVE',
+    });
+  });
+
+  // The three shapes one campus rejection takes: bare message key (no locale
+  // negotiated, which is what the CLI gets), zh_CN, and en.
+  it.each([
+    ['accountLogin_account_pwd_error'],
+    ['您提供的用户名或者密码有误，首次登录请先帐号激活'],
+    ['username or password is incorrect'],
+  ])('classifies the campus credential rejection rendered as %s', async (tip) => {
+    await expect(rejectionCode(tip)).resolves.toMatchObject({ code: 'INVALID_CREDENTIALS' });
+  });
+
+  it('negotiates no locale, so the campus keeps rendering the message key', async () => {
+    const { baseFetch, credentialHeaders } = rejectingFetch('accountLogin_account_pwd_error');
+    await expect(
+      loginWithStudentPassword('3240000000', 'wrong', { baseFetch }),
+    ).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' });
+    expect(credentialHeaders[0]?.get('accept-language')).toBeNull();
+  });
+
+  it('does not treat a 401 without a login form as a successful login', async () => {
     const baseFetch = vi.fn((input: string | URL | Request) => {
       const url = inputUrl(input);
       if (url.hostname === 'webvpn.nbt.edu.cn') {
@@ -144,24 +221,11 @@ describe('loginWithStudentPassword', () => {
       if (url.pathname.endsWith('/checkNeedCaptcha.htl')) {
         return Promise.resolve(mockResponse(url.href, '{"isNeed":false}'));
       }
-      return Promise.resolve(
-        mockResponse(
-          url.href,
-          loginPage.replace(
-            '<div id="showErrorTip"></div>',
-            `<div id="showErrorTip">用户名或密码错误 ${marker}</div>`,
-          ),
-        ),
-      );
+      return Promise.resolve(mockResponse(url.href, 'gateway down', { status: 401 }));
     }) as unknown as typeof fetch;
 
-    let caught: unknown;
-    try {
-      await loginWithStudentPassword('3240000000', 'wrong', { baseFetch });
-    } catch (error) {
-      caught = error;
-    }
-    expect(caught).toMatchObject({ code: 'INVALID_CREDENTIALS' });
-    expect(String(caught)).not.toContain(marker);
+    await expect(
+      loginWithStudentPassword('3240000000', 'wrong', { baseFetch }),
+    ).rejects.toBeInstanceOf(AuthError);
   });
 });

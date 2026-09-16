@@ -233,6 +233,7 @@
     "sessionExpired": "The login session expired. Please sign in again.",
     "timeout": "The school service timed out.",
     "network": "Could not connect to the school service.",
+    "profileIncomplete": "The school wants this account's profile completed first; finish it in a browser, then try again.",
     "untrustedUrl": "The school returned an unapproved redirect; the request stopped safely.",
     "httpError": "The school login service returned an error status.",
     "loginChanged": "The school login page changed; credentials were not submitted.",

@@ -63,10 +63,13 @@ jobs:
           ref: main
           path: integration/nbtcal
 
+      # Not the engines floor -- the Check matrix covers that. This needs npm 11:
+      # the npm 10 line that ships through Node 22 dies in arborist on the
+      # tarball install below.
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: '20.12.0'
+          node-version: '24'
           cache: npm
 
       - name: Install Prompt dependencies

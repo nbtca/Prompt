@@ -83,6 +83,8 @@ export function safeMessage(error: unknown): string {
         return trans.accountInactive;
       case 'INTERACTIVE_CHALLENGE':
         return trans.challenge;
+      case 'PROFILE_INCOMPLETE':
+        return trans.profileIncomplete;
       case 'SESSION_EXPIRED':
         return trans.sessionExpired;
       case 'TIMEOUT':
