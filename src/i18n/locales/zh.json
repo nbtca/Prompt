@@ -233,6 +233,7 @@
     "sessionExpired": "登录状态已过期，请重新登录。",
     "timeout": "学校服务响应超时。",
     "network": "无法连接学校服务。",
+    "profileIncomplete": "学校要求先补全个人资料；请在浏览器登录统一身份认证完成后再试。",
     "untrustedUrl": "学校返回了未授权的登录跳转，已安全中止。",
     "httpError": "学校登录服务返回了错误状态。",
     "loginChanged": "学校登录页结构已经变化，当前版本未提交凭据。",

@@ -244,6 +244,7 @@ export interface Translations {
     sessionExpired: string;
     timeout: string;
     network: string;
+    profileIncomplete: string;
     untrustedUrl: string;
     httpError: string;
     loginChanged: string;

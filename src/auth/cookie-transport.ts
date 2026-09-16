@@ -15,6 +15,8 @@ const WEBVPN_PATHS = new Set([
 ]);
 
 const AUTH_PATHS = new Set(['/authserver/login', '/authserver/checkNeedCaptcha.htl']);
+// CAS parks accounts owing a profile here instead of issuing a ticket.
+const PROFILE_GATE_PATH = '/authserver/improveInfo/improveUserInfo.do';
 
 const JWXT_EXACT_PATHS = new Set([
   '/sso/jziotlogin',
@@ -124,6 +126,13 @@ export function assertAllowedCampusUrl(url: URL): void {
     return;
   }
   if (hostname === JWXT_HOST && isAllowedJwxtPath(url.pathname)) return;
+  if (hostname === AUTH_HOST && url.pathname === PROFILE_GATE_PATH) {
+    throw new AuthError(
+      'PROFILE_INCOMPLETE',
+      'credentials',
+      'The campus requires this account to complete its profile.',
+    );
+  }
 
   throw new AuthError('UNTRUSTED_URL', 'session', 'The campus service URL is not allowed.');
 }
