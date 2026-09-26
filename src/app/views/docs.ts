@@ -116,13 +116,18 @@ async function openBrowserFromView(
 
 function buildSectionsField(): ListField {
   const trans = t();
+  const countWidth = Math.max(0, ...sections.map((sec) => String(sec.count).length));
   const options = [
-    ...sections.map((sec) => ({ value: sec.key, label: sec.label, hint: String(sec.count) })),
-    { value: '__search__', label: trans.docs.searchPrompt.replace(':', '') },
+    ...sections.map((sec) => ({
+      value: sec.key,
+      label: sec.label,
+      hint: String(sec.count).padStart(countWidth),
+    })),
+    { value: '__search__', label: trans.docs.searchPrompt },
     { value: '__refresh__', label: trans.docs.refreshCache },
     { value: '__browser__', label: trans.docs.openBrowser },
   ];
-  return new ListField({ title: trans.docs.chooseCategory, options });
+  return new ListField({ options });
 }
 
 function buildFilesField(section: DocSection, maxVisible: number, initialIndex = 0): ListField {
@@ -616,10 +621,11 @@ export const docsView = {
       const hasLinks = (state.readerLinks?.length ?? 0) > 0;
       const linkHint = hasLinks ? `f ${trans.docs.readerLinksHint} ${dot} ` : '';
       const pageHint = `${glyph.updown()} PgUp/PgDn ${dot} `;
-      const localFull = `${pageHint}${linkHint}b ${trans.docs.openBrowser} ${dot} Esc ${dot} q ${trans.menu.hintQuit}`;
+      const localFull = `${pageHint}${linkHint}b ${trans.docs.openBrowser} ${dot} Esc ${trans.menu.hintBack} ${dot} q ${trans.menu.hintQuit}`;
       const localCompact = `${pageHint}${hasLinks ? `f ${dot} ` : ''}b ${dot} Esc ${dot} q`;
       return fitFooterHint(
         cols,
+        `${digitTabHint(tabCount)}${localFull} ${dot} ${trans.help.hint}`,
         `${digitTabHint(tabCount)}${localFull}`,
         localFull,
         localCompact,

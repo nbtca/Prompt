@@ -102,7 +102,7 @@ export function renderDocs(
       lines = state.searchField?.render(cols) ?? [];
       break;
     case 'searchLoading':
-      lines = hintLines(trans.docs.searching, cols);
+      lines = loadingLines(trans.docs.searching, cols);
       break;
     case 'searchResults':
       lines = state.searchResultsField
