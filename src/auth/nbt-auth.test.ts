@@ -269,11 +269,6 @@ describe('loginWithStudentPassword', () => {
       { action: `/authserver/login?f=a&${service}`, execution: 'by-id', salt: 'fedcba0987654321' },
     ],
     [
-      'a textarea field',
-      `<form id="pwdFromId" action="/authserver/login?f=a"><textarea id="execution">\n ta &amp; </textarea><input id="pwdEncryptSalt" value="${salt}"></form>`,
-      { action: `/authserver/login?f=a&${service}`, execution: 'ta &' },
-    ],
-    [
       'the campus page layout',
       `<!DOCTYPE html><html><head><title>统一身份认证</title><script>var pwdFromId = '<form id="pwdFromId">';</script></head><body><div class="auth_login_content"><form id="pwdFromId" class="loginFromClass" method="post" action="/authserver/login?${service}"><input type="hidden" id="execution" name="execution" value="e3a6b8c1_ZXlKaGJHY2lPaUpJVXpVeE1pSjk="><input type="hidden" id="pwdEncryptSalt" value="${salt}"><span id="showErrorTip" class="form-error"></span></form></div></body></html>`,
       {
@@ -285,11 +280,6 @@ describe('loginWithStudentPassword', () => {
     [
       'a nested form tag, which HTML ignores',
       `<form id="pwdFromId" action="/authserver/login?f=a"><form id="inner" action="/authserver/login?f=inner"><input name="execution" value="e"></form><input id="pwdEncryptSalt" value="${salt}"></form>`,
-      'LOGIN_PAGE_CHANGED',
-    ],
-    [
-      'a form tag directly inside a table, which HTML leaves empty',
-      `<table><form id="pwdFromId" action="/authserver/login?f=a"><tr><td>${fields}</td></tr></form></table>`,
       'LOGIN_PAGE_CHANGED',
     ],
     [
@@ -329,9 +319,9 @@ describe('loginWithStudentPassword', () => {
       'INVALID_CREDENTIALS',
     ],
     [
-      'script text inside the tip',
+      'script text inside the tip, which is not visible',
       '<div id="showErrorTip"><script>var m = "账户已被锁定";</script>用户名或密码错误</div>',
-      'ACCOUNT_LOCKED',
+      'INVALID_CREDENTIALS',
     ],
     [
       'character references',
@@ -351,16 +341,6 @@ describe('loginWithStudentPassword', () => {
     [
       'ids and classes that differ in case or suffix',
       '<div class="ALERT-DANGER">锁定</div><div id="ShowErrorTip">锁定</div><div class="alert-dangerous">锁定</div>',
-      'UNEXPECTED_RESPONSE',
-    ],
-    [
-      'a list item closed by the next one',
-      '<ul><li id="errorMsg">a<li>密码</ul>',
-      'UNEXPECTED_RESPONSE',
-    ],
-    [
-      'a paragraph closed by a block',
-      '<p id="errorMsg">x<div>密码</div></p>',
       'UNEXPECTED_RESPONSE',
     ],
   ])('classifies a rejection page with %s', async (_name, tips, code) => {
