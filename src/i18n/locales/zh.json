@@ -108,7 +108,9 @@
       "days": "{days} 天 {hours} 小时",
       "hours": "{hours} 小时 {minutes} 分钟",
       "minutes": "{minutes} 分钟"
-    }
+    },
+    "offlineError": "无法获取活动日历，可能是网络没有连接。",
+    "retry": "重试"
   },
   "docs": {
     "loading": "正在加载文档列表...",
@@ -159,7 +161,12 @@
     "loadingFile": "正在加载",
     "readerLinksTitle": "跳转到",
     "readerLinksHint": "链接",
-    "readerNoLinks": "本页没有指向其他文档的链接"
+    "readerNoLinks": "本页没有指向其他文档的链接",
+    "offlineError": "无法加载文档目录，可能是网络没有连接。",
+    "offlineHint": "请稍后重试，或者到 https://docs.nbtca.space 阅读",
+    "retryLoad": "重试",
+    "searchResultsTitle": "“{query}”的搜索结果 · {count} 篇",
+    "searchProgress": "正在逐篇检索文档，已检索 {done} / {total} 篇"
   },
   "links": {
     "choose": "链接",

@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest';
+import chalk from 'chalk';
 import type { HeatmapBucket } from '@nbtca/nbtcal';
 import { renderHeatmap } from './calendar-heatmap.js';
 import { setLanguage } from '../i18n/index.js';
@@ -106,7 +107,7 @@ describe('renderHeatmap', () => {
     expect(firstGridRow.startsWith('   ')).toBe(true);
 
     const firstNonSpace = (s: string) => s.search(/\S/);
-    expect(firstNonSpace(monthLine)).toBe(6);
+    expect((firstNonSpace(monthLine) - 6) % 2).toBe(0);
     expect(firstNonSpace(secondGridRow)).toBe(6);
     expect(firstNonSpace(firstGridRow)).toBe(3);
   });
@@ -117,19 +118,64 @@ describe('renderHeatmap', () => {
     expect(visualWidth(stripAnsi(lines[2] ?? ''))).toBe(59);
   });
 
-  it('keeps Chinese month labels on their week columns', () => {
+  function monthLabels(cols: number): string[] {
+    return stripAnsi(renderHeatmap(buckets, today, { color: false, cols }).split('\n')[2] ?? '')
+      .trim()
+      .split(/\s+/);
+  }
+
+  it('labels every month in order at every width, never letting two labels touch', () => {
+    for (const language of ['en', 'zh'] as const) {
+      setLanguage(language);
+      try {
+        for (const cols of [40, 60, 80, 100, 114, 160]) {
+          const labels = monthLabels(cols);
+          const months = labels.map((label) => {
+            const number = Number.parseInt(label, 10);
+            return Number.isNaN(number) ? new Date(`${label} 1, 2025`).getMonth() + 1 : number;
+          });
+          months.slice(1).forEach((month, index) => {
+            expect(month).toBe(((months[index] ?? 0) % 12) + 1);
+          });
+          expect(months.at(-1)).toBe(6);
+        }
+      } finally {
+        setLanguage('en');
+      }
+    }
+  });
+
+  it('keeps full month names when the weeks are wide enough', () => {
     setLanguage('zh');
     try {
-      const lines = renderHeatmap(buckets, today, { color: false, cols: 80 })
-        .split('\n')
-        .map(stripAnsi);
-      const monthRow = lines[2] ?? '';
-      const gridRow = lines[3] ?? '';
-      expect(visualWidth(monthRow)).toBeLessThanOrEqual(visualWidth(gridRow));
-      expect(monthRow).not.toMatch(/月\d/);
-      expect(monthRow).toContain('6月');
+      const labels = monthLabels(114);
+      expect(labels).toHaveLength(12);
+      expect(labels.every((label) => label.endsWith('月'))).toBe(true);
     } finally {
       setLanguage('en');
+    }
+    expect(monthLabels(100)).toContain('Oct');
+  });
+
+  it('drops a partial first month rather than crowding the next label', () => {
+    const line = stripAnsi(
+      renderHeatmap(buckets, today, { color: false, cols: 114 }).split('\n')[2] ?? '',
+    );
+    expect(line.trim().split(/\s+/)[0]).toBe('Jul');
+  });
+
+  it('keeps empty days faint and every active level in one theme-aware color', () => {
+    const level = chalk.level;
+    chalk.level = 1;
+    try {
+      const output = renderHeatmap(makeBuckets('2025-06-09', [0, 1, 2, 3, 4]), today, {
+        color: true,
+      });
+      expect(output).toContain(chalk.dim('·'));
+      for (const glyph of ['░', '▒', '▓', '█']) expect(output).toContain(chalk.green(glyph));
+      expect(output).not.toMatch(/\u001b\[38;[25];/);
+    } finally {
+      chalk.level = level;
     }
   });
 

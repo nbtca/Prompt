@@ -87,13 +87,19 @@ describe('eventsView', () => {
     expect(hint).not.toContain(t().menu.hintOpen);
   });
 
-  it('does not offer move or open actions on an error screen', async () => {
+  it('says the calendar looks offline and retries from the error screen', async () => {
     loadCalendarOrCacheMock.mockRejectedValueOnce(new Error('Broke'));
-    await eventsView.load(fakeCtx());
-    const hint = stripAnsi(eventsView.footerHint(5, 80) ?? '');
-    expect(hint).toContain('1-5');
-    expect(hint).not.toContain(t().menu.hintMove);
-    expect(hint).not.toContain(t().menu.hintOpen);
+    const ctx = fakeCtx();
+    await eventsView.load(ctx);
+    const out = stripAnsi(eventsView.render(ctx).join('\n'));
+    expect(out).toContain(t().calendar.offlineError);
+    expect(out).toContain(t().calendar.errorHint);
+    expect(out).toContain(t().calendar.retry);
+    expect(eventsView.capturesPageKeys()).toBe(true);
+
+    eventsView.handleKey('\r', ctx);
+    await Promise.resolve();
+    expect(loadCalendarOrCacheMock).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -271,6 +277,56 @@ describe('eventsView navigation', () => {
     const out = screen(ctx).join('\n');
     expect(out).toContain('No events match “zzz”');
     expect(out).not.toContain(t().calendar.noEvents);
+  });
+
+  it('marks and dims the events that already ended in this week', async () => {
+    calendarInRange.mockReturnValue([
+      event('Monday talk', '2026-07-13T10:00:00', '2026-07-13T11:00:00'),
+      event('Friday lab', '2026-07-17T10:00:00'),
+    ]);
+    const ctx = fakeCtx();
+    await eventsView.load(ctx);
+    press(ctx, DOWN, '\r');
+
+    const lines = screen(ctx);
+    expect(lines.find((line) => line.includes('Monday talk'))).toContain(t().calendar.endedLabel);
+    expect(lines.find((line) => line.includes('Friday lab'))).not.toContain(
+      t().calendar.endedLabel,
+    );
+  });
+
+  it('shows the start and end time on the detail screen', async () => {
+    calendarInRange.mockReturnValue([event('Talk', '2026-07-16T19:00:00', '2026-07-16T21:00:00')]);
+    const ctx = fakeCtx();
+    await eventsView.load(ctx);
+    press(ctx, '\r', '\r');
+
+    expect(screen(ctx).join('\n')).toContain('07-16 19:00–21:00');
+  });
+
+  it('keeps the offline notice on every screen while showing a stored calendar', async () => {
+    calendarInRange.mockReturnValue([event('Talk', '2026-07-16T19:00:00')]);
+    loadCalendarOrCacheMock.mockResolvedValueOnce({
+      calendar: { inRange: calendarInRange, heatmap: calendarHeatmap },
+      stale: true,
+    });
+    const ctx = fakeCtx();
+    await eventsView.load(ctx);
+    press(ctx, '\r');
+    expect(screen(ctx).join('\n')).toContain(t().common.offline);
+    press(ctx, '\r');
+    expect(screen(ctx).join('\n')).toContain(t().common.offline);
+  });
+
+  it('offers the activity item only when the hub has no room for the heatmap', async () => {
+    const ctx = fakeCtx();
+    await eventsView.load(ctx);
+    expect(screen(ctx).join('\n')).toContain(t().calendar.heatmap.title);
+
+    const tall = { ...ctx, size: { rows: 45, cols: 160 }, bodyRows: 40 };
+    const lines = screen(tall);
+    expect(lines.filter((line) => line.includes(t().calendar.heatmap.title))).toHaveLength(1);
+    expect(lines.some((line) => line.includes(t().calendar.heatmap.legendLess))).toBe(true);
   });
 
   it('returns from a detail to the same list title and cursor', async () => {

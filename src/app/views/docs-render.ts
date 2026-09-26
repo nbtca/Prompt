@@ -1,5 +1,5 @@
 import { type, space, bodyEdge } from '../../core/theme.js';
-import { t } from '../../i18n/index.js';
+import { fmt, t } from '../../i18n/index.js';
 import { type ListField, renderListFieldWithContext } from '../fields/list-field.js';
 import { offlineNotice } from '../chrome.js';
 import type { TextField } from '../fields/text-field.js';
@@ -23,6 +23,7 @@ export type DocsMode =
 export interface DocsViewState {
   mode: DocsMode;
   errorMessage?: string;
+  errorField?: ListField;
   stale?: boolean;
   sectionsField?: ListField;
   filesField?: ListField;
@@ -31,6 +32,7 @@ export interface DocsViewState {
   searchField?: TextField;
   searchResultsField?: ListField;
   searchResultsEmpty?: boolean;
+  searchProgress?: { done: number; total: number };
   readerTitle?: string;
   readerRender?: (width: number) => string[];
   readerLinks?: DocLink[];
@@ -61,6 +63,7 @@ function listFieldForState(state: DocsViewState): ListField | undefined {
     case 'reader':
       return state.readerLinksField;
     case 'error':
+      return state.errorField;
     case 'loading':
     case 'readerLoading':
     case 'search':
@@ -80,16 +83,16 @@ export function renderDocs(
     case 'loading':
       lines = loadingLines(trans.common.loading, cols);
       break;
-    case 'sections':
+    case 'sections': {
+      const context = state.stale ? offlineNotice(cols) : [];
+      if (Number.isFinite(bodyRows)) {
+        state.sectionsField?.setMaxVisible(Math.max(1, Math.floor(bodyRows) - context.length - 1));
+      }
       lines = state.sectionsField
-        ? renderListFieldWithContext(
-            state.stale ? offlineNotice(cols) : [],
-            state.sectionsField,
-            bodyRows,
-            cols,
-          )
+        ? renderListFieldWithContext(context, state.sectionsField, bodyRows, cols)
         : [];
       break;
+    }
     case 'files':
       lines = state.filesField?.render(bodyRows, cols) ?? loadingLines(trans.common.loading, cols);
       break;
@@ -105,7 +108,12 @@ export function renderDocs(
       lines = state.searchField?.render(cols) ?? [];
       break;
     case 'searchLoading':
-      lines = loadingLines(trans.docs.searching, cols);
+      lines = loadingLines(
+        state.searchProgress
+          ? fmt(trans.docs.searchProgress, state.searchProgress)
+          : trans.docs.searching,
+        cols,
+      );
       break;
     case 'searchResults':
       lines = state.searchResultsField
@@ -129,8 +137,20 @@ export function renderDocs(
         ? state.readerLinksField.render(bodyRows, cols)
         : renderReader(state.readerRender ?? (() => []), cols);
       break;
-    case 'error':
-      return hintLines(state.errorMessage ?? trans.docs.loadError, cols);
+    case 'error': {
+      const context = [
+        ...wrapAnsiWithIndent(
+          type.body(state.errorMessage ?? trans.docs.loadError),
+          cols,
+          space.indent,
+        ),
+        ...hintLines(trans.docs.offlineHint, cols),
+        '',
+      ];
+      return state.errorField
+        ? renderListFieldWithContext(context, state.errorField, bodyRows, cols)
+        : context;
+    }
   }
   if (!state.errorMessage) return lines;
   const errorContext = [...hintLines(state.errorMessage, cols), ''];

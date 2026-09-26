@@ -8,8 +8,14 @@ const fetchSectionsMock = vi.fn().mockResolvedValue([
     label: 'Guide',
     count: 2,
     files: [
-      { name: 'index.md', path: 'tutorial/index.md', type: 'file' },
-      { name: 'os-skills.md', path: 'tutorial/manual/os-skills.md', type: 'file' },
+      { name: 'index.md', path: 'tutorial/index.md', type: 'file', title: 'Guide', summary: '' },
+      {
+        name: 'os-skills.md',
+        path: 'tutorial/manual/os-skills.md',
+        type: 'file',
+        title: 'Os Skills',
+        summary: '',
+      },
     ],
   },
 ]);
@@ -19,7 +25,10 @@ const readerDocs: Record<string, ReaderDoc> = {
     path: 'tutorial/manual/os-skills.md',
     title: 'OS Skills',
     render: () => ['OS Skills content', '', 'See also linked doc.'],
-    links: [{ href: 'tutorial/manual/other-doc.md', text: 'linked doc' }],
+    links: [
+      { href: 'tutorial/manual/other-doc.md', text: 'linked doc' },
+      { href: 'https://nbtca.space', text: 'the site', external: true },
+    ],
   },
   'tutorial/manual/other-doc.md': {
     path: 'tutorial/manual/other-doc.md',
@@ -36,7 +45,9 @@ function readerDoc(path: string): ReaderDoc {
 
 const loadDocForReaderMock = vi.fn((path: string) => Promise.resolve(readerDoc(path)));
 const fetchDocMetadataMock = vi.fn((files: ListedDoc[]) => Promise.resolve(files));
-const fetchSectionMetadataMock = vi.fn((section: DocSection) => Promise.resolve(section));
+const fetchSectionMetadataMock = vi.fn<typeof DocsModule.fetchSectionMetadata>((section) =>
+  Promise.resolve(section),
+);
 const searchDocumentsMock = vi.fn().mockResolvedValue([]);
 const openDocsInBrowserMock = vi.fn().mockResolvedValue(true);
 const clearDocsCacheMock = vi.fn();
@@ -56,6 +67,9 @@ function deferred<T>(): {
   });
   return { promise, resolve };
 }
+
+const launchBrowserUrlMock = vi.fn().mockResolvedValue(true);
+vi.mock('../../features/links.js', () => ({ launchBrowserUrl: launchBrowserUrlMock }));
 
 vi.mock('../../features/docs.js', async (importOriginal) => {
   const actual = await importOriginal<typeof DocsModule>();
@@ -131,15 +145,25 @@ describe('docsView', () => {
     expect(hint).not.toContain(t().menu.hintOpen);
   });
 
-  it('does not offer move or open actions on an error screen', async () => {
+  it('says the docs look offline and offers a retry when nothing is stored', async () => {
     fetchSectionsMock.mockRejectedValueOnce(new Error('Broke'));
     vi.resetModules();
     const { docsView: freshDocsView } = await import('./docs.js');
-    await freshDocsView.load(fakeCtx());
-    const hint = stripAnsi(freshDocsView.footerHint(5, 80) ?? '');
-    expect(hint).toContain('1-5');
-    expect(hint).not.toContain(t().menu.hintMove);
-    expect(hint).not.toContain(t().menu.hintOpen);
+    const { setLanguage: setFreshLanguage } = await import('../../i18n/index.js');
+    setFreshLanguage('en');
+    const ctx = fakeCtx();
+    await freshDocsView.load(ctx);
+    const out = stripAnsi(freshDocsView.render(ctx).join('\n'));
+    expect(out).toContain(t().docs.offlineError);
+    expect(out).toContain(t().docs.offlineHint);
+    expect(out).toContain(t().docs.retryLoad);
+    expect(freshDocsView.capturesPageKeys()).toBe(true);
+
+    fetchSectionsMock.mockClear();
+    freshDocsView.handleKey('\r', ctx);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(fetchSectionsMock).toHaveBeenCalledOnce();
+    expect(stripAnsi(freshDocsView.render(ctx).join('\n'))).toContain(t().docs.searchPrompt);
   });
 
   it('rebuilds the cached section menu after a language change without fetching again', async () => {
@@ -185,8 +209,14 @@ describe('docsView', () => {
         label: '指南',
         count: 2,
         files: [
-          { name: 'index.md', path: 'tutorial/index.md', type: 'file' },
-          { name: 'os-skills.md', path: 'tutorial/manual/os-skills.md', type: 'file' },
+          { name: 'index.md', path: 'tutorial/index.md', type: 'file', title: '指南', summary: '' },
+          {
+            name: 'os-skills.md',
+            path: 'tutorial/manual/os-skills.md',
+            type: 'file',
+            title: 'Os Skills',
+            summary: '',
+          },
         ],
       },
     ]);
@@ -296,10 +326,10 @@ describe('docsView', () => {
       setFreshLanguage('en');
       await freshDocsView.load(ctx);
       const out = stripAnsi(freshDocsView.render(ctx).join('\n'));
-      expect(out).toContain('Choose a document or directory');
+      expect(out).toContain('Results for “o” · 1');
       const selected = out.split('\n').find((line) => line.includes('Back'));
       expect(selected?.trim().startsWith('→')).toBe(true);
-      expect(searchDocumentsMock).toHaveBeenCalledWith('o', ctx.signal);
+      expect(searchDocumentsMock).toHaveBeenCalledWith('o', ctx.signal, expect.any(Function));
       expect(fetchSectionsMock).toHaveBeenCalledTimes(1);
     } finally {
       setFreshLanguage('en');
@@ -555,18 +585,60 @@ describe('docsView native reader (no shell-out to less/glow)', () => {
     expect(fetchSectionMetadataMock).not.toHaveBeenCalled();
   });
 
-  it('shows filenames at once and swaps in titles when they arrive', async () => {
+  it('lets summaries fill a wide terminal in one aligned column', async () => {
+    const summary = 'Practical workstation skills for every new member, from shells to editors';
+    peekListedDocsMock.mockReturnValueOnce({
+      complete: true,
+      docs: [
+        { name: 'a.md', path: 'tutorial/a.md', type: 'file', title: 'Handbook', summary },
+        {
+          name: 'b.md',
+          path: 'tutorial/b.md',
+          type: 'file',
+          title: 'Shells',
+          summary: 'Terminals',
+        },
+      ],
+    });
+    const ctx = { ...fakeCtx(), size: { rows: 40, cols: 120 }, bodyRows: 35 };
+    await freshDocsView.load(ctx);
+    freshDocsView.handleKey('\r', ctx);
+
+    const lines = stripAnsi(freshDocsView.render(ctx).join('\n')).split('\n');
+    const first = lines.find((line) => line.includes('Handbook')) ?? '';
+    const second = lines.find((line) => line.includes('Shells')) ?? '';
+    expect(first).toContain(summary);
+    expect(first.indexOf('Practical')).toBe(second.indexOf('Terminals'));
+  });
+
+  it('keeps unknown titles as placeholders and swaps in each title as it arrives', async () => {
     let resolveMetadata!: (section: DocSection) => void;
+    let reportDoc!: (index: number, doc: ListedDoc) => void;
+    peekListedDocsMock.mockImplementationOnce((items) => ({
+      docs: items.map((item) => ({ ...item, title: '' })),
+      complete: false,
+    }));
     fetchSectionMetadataMock.mockImplementationOnce(
-      () =>
+      (_section, _signal, onDoc) =>
         new Promise((resolve) => {
           resolveMetadata = resolve;
+          if (onDoc) reportDoc = onDoc;
         }),
     );
     const ctx = fakeCtx();
     await openTutorialFiles(ctx);
     const early = stripAnsi(freshDocsView.render(ctx).join('\n'));
-    expect(early).toContain('Os Skills');
+    expect(early).not.toContain('Os Skills');
+    expect(early).toContain('…');
+
+    reportDoc(1, {
+      name: 'os-skills.md',
+      path: 'tutorial/manual/os-skills.md',
+      type: 'file',
+      title: 'Operating Systems Handbook',
+      summary: '',
+    });
+    expect(stripAnsi(freshDocsView.render(ctx).join('\n'))).toContain('Operating Systems Handbook');
     expect(freshDocsView.isBusy()).toBe(false);
     expect(freshDocsView.contextPath()).toEqual(['Docs', 'Guide']);
 
@@ -599,6 +671,10 @@ describe('docsView native reader (no shell-out to less/glow)', () => {
   });
 
   it('falls back to filename titles with an error when the titles cannot load', async () => {
+    peekListedDocsMock.mockImplementationOnce((items) => ({
+      docs: items.map((item) => ({ ...item, title: '' })),
+      complete: false,
+    }));
     fetchSectionMetadataMock.mockRejectedValueOnce(new Error('offline'));
     const ctx = fakeCtx();
     await openTutorialFiles(ctx);
@@ -780,6 +856,51 @@ describe('docsView native reader (no shell-out to less/glow)', () => {
     expect(out).toContain('Other doc content, no further links.');
   });
 
+  it('lists external links with their address and opens them in the browser', async () => {
+    const ctx = fakeCtx();
+    await openTutorialFiles(ctx);
+    freshDocsView.handleKey('\x1b[B', ctx);
+    freshDocsView.handleKey('\r', ctx);
+    await flush();
+
+    freshDocsView.handleKey('f', ctx);
+    const out = stripAnsi(freshDocsView.render(ctx).join('\n'));
+    expect(out.split('\n').find((line) => line.includes('the site'))).toContain('nbtca.space');
+
+    freshDocsView.handleKey('\x1b[B', ctx);
+    freshDocsView.handleKey('\r', ctx);
+    await flush();
+    expect(launchBrowserUrlMock).toHaveBeenCalledWith('https://nbtca.space');
+    expect(ctx.runClassic).toHaveBeenCalled();
+    expect(stripAnsi(freshDocsView.render(ctx).join('\n'))).toContain('OS Skills content');
+  });
+
+  it('counts the documents a search has checked while it runs', async () => {
+    let report!: (done: number, total: number) => void;
+    searchDocumentsMock.mockImplementationOnce(
+      (_query: string, _signal: AbortSignal, onProgress: (done: number, total: number) => void) => {
+        report = onProgress;
+        return new Promise(() => undefined);
+      },
+    );
+    const ctx = fakeCtx();
+    await freshDocsView.load(ctx);
+    freshDocsView.handleKey('\x1b[B', ctx);
+    freshDocsView.handleKey('\r', ctx);
+    freshDocsView.handleKey('git', ctx);
+    freshDocsView.handleKey('\r', ctx);
+    report(12, 245);
+    expect(stripAnsi(freshDocsView.render(ctx).join('\n'))).toContain('12 of 245');
+  });
+
+  it('keeps an overflow cue on a short docs menu', async () => {
+    const ctx = { ...fakeCtx(), size: { rows: 12, cols: 40 }, bodyRows: 4 };
+    await freshDocsView.load(ctx);
+    const lines = stripAnsi(freshDocsView.render(ctx).join('\n')).split('\n');
+    expect(lines.length).toBeLessThanOrEqual(4);
+    expect(lines.at(-1)).toContain('more below');
+  });
+
   it('keeps the current document and navigation stack when an internal link fails to load', async () => {
     const ctx = fakeCtx();
     await openTutorialFiles(ctx);
@@ -811,7 +932,7 @@ describe('docsView native reader (no shell-out to less/glow)', () => {
       freshDocsView.handleKey('\r', ctx);
       await flush();
       freshDocsView.handleKey('f', ctx);
-      freshDocsView.handleKey('\x1b[B', ctx);
+      freshDocsView.handleKey('G', ctx);
 
       setLanguage('en');
       setFreshLanguage('en');

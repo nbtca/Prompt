@@ -1,7 +1,6 @@
-import chalk from 'chalk';
 import type { HeatmapBucket } from '@nbtca/nbtcal';
 import { pickIcon } from '../core/icons.js';
-import { space, type } from '../core/theme.js';
+import { c, space, type } from '../core/theme.js';
 import { t, getCurrentLanguage } from '../i18n/index.js';
 import { visualWidth } from '../core/text.js';
 
@@ -17,23 +16,49 @@ function utcDayToMonIndex(utcDay: number): number {
   return (utcDay + 6) % 7;
 }
 
-function countToGlyph(count: number): string {
-  if (count <= 0) return pickIcon('·', ' ');
-  if (count === 1) return pickIcon('░', '.');
-  if (count === 2) return pickIcon('▒', ':');
-
-  if (count === 3) return pickIcon('▓', '-');
-  return pickIcon('█', '=');
-}
-
-const HEATMAP_RAMP = ['#1b4332', '#2d6a4f', '#40916c', '#52b788'] as const;
+const LEVEL_GLYPHS = [
+  ['·', ' '],
+  ['░', '.'],
+  ['▒', ':'],
+  ['▓', '-'],
+  ['█', '='],
+] as const;
 const MAX_WEEK_COLUMNS = 53;
 const GRID_PREFIX_WIDTH = 6;
 
-function applyColor(glyph: string, count: number, useColor: boolean): string {
-  if (!useColor || count <= 0) return glyph;
-  const level = Math.min(count, HEATMAP_RAMP.length) - 1;
-  return chalk.hex(HEATMAP_RAMP[level] as string)(glyph);
+function levelCell(count: number, useColor: boolean): string {
+  const level = Math.max(0, Math.min(count, LEVEL_GLYPHS.length - 1));
+  const [unicode, ascii] = LEVEL_GLYPHS[level] ?? LEVEL_GLYPHS[0];
+  const cell = pickIcon(unicode, ascii);
+  if (!useColor) return cell;
+  return level === 0 ? type.hint(cell) : c.success(cell);
+}
+
+interface MonthAnchor {
+  start: number;
+  date: Date;
+}
+
+function placeMonthLabels(
+  anchors: readonly MonthAnchor[],
+  width: number,
+  format: (date: Date) => string,
+  strict: boolean,
+): string | undefined {
+  let line = '';
+  for (const [index, anchor] of anchors.entries()) {
+    const label = format(anchor.date);
+    const end = anchor.start + visualWidth(label);
+    const used = visualWidth(line);
+    const gap = index === 0 ? 2 : 1;
+    const limit = (anchors[index + 1]?.start ?? width + gap) - gap;
+    if (anchor.start >= used + (used > 0 ? 1 : 0) && end <= limit) {
+      line += ' '.repeat(anchor.start - used) + label;
+    } else if (strict && index > 0) {
+      return undefined;
+    }
+  }
+  return line;
 }
 
 export function renderHeatmap(
@@ -94,29 +119,22 @@ export function renderHeatmap(
     timeZone: 'UTC',
   });
   const cellsWidth = numCols * cellWidth;
-  let monthLine = '';
+  const anchors: MonthAnchor[] = [];
   let prevMonth = -1;
-  for (let col = 0; col < numCols; col++) {
-    let labelDate: Date | null = null;
-    for (let row = 0; row < 7; row++) {
-      const cell = columns[col]?.[row];
-      if (cell !== null && cell !== undefined) {
-        labelDate = parseBucketDate(cell.date);
-        break;
-      }
-    }
-    if (labelDate === null) continue;
-    const month = labelDate.getUTCMonth();
-    if (month !== prevMonth) {
-      prevMonth = month;
-      const label = monthFmt.format(labelDate);
-      const start = col * cellWidth;
-      const used = visualWidth(monthLine);
-      if (start >= used + (used > 0 ? 1 : 0) && start + visualWidth(label) <= cellsWidth) {
-        monthLine += ' '.repeat(start - used) + label;
-      }
-    }
+  for (const [col, column] of columns.entries()) {
+    const cell = column.find((candidate) => candidate !== null);
+    if (!cell) continue;
+    const date = parseBucketDate(cell.date);
+    if (date.getUTCMonth() === prevMonth) continue;
+    prevMonth = date.getUTCMonth();
+    anchors.push({ start: col * cellWidth, date });
   }
+  const monthNumber = (date: Date) => String(date.getUTCMonth() + 1);
+  const monthLine =
+    placeMonthLabels(anchors, cellsWidth, (date) => monthFmt.format(date), true) ??
+    placeMonthLabels(anchors, cellsWidth, monthNumber, true) ??
+    placeMonthLabels(anchors, cellsWidth, monthNumber, false) ??
+    '';
   const monthLabelLine = space.indent + weekdayLabel + monthLine;
 
   const weekdayNames = [
@@ -141,32 +159,16 @@ export function renderHeatmap(
     const cells = columns.map((col) => {
       const cell = col[row];
       if (cell === null || cell === undefined) return ' ';
-      const glyph = countToGlyph(cell.count);
-      return applyColor(glyph, cell.count, useColor);
+      return levelCell(cell.count, useColor);
     });
     lines.push(`${space.indent}${wdLabel} ${cells.join(cellWidth === 2 ? ' ' : '')}`);
   }
 
-  const legendGlyphs = [
-    pickIcon('·', ' '),
-    pickIcon('░', '.'),
-    pickIcon('▒', ':'),
-    pickIcon('▓', '-'),
-    pickIcon('█', '='),
-  ];
-  const legendColored = useColor
-    ? [
-        legendGlyphs[0] ?? '·',
-        applyColor(legendGlyphs[1] ?? '░', 1, true),
-        applyColor(legendGlyphs[2] ?? '▒', 2, true),
-        applyColor(legendGlyphs[3] ?? '▓', 3, true),
-        applyColor(legendGlyphs[4] ?? '█', 4, true),
-      ]
-    : legendGlyphs;
+  const legend = LEVEL_GLYPHS.map((_, level) => levelCell(level, useColor)).join('');
 
   lines.push('');
   lines.push(
-    `${space.indent}${type.hint(trans.calendar.heatmap.legendLess)} ${legendColored.join('')} ${type.hint(trans.calendar.heatmap.legendMore)}`,
+    `${space.indent}${type.hint(trans.calendar.heatmap.legendLess)} ${legend} ${type.hint(trans.calendar.heatmap.legendMore)}`,
   );
 
   return lines.join('\n');

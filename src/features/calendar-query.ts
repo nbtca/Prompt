@@ -30,7 +30,7 @@ export function eventEnd(event: CalendarEvent): Date {
   );
 }
 
-function hasEnded(event: CalendarEvent, now: Date): boolean {
+export function hasEnded(event: CalendarEvent, now: Date): boolean {
   return event.start < now && eventEnd(event) <= now;
 }
 

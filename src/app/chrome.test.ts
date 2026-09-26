@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { glyph } from '../core/theme.js';
 import {
   captureFooterHint,
   offlineNotice,
@@ -258,7 +259,7 @@ describe('captureFooterHint', () => {
     expect(visualWidth(hint)).toBeLessThanOrEqual(20);
     expect(hint).toContain('Ctrl+C');
     expect(hint).toContain('Esc');
-    expect(hint).toContain('Enter');
+    expect(hint).toContain(glyph.enter());
   });
 });
 

@@ -37,10 +37,10 @@ describe('links', () => {
     expect(out).not.toContain('#沿革');
   });
 
-  it('keeps the target of external links, once', () => {
-    expect(render('见 [学校官网](https://www.nbt.edu.cn) 。').join('\n')).toContain(
-      '学校官网 (https://www.nbt.edu.cn)',
-    );
+  it('shows only the text of an external link and leaves its URL to the link picker', () => {
+    const out = render('见 [学校官网](https://www.nbt.edu.cn) 。').join('\n');
+    expect(out).toContain('学校官网');
+    expect(out).not.toContain('nbt.edu.cn');
     expect(render('<https://example.com>').join('\n')).toBe('https://example.com');
     expect(render('[github.com/nbtca](https://github.com/nbtca/)').join('\n')).toBe(
       'github.com/nbtca',
@@ -171,6 +171,6 @@ describe('plain output', () => {
     ].join('\n\n');
     const out = renderMarkdown(marked.lexer(source), 60).join('\n');
     expect(out).not.toMatch(/[\u001B\u009B\u009D]/u);
-    expect(out).toContain('│ Note: read this (https://example.com) and code');
+    expect(out).toContain('│ Note: read this and code');
   });
 });

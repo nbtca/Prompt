@@ -112,6 +112,7 @@ function renderIndentedText(
 }
 
 const MIN_LABEL_COLUMN = 24;
+const MIN_HINT_COLUMN = 16;
 
 function clipWithEllipsis(value: string, width: number): string {
   if (visualWidth(value) <= width) return value;
@@ -126,7 +127,10 @@ function fitColumns(columns: MenuColumns, contentWidth: number): MenuColumns | u
     Math.max(contentWidth - 2 - columns.label, Math.ceil(contentWidth / 3)),
   );
   const label = Math.min(columns.label, contentWidth - 2 - hint);
-  return label >= MIN_LABEL_COLUMN ? { label, hint } : undefined;
+  const readable =
+    label >= Math.min(MIN_LABEL_COLUMN, columns.label) &&
+    hint >= Math.min(MIN_HINT_COLUMN, columns.hint);
+  return readable ? { label, hint } : undefined;
 }
 
 function optionCells(

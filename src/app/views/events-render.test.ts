@@ -682,6 +682,6 @@ describe('renderEvents — list/detail/search/error modes', () => {
 
     expect(lines.length).toBeLessThanOrEqual(6);
     expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
-    expect(text).toBe(message.replace(/\s/g, ''));
+    expect(text.startsWith(message.replace(/\s/g, ''))).toBe(true);
   });
 });

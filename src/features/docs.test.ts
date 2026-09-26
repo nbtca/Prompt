@@ -17,6 +17,7 @@ import {
   loadDocForReader,
   fetchAllDocs,
   peekListedDocs,
+  searchDocuments,
 } from './docs.js';
 import { setLanguage } from '../i18n/index.js';
 import { stripAnsi } from '../core/text.js';
@@ -338,14 +339,14 @@ describe('peekListedDocs', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('keeps unstored documents as they are and reports the list incomplete', () => {
+  it('leaves unstored titles blank instead of guessing from the filename', () => {
     const listed = peekListedDocs([
       stored('cached.md', 'b'.repeat(40), '# Cached\n'),
       stored('missing.md', 'c'.repeat(40)),
     ]);
     expect(listed.complete).toBe(false);
     expect(listed.docs).toMatchObject([{ title: 'Cached' }, { name: 'missing.md' }]);
-    expect(listed.docs[1]).not.toHaveProperty('title');
+    expect(listed.docs[1]?.title).toBe('');
     expect(peekListedDocs([{ name: 'x.md', path: 'guide/x.md', type: 'file' }]).complete).toBe(
       false,
     );
@@ -467,5 +468,59 @@ describe('document rendering', () => {
     } finally {
       chalk.level = level;
     }
+  });
+});
+
+describe('reader links', () => {
+  it('lists external links with their URL beside internal ones', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        text: () =>
+          Promise.resolve(
+            'See [join](./join.md), [the site](https://nbtca.space) and [top](#top).',
+          ),
+      }),
+    );
+    const doc = await loadDocForReader('about/index.md');
+    expect(doc.links).toEqual([
+      { text: 'join', href: 'about/join.md' },
+      { text: 'the site', href: 'https://nbtca.space', external: true },
+    ]);
+  });
+});
+
+describe('searchDocuments', () => {
+  it('reports how many documents it has checked and drops the title from each excerpt', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: string) =>
+        Promise.resolve(
+          input.includes('/trees/')
+            ? Response.json({
+                tree: [
+                  { path: 'guide/alpha.md', type: 'blob' },
+                  { path: 'guide/beta.md', type: 'blob' },
+                ],
+                truncated: false,
+              })
+            : new Response(
+                input.endsWith('alpha.md')
+                  ? '# Alpha Guide\n\nThe needle is here.'
+                  : '# Beta\n\nNothing to see.',
+              ),
+        ),
+      ),
+    );
+    const progress: [number, number][] = [];
+    const results = await searchDocuments('needle', undefined, (done, total) => {
+      progress.push([done, total]);
+    });
+    expect(progress.at(0)).toEqual([0, 2]);
+    expect(progress.at(-1)).toEqual([2, 2]);
+    expect(results.map((result) => result.title)).toEqual(['Alpha Guide']);
+    expect(results[0]?.excerpt).not.toMatch(/^Alpha Guide/);
+    expect(results[0]?.excerpt).toContain('needle');
   });
 });

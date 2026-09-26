@@ -23,6 +23,7 @@ import { t } from '../i18n/index.js';
 import { localDayDifference } from '../core/calendar-day.js';
 import {
   countdownParts,
+  eventEnd,
   isCountdownUrgent,
   buildExportFilename,
   formatDuration,
@@ -136,6 +137,22 @@ export function toDisplayEvent(e: CalendarEvent): Event {
     recurring: e.recurring,
     uid: e.uid,
   };
+}
+
+export function eventTimeRange(e: CalendarEvent): string {
+  const dash = pickIcon('–', '-');
+  const startDate = formatDate(e.start);
+  if (e.isAllDay) {
+    const lastDay = new Date(eventEnd(e).getTime() - 1);
+    const endDate = formatDate(lastDay);
+    return endDate === startDate ? startDate : `${startDate} ${dash} ${endDate}`;
+  }
+  const start = `${startDate} ${formatTime(e.start)}`;
+  if (!e.end || e.end <= e.start) return start;
+  const endDate = formatDate(e.end);
+  return endDate === startDate
+    ? `${start}${dash}${formatTime(e.end)}`
+    : `${start} ${dash} ${endDate} ${formatTime(e.end)}`;
 }
 
 export async function loadCalendarOrCache(
@@ -311,7 +328,7 @@ export function renderCountdownBanner(
   const whenStyled = isCountdownUrgent(p) ? c.warn(when) : type.hint(when);
   const dot = pickIcon('·', '-');
   const content = `${type.label(trans.calendar.next)}  ${dot}  ${type.body(event.title)}  ${dot}  ${whenStyled}`;
-  return hangingLines(type.active(glyph.cursor()), content, cols).join('\n');
+  return hangingLines(type.active(glyph.dot()), content, cols).join('\n');
 }
 
 export function exportEventIcs(

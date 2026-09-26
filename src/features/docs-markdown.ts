@@ -42,40 +42,32 @@ function joinSoftBreaks(text: string): string {
   return text.replace(CJK_SOFT_BREAK, '').replace(/[ \t]*\n[ \t]*/g, ' ');
 }
 
-function renderInline(tokens: readonly Token[] | undefined, hrefs: boolean): string {
-  return (tokens ?? []).map((token) => renderInlineToken(token as MarkedToken, hrefs)).join('');
+function renderInline(tokens: readonly Token[] | undefined): string {
+  return (tokens ?? []).map((token) => renderInlineToken(token as MarkedToken)).join('');
 }
 
-function renderLink(token: Tokens.Link, hrefs: boolean): string {
-  const text = renderInline(token.tokens, hrefs);
-  const bare = (href: string) => href.replace(/^(?:https?:\/\/|mailto:)/, '').replace(/\/$/, '');
-  const selfLabelled = bare(stripAnsi(text)) === bare(token.href);
-  if (isInternalHref(token.href) || token.href.startsWith('#') || selfLabelled) {
-    return chalk.underline(c.accent(text));
-  }
-  return hrefs ? `${c.accent(text)} ${c.url(`(${token.href})`)}` : c.accent(text);
+function renderLink(token: Tokens.Link): string {
+  return chalk.underline(c.accent(renderInline(token.tokens)));
 }
 
-function renderInlineToken(token: MarkedToken, hrefs: boolean): string {
+function renderInlineToken(token: MarkedToken): string {
   switch (token.type) {
     case 'text':
-      return token.tokens
-        ? renderInline(token.tokens, hrefs)
-        : joinSoftBreaks(decodeEntities(token.text));
+      return token.tokens ? renderInline(token.tokens) : joinSoftBreaks(decodeEntities(token.text));
     case 'escape':
       return token.text;
     case 'strong':
-      return chalk.bold(renderInline(token.tokens, hrefs));
+      return chalk.bold(renderInline(token.tokens));
     case 'em':
-      return chalk.italic(renderInline(token.tokens, hrefs));
+      return chalk.italic(renderInline(token.tokens));
     case 'del':
-      return chalk.strikethrough(c.muted(renderInline(token.tokens, hrefs)));
+      return chalk.strikethrough(c.muted(renderInline(token.tokens)));
     case 'codespan':
       return c.code(token.text);
     case 'br':
       return '\n';
     case 'link':
-      return renderLink(token, hrefs);
+      return renderLink(token);
     case 'image':
       return `${pickIcon('🖼️', '[image]')} ${token.text || 'image'}`;
     case 'html':
@@ -112,7 +104,7 @@ function styleHeading(text: string, depth: number): string {
 }
 
 function renderHeading(token: Tokens.Heading, width: number): string[] {
-  const lines = wrap(styleHeading(renderInline(token.tokens, false), token.depth), width);
+  const lines = wrap(styleHeading(renderInline(token.tokens), token.depth), width);
   if (token.depth !== 2) return lines;
   const underline = Math.min(width, Math.max(...lines.map(visualWidth)));
   return [...lines, c.muted(glyph.rule().repeat(underline))];
@@ -209,8 +201,8 @@ function renderRecords(
 }
 
 function renderTable(token: Tokens.Table, width: number): string[] {
-  const header = token.header.map((cell) => renderInline(cell.tokens, false));
-  const rows = token.rows.map((row) => row.map((cell) => renderInline(cell.tokens, false)));
+  const header = token.header.map((cell) => renderInline(cell.tokens));
+  const rows = token.rows.map((row) => row.map((cell) => renderInline(cell.tokens)));
   const natural = header.map((label, column) =>
     Math.max(cellWidth(label), ...rows.map((row) => cellWidth(row[column] ?? ''))),
   );
@@ -263,9 +255,9 @@ function renderBlock(token: MarkedToken, width: number, depth: number): string[]
     case 'heading':
       return renderHeading(token, width);
     case 'paragraph':
-      return wrap(renderInline(token.tokens, true), width);
+      return wrap(renderInline(token.tokens), width);
     case 'text':
-      return wrap(renderInlineToken(token, true), width);
+      return wrap(renderInlineToken(token), width);
     case 'code':
       return renderCode(token, width);
     case 'blockquote':
@@ -292,7 +284,7 @@ function renderBlock(token: MarkedToken, width: number, depth: number): string[]
     case 'image':
     case 'link':
     case 'strong':
-      return wrap(renderInlineToken(token, true), width);
+      return wrap(renderInlineToken(token), width);
   }
 }
 

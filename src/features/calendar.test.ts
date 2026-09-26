@@ -7,6 +7,7 @@ import {
   renderEventBrief,
   renderEventBriefLines,
   exportEventIcs,
+  eventTimeRange,
 } from './calendar.js';
 import chalk from 'chalk';
 import { setLanguage } from '../i18n/index.js';
@@ -313,7 +314,7 @@ describe('renderCountdownBanner', () => {
     expect(text).toContain(title.replace(/\s/g, ''));
     expect(text).toContain('Next');
     expect(text).toContain('1d0h');
-    expect(lines.filter((line) => /[→>]/u.test(stripAnsi(line)))).toHaveLength(1);
+    expect(lines.filter((line) => /[●*]/u.test(stripAnsi(line)))).toHaveLength(1);
   });
   it('spells the countdown out in Chinese', () => {
     setLanguage('zh');
@@ -392,5 +393,42 @@ describe('exportEventIcs', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('eventTimeRange', () => {
+  beforeAll(() => {
+    process.env['NBTCA_ICON_MODE'] = 'unicode';
+    resetIconCache();
+  });
+
+  const year = new Date().getFullYear();
+  const at = (value: string) => new Date(`${year}-${value}`);
+
+  it('joins a same-day end time to the start', () => {
+    const event = makeEvent({ start: at('06-17T19:00:00'), end: at('06-17T21:30:00') });
+    expect(eventTimeRange(event)).toBe('06-17 19:00–21:30');
+  });
+
+  it('spells out the end date when an event runs past midnight', () => {
+    const event = makeEvent({ start: at('06-17T22:00:00'), end: at('06-18T02:00:00') });
+    expect(eventTimeRange(event)).toBe('06-17 22:00 – 06-18 02:00');
+  });
+
+  it('shows only the start when there is no later end', () => {
+    expect(eventTimeRange(makeEvent({ start: at('06-17T19:00:00'), end: null }))).toBe(
+      '06-17 19:00',
+    );
+  });
+
+  it('treats an all-day end date as exclusive', () => {
+    const oneDay = makeEvent({ isAllDay: true, start: at('06-17T00:00:00'), end: null });
+    const threeDays = makeEvent({
+      isAllDay: true,
+      start: at('06-17T00:00:00'),
+      end: at('06-20T00:00:00'),
+    });
+    expect(eventTimeRange(oneDay)).toBe('06-17');
+    expect(eventTimeRange(threeDays)).toBe('06-17 – 06-19');
   });
 });
