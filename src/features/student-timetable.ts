@@ -19,6 +19,7 @@ import {
 import { createSessionStore, type SessionStore } from '../auth/session-store.js';
 import { isoDayDifference, parseLocalMonday } from '../core/calendar-day.js';
 import { clearScheduleCache, termKey } from './schedule-store.js';
+import { sanitizeTerminalLine } from '../core/text.js';
 import { fmt, t } from '../i18n/index.js';
 import { sanitizeAcademicTerm, sanitizeTimetable } from './timetable-sanitize.js';
 
@@ -90,6 +91,15 @@ export function assertWeekOne(
   }
 }
 
+class IcsWriteError extends Error {
+  constructor(
+    readonly file: string,
+    readonly reason: string,
+  ) {
+    super(`Could not write ${file}.`);
+  }
+}
+
 export function isSessionExpired(error: unknown): boolean {
   return (
     (error instanceof AuthError && error.code === 'SESSION_EXPIRED') ||
@@ -99,6 +109,12 @@ export function isSessionExpired(error: unknown): boolean {
 
 export function safeMessage(error: unknown): string {
   const trans = t().timetable;
+  if (error instanceof IcsWriteError) {
+    return fmt(trans.writeFailed, {
+      file: sanitizeTerminalLine(error.file),
+      reason: sanitizeTerminalLine(error.reason),
+    });
+  }
   if (error instanceof WeekOneError) {
     return error.reason === 'invalid' ? trans.invalidWeekOne : trans.weekOneConflict;
   }
@@ -276,6 +292,10 @@ export function writePrivateIcs(filePath: string, contents: string): void {
     } catch {
       /* Best effort on non-POSIX filesystems. */
     }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    // Node appends the syscall and the temporary path; keep only "CODE: description".
+    throw new IcsWriteError(resolved, /^(.+?), \w+ '/.exec(message)?.[1] ?? message);
   } finally {
     try {
       fs.unlinkSync(temporaryPath);

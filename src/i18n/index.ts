@@ -259,6 +259,7 @@ export interface Translations {
     noTerms: string;
     currentTermUnknown: string;
     genericError: string;
+    writeFailed: string;
     hubToday: string;
     hubWeek: string;
     hubSwitchTerm: string;

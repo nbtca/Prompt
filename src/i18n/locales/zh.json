@@ -248,6 +248,7 @@
     "noTerms": "教务系统没有返回可用学期。",
     "currentTermUnknown": "教务没有标出唯一的当前学期；请用 --term=学年:代码 指定。",
     "genericError": "课表操作失败。",
+    "writeFailed": "无法写入 {file}：{reason}",
     "hubToday": "今日",
     "hubWeek": "本周",
     "hubSwitchTerm": "切换学期",

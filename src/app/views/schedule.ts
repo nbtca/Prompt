@@ -559,8 +559,8 @@ export const scheduleView = {
             const out = `timetable-${hubKey}.ics`;
             writePrivateIcs(out, ics);
             state = { ...state, statusMessage: `${t().common.success}: ${path.resolve(out)}` };
-          } catch {
-            state = { ...state, statusMessage: t().timetable.genericError };
+          } catch (error) {
+            state = { ...state, statusMessage: safeMessage(error) };
           }
           return;
         }

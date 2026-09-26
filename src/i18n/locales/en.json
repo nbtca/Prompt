@@ -248,6 +248,7 @@
     "noTerms": "JWXT returned no available terms.",
     "currentTermUnknown": "JWXT did not identify one current term. Choose one with --term=year:code.",
     "genericError": "The timetable operation failed.",
+    "writeFailed": "Could not write {file}: {reason}",
     "hubToday": "Today",
     "hubWeek": "This week",
     "hubSwitchTerm": "Switch term",

@@ -13,6 +13,7 @@ import {
   relevantTerms,
   resolveTerm,
   runStudentTimetableCommand,
+  safeMessage,
   withAuthenticatedSession,
   writePrivateIcs,
 } from './student-timetable.js';
@@ -215,6 +216,30 @@ describe('private ICS output', () => {
       expect(fs.lstatSync(output).isSymbolicLink()).toBe(false);
       expect(fs.statSync(output).mode & 0o777).toBe(0o600);
       expect(fs.readdirSync(directory).sort()).toEqual(['schedule.ics', 'target.ics']);
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    ['an existing directory', 'existing', 'EISDIR'],
+    ['a missing parent directory', path.join('missing', 'schedule.ics'), 'ENOENT'],
+  ])('names the path and the reason when the output is %s', (_label, output, code) => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'nbtca-ics-'));
+    try {
+      fs.mkdirSync(path.join(directory, 'existing'));
+      const target = path.join(directory, output);
+      let caught: unknown;
+      try {
+        writePrivateIcs(target, 'contents');
+      } catch (error) {
+        caught = error;
+      }
+      const message = safeMessage(caught);
+      expect(message).toContain(target);
+      expect(message).toContain(code);
+      expect(message).not.toContain('.tmp');
+      expect(fs.readdirSync(directory)).toEqual(['existing']);
     } finally {
       fs.rmSync(directory, { recursive: true, force: true });
     }
