@@ -435,7 +435,7 @@ async function openInReader(ctx: AppContext, path: string, pushCurrent: boolean)
     state = {
       mode: 'reader',
       readerTitle: doc.title,
-      readerLines: doc.lines,
+      readerRender: doc.render,
       readerLinks: doc.links,
     };
     ctx.resetScroll();

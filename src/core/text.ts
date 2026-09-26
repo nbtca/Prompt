@@ -357,22 +357,6 @@ export function wrapAnsiToVisualWidth(
   return lines.length > 0 ? lines : [''];
 }
 
-const LEADING_MARKER = /^(\s*)((?:[-*+•]|\d{1,3}[.)])\s+)?/u;
-
-export function wrapAnsiHanging(str: string, maxWidth: number): string[] {
-  const width = Number.isFinite(maxWidth)
-    ? Math.max(1, Math.floor(maxWidth))
-    : Number.POSITIVE_INFINITY;
-  const match = LEADING_MARKER.exec(stripAnsi(str));
-  const hang = visualWidth((match?.[1] ?? '') + (match?.[2] ?? ''));
-  if (hang === 0 || hang >= width) return wrapAnsiToVisualWidth(str, width);
-
-  const continuation = ' '.repeat(hang);
-  return wrapAnsiToVisualWidth(str, width, width - hang).map((line, index) =>
-    index === 0 ? line : continuation + line,
-  );
-}
-
 export function wrapAnsiWithIndent(str: string, maxWidth: number, preferredIndent = ''): string[] {
   const width = Number.isFinite(maxWidth)
     ? Math.max(1, Math.floor(maxWidth))

@@ -1,10 +1,14 @@
 import { describe, it, expect, beforeAll } from 'vitest';
+import { marked } from 'marked';
 import { renderDocs, type DocsViewState } from './docs-render.js';
 import { ListField } from '../fields/list-field.js';
 import { TextField } from '../fields/text-field.js';
 import { setLanguage } from '../../i18n/index.js';
 import { resetIconCache } from '../../core/icons.js';
 import { stripAnsi, visualWidth } from '../../core/text.js';
+import { renderMarkdown } from '../../features/docs-markdown.js';
+
+const markdown = (source: string) => (width: number) => renderMarkdown(marked.lexer(source), width);
 
 beforeAll(() => {
   setLanguage('en');
@@ -198,7 +202,7 @@ describe('renderDocs', () => {
 
   it('wraps Chinese reader text without dropping content', () => {
     const source = '刚认识这个社区？这一栏带你快速看懂：我们是谁、怎么加入、怎么运转。';
-    const lines = renderDocs({ mode: 'reader', readerLines: [source] }, 20).map(stripAnsi);
+    const lines = renderDocs({ mode: 'reader', readerRender: markdown(source) }, 20).map(stripAnsi);
 
     expect(lines.length).toBeGreaterThan(1);
     expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
@@ -209,7 +213,9 @@ describe('renderDocs', () => {
   it('reflows the same reader content when the terminal width changes', () => {
     const state: DocsViewState = {
       mode: 'reader',
-      readerLines: ['文档正文需要随着终端宽度变化重新排版，不能继续沿用第一次打开时的宽度。'],
+      readerRender: markdown(
+        '文档正文需要随着终端宽度变化重新排版，不能继续沿用第一次打开时的宽度。',
+      ),
     };
 
     const narrow = renderDocs(state, 20);

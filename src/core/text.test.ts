@@ -10,7 +10,6 @@ import {
   visualWidth,
   wrapAnsiWithIndent,
   wrapAnsiToVisualWidth,
-  wrapAnsiHanging,
 } from './text.js';
 
 describe('visualWidth', () => {
@@ -163,36 +162,6 @@ describe('wrapAnsiToVisualWidth kinsoku', () => {
         expect(visualWidth(line)).toBeLessThanOrEqual(width);
       }
     }
-  });
-});
-
-describe('wrapAnsiHanging', () => {
-  it('indents continuations under the text of a bullet, not back to the margin', () => {
-    const lines = wrapAnsiHanging('    * Join us — how students can take part today', 30);
-    expect(lines.length).toBeGreaterThan(1);
-    expect(lines[0]).toMatch(/^ {4}\* /);
-    for (const line of lines.slice(1)) expect(line.startsWith(' '.repeat(6))).toBe(true);
-  });
-
-  it('keeps hanging lines inside the width', () => {
-    const lines = wrapAnsiHanging(
-      '  1. 本校学生怎么加入、想参与开源怎么上手，以及怎么找到我们',
-      24,
-    );
-    for (const line of lines) expect(visualWidth(line)).toBeLessThanOrEqual(24);
-  });
-
-  it('does not lose the space at a break it wrapped on', () => {
-    const lines = wrapAnsiHanging('  - alpha beta gamma delta epsilon zeta', 16);
-    expect(lines.join('\n').replace(/\s+/g, ' ').trim()).toBe(
-      '- alpha beta gamma delta epsilon zeta',
-    );
-  });
-
-  it('falls back to plain wrapping without a leading marker', () => {
-    expect(wrapAnsiHanging('plain text with no marker at all', 12)).toEqual(
-      wrapAnsiToVisualWidth('plain text with no marker at all', 12),
-    );
   });
 });
 
