@@ -24,6 +24,7 @@ import { stripAnsi } from '../core/text.js';
 import type { DocItem } from '@nbtca/docs';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { createHash, randomUUID } from 'node:crypto';
 import { getWritableStateDir } from '../config/paths.js';
 
 const spawnMock = vi.hoisted(() => vi.fn());
@@ -522,5 +523,36 @@ describe('searchDocuments', () => {
     expect(results.map((result) => result.title)).toEqual(['Alpha Guide']);
     expect(results[0]?.excerpt).not.toMatch(/^Alpha Guide/);
     expect(results[0]?.excerpt).toContain('needle');
+  });
+
+  it('loads uncached documents from the mirror bundle before counting', async () => {
+    const run = randomUUID();
+    const files = Array.from({ length: 8 }, (_, index) => {
+      const content = `# Doc ${String(index)}\n\nneedle ${run}`;
+      const sha = createHash('sha1')
+        .update(`blob ${String(content.length)}\0${content}`)
+        .digest('hex');
+      return { path: `guide/${String(index)}.md`, sha, content };
+    });
+    const fetchMock = vi.fn((input: string) =>
+      Promise.resolve(
+        input.endsWith('/docs-api/index.json')
+          ? Response.json({
+              tree: files.map(({ path, sha }) => ({ path, type: 'blob', sha })),
+              truncated: false,
+            })
+          : input.endsWith('/docs-api/bundle.json')
+            ? Response.json({ files })
+            : new Response(null, { status: 404 }),
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const progress: [number, number][] = [];
+    const results = await searchDocuments(run, new AbortController().signal, (done, total) => {
+      progress.push([done, total]);
+    });
+    expect(progress).toEqual([[8, 8]]);
+    expect(results).toHaveLength(8);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
