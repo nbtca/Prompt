@@ -4,13 +4,14 @@ import { dirname, join } from 'path';
 import chalk from 'chalk';
 import { useUnicodeIcons } from './icons.js';
 import { APP_INFO } from '../config/data.js';
-import { typeReveal, materializeBraille } from './motion.js';
-import { brandGradient as brand, c } from './theme.js';
+import { typeReveal, materializeBraille, sleep } from './motion.js';
+import { brandGradient as brand, c, frameLeft, space } from './theme.js';
 import { visualWidth } from './text.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const TAGLINE = 'To be at the intersection of technology and liberal arts.';
+const FINAL_FRAME_MS = 400;
 
 function readArt(file: string): string | null {
   try {
@@ -67,6 +68,17 @@ export function buildLogoLines(): string[] {
   ];
 }
 
+export function startupOffset(cols: number | undefined, width: number): number {
+  if (cols === undefined) return 0;
+  return Math.max(0, Math.min(frameLeft(cols) + space.indent.length, cols - width));
+}
+
+function indentBlock(text: string, cols: number | undefined): string {
+  const lines = text.split('\n');
+  const pad = ' '.repeat(startupOffset(cols, Math.max(...lines.map(visualWidth))));
+  return lines.map((line) => pad + line).join('\n');
+}
+
 function skipOnKeypress(): { signal: AbortSignal; release(): void } {
   const controller = new AbortController();
   const stdin = process.stdin;
@@ -96,18 +108,25 @@ export async function runStartup(): Promise<void> {
   if (!process.stdout.isTTY) return;
   const art = loadArt();
   if (!startupFitsTerminal(process.stdout.rows, process.stdout.columns, art)) return;
+  const cols = process.stdout.columns;
   const color = !process.env['NO_COLOR'];
   const skip = skipOnKeypress();
   process.stdout.write('\n');
   try {
-    await materializeBraille(art, (s) => paint(s, color), {
-      paintProgress: (s) => (color ? c.brand(s) : s),
+    await materializeBraille(art, (s) => indentBlock(paint(s, color), cols), {
+      paintProgress: (s) => indentBlock(color ? c.brand(s) : s, cols),
       signal: skip.signal,
     });
     await typeReveal(
-      ['', color ? brand(TAGLINE) : TAGLINE, chalk.dim(`@nbtca/prompt  v${APP_INFO.version}`), ''],
+      [
+        '',
+        indentBlock(color ? brand(TAGLINE) : TAGLINE, cols),
+        indentBlock(chalk.dim(`@nbtca/prompt  v${APP_INFO.version}`), cols),
+        '',
+      ],
       { signal: skip.signal },
     );
+    await sleep(FINAL_FRAME_MS, skip.signal);
   } finally {
     skip.release();
   }
