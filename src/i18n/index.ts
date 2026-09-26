@@ -250,6 +250,8 @@ export interface Translations {
     loginChanged: string;
     unexpectedResponse: string;
     missingDates: string;
+    invalidWeekOne: string;
+    weekOneConflict: string;
     missingPeriod: string;
     termMismatch: string;
     invalidData: string;

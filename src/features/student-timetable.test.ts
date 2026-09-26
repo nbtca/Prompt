@@ -7,7 +7,9 @@ import type { AcademicTerm } from '@nbtca/nbtcal/timetable';
 import type { AuthenticatedNbtSession } from '../auth/nbt-auth.js';
 import type { PersistedNbtSession, SessionStore } from '../auth/session-store.js';
 import { runSecretInput, runTextInput } from '../core/components/text-input.js';
+import { t } from '../i18n/index.js';
 import {
+  assertWeekOne,
   relevantTerms,
   resolveTerm,
   runStudentTimetableCommand,
@@ -237,6 +239,45 @@ describe('cancelled prompts', () => {
     expect(code).toBe(130);
     expect(stdout.text()).toBe('');
     expect(stderr.text()).toBe('');
+  });
+});
+
+describe('--week-one', () => {
+  it.each(['2026-09-08', 'next-monday', '2026-02-30'])(
+    'rejects %s before touching the session',
+    async (value) => {
+      const stderr = captured();
+      const store: SessionStore = {
+        filePath: '/unused',
+        load: () => {
+          throw new Error('must not load');
+        },
+        save: () => undefined,
+        clear: () => undefined,
+      };
+      const code = await runStudentTimetableCommand('export', {
+        flags: new Set([`--week-one=${value}`]),
+        isInteractive: false,
+        store,
+        stdout: captured().stream,
+        stderr: stderr.stream,
+      });
+      expect(code).toBe(1);
+      expect(stderr.text()).toBe(`${t().timetable.invalidWeekOne}\n`);
+    },
+  );
+
+  it('must agree with every date JWXT supplied', () => {
+    const calendarDays = [
+      { week: 1, weekday: 1, date: '2026-09-07' },
+      { week: 2, weekday: 3, date: '2026-09-16' },
+    ] as const;
+    expect(() => {
+      assertWeekOne('2026-09-07', calendarDays);
+    }).not.toThrow();
+    expect(() => {
+      assertWeekOne('2026-09-14', calendarDays);
+    }).toThrow(expect.objectContaining({ reason: 'conflict' }));
   });
 });
 

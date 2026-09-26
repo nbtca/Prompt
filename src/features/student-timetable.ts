@@ -7,6 +7,7 @@ import {
   timetableToIcs,
   TimetableError,
   type AcademicTerm,
+  type TimetableCalendarDay,
 } from '@nbtca/nbtcal/timetable';
 import { runSecretInput, runTextInput } from '../core/components/text-input.js';
 import { AuthError } from '../auth/errors.js';
@@ -16,6 +17,7 @@ import {
   type AuthenticatedNbtSession,
 } from '../auth/nbt-auth.js';
 import { createSessionStore, type SessionStore } from '../auth/session-store.js';
+import { isoDayDifference, parseLocalMonday } from '../core/calendar-day.js';
 import { clearScheduleCache, termKey } from './schedule-store.js';
 import { fmt, t } from '../i18n/index.js';
 import { sanitizeAcademicTerm, sanitizeTimetable } from './timetable-sanitize.js';
@@ -64,6 +66,30 @@ function displaySemesterLabel(term: AcademicTerm): string {
     : term.semesterLabel;
 }
 
+class WeekOneError extends Error {
+  constructor(readonly reason: 'invalid' | 'conflict') {
+    super(`--week-one is ${reason}.`);
+  }
+}
+
+export function assertWeekOne(
+  weekOneMonday: string,
+  calendarDays: readonly TimetableCalendarDay[] = [],
+): void {
+  try {
+    parseLocalMonday(weekOneMonday);
+  } catch {
+    throw new WeekOneError('invalid');
+  }
+  if (
+    calendarDays.some(
+      (day) => isoDayDifference(weekOneMonday, day.date) !== (day.week - 1) * 7 + day.weekday - 1,
+    )
+  ) {
+    throw new WeekOneError('conflict');
+  }
+}
+
 export function isSessionExpired(error: unknown): boolean {
   return (
     (error instanceof AuthError && error.code === 'SESSION_EXPIRED') ||
@@ -73,6 +99,9 @@ export function isSessionExpired(error: unknown): boolean {
 
 export function safeMessage(error: unknown): string {
   const trans = t().timetable;
+  if (error instanceof WeekOneError) {
+    return error.reason === 'invalid' ? trans.invalidWeekOne : trans.weekOneConflict;
+  }
   if (error instanceof AuthError) {
     switch (error.code) {
       case 'INVALID_CREDENTIALS':
@@ -268,13 +297,15 @@ async function resolveWeekOneMonday(
   if (hasAuthoritativeDates) return explicitValue;
   if (explicitValue) return explicitValue;
   if (!isInteractive) return undefined;
-  return answered(
+  const value = answered(
     await runTextInput({
       message: t().timetable.weekOne,
       placeholder: t().timetable.weekOneHint,
       allowEmpty: false,
     }),
-  );
+  ).trim();
+  assertWeekOne(value);
+  return value;
 }
 
 export async function runStudentTimetableCommand(
@@ -312,7 +343,10 @@ export async function runStudentTimetableCommand(
     return 1;
   }
 
+  const weekOneFlag = flagValue(options.flags, '--week-one=');
+
   try {
+    if (weekOneFlag !== undefined) assertWeekOne(weekOneFlag);
     if (subcommand === 'logout') {
       store.clear();
       clearScheduleCache();
@@ -361,10 +395,11 @@ export async function runStudentTimetableCommand(
             ? `timetable-${termKey(selected)}.ics`
             : outputFlag;
         const weekOneMonday = await resolveWeekOneMonday(
-          flagValue(options.flags, '--week-one='),
+          weekOneFlag,
           timetable.calendarDays.length > 0,
           isInteractive,
         );
+        if (weekOneMonday !== undefined) assertWeekOne(weekOneMonday, timetable.calendarDays);
         const ics = timetableToIcs(timetable, {
           ...(weekOneMonday === undefined ? {} : { weekOneMonday }),
           calendarName: fmt(trans.calendarName, {
