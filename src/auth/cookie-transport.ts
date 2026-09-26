@@ -151,42 +151,8 @@ function safeHeaders(headers: RequestInit['headers']): Record<string, string> {
   return Object.fromEntries(result.entries());
 }
 
-function abortSignal(
-  signal: AbortSignal | null | undefined,
-  timeoutMs: number,
-): {
-  signal: AbortSignal;
-  cleanup(): void;
-  timedOut(): boolean;
-} {
-  const controller = new AbortController();
-  let didTimeout = false;
-  const onAbort = () => {
-    controller.abort(signal?.reason);
-  };
-  signal?.addEventListener('abort', onAbort, { once: true });
-  if (signal?.aborted) onAbort();
-  const timer = setTimeout(() => {
-    didTimeout = true;
-    controller.abort();
-  }, timeoutMs);
-  timer.unref();
-  return {
-    signal: controller.signal,
-    cleanup() {
-      clearTimeout(timer);
-      signal?.removeEventListener('abort', onAbort);
-    },
-    timedOut: () => didTimeout,
-  };
-}
-
-function safeFetchError(error: unknown, stage: AuthStage, didTimeout: boolean): Error {
+function safeFetchError(error: unknown, stage: AuthStage): Error {
   if (error instanceof AuthError) return error;
-  if (didTimeout)
-    return new AuthError('TIMEOUT', stage, 'The campus service request timed out.', {
-      retryable: true,
-    });
   if (typeof error === 'object' && error !== null && Reflect.get(error, 'name') === 'AbortError') {
     return new DOMException('The campus service request was aborted.', 'AbortError');
   }
@@ -238,18 +204,25 @@ export function createCampusCookieSession(
     if (init.method && init.method !== 'GET' && init.method !== 'POST') {
       throw new AuthError('UNTRUSTED_URL', stage, 'Only read and login requests are allowed.');
     }
-    const controlled = abortSignal(init.signal, timeoutMs);
+    const timeout = new AbortController();
+    setTimeout(() => {
+      timeout.abort(
+        new AuthError('TIMEOUT', stage, 'The campus service request timed out.', {
+          retryable: true,
+        }),
+      );
+    }, timeoutMs).unref();
+    // Keep the timer running after the headers: the caller still has to read the body.
+    const signal = init.signal ? AbortSignal.any([init.signal, timeout.signal]) : timeout.signal;
     try {
       return await cookieFetch(url, {
         ...init,
         headers: safeHeaders(init.headers),
-        signal: controlled.signal,
+        signal,
         maxRedirect: 8,
       });
     } catch (error) {
-      throw safeFetchError(error, stage, controlled.timedOut());
-    } finally {
-      controlled.cleanup();
+      throw safeFetchError(error, stage);
     }
   }
 
