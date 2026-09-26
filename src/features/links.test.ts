@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChildProcess } from 'node:child_process';
-import open from 'open';
+import { ChildProcess, spawn } from 'child_process';
+import type * as ChildProcessModule from 'child_process';
 import { setLanguage } from '../i18n/index.js';
 import { launchBrowserUrl, openUrlInBrowser } from './links.js';
 
-vi.mock('open', () => ({ default: vi.fn() }));
+vi.mock('child_process', async (importOriginal) => ({
+  ...(await importOriginal<typeof ChildProcessModule>()),
+  spawn: vi.fn(),
+}));
 
 beforeEach(() => {
   setLanguage('en');
@@ -12,7 +15,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
-  vi.mocked(open).mockReset();
+  vi.mocked(spawn).mockReset();
   vi.restoreAllMocks();
 });
 
@@ -23,7 +26,7 @@ function launcherWithExitCode(exitCode: number): ChildProcess {
 }
 
 async function startLaunch(child: ChildProcess): Promise<{ result: Promise<boolean> }> {
-  vi.mocked(open).mockResolvedValueOnce(child);
+  vi.mocked(spawn).mockReturnValueOnce(child);
   const result = launchBrowserUrl('https://nbtca.space');
   await Promise.resolve();
   return { result };
@@ -76,7 +79,7 @@ describe('launchBrowserUrl', () => {
   });
 
   it('uses an exit code already available when open resolves', async () => {
-    vi.mocked(open).mockResolvedValueOnce(launcherWithExitCode(4));
+    vi.mocked(spawn).mockReturnValueOnce(launcherWithExitCode(4));
 
     await expect(launchBrowserUrl('https://nbtca.space')).resolves.toBe(false);
   });
@@ -84,14 +87,20 @@ describe('launchBrowserUrl', () => {
 
 describe('openUrlInBrowser', () => {
   it('returns true when the browser command starts', async () => {
-    vi.mocked(open).mockResolvedValueOnce(launcherWithExitCode(0));
+    vi.mocked(spawn).mockReturnValueOnce(launcherWithExitCode(0));
 
     await expect(openUrlInBrowser('https://nbtca.space')).resolves.toBe(true);
-    expect(open).toHaveBeenCalledWith('https://nbtca.space');
+    expect(spawn).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.arrayContaining(['https://nbtca.space']),
+      expect.objectContaining({ detached: true }),
+    );
   });
 
   it('prints the exact manual URL when the browser command fails', async () => {
-    vi.mocked(open).mockRejectedValueOnce(new Error('no browser'));
+    vi.mocked(spawn).mockImplementationOnce(() => {
+      throw new Error('no browser');
+    });
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     await expect(openUrlInBrowser('https://nbtca.space/repair')).resolves.toBe(false);

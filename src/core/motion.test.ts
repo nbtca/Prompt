@@ -14,6 +14,20 @@ describe('typeReveal', () => {
     await typeReveal(['a', 'b'], { reducedMotion: false, stepMs: 0, write: (s) => out.push(s) });
     expect(out).toEqual(['a\n', 'b\n']);
   });
+  it('writes the remaining lines at once when skipped', async () => {
+    const out: string[] = [];
+    const skip = new AbortController();
+    await typeReveal(['a', 'b', 'c'], {
+      reducedMotion: false,
+      stepMs: 10_000,
+      signal: skip.signal,
+      write: (s) => {
+        out.push(s);
+        skip.abort();
+      },
+    });
+    expect(out).toEqual(['a\n', 'b\nc\n']);
+  });
 });
 
 describe('materializeBraille', () => {
@@ -46,6 +60,25 @@ describe('materializeBraille', () => {
     expect(out.length).toBeGreaterThan(1);
     const lastFrame = out[out.length - 1];
     expect(lastFrame).toBe(art + '\n');
+  });
+
+  it('jumps to the finished art when skipped', async () => {
+    const out: string[] = [];
+    const skip = new AbortController();
+    const started = Date.now();
+    await materializeBraille(art, (s) => s, {
+      reducedMotion: false,
+      frames: 12,
+      frameMs: 10_000,
+      random: () => 0.5,
+      signal: skip.signal,
+      write: (s) => {
+        out.push(s);
+        skip.abort();
+      },
+    });
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(out.at(-1)).toBe(art + '\n');
   });
 
   it('dot count is non-decreasing across frames and never exceeds the source', async () => {
