@@ -123,7 +123,7 @@ export interface Translations {
     chooseCategory: string;
     refreshCache: string;
     cacheCleared: string;
-    usingCachedData: string;
+    stale: string;
     currentDir: string;
     chooseDoc: string;
     emptyDir: string;

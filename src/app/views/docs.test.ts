@@ -40,6 +40,7 @@ const fetchSectionMetadataMock = vi.fn((section: DocSection) => Promise.resolve(
 const searchDocumentsMock = vi.fn().mockResolvedValue([]);
 const openDocsInBrowserMock = vi.fn().mockResolvedValue(true);
 const clearDocsCacheMock = vi.fn();
+const peekSectionsMock = vi.fn((): DocSection[] | null => null);
 
 function deferred<T>(): {
   promise: Promise<T>;
@@ -57,6 +58,7 @@ vi.mock('../../features/docs.js', async (importOriginal) => {
   return {
     ...actual,
     fetchSections: fetchSectionsMock,
+    peekSections: peekSectionsMock,
     fetchDocMetadata: fetchDocMetadataMock,
     fetchSectionMetadata: fetchSectionMetadataMock,
     searchDocuments: searchDocumentsMock,
@@ -359,6 +361,51 @@ describe('docsView native reader (no shell-out to less/glow)', () => {
     expect(ctx.runClassic).not.toHaveBeenCalled();
     const out = stripAnsi(freshDocsView.render(ctx).join('\n'));
     expect(out).toContain('OS Skills content');
+  });
+
+  it('shows the stored list at once and keeps it with an offline hint when the refresh fails', async () => {
+    peekSectionsMock.mockReturnValueOnce([{ key: 'guide', label: 'Guide', count: 0, files: [] }]);
+    fetchSectionsMock.mockRejectedValueOnce(new Error('offline'));
+    const ctx = fakeCtx();
+    const loading = freshDocsView.load(ctx);
+    expect(stripAnsi(freshDocsView.render(ctx).join('\n'))).toContain('Guide');
+    expect(freshDocsView.isBusy()).toBe(false);
+
+    await loading;
+    const out = stripAnsi(freshDocsView.render(ctx).join('\n'));
+    expect(out).toContain('Guide');
+    expect(out).toContain('offline, showing last known docs');
+  });
+
+  it('keeps the reader open when the background refresh lands', async () => {
+    const pending = deferred<DocSection[]>();
+    peekSectionsMock.mockReturnValueOnce([
+      {
+        key: 'guide',
+        label: 'Guide',
+        count: 1,
+        files: [
+          {
+            name: 'os-skills.md',
+            path: 'tutorial/manual/os-skills.md',
+            type: 'file',
+            title: '',
+            summary: '',
+          },
+        ],
+      },
+    ]);
+    fetchSectionsMock.mockReturnValueOnce(pending.promise);
+    const ctx = fakeCtx();
+    const loading = freshDocsView.load(ctx);
+    freshDocsView.handleKey('\r', ctx);
+    freshDocsView.handleKey('\r', ctx);
+    await flush();
+    expect(stripAnsi(freshDocsView.render(ctx).join('\n'))).toContain('OS Skills content');
+
+    pending.resolve([{ key: 'about', label: 'About', count: 0, files: [] }]);
+    await loading;
+    expect(stripAnsi(freshDocsView.render(ctx).join('\n'))).toContain('OS Skills content');
   });
 
   it('ignores a deferred section response after abort', async () => {

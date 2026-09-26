@@ -112,7 +112,7 @@
     "chooseCategory": "Docs",
     "refreshCache": "Refresh cache",
     "cacheCleared": "Documentation cache cleared",
-    "usingCachedData": "Network unavailable, using cached data",
+    "stale": "offline, showing last known docs",
     "currentDir": "Current directory",
     "chooseDoc": "Choose a document or directory:",
     "emptyDir": "This directory is empty",

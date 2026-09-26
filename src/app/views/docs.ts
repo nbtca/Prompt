@@ -31,6 +31,7 @@ let state: DocsViewState = { mode: 'loading' };
 let sections: DocSection[] = [];
 let archivedGroups = new Map<string, ListedDoc[]>();
 let loaded = false;
+let stale = false;
 let loadedLanguage: Language | null = null;
 let currentSectionKey: string | null = null;
 let currentArchivedGroupKey: string | null = null;
@@ -290,7 +291,7 @@ function goToSections(): void {
   currentSectionKey = null;
   currentArchivedGroupKey = null;
   currentSearchResults = [];
-  state = { mode: 'sections', sectionsField: buildSectionsField() };
+  state = { mode: 'sections', sectionsField: buildSectionsField(), stale };
 }
 
 function replaceSection(section: DocSection): void {
@@ -494,10 +495,18 @@ export const docsView = {
       sections = localized;
       loaded = true;
       loadedLanguage = getCurrentLanguage();
-      if (!cached || changed || state.mode !== 'sections') goToSections();
+      stale = false;
+      if (!cached || (changed && state.mode === 'sections')) goToSections();
+      else if (state.mode === 'sections') state = { ...state, stale };
     } catch {
       if (!isLifecycleActive(ctx, generation) || requestId !== sectionsRequestId) return;
-      state = { mode: 'error', errorMessage: t().docs.loadError };
+      if (cached) {
+        loaded = true;
+        stale = true;
+        if (state.mode === 'sections') state = { ...state, stale };
+      } else {
+        state = { mode: 'error', errorMessage: t().docs.loadError };
+      }
     }
     if (isLifecycleActive(ctx, generation)) ctx.rerender();
   },

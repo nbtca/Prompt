@@ -22,6 +22,7 @@ export type DocsMode =
 export interface DocsViewState {
   mode: DocsMode;
   errorMessage?: string;
+  stale?: boolean;
   sectionsField?: ListField;
   filesField?: ListField;
   archivedGroupsField?: ListField;
@@ -81,7 +82,14 @@ export function renderDocs(
       lines = loadingLines(trans.common.loading, cols);
       break;
     case 'sections':
-      lines = state.sectionsField?.render(bodyRows, cols) ?? [];
+      lines = state.sectionsField
+        ? renderListFieldWithContext(
+            state.stale ? [...hintLines(trans.docs.stale, cols), ''] : [],
+            state.sectionsField,
+            bodyRows,
+            cols,
+          )
+        : [];
       break;
     case 'files':
       lines = state.filesField?.render(bodyRows, cols) ?? [];
