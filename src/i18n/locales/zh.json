@@ -294,7 +294,7 @@
     "weekdayFri": "五",
     "weekdaySat": "六",
     "weekdaySun": "日",
-    "todayHeading": "今日 · 周{weekday} · 第{week}教学周",
+    "todayHeading": "今日 · 周{weekday} · 第 {week} 教学周",
     "classDone": "已结束",
     "classLive": "进行中",
     "minutesRemaining": "还剩 {minutes} 分钟",
