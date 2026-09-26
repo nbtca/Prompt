@@ -346,6 +346,11 @@
     "reset": "主题设置已重置",
     "resetLabel": "恢复默认",
     "resetSessionOnly": "主题设置仅在当前会话重置（无法写入配置文件）",
+    "resetConfirm": "把图标模式和颜色模式恢复为默认值？",
+    "iconUpdated": "图标模式已更新",
+    "iconUpdatedSessionOnly": "图标模式仅在当前会话生效（无法写入配置文件）",
+    "colorUpdated": "颜色模式已更新",
+    "colorUpdatedSessionOnly": "颜色模式仅在当前会话生效（无法写入配置文件）",
     "usage": "用法: nbtca theme | nbtca theme icon <auto|ascii|unicode> | nbtca theme color <auto|on|off> | nbtca theme reset",
     "invalidValue": "无效取值，可选:"
   },

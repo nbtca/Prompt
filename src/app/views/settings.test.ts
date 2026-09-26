@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { settingsView } from './settings.js';
 import { setLanguage } from '../../i18n/index.js';
 import { resetIconCache } from '../../core/icons.js';
@@ -6,6 +9,7 @@ import { stripAnsi, visualWidth } from '../../core/text.js';
 import type { AppContext } from '../view.js';
 
 beforeAll(() => {
+  process.env['XDG_CONFIG_HOME'] = mkdtempSync(join(tmpdir(), 'nbtca-settings-'));
   setLanguage('en');
   process.env['NBTCA_ICON_MODE'] = 'unicode';
   resetIconCache();
@@ -57,7 +61,7 @@ describe('settingsView', () => {
 
     expect(settingsView.handleBack()).toBe(true);
     const menuOut = stripAnsi(settingsView.render(ctx).join('\n'));
-    expect(menuOut).toContain('Icon mode');
+    expect(menuOut).toContain('Icon Mode');
   });
 
   it('aligns every Chinese about value on the same visual column', async () => {
@@ -82,5 +86,57 @@ describe('settingsView', () => {
       setLanguage('en');
       await settingsView.load();
     }
+  });
+
+  function selectedLabel(ctx: AppContext): string {
+    const line = settingsView
+      .render(ctx)
+      .map(stripAnsi)
+      .find((candidate) => candidate.includes('→'));
+    return (
+      line
+        ?.replace('→', '')
+        .trim()
+        .split(/\s{2,}/u)[0] ?? ''
+    );
+  }
+
+  it('keeps the cursor on the entry the user came back from', async () => {
+    const ctx = fakeCtx();
+    await settingsView.load();
+    settingsView.handleKey('\x1b[B');
+    settingsView.handleKey('\x1b[B');
+    settingsView.handleKey('\r');
+    settingsView.handleBack();
+    expect(selectedLabel(ctx)).toBe('Color Mode');
+
+    settingsView.handleKey('\x1b[F');
+    settingsView.handleKey('\r');
+    settingsView.handleKey('\r');
+    expect(selectedLabel(ctx)).toBe('About');
+  });
+
+  it('asks before resetting and stays put when cancelled', async () => {
+    const ctx = fakeCtx();
+    await settingsView.load();
+    for (let step = 0; step < 3; step += 1) settingsView.handleKey('\x1b[B');
+    settingsView.handleKey('\r');
+    const confirm = stripAnsi(settingsView.render(ctx).join('\n'));
+    expect(confirm).toContain('Reset icon mode and color mode to their defaults?');
+    expect(selectedLabel(ctx)).toBe('Cancel');
+
+    settingsView.handleKey('\r');
+    expect(selectedLabel(ctx)).toBe('Reset to Defaults');
+    expect(stripAnsi(settingsView.render(ctx).join('\n'))).not.toContain('reset');
+  });
+
+  it('names the setting that changed', async () => {
+    const ctx = fakeCtx();
+    await settingsView.load();
+    settingsView.handleKey('\x1b[B');
+    settingsView.handleKey('\r');
+    settingsView.handleKey('\r');
+    expect(stripAnsi(settingsView.render(ctx).join('\n'))).toMatch(/Icon mode (updated|changed)/u);
+    expect(selectedLabel(ctx)).toBe('Icon Mode');
   });
 });
