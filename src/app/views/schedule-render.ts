@@ -21,6 +21,8 @@ import {
   renderMeetingDetail,
   renderDayTimeline,
   renderDaySwitcher,
+  renderWeekAgenda,
+  lineBudget,
 } from '../../features/schedule-render.js';
 import type { AcademicWindow, OnBreak } from '@nbtca/nbtcal';
 import type { GridCursor } from './schedule-grid-cursor.js';
@@ -51,6 +53,7 @@ export interface ScheduleViewState {
   passwordField?: TextField;
   weekOneField?: TextField;
   termField?: ListField;
+  termPickerNote?: string;
   key?: string;
   term?: AcademicTerm;
   weekOne?: string;
@@ -118,7 +121,7 @@ function renderShortcutLines(
   cols: number,
   compact = false,
 ): string[] {
-  const available = Math.max(1, cols - visualWidth(space.indent));
+  const available = Math.max(1, lineBudget(cols) - visualWidth(space.indent));
   const parts = shortcuts.map((shortcut) => {
     const text = compact
       ? shortcut.showKey === false
@@ -193,6 +196,7 @@ function hubPreGridLines(
       }),
     ),
     ...renderTodayTimeline(today, tt.periods, now, cols).split('\n'),
+    '',
     weekHeading,
   ];
   return { inlineLines, fallbackLines: [...lines, weekHeading], week, tt };
@@ -200,19 +204,39 @@ function hubPreGridLines(
 
 const MIN_GRID_COLS = 100;
 
-function gridFitsInline(
-  precedingLineCount: number,
+function fittingWeekGrid(
   tt: Timetable,
   week: number,
   now: Date,
-  bodyRows: number,
+  rows: number,
   cols: number,
   cursor: GridCursor | undefined,
-  reservedRows: number,
-): boolean {
-  if (cols < MIN_GRID_COLS) return false;
-  const gridLines = renderWeekGrid(tt, week, now, cols, cursor).split('\n');
-  return precedingLineCount + gridLines.length <= bodyRows - reservedRows;
+): string[] | null {
+  if (cols < MIN_GRID_COLS) return null;
+  const grid = renderWeekGrid(tt, week, now, cols, cursor).split('\n');
+  return grid.length <= rows ? grid : null;
+}
+
+function renderDayFallback(
+  tt: Timetable,
+  week: number,
+  todayWd: Weekday,
+  now: Date,
+  cols: number,
+  cursor: GridCursor | undefined,
+): string[] {
+  const selectedWd = cursor?.weekday ?? todayWd;
+  return [
+    renderDaySwitcher(selectedWd, todayWd, cols),
+    ...renderDayTimeline(
+      createTimetableSchedule(tt).meetingsOnDay(week, selectedWd),
+      tt.periods,
+      now,
+      { weekday: selectedWd, isToday: selectedWd === todayWd },
+      cursor?.period,
+      cols,
+    ).split('\n'),
+  ];
 }
 
 function renderAdaptiveWeekGrid(
@@ -227,24 +251,48 @@ function renderAdaptiveWeekGrid(
   cursor: GridCursor | undefined,
   reservedRows: number,
 ): string[] {
-  if (gridFitsInline(inlineLines.length, tt, week, now, bodyRows, cols, cursor, reservedRows)) {
-    return [...inlineLines, ...renderWeekGrid(tt, week, now, cols, cursor).split('\n')];
+  const grid = fittingWeekGrid(
+    tt,
+    week,
+    now,
+    bodyRows - reservedRows - inlineLines.length,
+    cols,
+    cursor,
+  );
+  if (grid) return [...inlineLines, ...grid];
+  return [...fallbackLines, ...renderDayFallback(tt, week, todayWd, now, cols, cursor)];
+}
+
+function renderWeekBody(
+  tt: Timetable,
+  week: number,
+  todayWd: Weekday,
+  now: Date,
+  bodyRows: number,
+  cols: number,
+  cursor: GridCursor | undefined,
+): string[] {
+  const rows = Math.max(0, Math.floor(bodyRows));
+  const title = heading(t().timetable.hubWeek);
+  const layouts = [
+    fittingWeekGrid(tt, week, now, rows - 2, cols, cursor),
+    renderWeekAgenda(tt, week, now, cols, cursor),
+    renderWeekAgenda(tt, week, now, cols, cursor, true),
+  ];
+  for (const layout of layouts) {
+    if (!layout) continue;
+    if (layout.length + 2 <= rows) return [title, '', ...layout];
+    if (layout.length + 1 <= rows) return [title, ...layout];
   }
-  const selectedWd = cursor?.weekday ?? todayWd;
-  const dayMeetings = createTimetableSchedule(tt).meetingsOnDay(week, selectedWd);
+  const dense = layouts.at(-1);
+  if (dense && dense.length <= rows) return dense;
   return [
-    ...fallbackLines,
-    renderDaySwitcher(selectedWd, todayWd, cols),
-    ...renderDayTimeline(
-      dayMeetings,
-      tt.periods,
-      now,
-      selectedWd === todayWd,
-      cursor?.period,
-      cols,
-    ).split('\n'),
+    ...hintLines(t().timetable.weekTooSmall, cols),
+    ...renderDayFallback(tt, week, todayWd, now, cols, cursor),
   ];
 }
+
+const MIN_HUB_CONTENT_ROWS = 4;
 
 function renderHubBody(
   state: ScheduleViewState,
@@ -257,9 +305,9 @@ function renderHubBody(
   const shortcuts = tt ? hubShortcuts(tt) : [];
   const rows = Math.max(0, Math.floor(bodyRows));
 
-  const build = (shortcutLines: string[]): { content: string[]; tail: string[] } => {
+  const build = (shortcutLines: string[], gap = true): { content: string[]; tail: string[] } => {
     const tail: string[] = [];
-    if (pre && (state.statusMessage || shortcutLines.length > 0)) tail.push('');
+    if (gap && pre && (state.statusMessage || shortcutLines.length > 0)) tail.push('');
     if (state.statusMessage) {
       tail.push(...hintLines(state.statusMessage, cols));
       if (shortcutLines.length > 0) tail.push('');
@@ -282,8 +330,14 @@ function renderHubBody(
     return { content, tail };
   };
 
-  const full = build(renderShortcutLines(shortcuts, cols));
+  const labelled = renderShortcutLines(shortcuts, cols);
+  const full = build(labelled);
   if (full.content.length + full.tail.length <= rows) return [...full.content, ...full.tail];
+  const tight = build(labelled, false);
+  if (rows - tight.tail.length >= MIN_HUB_CONTENT_ROWS) {
+    const content = tight.content.filter((line) => line !== '');
+    return [...content.slice(0, rows - tight.tail.length), ...tight.tail];
+  }
 
   const compact = build(renderShortcutLines(shortcuts, cols, true));
   if (compact.tail.length >= rows) return rows > 0 ? compact.tail.slice(-rows) : [];
@@ -407,19 +461,14 @@ export function renderSchedule(
       const schedule = createTimetableSchedule(state.timetable, {
         weekOneMonday: state.weekOne,
       });
-      const week = Math.max(1, schedule.weekAt(now));
-      const weekLines = [heading(trans.timetable.hubWeek), ''];
-      return renderAdaptiveWeekGrid(
-        weekLines,
-        weekLines,
+      return renderWeekBody(
         state.timetable,
-        week,
+        Math.max(1, schedule.weekAt(now)),
         schedule.weekdayAt(now),
         now,
         bodyRows,
         cols,
         state.gridCursor,
-        2,
       );
     }
     case 'termDensity':
@@ -430,8 +479,18 @@ export function renderSchedule(
         createTimetableSchedule(state.timetable, { weekOneMonday: state.weekOne }).weekAt(now),
         cols,
       ).split('\n');
-    case 'termPicker':
-      return state.termField?.render(bodyRows, cols) ?? [];
+    case 'termPicker': {
+      if (!state.termField) return [];
+      const note = state.termPickerNote
+        ? [
+            ...headingLines(trans.timetable.hubSwitchTerm, cols),
+            '',
+            ...hintLines(state.termPickerNote, cols),
+            '',
+          ]
+        : [];
+      return renderListFieldWithContext(note, state.termField, bodyRows, cols);
+    }
     case 'unresolved':
       return [
         heading(trans.timetable.unresolvedTitle),

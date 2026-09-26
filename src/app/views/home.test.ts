@@ -8,6 +8,7 @@ import { campusDateTime } from '@nbtca/nbtcal/timetable';
 import { stripAnsi, visualWidth } from '../../core/text.js';
 import type { AppContext } from '../view.js';
 import type * as CalendarModule from '../../features/calendar.js';
+import type { CachedSchedule } from '../../features/schedule-view.js';
 
 const calendarInRange = vi.fn().mockReturnValue([]);
 const loadCalendarOrThrowMock = vi.fn().mockResolvedValue({
@@ -33,6 +34,41 @@ const noon = campusDateTime('2026-07-15', '12:00');
 const FIXTURE_TERM_KEY = '2020-1';
 const FIXTURE_WEEK_ONE = '2020-01-06';
 
+function scheduleWith(
+  meetings: { courseName: string; startPeriod: number; location?: string }[] = [],
+  unresolvedCount = 0,
+): CachedSchedule {
+  return {
+    weekOneMonday: '2026-07-13',
+    timetable: {
+      term: { academicYear: '2026', semester: '3' },
+      meetings: meetings.map((m) => ({
+        sourceId: null,
+        courseName: m.courseName,
+        teacherNames: [],
+        location: m.location ?? null,
+        weekday: 3,
+        startPeriod: m.startPeriod,
+        endPeriod: m.startPeriod,
+        weeks: [1],
+        kind: 'regular',
+      })),
+      unresolvedItems: Array.from({ length: unresolvedCount }, (_, itemIndex) => ({
+        kind: 'practice',
+        itemIndex,
+        sourceFields: { kcmc: 'Fitness test' },
+      })),
+      periods: [
+        { period: 1, label: null, start: '08:00', end: '09:40' },
+        { period: 2, label: null, start: '14:00', end: '15:40' },
+      ],
+      calendarDays: [],
+      warnings: [],
+      fetchedAt: new Date('2026-07-01T00:00:00Z'),
+    },
+  };
+}
+
 function defined<T>(value: T | undefined): T {
   if (value === undefined) throw new Error('Expected fixture value');
   return value;
@@ -53,27 +89,59 @@ describe('renderHome (schedule-first dashboard)', () => {
     const out = stripAnsi(
       renderHome(
         {
-          nextClassLine: '  Next class in 2h',
-          todayLines: ['  08:00 Math', '  10:00 Physics'],
+          schedule: scheduleWith([
+            { courseName: 'Math', startPeriod: 1 },
+            { courseName: 'Physics', startPeriod: 2 },
+          ]),
           eventLines: ['  03-25 Hackathon', '  03-28 Study group'],
           loading: false,
         },
         noon,
       ).join('\n'),
     );
-    expect(out).toContain('Next class in 2h');
-    expect(out).toContain('08:00 Math');
+    expect(out).toContain('Physics');
+    expect(out).toContain('in 2h 0m');
+    expect(out).toContain('Math');
     expect(out).toContain('Hackathon');
   });
 
   it('falls back to "no class today" and "no upcoming class" when schedule is empty', () => {
     const out = stripAnsi(
-      renderHome({ nextClassLine: '', todayLines: [], eventLines: [], loading: false }, noon).join(
-        '\n',
-      ),
+      renderHome({ schedule: scheduleWith(), eventLines: [], loading: false }, noon).join('\n'),
     );
     expect(out).toContain('No classes today');
     expect(out).toContain('No upcoming classes');
+  });
+
+  it('asks to log in instead of showing empty class panels when there is no timetable', () => {
+    const trans = t();
+    const lines = renderHome(
+      { schedule: null, eventLines: ['  03-25 Hackathon'], loading: false },
+      noon,
+    ).map(stripAnsi);
+    const out = lines.join('\n');
+    expect(out).toContain(trans.timetable.publicLoginAction);
+    expect(out).not.toContain(trans.timetable.noClassToday);
+    expect(out).not.toContain(trans.timetable.noNextClass);
+    expect(out).not.toContain('%');
+    expect(out).toContain('Hackathon');
+  });
+
+  it('keeps the next-class countdown on one line at forty columns', () => {
+    const lines = renderHome(
+      {
+        schedule: scheduleWith([
+          { courseName: 'Advanced Engineering Mathematics', startPeriod: 2, location: 'Bldg 3' },
+        ]),
+        loading: false,
+      },
+      noon,
+      100,
+      40,
+    ).map(stripAnsi);
+    const banner = defined(lines.find((line) => line.includes('in 2h 0m')));
+    expect(banner).toContain('Advanced');
+    expect(visualWidth(banner)).toBeLessThanOrEqual(40);
   });
 
   it('shows a loading state for events before they land', () => {
@@ -82,7 +150,7 @@ describe('renderHome (schedule-first dashboard)', () => {
   });
 
   it('always returns a non-empty array', () => {
-    const out = renderHome({}, noon);
+    const out = renderHome({ schedule: scheduleWith() }, noon);
     expect(Array.isArray(out)).toBe(true);
     expect(out.length).toBeGreaterThan(0);
   });
@@ -104,7 +172,12 @@ describe('renderHome (schedule-first dashboard)', () => {
       setLanguage(language);
       try {
         const trans = t();
-        const lines = renderHome({ loading: false, unresolvedCount: 123 }, noon, 100, 20);
+        const lines = renderHome(
+          { loading: false, schedule: scheduleWith([], 123) },
+          noon,
+          100,
+          20,
+        );
         const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
 
         expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
@@ -136,8 +209,7 @@ describe('renderHome adaptive event count', () => {
     const out = stripAnsi(
       renderHome(
         {
-          nextClassLine: '',
-          todayLines: [],
+          schedule: scheduleWith(),
           eventLines: manyEventLines,
           loading: false,
         },
@@ -154,8 +226,7 @@ describe('renderHome adaptive event count', () => {
     const out = stripAnsi(
       renderHome(
         {
-          nextClassLine: '',
-          todayLines: [],
+          schedule: scheduleWith(),
           eventLines: manyEventLines,
           loading: false,
         },
@@ -168,37 +239,30 @@ describe('renderHome adaptive event count', () => {
 
   it.each([
     [
-      '10:00 Advanced distributed systems in the engineering laboratory',
-      '14:00 Community governance seminar in the collaboration space',
+      'Advanced distributed systems',
       '08-03 Campus organizations coordination and planning workshop',
     ],
-    [
-      '10:00 高级分布式系统与工程实践课程',
-      '14:00 社区治理与组织协作专题研讨',
-      '08-03 校园组织协调与长期规划工作坊',
-    ],
-  ])(
-    'reflows complete schedule and event data within twenty columns',
-    (nextClassLine, todayLine, eventLine) => {
-      const lines = renderHome(
-        {
-          nextClassLine: `   ${nextClassLine}`,
-          todayLines: [`   ${todayLine}`],
-          eventLines: [`   ${eventLine}`],
-          loading: false,
-        },
-        noon,
-        100,
-        20,
-      );
-      const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
+    ['高级分布式系统与工程实践课程', '08-03 校园组织协调与长期规划工作坊'],
+  ])('fits schedule and event data within twenty columns', (courseName, eventLine) => {
+    const lines = renderHome(
+      {
+        schedule: scheduleWith([
+          { courseName, startPeriod: 1 },
+          { courseName, startPeriod: 2 },
+        ]),
+        eventLines: [`   ${eventLine}`],
+        loading: false,
+      },
+      noon,
+      100,
+      20,
+    );
+    const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
 
-      expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
-      expect(text).toContain(nextClassLine.replace(/\s/g, ''));
-      expect(text).toContain(todayLine.replace(/\s/g, ''));
-      expect(text).toContain(eventLine.replace(/\s/g, ''));
-    },
-  );
+    expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+    expect(text).toContain(courseName.replace(/\s/g, '').slice(0, 2));
+    expect(text).toContain(eventLine.replace(/\s/g, ''));
+  });
 
   it('budgets wrapped events by rendered rows without splitting an event', () => {
     const eventLines = [
@@ -208,8 +272,7 @@ describe('renderHome adaptive event count', () => {
     ];
     const lines = renderHome(
       {
-        nextClassLine: '',
-        todayLines: [],
+        schedule: scheduleWith(),
         eventLines,
         loading: false,
       },
@@ -251,7 +314,7 @@ describe('renderHome day-progress bar', () => {
   it('shows a half-filled bar and 50% at noon', () => {
     process.env['NBTCA_ICON_MODE'] = 'ascii';
     resetIconCache();
-    const out = stripAnsi(renderHome({}, noon).join('\n'));
+    const out = stripAnsi(renderHome({ schedule: scheduleWith() }, noon).join('\n'));
     expect(out).toContain('##########----------'); // 20-wide bar, half filled
     expect(out).toContain('50%');
     process.env['NBTCA_ICON_MODE'] = 'unicode';
@@ -259,18 +322,26 @@ describe('renderHome day-progress bar', () => {
   });
 
   it('is empty at midnight and full just before it', () => {
-    const out = stripAnsi(renderHome({}, campusDateTime('2026-07-15', '00:00')).join('\n'));
+    const out = stripAnsi(
+      renderHome({ schedule: scheduleWith() }, campusDateTime('2026-07-15', '00:00')).join('\n'),
+    );
     expect(out).toContain('0%');
-    const lateOut = stripAnsi(renderHome({}, campusDateTime('2026-07-15', '23:59')).join('\n'));
+    const lateOut = stripAnsi(
+      renderHome({ schedule: scheduleWith() }, campusDateTime('2026-07-15', '23:59')).join('\n'),
+    );
     expect(lateOut).toContain('100%');
   });
 
   it('shrinks with a twenty-column terminal and grows back with available width', () => {
     const narrow = defined(
-      renderHome({}, noon, 100, 20).find((line) => stripAnsi(line).includes('50%')),
+      renderHome({ schedule: scheduleWith() }, noon, 100, 20).find((line) =>
+        stripAnsi(line).includes('50%'),
+      ),
     );
     const wide = defined(
-      renderHome({}, noon, 100, 40).find((line) => stripAnsi(line).includes('50%')),
+      renderHome({ schedule: scheduleWith() }, noon, 100, 40).find((line) =>
+        stripAnsi(line).includes('50%'),
+      ),
     );
 
     expect(visualWidth(narrow)).toBeLessThanOrEqual(20);
@@ -302,8 +373,8 @@ describe('renderHome — week overview panel', () => {
     expect(lines[titleIdx + 2]).toContain('Classes');
     expect(lines[titleIdx + 3]).toContain('Events');
     expect(lines[titleIdx + 4]).toContain('Busy');
-    expect(lines[titleIdx + 4]).toContain('Free');
-    expect(lines[titleIdx + 4]).toContain('N/A');
+    expect(lines[titleIdx + 4]).toContain('Light');
+    expect(lines[titleIdx + 4]).toContain('None');
   });
 
   it('shows weekend classes as busy and an empty weekend as none', () => {
@@ -431,7 +502,9 @@ describe('renderHome — unresolved items warning', () => {
   });
 
   it('shows a warning line with the real count when unresolvedCount > 0', () => {
-    const out = stripAnsi(renderHome({ loading: false, unresolvedCount: 3 }, noon).join('\n'));
+    const out = stripAnsi(
+      renderHome({ loading: false, schedule: scheduleWith([], 3) }, noon).join('\n'),
+    );
     expect(out).toContain('Needs attention');
     expect(out).toContain('3');
   });
@@ -440,7 +513,7 @@ describe('renderHome — unresolved items warning', () => {
     const lines = renderHome(
       {
         loading: false,
-        unresolvedCount: 1,
+        schedule: scheduleWith([], 1),
         weekAhead: { classDays: [false, false, false, false, false, false, false] },
       },
       noon,

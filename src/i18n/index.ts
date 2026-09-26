@@ -328,6 +328,20 @@ export interface Translations {
     detailTeacher: string;
     detailWeeks: string;
     teacherSeparator: string;
+    noClassOnDay: string;
+    countdownDays: string;
+    countdownHours: string;
+    countdownMinutes: string;
+    weekTooSmall: string;
+    termPickerNeedsLogin: string;
+    termPickerLoginAction: string;
+    homeLoginCta: string;
+    helpSwitchDay: string;
+    helpPickClass: string;
+    helpOpenClass: string;
+    footerDay: string;
+    footerClass: string;
+    footerDetail: string;
   };
   theme: {
     current: string;
