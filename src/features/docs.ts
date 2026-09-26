@@ -1150,7 +1150,7 @@ export async function showDocsMenu(): Promise<void> {
       title: trans.docs.chooseCategory,
       options: [
         ...sections.map((sec) => ({ value: sec.key, label: sec.label })),
-        { value: 'search', label: chalk.dim(trans.docs.searchPrompt.replace(':', '')) },
+        { value: 'search', label: chalk.dim(trans.docs.searchPrompt) },
         { value: 'browser', label: chalk.dim(trans.docs.openBrowser) },
       ],
       footer: menuFooter(),

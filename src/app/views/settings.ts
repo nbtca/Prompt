@@ -20,6 +20,7 @@ import {
   type Language,
 } from '../../i18n/index.js';
 import { padEndV } from '../../core/text.js';
+import { type } from '../../core/theme.js';
 import { resetCapabilities } from '../../core/capabilities.js';
 
 let state: SettingsViewState = { mode: 'menu' };
@@ -65,7 +66,7 @@ function buildMenuField(statusMessage?: string): SettingsViewState {
   return {
     mode: 'menu',
     ...(statusMessage === undefined ? {} : { statusMessage }),
-    menuField: new ListField({ title: trans.theme.chooseAction, options }),
+    menuField: new ListField({ options }),
   };
 }
 
@@ -142,7 +143,7 @@ export const settingsView = {
           state = {
             mode: 'icon',
             subField: new ListField({
-              title: trans.theme.chooseIconMode,
+              title: trans.theme.iconMode,
               options,
               initialIndex: idx,
             }),
@@ -159,7 +160,7 @@ export const settingsView = {
           state = {
             mode: 'color',
             subField: new ListField({
-              title: trans.theme.chooseColorMode,
+              title: trans.theme.colorMode,
               options,
               initialIndex: idx,
             }),
@@ -180,6 +181,8 @@ export const settingsView = {
           state = {
             mode: 'about',
             aboutLines: [
+              type.heading(trans.about.title),
+              '',
               row(trans.about.project, APP_INFO.name),
               row(trans.about.version, `v${APP_INFO.version}`),
               row(trans.about.description, trans.about.descriptionText),
@@ -194,7 +197,7 @@ export const settingsView = {
               ),
             ],
             backField: new ListField({
-              title: trans.about.title,
+              title: '',
               options: [{ value: '__back__', label: trans.common.back }],
             }),
           };

@@ -44,7 +44,7 @@ export const c = {
   error: (s: string) => chalk.red(s),
   warn: (s: string) => chalk.yellow(s),
 
-  heading: (s: string) => chalk.bold.white(s),
+  heading: (s: string) => chalk.bold(s),
   muted: (s: string) => chalk.dim(s),
   subtle: (s: string) => chalk.gray(s),
 
@@ -81,8 +81,8 @@ export const space = {
 } as const;
 
 export const type = {
-  heading: (s: string) => chalk.bold.white(s),
-  label: (s: string) => chalk.white(s),
+  heading: (s: string) => chalk.bold(s),
+  label: (s: string) => s,
   body: (s: string) => s,
   hint: (s: string) => chalk.dim(s),
   active: (s: string) => chalk.bold(c.brand(s)),

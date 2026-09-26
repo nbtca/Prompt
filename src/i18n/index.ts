@@ -39,6 +39,8 @@ export interface Translations {
     settingsDesc: string;
     chooseAction: string;
     hintMove: string;
+    hintTabs: string;
+    hintBack: string;
     hintOpen: string;
     hintQuit: string;
   };
@@ -321,9 +323,6 @@ export interface Translations {
   };
   theme: {
     current: string;
-    chooseAction: string;
-    chooseIconMode: string;
-    chooseColorMode: string;
     modeAuto: string;
     modeAscii: string;
     modeUnicode: string;

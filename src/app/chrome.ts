@@ -35,7 +35,9 @@ function renderTabs(views: { id: ViewId; title: string }[], active: ViewId, cols
   const full =
     space.indent +
     views
-      .map((view) => (view.id === active ? type.active(`[${view.title}]`) : type.hint(view.title)))
+      .map((view) =>
+        view.id === active ? type.active(`[${view.title}]`) : type.hint(` ${view.title} `),
+      )
       .join(`  ${dot}  `);
   if (visualWidth(full) <= cols) return full;
 
@@ -122,7 +124,7 @@ export function captureFooterHint(cols = Number.POSITIVE_INFINITY): string {
   const dot = pickIcon('·', '-');
   return fitFooterHint(
     cols,
-    `Ctrl+C ${trans.common.exit}  ${dot}  Esc ${trans.common.back}  ${dot}  Enter ${trans.common.confirm}`,
+    `Ctrl+C ${trans.common.exit} ${dot} Esc ${trans.common.back} ${dot} Enter ${trans.common.confirm}`,
     'Ctrl+C Esc Enter',
     'Ctrl+C Esc',
     'Ctrl+C',
@@ -131,7 +133,7 @@ export function captureFooterHint(cols = Number.POSITIVE_INFINITY): string {
 
 export function digitTabHint(tabCount: number): string {
   const dot = pickIcon('·', '-');
-  return tabCount > 1 ? `1-${tabCount} / Tab ${dot} ` : '';
+  return tabCount > 1 ? `1-${tabCount} / Tab ${t().menu.hintTabs} ${dot} ` : '';
 }
 
 export function passiveFooterHint(tabCount: number, cols = Number.POSITIVE_INFINITY): string {
@@ -140,8 +142,8 @@ export function passiveFooterHint(tabCount: number, cols = Number.POSITIVE_INFIN
   const compactTabs = tabCount > 1 ? `1-${tabCount}/Tab ${dot} ` : '';
   return fitFooterHint(
     cols,
-    `${digitTabHint(tabCount)}Esc ${dot} q ${trans.menu.hintQuit} ${dot} ${trans.help.hint}`,
-    `${digitTabHint(tabCount)}Esc ${dot} q ${trans.menu.hintQuit}`,
+    `${digitTabHint(tabCount)}Esc ${trans.menu.hintBack} ${dot} q ${trans.menu.hintQuit} ${dot} ${trans.help.hint}`,
+    `${digitTabHint(tabCount)}Esc ${trans.menu.hintBack} ${dot} q ${trans.menu.hintQuit}`,
     `${compactTabs}Esc ${dot} q ${dot} ?`,
     `Esc ${dot} q ${dot} ?`,
     `Esc ${dot} q`,
@@ -154,11 +156,12 @@ function interactiveFooterHint(tabCount: number, cols: number): string {
   const dot = pickIcon('·', '-');
   const fullTabs = digitTabHint(tabCount);
   const compactTabs = tabCount > 1 ? `1-${tabCount}/Tab ${dot} ` : '';
+  const localLabelled = `${trans.menu.hintMove} ${dot} ${trans.menu.hintOpen} ${dot} Esc ${trans.menu.hintBack} ${dot} q ${trans.menu.hintQuit}`;
   const localFull = `${trans.menu.hintMove} ${dot} ${trans.menu.hintOpen} ${dot} Esc ${dot} q ${trans.menu.hintQuit}`;
   const localCompact = `${trans.menu.hintMove} ${trans.menu.hintOpen} Esc q`;
   const candidates = [
-    `${fullTabs}${localFull} ${dot} ${trans.help.hint}`,
-    `${fullTabs}${localFull}`,
+    `${fullTabs}${localLabelled} ${dot} ${trans.help.hint}`,
+    `${fullTabs}${localLabelled}`,
     `${compactTabs}${localFull}`,
     localFull,
     `${compactTabs}${localCompact}`,

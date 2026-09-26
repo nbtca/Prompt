@@ -289,7 +289,7 @@ describe('docsView', () => {
       setFreshLanguage('en');
       await freshDocsView.load(ctx);
       const out = stripAnsi(freshDocsView.render(ctx).join('\n'));
-      expect(out).toContain('Choose a document or directory:');
+      expect(out).toContain('Choose a document or directory');
       const selected = out.split('\n').find((line) => line.includes('Back'));
       expect(selected?.trim().startsWith('→')).toBe(true);
       expect(searchDocumentsMock).toHaveBeenCalledWith('o', ctx.signal);
