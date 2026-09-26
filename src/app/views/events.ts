@@ -6,31 +6,37 @@ import { TextField } from '../fields/text-field.js';
 import { renderEvents, type EventsViewState } from './events-render.js';
 import { setVimKeysActive } from '../../core/vim-keys.js';
 import { pickIcon } from '../../core/icons.js';
-import { t } from '../../i18n/index.js';
+import { padEndV, visualWidth } from '../../core/text.js';
+import type { MenuOption } from '../../core/components/menu.js';
+import { fmt, t } from '../../i18n/index.js';
 import {
+  eventWhen,
   exportEventIcs,
   loadCalendarOrCache,
+  recurringMark,
   toDisplayEvent,
   yearHeatmap,
 } from '../../features/calendar.js';
 import {
   currentEvents,
-  filterEvents,
   monthRange,
+  pastEvents,
+  searchEvents,
   weekRange,
 } from '../../features/calendar-query.js';
-import { addLocalDays } from '../../core/calendar-day.js';
 
 let state: EventsViewState = { mode: 'loading' };
 let calendar: Calendar | null = null;
 let stale = false;
 let currentList: CalendarEvent[] = [];
+let listState: EventsViewState | undefined;
+let hubField: ListField | undefined;
 
 function backLabel(): string {
   return t().common.back;
 }
 
-function buildHubField(): ListField {
+function buildHubField(initialIndex: number): ListField {
   const trans = t();
   const options = [
     { value: 'upcoming', label: trans.calendar.next30Days },
@@ -40,56 +46,66 @@ function buildHubField(): ListField {
     { value: 'past', label: trans.calendar.pastEvents },
     { value: 'heatmap', label: trans.calendar.heatmap.title },
   ];
-  return new ListField({ title: trans.calendar.browse, options });
+  return new ListField({ title: trans.calendar.browse, options, initialIndex });
 }
 
-function buildListField(title: string, events: CalendarEvent[], maxVisible: number): ListField {
+function showList(
+  ctx: AppContext,
+  title: string,
+  events: CalendarEvent[],
+  emptyMessage: string,
+  endedFrom = events.length,
+): void {
   const trans = t();
+  const dot = pickIcon('·', '-');
   const display = events.map(toDisplayEvent);
-  const options = [
-    ...display.map((event, index) => ({
-      value: String(index),
-      label: `${event.date}${event.time ? ` ${event.time}` : ''}  ${event.title}`,
-      hint: event.location,
-    })),
+  const whenWidth = Math.max(0, ...display.map((event) => visualWidth(eventWhen(event))));
+  const options: MenuOption[] = [
+    ...display.map((event, index) => {
+      const ended = index >= endedFrom;
+      return {
+        value: String(index),
+        label: `${padEndV(eventWhen(event), whenWidth)}  ${event.title}${recurringMark(event)}`,
+        hint: ended ? `${trans.calendar.endedLabel} ${dot} ${event.location}` : event.location,
+        hintColumn: true,
+        dim: ended,
+      };
+    }),
     { value: '__back__', label: backLabel() },
   ];
-  return new ListField({
-    title: title || trans.menu.events,
-    options:
-      options.length > 1
-        ? options
-        : [{ value: '__back__', label: `${trans.calendar.noEvents} — ${backLabel()}` }],
-    maxVisible,
-  });
-}
-
-function showList(title: string, events: CalendarEvent[], ctx: AppContext): void {
   currentList = events;
-  state = {
-    mode: 'list',
-    listField: buildListField(title, events, computeMaxVisible(ctx.bodyRows)),
-  };
+  const maxVisible = computeMaxVisible(ctx.bodyRows);
+  state =
+    events.length > 0
+      ? { mode: 'list', listField: new ListField({ title, options, maxVisible }) }
+      : {
+          mode: 'list',
+          listTitle: title,
+          listNotice: emptyMessage,
+          listField: new ListField({ options, maxVisible }),
+        };
 }
 
-const RECENT_ACTIVITY_FETCH_CAP = 15;
+const RECENT_EVENTS_CAP = 5;
 
 function goToHub(): void {
   const now = new Date();
   const upcoming = calendar ? currentEvents(calendar, now) : [];
   const nextEvent = upcoming.find((event) => event.start >= now);
+  hubField = buildHubField(hubField?.selectedIndex ?? 0);
   state = {
     mode: 'hub',
-    hubField: buildHubField(),
+    hubField,
     ...(stale ? { stale } : {}),
     ...(nextEvent === undefined ? {} : { nextEvent: toDisplayEvent(nextEvent) }),
     heatmapBuckets: calendar ? yearHeatmap(calendar, now) : [],
-    recentEvents: upcoming.slice(0, RECENT_ACTIVITY_FETCH_CAP).map(toDisplayEvent),
+    recentEvents: upcoming.slice(0, RECENT_EVENTS_CAP).map(toDisplayEvent),
   };
 }
 
 function showDetail(raw: CalendarEvent): void {
   const trans = t();
+  listState = state;
   const e = toDisplayEvent(raw);
   const dot = pickIcon('·', '-');
   state = {
@@ -115,6 +131,7 @@ export const eventsView = {
   async load(ctx: AppContext): Promise<void> {
     if (ctx.signal?.aborted) return;
     state = { mode: 'loading' };
+    hubField = undefined;
     ctx.rerender();
     try {
       const loaded = await loadCalendarOrCache(ctx.signal);
@@ -153,6 +170,10 @@ export const eventsView = {
   },
 
   handleBack(): boolean {
+    if (state.mode === 'detail' && listState) {
+      state = listState;
+      return true;
+    }
     if (
       state.mode === 'list' ||
       state.mode === 'detail' ||
@@ -173,22 +194,30 @@ export const eventsView = {
         const result = state.hubField?.handleKey(key);
         if (!result?.selected) return;
         const now = new Date();
+        const trans = t();
         if (result.selected === 'upcoming') {
-          showList(t().calendar.next30Days, currentEvents(calendar, now), ctx);
+          showList(
+            ctx,
+            trans.calendar.next30Days,
+            currentEvents(calendar, now),
+            trans.calendar.noEvents,
+          );
           return;
         }
-        if (result.selected === 'week') {
-          const r = weekRange(now);
-          showList(t().calendar.thisWeek, calendar.inRange(r.start, r.end), ctx);
-          return;
-        }
-        if (result.selected === 'month') {
-          const r = monthRange(now);
-          showList(t().calendar.thisMonth, calendar.inRange(r.start, r.end), ctx);
+        if (result.selected === 'week' || result.selected === 'month') {
+          const r = result.selected === 'week' ? weekRange(now) : monthRange(now);
+          const title =
+            result.selected === 'week' ? trans.calendar.thisWeek : trans.calendar.thisMonth;
+          showList(ctx, title, calendar.inRange(r.start, r.end), trans.calendar.noEventsInRange);
           return;
         }
         if (result.selected === 'past') {
-          showList(t().calendar.pastEvents, calendar.past({ days: 30 }).reverse(), ctx);
+          showList(
+            ctx,
+            trans.calendar.pastEvents,
+            pastEvents(calendar, now),
+            trans.calendar.noPastEvents,
+          );
           return;
         }
         if (result.selected === 'heatmap') {
@@ -227,7 +256,7 @@ export const eventsView = {
         const result = state.detailField?.handleKey(key);
         if (!result?.selected) return;
         if (result.selected === '__back__') {
-          showList('', currentList, ctx);
+          eventsView.handleBack();
           return;
         }
         if (result.selected === 'export' && state.detailEvent) {
@@ -255,10 +284,15 @@ export const eventsView = {
             goToHub();
             return;
           }
-          const now = new Date();
-          const pool = calendar.inRange(now, addLocalDays(now, 365));
-          const results = filterEvents(pool, query);
-          showList(`${t().calendar.search}: ${query}`, results, ctx);
+          const { upcoming, past } = searchEvents(calendar, query, new Date());
+          const trans = t();
+          showList(
+            ctx,
+            `${trans.calendar.search}: ${query}`,
+            [...upcoming, ...past],
+            fmt(trans.calendar.searchNoResultsFor, { query }),
+            upcoming.length,
+          );
         }
         return;
       }

@@ -83,7 +83,7 @@
     "pastLoading": "Loading past events...",
     "pastEvents": "Past Events",
     "pastEventsDesc": "Recent activity history",
-    "noPastEvents": "No past events in the last 30 days",
+    "noPastEvents": "No past events in the last year",
     "viewPastDetail": "Select an event for details:",
     "next": "Next",
     "recentActivity": "Coming up",
@@ -100,7 +100,15 @@
     "exportIcs": "Export .ics",
     "exportSuccess": "Saved",
     "exportError": "Could not write the .ics file",
-    "recurringLabel": "recurring"
+    "recurringLabel": "recurring",
+    "searchNoResultsFor": "No events match “{query}”",
+    "noEventsInRange": "No events in this period",
+    "endedLabel": "ended",
+    "duration": {
+      "days": "{days}d {hours}h",
+      "hours": "{hours}h {minutes}m",
+      "minutes": "{minutes}m"
+    }
   },
   "docs": {
     "loading": "Loading documentation list...",

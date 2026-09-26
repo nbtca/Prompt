@@ -20,8 +20,14 @@ import {
   wrapAnsiToVisualWidth,
 } from '../core/text.js';
 import { t } from '../i18n/index.js';
-import { addLocalDays, localDayDifference } from '../core/calendar-day.js';
-import { countdownParts, isCountdownUrgent, buildExportFilename } from './calendar-query.js';
+import { localDayDifference } from '../core/calendar-day.js';
+import {
+  countdownParts,
+  isCountdownUrgent,
+  buildExportFilename,
+  formatDuration,
+  pastYearRange,
+} from './calendar-query.js';
 import { loadFeedCache, saveFeedCache } from './calendar-store.js';
 import { writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
@@ -133,7 +139,7 @@ export async function loadCalendarOrCache(
 }
 
 export function yearHeatmap(calendar: Calendar, now: Date): HeatmapBucket[] {
-  return calendar.heatmap({ start: addLocalDays(now, -365), end: now, bucket: 'day' });
+  return calendar.heatmap({ ...pastYearRange(now), bucket: 'day' });
 }
 
 export function serializeEvents(events: Event[]): EventOutputItem[] {
@@ -232,7 +238,32 @@ function styleTitle(title: string, style: (value: string) => string): string {
   return `${type.hint(match[1])}${match[2]}${style(title.slice(match[0].length))}`;
 }
 
-export function renderEventBrief(e: Event, now: Date): string {
+const TIME_COLUMN = ' 00:00'.length;
+
+export function eventWhen(e: Event): string {
+  return e.time ? `${e.date} ${e.time}` : padEndV(e.date, visualWidth(e.date) + TIME_COLUMN);
+}
+
+export function recurringMark(e: Event): string {
+  return e.recurring ? ` ${pickIcon('↻', '~')}` : '';
+}
+
+function hangingLines(marker: string, content: string, cols: number): string[] {
+  const width = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : Number.POSITIVE_INFINITY;
+  const prefixes = [`${space.indent}${marker} `, `${marker} `, marker, ''];
+  const prefix = prefixes.find((candidate) => visualWidth(candidate) < width) ?? '';
+  const continuation = ' '.repeat(visualWidth(prefix));
+  const contentWidth = Math.max(1, width - visualWidth(prefix));
+  return wrapAnsiToVisualWidth(content, contentWidth).map(
+    (line, index) => `${index === 0 ? prefix : continuation}${line}`,
+  );
+}
+
+export function renderEventBriefLines(
+  e: Event,
+  now: Date,
+  cols = Number.POSITIVE_INFINITY,
+): string[] {
   const dot = pickIcon('·', '-');
   const proximity = eventProximity(e.startDate, now);
   const dateStyle =
@@ -243,12 +274,15 @@ export function renderEventBrief(e: Event, now: Date): string {
         : proximity === 'week'
           ? type.body
           : type.hint;
-  const dateTime = `${e.date}${e.time ? ' ' + e.time : ''}`;
   const marker =
     proximity === 'today' ? type.active(pickIcon('●', '*')) : dateStyle(pickIcon('·', '-'));
   const titleStyled = styleTitle(e.title, proximity === 'today' ? type.active : type.body);
-  const recurringMark = e.recurring ? ` ${type.hint(pickIcon('↻', '~'))}` : '';
-  return `${space.indent}${marker} ${dateStyle(dateTime)}  ${type.hint(dot)}  ${titleStyled}${recurringMark}`;
+  const content = `${dateStyle(eventWhen(e))}  ${type.hint(dot)}  ${titleStyled}${type.hint(recurringMark(e))}`;
+  return hangingLines(marker, content, cols);
+}
+
+export function renderEventBrief(e: Event, now: Date): string {
+  return renderEventBriefLines(e, now)[0] ?? '';
 }
 
 export function renderCountdownBanner(
@@ -259,26 +293,13 @@ export function renderCountdownBanner(
   if (!event) return '';
   const trans = t();
   const p = countdownParts(event.startDate, now);
-  const inp = trans.calendar.inPrefix;
   const when = p.past
     ? trans.calendar.startingNow
-    : p.days > 0
-      ? `${inp} ${p.days}d ${p.hours}h`
-      : p.hours > 0
-        ? `${inp} ${p.hours}h ${p.minutes}m`
-        : `${inp} ${p.minutes}m`;
+    : `${trans.calendar.inPrefix} ${formatDuration(p)}`;
   const whenStyled = isCountdownUrgent(p) ? c.warn(when) : type.hint(when);
   const dot = pickIcon('·', '-');
-  const width = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : Number.POSITIVE_INFINITY;
-  const cursor = type.active(glyph.cursor());
-  const prefixes = [`${space.indent}${cursor} `, `${cursor} `, cursor, ''];
-  const prefix = prefixes.find((candidate) => visualWidth(candidate) < width) ?? '';
-  const continuation = ' '.repeat(visualWidth(prefix));
-  const contentWidth = Math.max(1, width - visualWidth(prefix));
   const content = `${type.label(trans.calendar.next)}  ${dot}  ${type.body(event.title)}  ${dot}  ${whenStyled}`;
-  return wrapAnsiToVisualWidth(content, contentWidth)
-    .map((line, index) => `${index === 0 ? prefix : continuation}${line}`)
-    .join('\n');
+  return hangingLines(type.active(glyph.cursor()), content, cols).join('\n');
 }
 
 export function exportEventIcs(

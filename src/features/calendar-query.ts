@@ -1,6 +1,9 @@
 import type { Calendar, CalendarEvent } from '@nbtca/nbtcal';
+import { addLocalDays } from '../core/calendar-day.js';
+import { fmt, t } from '../i18n/index.js';
 
 const UPCOMING_DAYS = 30;
+const YEAR_DAYS = 365;
 
 export function weekRange(now: Date): { start: Date; end: Date } {
   const start = new Date(now);
@@ -18,18 +21,48 @@ export function dayRange(now: Date): { start: Date; end: Date } {
   return { start, end };
 }
 
+export function eventEnd(event: CalendarEvent): Date {
+  return (
+    event.end ??
+    (event.isAllDay
+      ? new Date(event.start.getFullYear(), event.start.getMonth(), event.start.getDate() + 1)
+      : event.start)
+  );
+}
+
+function hasEnded(event: CalendarEvent, now: Date): boolean {
+  return event.start < now && eventEnd(event) <= now;
+}
+
 export function currentEvents(calendar: Pick<Calendar, 'inRange'>, now: Date): CalendarEvent[] {
   const { start } = dayRange(now);
   const end = new Date(now.getTime() + UPCOMING_DAYS * 86_400_000);
-  return calendar.inRange(start, end).filter((event) => {
-    if (event.start >= now) return true;
-    const eventEnd =
-      event.end ??
-      (event.isAllDay
-        ? new Date(event.start.getFullYear(), event.start.getMonth(), event.start.getDate() + 1)
-        : event.start);
-    return eventEnd > now;
-  });
+  return calendar.inRange(start, end).filter((event) => !hasEnded(event, now));
+}
+
+export function pastYearRange(now: Date): { start: Date; end: Date } {
+  return { start: addLocalDays(now, -YEAR_DAYS), end: now };
+}
+
+export function pastEvents(calendar: Pick<Calendar, 'inRange'>, now: Date): CalendarEvent[] {
+  const { start, end } = pastYearRange(now);
+  return calendar
+    .inRange(start, end)
+    .filter((event) => hasEnded(event, now))
+    .reverse();
+}
+
+export function searchEvents(
+  calendar: Pick<Calendar, 'inRange'>,
+  query: string,
+  now: Date,
+): { upcoming: CalendarEvent[]; past: CalendarEvent[] } {
+  const pool = calendar.inRange(pastYearRange(now).start, addLocalDays(now, YEAR_DAYS));
+  const matches = filterEvents(pool, query);
+  return {
+    upcoming: matches.filter((event) => !hasEnded(event, now)),
+    past: matches.filter((event) => hasEnded(event, now)).reverse(),
+  };
 }
 
 export function monthRange(now: Date): { start: Date; end: Date } {
@@ -64,6 +97,13 @@ export function countdownParts(target: Date, now: Date): Countdown {
     hours: Math.floor((totalMin % 1440) / 60),
     minutes: totalMin % 60,
   };
+}
+
+export function formatDuration(p: Countdown): string {
+  const d = t().calendar.duration;
+  if (p.days > 0) return fmt(d.days, { days: p.days, hours: p.hours });
+  if (p.hours > 0) return fmt(d.hours, { hours: p.hours, minutes: p.minutes });
+  return fmt(d.minutes, { minutes: p.minutes });
 }
 
 /** True once a countdown is close enough to call out visually (default: 15

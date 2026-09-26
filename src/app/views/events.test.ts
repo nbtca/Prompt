@@ -211,3 +211,160 @@ describe('eventsView heatmap navigation', () => {
     expect(hint).toContain(t().menu.hintQuit);
   });
 });
+
+describe('eventsView navigation', () => {
+  const DOWN = '\x1b[B';
+  const now = new Date('2026-07-15T12:00:00');
+
+  function event(uid: string, start: string, end: string | null = null) {
+    return {
+      uid,
+      title: uid,
+      start: new Date(start),
+      end: end === null ? null : new Date(end),
+      isAllDay: false,
+      location: `${uid} room`,
+      description: '',
+      recurring: false,
+    };
+  }
+
+  function press(ctx: AppContext, ...keys: string[]): void {
+    for (const key of keys) eventsView.handleKey(key, ctx);
+  }
+
+  function screen(ctx: AppContext): string[] {
+    return eventsView.render(ctx).map(stripAnsi);
+  }
+
+  function selectedLine(ctx: AppContext): string {
+    return screen(ctx).find((line) => line.includes('→')) ?? '';
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(now);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('shows an empty list message on its own line above the back row', async () => {
+    const ctx = fakeCtx();
+    await eventsView.load(ctx);
+    press(ctx, '\r');
+
+    const lines = screen(ctx);
+    expect(lines.join('\n')).toContain(t().calendar.next30Days);
+    const notice = lines.find((line) => line.includes(t().calendar.noEvents));
+    expect(notice).toBeDefined();
+    expect(notice).not.toContain(t().common.back);
+    expect(selectedLine(ctx)).toContain(t().common.back);
+  });
+
+  it('says a search found nothing for the query', async () => {
+    const ctx = fakeCtx();
+    await eventsView.load(ctx);
+    press(ctx, DOWN, DOWN, DOWN, '\r', 'z', 'z', 'z', '\r');
+
+    const out = screen(ctx).join('\n');
+    expect(out).toContain('No events match “zzz”');
+    expect(out).not.toContain(t().calendar.noEvents);
+  });
+
+  it('returns from a detail to the same list title and cursor', async () => {
+    calendarInRange.mockReturnValue([
+      event('First', '2026-07-16T10:00:00'),
+      event('Second', '2026-07-17T10:00:00'),
+      event('Third', '2026-07-18T10:00:00'),
+    ]);
+    const ctx = fakeCtx();
+    await eventsView.load(ctx);
+    press(ctx, DOWN, '\r', DOWN, '\r', DOWN, '\r');
+
+    expect(screen(ctx).join('\n')).toContain(t().calendar.thisWeek);
+    expect(selectedLine(ctx)).toContain('Second');
+
+    press(ctx, '\r');
+    expect(eventsView.handleBack()).toBe(true);
+    expect(screen(ctx).join('\n')).toContain(t().calendar.thisWeek);
+    expect(selectedLine(ctx)).toContain('Second');
+  });
+
+  it('keeps the selected hub item after Esc from a list', async () => {
+    const ctx = fakeCtx();
+    await eventsView.load(ctx);
+    press(ctx, DOWN, DOWN, '\r');
+    expect(eventsView.handleBack()).toBe(true);
+    expect(selectedLine(ctx)).toContain(t().calendar.thisMonth);
+  });
+
+  it('lists the past year of finished events, most recent first', async () => {
+    calendarInRange.mockReturnValue([
+      event('Autumn', '2025-10-01T10:00:00', '2025-10-01T12:00:00'),
+      event('Spring', '2026-04-01T10:00:00', '2026-04-01T12:00:00'),
+      event('Running', '2026-07-15T11:00:00', '2026-07-15T13:00:00'),
+    ]);
+    const ctx = fakeCtx();
+    await eventsView.load(ctx);
+    calendarInRange.mockClear();
+    press(ctx, DOWN, DOWN, DOWN, DOWN, '\r');
+
+    const [start, end] = calendarInRange.mock.calls[0] as [Date, Date];
+    expect(Math.round((end.getTime() - start.getTime()) / 86_400_000)).toBe(365);
+    const out = screen(ctx).join('\n');
+    expect(out).not.toContain('Running');
+    expect(out.indexOf('Spring')).toBeLessThan(out.indexOf('Autumn'));
+  });
+
+  it('searches past and upcoming events, upcoming first and past marked as ended', async () => {
+    calendarInRange.mockReturnValue([
+      event('Meetup old', '2025-10-01T10:00:00', '2025-10-01T12:00:00'),
+      event('Meetup next', '2026-12-01T10:00:00', '2026-12-01T12:00:00'),
+    ]);
+    const ctx = fakeCtx();
+    await eventsView.load(ctx);
+    calendarInRange.mockClear();
+    press(ctx, DOWN, DOWN, DOWN, '\r', 'm', 'e', 'e', 't', 'u', 'p', '\r');
+
+    const [start, end] = calendarInRange.mock.calls[0] as [Date, Date];
+    expect(start.getTime()).toBeLessThan(now.getTime() - 360 * 86_400_000);
+    expect(end.getTime()).toBeGreaterThan(now.getTime() + 360 * 86_400_000);
+    const lines = screen(ctx);
+    const next = lines.findIndex((line) => line.includes('Meetup next'));
+    const old = lines.findIndex((line) => line.includes('Meetup old'));
+    expect(next).toBeGreaterThan(-1);
+    expect(old).toBeGreaterThan(next);
+    expect(lines[old]).toContain(t().calendar.endedLabel);
+    expect(lines[next]).not.toContain(t().calendar.endedLabel);
+  });
+
+  it('marks recurring events in lists and lines up all-day titles with timed ones', async () => {
+    calendarInRange.mockReturnValue([
+      { ...event('Open day', '2026-07-16T00:00:00'), isAllDay: true },
+      { ...event('Weekly sync', '2026-07-16T20:00:00'), recurring: true },
+    ]);
+    const ctx = fakeCtx();
+    await eventsView.load(ctx);
+    press(ctx, '\r');
+
+    const lines = screen(ctx);
+    const allDay = lines.find((line) => line.includes('Open day')) ?? '';
+    const timed = lines.find((line) => line.includes('Weekly sync')) ?? '';
+    expect(timed).toContain('Weekly sync ↻');
+    expect(allDay.indexOf('Open day')).toBe(timed.indexOf('Weekly sync'));
+  });
+
+  it('caps the coming-up block on the hub to five events', async () => {
+    calendarInRange.mockReturnValue(
+      Array.from({ length: 8 }, (_, i) => event(`Event ${i}`, `2026-07-2${i}T10:00:00`)),
+    );
+    const ctx = { ...fakeCtx(), size: { rows: 40, cols: 100 }, bodyRows: 35 };
+    await eventsView.load(ctx);
+
+    const out = screen(ctx).join('\n');
+    expect(out).toContain('Event 4');
+    expect(out).not.toContain('Event 5');
+  });
+});

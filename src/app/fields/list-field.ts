@@ -1,6 +1,7 @@
 import {
   renderMenu,
   renderMenuOption,
+  menuColumns,
   nextIndex,
   parseKey,
   type MenuOption,
@@ -110,12 +111,9 @@ export class ListField {
       return title ? renderIndentedOutput(type.heading(title), cols).slice(0, maxRows) : [];
     }
 
-    const labelWidth = options.reduce(
-      (width, option) => Math.max(width, visualWidth(option.label)),
-      0,
-    );
+    const columns = menuColumns(options);
     const optionGroups = options.map((option, index) =>
-      renderMenuOption(option, index === this.index, labelWidth, cols),
+      renderMenuOption(option, index === this.index, columns, cols),
     );
     const selectedLines = optionGroups[this.index] ?? [];
     const titleValue = !title

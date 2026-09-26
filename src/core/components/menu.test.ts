@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import chalk from 'chalk';
 import { parseKey, nextIndex, renderMenu, runMenu } from './menu.js';
 import { stripAnsi, visualWidth } from '../text.js';
 import { resetIconCache } from '../icons.js';
@@ -153,5 +154,50 @@ describe('renderMenu without a title', () => {
     expect(without).toHaveLength(withTitle.length - 2);
     expect(stripAnsi(without[0] ?? '')).toContain('Log in');
     expect(stripAnsi(without.join('\n'))).not.toContain('Schedule');
+  });
+});
+
+describe('renderMenu with a hint column', () => {
+  const options = [
+    { value: 'a', label: '09-26 19:00  Evening talk on Rust ownership', hint: 'Lab A302' },
+    { value: 'b', label: '09-27 13:00  CTF', hint: 'Online' },
+    { value: 'c', label: '10-06 18:30  NAS workshop', hint: 'Library room 305, third floor' },
+  ].map((option) => ({ ...option, hintColumn: true }));
+
+  function render(cols: number): string[] {
+    return renderMenu({ options, selectedIndex: 0 }, cols).split('\n').map(stripAnsi);
+  }
+
+  it('keeps every hint in one column by truncating long labels and hints', () => {
+    const lines = render(60);
+    expect(lines).toHaveLength(3);
+    expect(lines.every((line) => visualWidth(line) <= 60)).toBe(true);
+    const starts = ['Lab A302', 'Online', 'Library'].map((hint, i) => lines[i]?.indexOf(hint));
+    expect(starts.every((start) => start !== undefined && start > 0)).toBe(true);
+    expect(new Set(starts).size).toBe(1);
+    expect(lines[0]).toContain('…');
+  });
+
+  it('drops the hint column when a readable label no longer fits beside it', () => {
+    const text = render(32).join('');
+    expect(text).not.toContain('Online');
+    expect(text.replace(/\s/g, '')).toContain('EveningtalkonRustownership');
+  });
+
+  it('dims an option marked as dim', () => {
+    const level = chalk.level;
+    chalk.level = 3;
+    const out = renderMenu(
+      {
+        options: [
+          { value: 'a', label: 'A' },
+          { value: 'b', label: 'B', dim: true },
+        ],
+        selectedIndex: 0,
+      },
+      40,
+    );
+    chalk.level = level;
+    expect(out.split('\n')[1]).toMatch(/\x1b\[2m/);
   });
 });

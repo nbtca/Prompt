@@ -5,6 +5,7 @@ import {
   renderEventsTable,
   renderCountdownBanner,
   renderEventBrief,
+  renderEventBriefLines,
   exportEventIcs,
 } from './calendar.js';
 import chalk from 'chalk';
@@ -239,6 +240,35 @@ describe('renderEventBrief', () => {
     expect(stripAnsi(renderEventBrief(odd, now))).toContain('[NBT]squashed');
   });
 
+  it('starts all-day and timed titles in the same column', () => {
+    const now = new Date('2026-07-15T09:00:00');
+    const allDay = toDisplayEvent(
+      makeEvent({ title: 'Open day', isAllDay: true, start: new Date('2026-07-16T00:00:00') }),
+    );
+    const timed = toDisplayEvent(
+      makeEvent({ title: 'Hack Night', start: new Date('2026-07-16T20:00:00') }),
+    );
+    const allDayLine = stripAnsi(renderEventBrief(allDay, now));
+    const timedLine = stripAnsi(renderEventBrief(timed, now));
+    expect(allDayLine.indexOf('Open day')).toBe(timedLine.indexOf('Hack Night'));
+  });
+
+  it('keeps the marker indented and hangs wrapped lines under the date', () => {
+    const now = new Date('2026-07-15T09:00:00');
+    const long = toDisplayEvent(
+      makeEvent({
+        title: 'Evening talk on Rust ownership and the borrow checker',
+        start: new Date('2026-07-15T20:00:00'),
+      }),
+    );
+    const width = visualWidth(stripAnsi(renderEventBrief(long, now)));
+    const lines = renderEventBriefLines(long, now, width - 1).map(stripAnsi);
+    expect(lines.length).toBeGreaterThan(1);
+    expect(lines.every((line) => visualWidth(line) < width)).toBe(true);
+    expect(lines[0]).toMatch(/^ {3}● 07-15/);
+    expect(lines.slice(1).every((line) => /^ {5}\S/.test(line))).toBe(true);
+  });
+
   it('does not throw for an event on a different day than now', () => {
     const future = toDisplayEvent(
       makeEvent({ title: 'Next Week', start: new Date('2026-07-22T20:00:00') }),
@@ -284,6 +314,16 @@ describe('renderCountdownBanner', () => {
     expect(text).toContain('Next');
     expect(text).toContain('1d0h');
     expect(lines.filter((line) => /[→>]/u.test(stripAnsi(line)))).toHaveLength(1);
+  });
+  it('spells the countdown out in Chinese', () => {
+    setLanguage('zh');
+    try {
+      const event = toDisplayEvent(makeEvent({ start: new Date('2026-09-27T13:00:00') }));
+      const out = stripAnsi(renderCountdownBanner(event, new Date('2026-09-26T19:06:00')));
+      expect(out).toContain('还有 17 小时 54 分钟');
+    } finally {
+      setLanguage('en');
+    }
   });
   it('returns empty string when there is no event', () => {
     expect(renderCountdownBanner(undefined, new Date())).toBe('');
