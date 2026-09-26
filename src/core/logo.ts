@@ -34,14 +34,7 @@ function dotmatrixFile(): string {
 }
 
 function paint(text: string, color: boolean): string {
-  if (!color) return text;
-  const fn = brand as unknown as { multiline?: (s: string) => string };
-  return typeof fn.multiline === 'function'
-    ? fn.multiline(text)
-    : text
-        .split('\n')
-        .map((line) => brand(line))
-        .join('\n');
+  return color ? brand(text) : text;
 }
 
 function loadArt(): string {
@@ -74,19 +67,48 @@ export function buildLogoLines(): string[] {
   ];
 }
 
+function skipOnKeypress(): { signal: AbortSignal; release(): void } {
+  const controller = new AbortController();
+  const stdin = process.stdin;
+  if (!stdin.isTTY) return { signal: controller.signal, release: () => undefined };
+  const onData = (chunk: Buffer) => {
+    // Raw mode swallows SIGINT, so Ctrl+C has to exit by hand.
+    if (chunk.includes(0x03)) {
+      stdin.setRawMode(false);
+      process.exit(130);
+    }
+    controller.abort();
+  };
+  stdin.setRawMode(true);
+  stdin.on('data', onData);
+  stdin.resume();
+  return {
+    signal: controller.signal,
+    release() {
+      stdin.off('data', onData);
+      stdin.setRawMode(false);
+      stdin.pause();
+    },
+  };
+}
+
 export async function runStartup(): Promise<void> {
   if (!process.stdout.isTTY) return;
   const art = loadArt();
   if (!startupFitsTerminal(process.stdout.rows, process.stdout.columns, art)) return;
   const color = !process.env['NO_COLOR'];
+  const skip = skipOnKeypress();
   process.stdout.write('\n');
-  await materializeBraille(art, (s) => paint(s, color), {
-    paintProgress: (s) => (color ? c.brand(s) : s),
-  });
-  await typeReveal([
-    '',
-    color ? brand(TAGLINE) : TAGLINE,
-    chalk.dim(`@nbtca/prompt  v${APP_INFO.version}`),
-    '',
-  ]);
+  try {
+    await materializeBraille(art, (s) => paint(s, color), {
+      paintProgress: (s) => (color ? c.brand(s) : s),
+      signal: skip.signal,
+    });
+    await typeReveal(
+      ['', color ? brand(TAGLINE) : TAGLINE, chalk.dim(`@nbtca/prompt  v${APP_INFO.version}`), ''],
+      { signal: skip.signal },
+    );
+  } finally {
+    skip.release();
+  }
 }

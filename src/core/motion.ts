@@ -3,14 +3,27 @@ import { ansi } from './canvas.js';
 
 const GRAPHEME_SEGMENTER = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 
-export function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal?.aborted) {
+      resolve();
+      return;
+    }
+    const timer = setTimeout(done, ms);
+    signal?.addEventListener('abort', done, { once: true });
+    function done(): void {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', done);
+      resolve();
+    }
+  });
 }
 
 export interface RevealOptions {
   reducedMotion?: boolean;
   stepMs?: number;
   write?: (s: string) => void;
+  signal?: AbortSignal;
 }
 
 export async function typeReveal(lines: string[], opts: RevealOptions = {}): Promise<void> {
@@ -27,9 +40,13 @@ export async function typeReveal(lines: string[], opts: RevealOptions = {}): Pro
   }
 
   const stepMs = opts.stepMs ?? 45;
-  for (const line of lines) {
+  for (const [index, line] of lines.entries()) {
+    if (opts.signal?.aborted) {
+      write(lines.slice(index).join('\n') + '\n');
+      return;
+    }
     write(line + '\n');
-    await sleep(stepMs);
+    await sleep(stepMs, opts.signal);
   }
 }
 
@@ -48,6 +65,7 @@ export interface MaterializeOptions {
   frameMs?: number;
   write?: (s: string) => void;
   random?: () => number;
+  signal?: AbortSignal;
 }
 
 export async function materializeBraille(
@@ -109,6 +127,7 @@ export async function materializeBraille(
   const frameMs = opts.frameMs ?? 35;
   let shown = 0;
   for (let f = 1; f <= frameCount; f++) {
+    if (opts.signal?.aborted) f = frameCount;
     const target = Math.round((dots.length * f) / frameCount);
     while (shown < target) {
       const d = dots[shown];
@@ -122,7 +141,7 @@ export async function materializeBraille(
     const painter = f === frameCount ? paint : (opts.paintProgress ?? paint);
     write(painter(renderFrame()) + '\n');
     if (f < frameCount) {
-      await sleep(frameMs);
+      await sleep(frameMs, opts.signal);
       write(ansi.cursorUp(lines.length) + ansi.cursorToCol0 + ansi.eraseDown);
     }
   }

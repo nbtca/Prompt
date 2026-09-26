@@ -1,6 +1,5 @@
 import chalk from 'chalk';
-import open from 'open';
-import type { ChildProcess } from 'node:child_process';
+import { spawn, type ChildProcess } from 'child_process';
 import { sanitizeTerminalLine } from '../core/text.js';
 import { fmt, t } from '../i18n/index.js';
 
@@ -37,9 +36,22 @@ function settleBrowserLauncher(child: ChildProcess): Promise<boolean> {
   });
 }
 
+function browserCommand(url: string): [string, string[]] {
+  if (process.platform === 'darwin') return ['open', [url]];
+  // rundll32 takes the URL as one argument, so no shell ever parses it.
+  if (process.platform === 'win32' || process.env['WSL_DISTRO_NAME']) {
+    return ['rundll32.exe', ['url.dll,FileProtocolHandler', url]];
+  }
+  return ['xdg-open', [url]];
+}
+
 export async function launchBrowserUrl(url: string): Promise<boolean> {
+  if (!/^https?:\/\//i.test(url)) return false;
   try {
-    return await settleBrowserLauncher(await open(url));
+    const [command, args] = browserCommand(url);
+    const child = spawn(command, args, { stdio: 'ignore', detached: true });
+    child.unref();
+    return await settleBrowserLauncher(child);
   } catch {
     return false;
   }

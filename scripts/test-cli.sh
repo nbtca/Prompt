@@ -89,7 +89,7 @@ if [[ "$(node dist/index.js docs)" != "https://docs.nbtca.space" ]]; then
   echo "docs output mismatch" >&2
   exit 1
 fi
-open_down_import='--import=data:text/javascript,import%20cp%20from%20%22node:child_process%22;cp.spawn=()=>{throw%20Error(%22blocked%22)}'
+open_down_import='--import=data:text/javascript,import%20cp%20from%20%22node:child_process%22;import%20{syncBuiltinESMExports}%20from%20%22node:module%22;cp.spawn=()=>{throw%20Error(%22blocked%22)};syncBuiltinESMExports()'
 assert_fails_with browser-website 'Open manually: https://nbtca.space' env NODE_OPTIONS="$open_down_import" node dist/index.js website --open --plain
 assert_fails_with browser-github 'Open manually: https://github.com/nbtca' env NODE_OPTIONS="$open_down_import" node dist/index.js github --open --plain
 assert_fails_with browser-roadmap 'Open manually: https://github.com/orgs/nbtca/projects/5' env NODE_OPTIONS="$open_down_import" node dist/index.js roadmap --open --plain

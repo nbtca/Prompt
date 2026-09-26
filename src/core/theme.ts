@@ -1,12 +1,35 @@
 import chalk from 'chalk';
-import gradient from 'gradient-string';
 import { pickIcon } from './icons.js';
 
-export const brandGradient = gradient([
-  { color: '#124689', pos: 0 },
-  { color: '#0ea5e9', pos: 0.55 },
-  { color: '#06b6d4', pos: 1 },
-]);
+const BRAND_STOPS = [
+  { at: 0, rgb: [0x12, 0x46, 0x89] },
+  { at: 0.55, rgb: [0x0e, 0xa5, 0xe9] },
+  { at: 1, rgb: [0x06, 0xb6, 0xd4] },
+] as const;
+
+function brandColorAt(position: number): [number, number, number] {
+  const upper = BRAND_STOPS.findIndex((stop) => stop.at >= position);
+  const to = BRAND_STOPS[Math.max(upper, 1)] ?? BRAND_STOPS[2];
+  const from = BRAND_STOPS[Math.max(upper, 1) - 1] ?? BRAND_STOPS[0];
+  const ratio = (position - from.at) / (to.at - from.at);
+  const mix = (index: 0 | 1 | 2) =>
+    Math.round(from.rgb[index] + (to.rgb[index] - from.rgb[index]) * ratio);
+  return [mix(0), mix(1), mix(2)];
+}
+
+export function brandGradient(text: string): string {
+  const lines = text.split('\n').map((line) => Array.from(line));
+  const span = Math.max(1, ...lines.map((line) => line.length - 1));
+  return lines
+    .map((line) =>
+      line
+        .map((char, column) =>
+          char.trim() ? chalk.rgb(...brandColorAt(Math.min(1, column / span)))(char) : char,
+        )
+        .join(''),
+    )
+    .join('\n');
+}
 
 export function brandMark(s: string): string {
   if (process.env['NO_COLOR']) return s;

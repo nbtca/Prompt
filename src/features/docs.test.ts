@@ -3,7 +3,6 @@ import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import type { ChildProcess } from 'node:child_process';
 import chalk from 'chalk';
-import open from 'open';
 import {
   cleanFileName,
   displayDocTitle,
@@ -25,13 +24,14 @@ import type { DocItem } from '@nbtca/docs';
 const spawnMock = vi.hoisted(() => vi.fn());
 
 function completedLauncher(): ChildProcess {
-  const child = new EventEmitter() as unknown as ChildProcess;
+  const child = Object.assign(new EventEmitter(), {
+    unref: () => undefined,
+  }) as unknown as ChildProcess;
   Object.defineProperty(child, 'exitCode', { value: 0, configurable: true });
   Object.defineProperty(child, 'signalCode', { value: null, configurable: true });
   return child;
 }
 
-vi.mock('open', () => ({ default: vi.fn() }));
 vi.mock('child_process', () => ({
   execFileSync: vi.fn(),
   spawn: spawnMock,
@@ -44,7 +44,6 @@ beforeAll(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
-  vi.mocked(open).mockClear();
   spawnMock.mockReset();
   clearDocsCache();
 });
@@ -283,7 +282,7 @@ describe('docsRouteFromPath', () => {
   });
 
   it('opens an index document with the route returned by the docs client', async () => {
-    vi.mocked(open).mockResolvedValueOnce(completedLauncher());
+    spawnMock.mockReturnValueOnce(completedLauncher());
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
@@ -295,11 +294,17 @@ describe('docsRouteFromPath', () => {
     const opened = await openDocsInBrowser('about/index.md');
 
     expect(opened).toBe(true);
-    expect(open).toHaveBeenCalledWith('https://docs.nbtca.space/about/');
+    expect(spawnMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.arrayContaining(['https://docs.nbtca.space/about/']),
+      expect.objectContaining({ detached: true }),
+    );
   });
 
   it('reports a browser launch failure', async () => {
-    vi.mocked(open).mockRejectedValueOnce(new Error('no browser'));
+    spawnMock.mockImplementationOnce(() => {
+      throw new Error('no browser');
+    });
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
 
     await expect(openDocsInBrowser()).resolves.toBe(false);

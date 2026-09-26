@@ -50,9 +50,7 @@
     "@nbtca/nbtcal": "^0.4.2",
     "chalk": "^5.6.2",
     "fetch-cookie": "^3.2.0",
-    "gradient-string": "^3.0.0",
     "marked": "^15.0.12",
-    "open": "^11.0.0",
     "tough-cookie": "^6.0.2"
   },
   "devDependencies": {
