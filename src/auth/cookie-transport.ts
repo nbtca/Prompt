@@ -241,6 +241,7 @@ export function createCampusCookieSession(
         finalUrl.hostname.toLowerCase() !== JWXT_HOST ||
         finalUrl.pathname.includes('/authserver/login') ||
         finalUrl.pathname.includes('/users/sign_in') ||
+        finalUrl.pathname === '/jwglxt/xtgl/login_slogin.html' ||
         finalUrl.pathname === '/vpn_key/update'
       )
         throw new SessionExpiredError();
