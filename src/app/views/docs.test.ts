@@ -290,6 +290,37 @@ describe('docsView', () => {
     }
   });
 
+  it('keeps the query visible in a long search excerpt', async () => {
+    searchDocumentsMock.mockResolvedValueOnce([
+      {
+        name: 'printing.md',
+        path: 'tutorial/manual/printing.md',
+        type: 'file',
+        title: 'Printing',
+        summary: '',
+        excerpt:
+          'The lab opens every weekday evening, bring your own laptop and charger, and the printer needs paper',
+        route: '/tutorial/manual/printing',
+        score: 80,
+        section: 'tutorial',
+      },
+    ]);
+    vi.resetModules();
+    const { docsView: freshDocsView } = await import('./docs.js');
+    const ctx = fakeCtx();
+    await freshDocsView.load(ctx);
+    freshDocsView.handleKey('\x1b[B', ctx);
+    freshDocsView.handleKey('\r', ctx);
+    freshDocsView.handleKey('printer', ctx);
+    freshDocsView.handleKey('\r', ctx);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const line = freshDocsView
+      .render(ctx)
+      .map(stripAnsi)
+      .find((candidate) => candidate.includes('Printing'));
+    expect(line).toContain('printer');
+  });
+
   it('rebuilds cached search results in place after a language change', async () => {
     setLanguage('zh');
     fetchSectionsMock.mockClear();

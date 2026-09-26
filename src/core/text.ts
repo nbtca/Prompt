@@ -127,6 +127,33 @@ export function truncateStart(str: string, maxWidth: number, marker = '...'): st
   return fittedMarker + value;
 }
 
+function indexOfIgnoreCase(text: string, needle: string): number {
+  const target = needle.toLowerCase();
+  for (let index = 0; index + needle.length <= text.length; index += 1) {
+    if (text.slice(index, index + needle.length).toLowerCase() === target) return index;
+  }
+  return -1;
+}
+
+export function excerptAround(
+  text: string,
+  needle: string,
+  maxWidth: number,
+  marker = '...',
+): string {
+  if (visualWidth(text) <= maxWidth) return text;
+  const at = needle ? indexOfIgnoreCase(text, needle) : -1;
+  const markerWidth = visualWidth(marker);
+  if (at <= 0 || visualWidth(text.slice(0, at + needle.length)) + markerWidth <= maxWidth) {
+    return truncate(text, maxWidth, marker);
+  }
+  const rest = text.slice(at);
+  const available = maxWidth - markerWidth;
+  const lead = Math.max(Math.floor(available / 4), available - visualWidth(rest));
+  const head = truncateStart(text.slice(0, at), lead + markerWidth, marker);
+  return head + truncate(rest, maxWidth - visualWidth(head), marker);
+}
+
 interface WrapToken {
   raw: string;
   width: number;

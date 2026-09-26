@@ -239,6 +239,7 @@ function buildSearchResultsField(
             ? sanitizeTerminalLine(result.path.split('/').slice(0, -1).join('/'))
             : undefined),
       ),
+      hintFocus: currentSearchQuery,
     })),
     { value: '__back__', label: backLabel() },
   ];

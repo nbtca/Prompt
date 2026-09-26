@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   clipAnsiToVisualWidth,
+  excerptAround,
   padEndV,
   sanitizeTerminalLine,
   sanitizeTerminalText,
@@ -202,5 +203,41 @@ describe('sanitizeTerminalText', () => {
 
   it('collapses untrusted single-line fields', () => {
     expect(sanitizeTerminalLine(' title\n\tlocation \u001B[31m')).toBe('title location');
+  });
+});
+
+describe('excerptAround', () => {
+  const text = '机房在教学楼三楼，开放时间为每周一到周五的晚上，如需使用打印机请提前预约并自带纸张';
+
+  it('keeps text that already fits', () => {
+    expect(excerptAround('short 打印', '打印', 20)).toBe('short 打印');
+  });
+
+  it('moves the window so the match stays visible', () => {
+    const out = excerptAround(text, '打印', 24);
+    expect(out).toContain('打印');
+    expect(out.startsWith('...')).toBe(true);
+    expect(out.endsWith('...')).toBe(true);
+    expect(visualWidth(out)).toBeLessThanOrEqual(24);
+  });
+
+  it('matches case-insensitively and falls back to the start', () => {
+    const english = 'The lab opens every weekday evening and the Printer needs paper from you';
+    expect(excerptAround(english, 'printer', 30)).toContain('Printer');
+    expect(excerptAround(english, 'missing', 20)).toBe(truncate(english, 20));
+  });
+
+  it('shows the tail without a trailing marker when the match is near the end', () => {
+    const out = excerptAround(text, '纸张', 20);
+    expect(out.endsWith('纸张')).toBe(true);
+    expect(visualWidth(out)).toBeLessThanOrEqual(20);
+  });
+
+  it('never splits a grapheme', () => {
+    const out = excerptAround(`${'👨‍👩‍👧 '.repeat(10)}needle`, 'needle', 14);
+    expect(out).toContain('needle');
+    const segments = Array.from(new Intl.Segmenter().segment(out), (part) => part.segment);
+    expect(segments.filter((part) => part.includes('\u200d'))).not.toContain('👨‍👩‍');
+    expect(visualWidth(out)).toBeLessThanOrEqual(14);
   });
 });
