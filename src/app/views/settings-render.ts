@@ -2,7 +2,7 @@ import { space, type } from '../../core/theme.js';
 import { wrapAnsiWithIndent } from '../../core/text.js';
 import { type ListField, renderListFieldWithContext } from '../fields/list-field.js';
 
-export type SettingsMode = 'menu' | 'language' | 'icon' | 'color' | 'about';
+export type SettingsMode = 'menu' | 'language' | 'icon' | 'color' | 'reset' | 'about';
 
 export interface SettingsViewState {
   mode: SettingsMode;
@@ -40,6 +40,7 @@ export function renderSettings(
     case 'language':
     case 'icon':
     case 'color':
+    case 'reset':
       return state.subField?.render(bodyRows, cols) ?? [];
     case 'about': {
       const context = [

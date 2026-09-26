@@ -1,4 +1,4 @@
-import { c, type, space, glyph, brandMark } from '../core/theme.js';
+import { c, type, space, glyph, brandMark, bodyEdge } from '../core/theme.js';
 import { pickIcon } from '../core/icons.js';
 import { t } from '../i18n/index.js';
 import type { ViewId } from './keys.js';
@@ -25,7 +25,7 @@ export function resolveChromeLayout(rows: number): ChromeLayout {
 function renderRule(cols: number): string {
   const width = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : 80;
   const indent = visualWidth(space.indent) < width ? space.indent : '';
-  const ruleWidth = Math.max(1, width - visualWidth(indent) * 2);
+  const ruleWidth = Math.max(1, bodyEdge(width) - visualWidth(indent));
   return indent + type.hint(glyph.rule().repeat(ruleWidth));
 }
 
@@ -73,7 +73,9 @@ function renderTabs(views: { id: ViewId; title: string }[], active: ViewId, cols
 export function renderContextPath(segments: readonly string[], cols: number): string {
   const chevron = pickIcon('›', '>');
   const ellipsis = pickIcon('…', '...');
-  const width = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : Number.POSITIVE_INFINITY;
+  const width = Number.isFinite(cols)
+    ? bodyEdge(Math.max(1, Math.floor(cols)))
+    : Number.POSITIVE_INFINITY;
   for (let start = 0; start < segments.length; start += 1) {
     const shown = segments.slice(start);
     const last = shown.length - 1;
@@ -117,7 +119,7 @@ export function offlineNotice(cols: number): string[] {
 
 export function fitFooterHint(cols: number, ...candidates: string[]): string {
   return (
-    candidates.find((candidate) => visualWidth(space.indent + candidate) <= cols) ??
+    candidates.find((candidate) => visualWidth(space.indent + candidate) <= bodyEdge(cols)) ??
     candidates[candidates.length - 1] ??
     ''
   );
@@ -140,17 +142,23 @@ export function digitTabHint(tabCount: number): string {
   return tabCount > 1 ? `1-${tabCount} / Tab ${t().menu.hintTabs} ${dot} ` : '';
 }
 
-export function passiveFooterHint(tabCount: number, cols = Number.POSITIVE_INFINITY): string {
+export function passiveFooterHint(
+  tabCount: number,
+  cols = Number.POSITIVE_INFINITY,
+  canGoBack = true,
+): string {
   const trans = t();
   const dot = pickIcon('·', '-');
   const compactTabs = tabCount > 1 ? `1-${tabCount}/Tab ${dot} ` : '';
+  const back = canGoBack ? `Esc ${trans.menu.hintBack} ${dot} ` : '';
+  const backKey = canGoBack ? `Esc ${dot} ` : '';
   return fitFooterHint(
     cols,
-    `${digitTabHint(tabCount)}Esc ${trans.menu.hintBack} ${dot} q ${trans.menu.hintQuit} ${dot} ${trans.help.hint}`,
-    `${digitTabHint(tabCount)}Esc ${trans.menu.hintBack} ${dot} q ${trans.menu.hintQuit}`,
-    `${compactTabs}Esc ${dot} q ${dot} ?`,
-    `Esc ${dot} q ${dot} ?`,
-    `Esc ${dot} q`,
+    `${digitTabHint(tabCount)}${back}q ${trans.menu.hintQuit} ${dot} ${trans.help.hint}`,
+    `${digitTabHint(tabCount)}${back}q ${trans.menu.hintQuit}`,
+    `${compactTabs}${backKey}q ${dot} ?`,
+    `${backKey}q ${dot} ?`,
+    `${backKey}q`,
     'q',
   );
 }
@@ -158,23 +166,23 @@ export function passiveFooterHint(tabCount: number, cols = Number.POSITIVE_INFIN
 function interactiveFooterHint(tabCount: number, cols: number): string {
   const trans = t();
   const dot = pickIcon('·', '-');
-  const fullTabs = digitTabHint(tabCount);
   const compactTabs = tabCount > 1 ? `1-${tabCount}/Tab ${dot} ` : '';
-  const localLabelled = `${trans.menu.hintMove} ${dot} ${trans.menu.hintOpen} ${dot} Esc ${trans.menu.hintBack} ${dot} q ${trans.menu.hintQuit}`;
-  const localFull = `${trans.menu.hintMove} ${dot} ${trans.menu.hintOpen} ${dot} Esc ${dot} q ${trans.menu.hintQuit}`;
-  const localCompact = `${trans.menu.hintMove} ${trans.menu.hintOpen} Esc q`;
-  const candidates = [
-    `${fullTabs}${localLabelled} ${dot} ${trans.help.hint}`,
-    `${fullTabs}${localLabelled}`,
-    `${compactTabs}${localFull}`,
-    localFull,
-    `${compactTabs}${localCompact}`,
-    localCompact,
-    `${trans.menu.hintOpen} Esc q`,
+  const move = `${glyph.updown()} ${trans.menu.hintMove} ${dot} ${glyph.enter()} ${trans.menu.hintOpen}`;
+  const quit = `q ${trans.menu.hintQuit}`;
+  const local = `${move} ${dot} Esc ${trans.menu.hintBack} ${dot} ${quit}`;
+  const keys = `${glyph.updown()} ${glyph.enter()} Esc q`;
+  return fitFooterHint(
+    cols,
+    `${digitTabHint(tabCount)}${local} ${dot} ${trans.help.hint}`,
+    `${digitTabHint(tabCount)}${local}`,
+    `${compactTabs}${local}`,
+    local,
+    `${move} ${dot} Esc ${dot} ${quit}`,
+    `${compactTabs}${keys}`,
+    keys,
     `Esc ${dot} q`,
     'q',
-  ];
-  return fitFooterHint(cols, ...candidates);
+  );
 }
 
 export function renderFooter(
@@ -203,8 +211,8 @@ function withPosition(
   cols: number,
 ): string {
   if (position === undefined) return hint;
-  const margin = visualWidth(space.indent) < cols ? space.indent : '';
-  const gap = cols - visualWidth(indent + hintText) - visualWidth(position) - visualWidth(margin);
+  const edge = bodyEdge(cols);
+  const gap = edge - visualWidth(indent + hintText) - visualWidth(position);
   if (gap < 2) return hint;
-  return hint + ' '.repeat(gap) + type.hint(position) + margin;
+  return hint + ' '.repeat(gap) + type.hint(position) + ' '.repeat(cols - edge);
 }

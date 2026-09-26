@@ -79,6 +79,20 @@ export const space = {
   indent: '   ',
 } as const;
 
+export function frameWidth(cols: number): number {
+  return Math.min(cols, MAX_FRAME_COLS);
+}
+
+export function frameLeft(cols: number): number {
+  return Math.floor((cols - frameWidth(cols)) / 2);
+}
+
+const RIGHT_MARGIN_MIN_COLS = 40;
+
+export function bodyEdge(cols: number): number {
+  return cols >= RIGHT_MARGIN_MIN_COLS ? cols - space.indent.length : cols;
+}
+
 export const type = {
   heading: (s: string) => chalk.bold(s),
   label: (s: string) => s,

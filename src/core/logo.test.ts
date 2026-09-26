@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { buildLogoLines, startupFitsTerminal } from './logo.js';
+import { buildLogoLines, startupFitsTerminal, startupOffset } from './logo.js';
 import { stripAnsi } from './text.js';
 import { resetIconCache } from './icons.js';
 
@@ -23,6 +23,18 @@ describe('startupFitsTerminal', () => {
     expect(startupFitsTerminal(8, 2, 'one\ntwo\nthree')).toBe(false);
     expect(startupFitsTerminal(8, 5, 'one\ntwo\nthree')).toBe(true);
     expect(startupFitsTerminal(undefined, undefined, 'one\ntwo\nthree')).toBe(true);
+  });
+});
+
+describe('startupOffset', () => {
+  it('starts the logo where the app frame starts its content', () => {
+    expect(startupOffset(80, 52)).toBe(3);
+    expect(startupOffset(160, 52)).toBe(23);
+  });
+
+  it('gives up the offset before letting the art overflow', () => {
+    expect(startupOffset(54, 52)).toBe(2);
+    expect(startupOffset(undefined, 52)).toBe(0);
   });
 });
 

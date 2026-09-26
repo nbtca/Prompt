@@ -248,7 +248,7 @@ export const homeView = {
   title: 'Home',
 
   footerHint(tabCount: number, cols = Number.POSITIVE_INFINITY): string {
-    return passiveFooterHint(tabCount, cols);
+    return passiveFooterHint(tabCount, cols, false);
   },
 
   async load(ctx: AppContext): Promise<void> {

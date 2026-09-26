@@ -10,7 +10,7 @@ import {
   type ColorMode,
   type IconMode,
 } from '../../config/preferences.js';
-import { resetIconCache, pickIcon } from '../../core/icons.js';
+import { resetIconCache } from '../../core/icons.js';
 import { APP_INFO, URLS } from '../../config/data.js';
 import {
   t,
@@ -48,7 +48,7 @@ function modeOptions<T extends IconMode | ColorMode>(modes: readonly T[], curren
   }));
 }
 
-function buildMenuField(statusMessage?: string): SettingsViewState {
+function buildMenuField(statusMessage?: string, focus?: string): SettingsViewState {
   const trans = t();
   const prefs = loadPreferences();
   const currentLang = getCurrentLanguage();
@@ -66,12 +66,18 @@ function buildMenuField(statusMessage?: string): SettingsViewState {
   return {
     mode: 'menu',
     ...(statusMessage === undefined ? {} : { statusMessage }),
-    menuField: new ListField({ options }),
+    menuField: new ListField({
+      options,
+      initialIndex: Math.max(
+        0,
+        options.findIndex((option) => option.value === focus),
+      ),
+    }),
   };
 }
 
 function goToMenu(statusMessage?: string): void {
-  state = buildMenuField(statusMessage);
+  state = buildMenuField(statusMessage, state.mode);
 }
 
 export const settingsView = {
@@ -168,11 +174,17 @@ export const settingsView = {
           return;
         }
         if (result.selected === 'reset') {
-          const saved = resetPreferences();
-          resetIconCache();
-          applyColorModePreference(false);
-          resetCapabilities();
-          goToMenu(saved ? trans.theme.reset : trans.theme.resetSessionOnly);
+          state = {
+            mode: 'reset',
+            subField: new ListField({
+              title: trans.theme.resetConfirm,
+              options: [
+                { value: 'reset', label: trans.theme.resetLabel },
+                { value: 'cancel', label: trans.common.cancel },
+              ],
+              initialIndex: 1,
+            }),
+          };
           return;
         }
         if (result.selected === 'about') {
@@ -191,10 +203,8 @@ export const settingsView = {
               row(trans.about.website, URLS.homepage),
               row(trans.about.email, URLS.email),
               '',
-              row(
-                trans.about.license,
-                `MIT  ${pickIcon('·', '-')}  ${trans.about.author}: m1ngsama`,
-              ),
+              row(trans.about.license, 'MIT'),
+              row(trans.about.author, 'm1ngsama'),
             ],
             backField: new ListField({
               title: '',
@@ -223,7 +233,7 @@ export const settingsView = {
         const saved = setIconMode(result.selected as IconMode);
         resetIconCache();
         resetCapabilities();
-        goToMenu(saved ? trans.theme.updated : trans.theme.updatedSessionOnly);
+        goToMenu(saved ? trans.theme.iconUpdated : trans.theme.iconUpdatedSessionOnly);
         return;
       }
       case 'color': {
@@ -232,7 +242,21 @@ export const settingsView = {
         const saved = setColorMode(result.selected as ColorMode);
         applyColorModePreference(false);
         resetCapabilities();
-        goToMenu(saved ? trans.theme.updated : trans.theme.updatedSessionOnly);
+        goToMenu(saved ? trans.theme.colorUpdated : trans.theme.colorUpdatedSessionOnly);
+        return;
+      }
+      case 'reset': {
+        const result = state.subField?.handleKey(key);
+        if (!result?.selected) return;
+        if (result.selected !== 'reset') {
+          goToMenu();
+          return;
+        }
+        const saved = resetPreferences();
+        resetIconCache();
+        applyColorModePreference(false);
+        resetCapabilities();
+        goToMenu(saved ? trans.theme.reset : trans.theme.resetSessionOnly);
         return;
       }
       case 'about': {

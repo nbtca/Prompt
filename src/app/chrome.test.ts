@@ -8,7 +8,7 @@ import {
   passiveFooterHint,
   resolveChromeLayout,
 } from './chrome.js';
-import { setLanguage } from '../i18n/index.js';
+import { setLanguage, t } from '../i18n/index.js';
 import { resetIconCache } from '../core/icons.js';
 import { stripAnsi, visualWidth } from '../core/text.js';
 
@@ -81,7 +81,7 @@ describe('renderHeader', () => {
 describe('offlineNotice', () => {
   it('leads with a warning icon and leaves a blank line before the content', () => {
     const lines = offlineNotice(80);
-    expect(lines.map(stripAnsi)).toEqual(['   ! Offline, showing last fetched data', '']);
+    expect(lines.map(stripAnsi)).toEqual(['   ! Offline, showing cached data', '']);
   });
 
   it('keeps its indent on one line at forty columns in both languages', () => {
@@ -123,6 +123,12 @@ describe('renderContextPath', () => {
     expect(visualWidth(line)).toBeLessThanOrEqual(60);
   });
 
+  it('ends where the rule ends', () => {
+    const line = renderContextPath(['Docs', 'About NBTCA', 'Infrastructure'], 40);
+    expect(visualWidth(line)).toBeLessThanOrEqual(37);
+    expect(stripAnsi(line)).toContain('Infrastructure');
+  });
+
   it('drops leading segments before truncating the tail', () => {
     const line = stripAnsi(renderContextPath(['Docs', 'Guides', 'Second classroom'], 30));
     expect(line).toContain('Second classroom');
@@ -156,12 +162,12 @@ describe('renderFooter', () => {
   });
 
   it('drops the position rather than crowding the hint', () => {
-    const narrow = renderFooter('docs', 18, 5, 'PgUp/PgDn', 1, '40%')[0] ?? '';
+    const narrow = renderFooter('docs', 16, 5, 'PgUp/PgDn', 1, '40%')[0] ?? '';
     expect(stripAnsi(narrow)).not.toContain('40%');
   });
 
   it('renders a keyhint line', () => {
-    const f = renderFooter('home', 40, 5).map(stripAnsi).join(' ');
+    const f = renderFooter('home', 80, 5).map(stripAnsi).join(' ');
     expect(f).toMatch(/q/);
     expect(f).toMatch(/quit|Quit|退出/i);
     done();
@@ -181,33 +187,42 @@ describe('renderFooter', () => {
     expect(f).not.toMatch(/\d-\d/);
   });
 
-  it('keeps the complete interactive hint within 40 columns', () => {
-    const hint = stripAnsi(renderFooter('settings', 40, 5)[1] ?? '');
-    expect(visualWidth(hint)).toBeLessThanOrEqual(40);
-    expect(hint).toContain('1-5/Tab');
-    expect(hint).toContain('move');
-    expect(hint).toContain('open');
-    expect(hint).toContain('quit');
+  it('names the key for every action it offers', () => {
+    process.env['NBTCA_ICON_MODE'] = 'unicode';
+    resetIconCache();
+    expect(stripAnsi(renderFooter('settings', 120, 5)[1] ?? '').trim()).toBe(
+      '1-5 / Tab switch · ↑↓ move · ⏎ open · Esc back · q quit · ? keys',
+    );
   });
 
-  it('prioritizes view-local controls over tab switching at 20 columns', () => {
+  it('keeps the keys and their labels within 40 columns in both languages', () => {
+    process.env['NBTCA_ICON_MODE'] = 'unicode';
+    resetIconCache();
+    for (const language of ['en', 'zh'] as const) {
+      setLanguage(language);
+      const hint = stripAnsi(renderFooter('settings', 40, 5)[1] ?? '');
+      expect(visualWidth(hint)).toBeLessThanOrEqual(37);
+      expect(hint).toContain(`↑↓ ${t().menu.hintMove}`);
+      expect(hint).toContain(`⏎ ${t().menu.hintOpen}`);
+      expect(hint).toContain(`q ${t().menu.hintQuit}`);
+    }
+    setLanguage('en');
+  });
+
+  it('prioritizes view-local keys over tab switching at 20 columns', () => {
+    process.env['NBTCA_ICON_MODE'] = 'unicode';
+    resetIconCache();
     const hint = stripAnsi(renderFooter('settings', 20, 5)[1] ?? '');
     expect(visualWidth(hint)).toBeLessThanOrEqual(20);
-    expect(hint).toContain('move');
-    expect(hint).toContain('open');
-    expect(hint).toContain('Esc');
-    expect(hint).toContain('q');
-    expect(hint).not.toContain('Tab');
+    expect(hint.trim()).toBe('↑↓ ⏎ Esc q');
   });
 
-  it('keeps tab switching only when every local control also fits', () => {
+  it('keeps tab switching only when every local key also fits', () => {
+    process.env['NBTCA_ICON_MODE'] = 'unicode';
+    resetIconCache();
     const hint = stripAnsi(renderFooter('settings', 28, 5)[1] ?? '');
     expect(visualWidth(hint)).toBeLessThanOrEqual(28);
-    expect(hint).toContain('1-5/Tab');
-    expect(hint).toContain('move');
-    expect(hint).toContain('open');
-    expect(hint).toContain('Esc');
-    expect(hint).toContain('q');
+    expect(hint.trim()).toBe('1-5/Tab · ↑↓ ⏎ Esc q');
   });
 });
 
@@ -221,6 +236,12 @@ describe('passiveFooterHint', () => {
   it("omits the digit prefix entirely with only one tab, matching renderFooter's own rule", () => {
     const hint = stripAnsi(passiveFooterHint(1));
     expect(hint).not.toMatch(/\d-\d/);
+  });
+
+  it('leaves out Esc where there is nothing to go back to', () => {
+    const hint = stripAnsi(passiveFooterHint(5, 120, false));
+    expect(hint).not.toContain('Esc');
+    expect(hint).toContain('q quit');
   });
 
   it('fits navigation and exit keys within 20 columns', () => {

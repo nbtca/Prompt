@@ -1,3 +1,5 @@
+import { bodyEdge } from './theme.js';
+
 const GRAPHEME_SEGMENTER = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 const MARK_RE = /^\p{Mark}$/u;
 const EMOJI_PRESENTATION_RE = /\p{Emoji_Presentation}/u;
@@ -359,18 +361,10 @@ export function wrapAnsiToVisualWidth(
 
 export function wrapAnsiWithIndent(str: string, maxWidth: number, preferredIndent = ''): string[] {
   const width = Number.isFinite(maxWidth)
-    ? Math.max(1, Math.floor(maxWidth))
+    ? bodyEdge(Math.max(1, Math.floor(maxWidth)))
     : Number.POSITIVE_INFINITY;
-  const indentWidth = visualWidth(preferredIndent);
-  const contentWidth = visualWidth(str);
-  let indent =
-    indentWidth >= width || (contentWidth > width - indentWidth && contentWidth <= width)
-      ? ''
-      : preferredIndent;
-  let lines = wrapAnsiToVisualWidth(str, Math.max(1, width - visualWidth(indent)));
-  if (indent && lines.some((line) => visualWidth(indent + line) > width)) {
-    indent = '';
-    lines = wrapAnsiToVisualWidth(str, width);
-  }
-  return lines.map((line) => `${indent}${line}`);
+  const indent = visualWidth(preferredIndent) + 2 <= width ? preferredIndent : '';
+  return wrapAnsiToVisualWidth(str, Math.max(1, width - visualWidth(indent))).map(
+    (line) => `${indent}${line}`,
+  );
 }

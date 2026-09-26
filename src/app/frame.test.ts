@@ -1,14 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import {
-  fitLine,
-  fitBody,
-  composeFrameLines,
-  computeBodyRows,
-  diffFrame,
-  frameWidth,
-} from './frame.js';
+import { fitLine, fitBody, composeFrameLines, computeBodyRows, diffFrame } from './frame.js';
 import { visualWidth } from '../core/text.js';
-import { MAX_FRAME_COLS } from '../core/theme.js';
+import { frameWidth, MAX_FRAME_COLS } from '../core/theme.js';
 
 describe('fitLine', () => {
   it('pads a short line to exactly cols', () => {

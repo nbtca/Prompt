@@ -140,4 +140,33 @@ describe('runApp terminal lifecycle', () => {
     expect(setRawMode.mock.calls).toEqual([[true], [false]]);
     expect(writtenOutput().split(ansi.leaveAlt)).toHaveLength(2);
   });
+
+  it('scrolls the help overlay and quits from it', async () => {
+    const rows = Object.getOwnPropertyDescriptor(process.stdout, 'rows');
+    const columns = Object.getOwnPropertyDescriptor(process.stdout, 'columns');
+    Object.defineProperty(process.stdout, 'rows', { value: 12, configurable: true });
+    Object.defineProperty(process.stdout, 'columns', { value: 40, configurable: true });
+    const { t } = await import('../i18n/index.js');
+    try {
+      const running = runApp();
+      const start = writtenOutput().length;
+      process.stdin.emit('data', Buffer.from('?'));
+      const beforeScroll = writtenOutput().slice(start);
+      process.stdin.emit('data', Buffer.from('\x1b[F'));
+      const afterScroll = writtenOutput().slice(start + beforeScroll.length);
+      process.stdin.emit('data', Buffer.from('q'));
+      await running;
+
+      expect(beforeScroll).toContain(t().help.title);
+      expect(beforeScroll).not.toContain(t().help.quit);
+      expect(afterScroll).toContain(t().help.quit);
+      expect(afterScroll).toContain('100%');
+      expect(signal?.aborted).toBe(true);
+    } finally {
+      if (rows) Object.defineProperty(process.stdout, 'rows', rows);
+      else Reflect.deleteProperty(process.stdout, 'rows');
+      if (columns) Object.defineProperty(process.stdout, 'columns', columns);
+      else Reflect.deleteProperty(process.stdout, 'columns');
+    }
+  });
 });

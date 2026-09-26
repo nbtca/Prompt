@@ -1,4 +1,4 @@
-import { glyph, type, space } from '../theme.js';
+import { glyph, type, space, bodyEdge } from '../theme.js';
 import { visualWidth, padEndV, wrapAnsiToVisualWidth, clipAnsiToVisualWidth } from '../text.js';
 import { pickIcon } from '../icons.js';
 import { createPainter } from './painter.js';
@@ -107,7 +107,7 @@ function renderIndentedText(
 ): string[] {
   const width = normalizedWidth(cols);
   const indent = visualWidth(space.indent) < width ? space.indent : '';
-  const contentWidth = Math.max(1, width - visualWidth(indent));
+  const contentWidth = Math.max(1, bodyEdge(width) - visualWidth(indent));
   return wrapAnsiToVisualWidth(style(label), contentWidth).map((line) => `${indent}${line}`);
 }
 
@@ -163,7 +163,7 @@ export function renderMenuOption(
   const prefixes = [`${space.indent}${marker} `, `${marker} `, marker, ''];
   const prefix = prefixes.find((candidate) => visualWidth(candidate) < width) ?? '';
   const continuation = ' '.repeat(visualWidth(prefix));
-  const contentWidth = Math.max(1, width - visualWidth(prefix));
+  const contentWidth = Math.max(1, bodyEdge(width) - visualWidth(prefix));
   const cells = optionCells(option, columns, contentWidth);
   const style = selected ? type.active : option.dim ? type.hint : type.body;
   const hint = cells.hint ? `  ${type.hint(cells.hint)}` : '';

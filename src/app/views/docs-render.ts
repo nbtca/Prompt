@@ -1,4 +1,4 @@
-import { type, space } from '../../core/theme.js';
+import { type, space, bodyEdge } from '../../core/theme.js';
 import { t } from '../../i18n/index.js';
 import { type ListField, renderListFieldWithContext } from '../fields/list-field.js';
 import { offlineNotice } from '../chrome.js';
@@ -42,7 +42,7 @@ function hintLines(label: string, cols: number): string[] {
 }
 
 function renderReader(render: (width: number) => string[], cols: number): string[] {
-  const contentWidth = Math.max(1, Math.min(80, cols - visualWidth(space.indent)));
+  const contentWidth = Math.max(1, Math.min(80, bodyEdge(cols) - visualWidth(space.indent)));
   return render(contentWidth).map((line) => (line ? `${space.indent}${line}` : ''));
 }
 

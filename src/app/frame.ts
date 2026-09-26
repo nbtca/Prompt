@@ -1,5 +1,5 @@
 import { ansi } from '../core/canvas.js';
-import { MAX_FRAME_COLS } from '../core/theme.js';
+import { frameLeft, frameWidth } from '../core/theme.js';
 import { clipAnsiToVisualWidth, visualWidth } from '../core/text.js';
 
 export function clipToWidth(line: string, cols: number): string {
@@ -21,10 +21,6 @@ export function fitBody(lines: string[], height: number, scroll: number, cols: n
   return out;
 }
 
-export function frameWidth(cols: number): number {
-  return Math.min(cols, MAX_FRAME_COLS);
-}
-
 export function composeFrameLines(
   header: string[],
   body: string[],
@@ -34,7 +30,7 @@ export function composeFrameLines(
   scroll: number,
 ): string[] {
   const width = frameWidth(cols);
-  const left = ' '.repeat(Math.floor((cols - width) / 2));
+  const left = ' '.repeat(frameLeft(cols));
   const right = ' '.repeat(cols - width - left.length);
   const h = header.map((l) => fitLine(l, width));
   const f = footer.map((l) => fitLine(l, width));

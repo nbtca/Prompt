@@ -83,6 +83,10 @@ describe('homeView footer', () => {
     expect(hint).not.toContain(t().menu.hintMove);
     expect(hint).not.toContain(t().menu.hintOpen);
   });
+
+  it('does not offer Esc to go back from the root tab', () => {
+    expect(stripAnsi(homeView.footerHint(5, 80))).not.toContain('Esc');
+  });
 });
 
 describe('renderHome (schedule-first dashboard)', () => {

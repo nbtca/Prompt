@@ -357,6 +357,11 @@ export interface Translations {
     reset: string;
     resetLabel: string;
     resetSessionOnly: string;
+    resetConfirm: string;
+    iconUpdated: string;
+    iconUpdatedSessionOnly: string;
+    colorUpdated: string;
+    colorUpdatedSessionOnly: string;
     usage: string;
     invalidValue: string;
   };
