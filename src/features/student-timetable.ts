@@ -139,6 +139,13 @@ export function safeMessage(error: unknown): string {
   return trans.genericError;
 }
 
+class PromptCancelledError extends Error {}
+
+function answered(value: string | null): string {
+  if (value === null) throw new PromptCancelledError();
+  return value;
+}
+
 async function interactiveLogin(isInteractive: boolean): Promise<AuthenticatedNbtSession> {
   const trans = t().timetable;
   if (!isInteractive) {
@@ -148,19 +155,20 @@ async function interactiveLogin(isInteractive: boolean): Promise<AuthenticatedNb
       'Interactive login requires a terminal.',
     );
   }
-  const username = await runTextInput({
-    message: trans.studentId,
-    placeholder: trans.studentIdHint,
-    allowEmpty: false,
-  });
-  if (!username)
-    throw new AuthError('INVALID_CREDENTIALS', 'credentials', 'Student id is required.');
-  const password = await runSecretInput({
-    message: trans.password,
-    placeholder: trans.passwordHint,
-    allowEmpty: false,
-  });
-  if (!password) throw new AuthError('INVALID_CREDENTIALS', 'credentials', 'Password is required.');
+  const username = answered(
+    await runTextInput({
+      message: trans.studentId,
+      placeholder: trans.studentIdHint,
+      allowEmpty: false,
+    }),
+  );
+  const password = answered(
+    await runSecretInput({
+      message: trans.password,
+      placeholder: trans.passwordHint,
+      allowEmpty: false,
+    }),
+  );
   return loginWithStudentPassword(username, password);
 }
 
@@ -260,12 +268,13 @@ async function resolveWeekOneMonday(
   if (hasAuthoritativeDates) return explicitValue;
   if (explicitValue) return explicitValue;
   if (!isInteractive) return undefined;
-  const value = await runTextInput({
-    message: t().timetable.weekOne,
-    placeholder: t().timetable.weekOneHint,
-    allowEmpty: false,
-  });
-  return value === null || value === '' ? undefined : value;
+  return answered(
+    await runTextInput({
+      message: t().timetable.weekOne,
+      placeholder: t().timetable.weekOneHint,
+      allowEmpty: false,
+    }),
+  );
 }
 
 export async function runStudentTimetableCommand(
@@ -386,6 +395,7 @@ export async function runStudentTimetableCommand(
       { oneShot, isInteractive, store, stderr },
     );
   } catch (error) {
+    if (error instanceof PromptCancelledError) return 130;
     if (!isInteractive && error instanceof AuthError && error.code === 'INVALID_CREDENTIALS') {
       stderr.write(`${trans.noSession}\n`);
       return 2;

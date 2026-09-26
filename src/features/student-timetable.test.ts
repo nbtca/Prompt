@@ -1,17 +1,37 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { SessionExpiredError } from '../auth/errors.js';
 import type { AcademicTerm } from '@nbtca/nbtcal/timetable';
 import type { AuthenticatedNbtSession } from '../auth/nbt-auth.js';
 import type { PersistedNbtSession, SessionStore } from '../auth/session-store.js';
+import { runSecretInput, runTextInput } from '../core/components/text-input.js';
 import {
   relevantTerms,
   resolveTerm,
+  runStudentTimetableCommand,
   withAuthenticatedSession,
   writePrivateIcs,
 } from './student-timetable.js';
+
+vi.mock('../core/components/text-input.js', () => ({
+  runTextInput: vi.fn(),
+  runSecretInput: vi.fn(),
+}));
+
+function captured(): { stream: Pick<NodeJS.WriteStream, 'write'>; text: () => string } {
+  let text = '';
+  return {
+    stream: {
+      write: (chunk: string | Uint8Array) => {
+        text += String(chunk);
+        return true;
+      },
+    },
+    text: () => text,
+  };
+}
 
 const catalog: [AcademicTerm, AcademicTerm] = [
   {
@@ -196,6 +216,27 @@ describe('private ICS output', () => {
     } finally {
       fs.rmSync(directory, { recursive: true, force: true });
     }
+  });
+});
+
+describe('cancelled prompts', () => {
+  it.each([
+    ['student id', null, null],
+    ['password', '20260001', null],
+  ])('exits quietly when the %s prompt is cancelled', async (_label, username, password) => {
+    vi.mocked(runTextInput).mockResolvedValue(username);
+    vi.mocked(runSecretInput).mockResolvedValue(password);
+    const stdout = captured();
+    const stderr = captured();
+    const code = await runStudentTimetableCommand('login', {
+      flags: new Set(['--one-shot']),
+      isInteractive: true,
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+    });
+    expect(code).toBe(130);
+    expect(stdout.text()).toBe('');
+    expect(stderr.text()).toBe('');
   });
 });
 
