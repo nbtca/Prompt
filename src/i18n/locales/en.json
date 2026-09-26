@@ -10,7 +10,8 @@
     "goodbye": "Goodbye!",
     "current": "current",
     "moreAbove": "{count} more above",
-    "moreBelow": "{count} more below"
+    "moreBelow": "{count} more below",
+    "offline": "Offline, showing last fetched data"
   },
   "help": {
     "title": "Keys",
@@ -64,7 +65,6 @@
     "loading": "Loading event calendar...",
     "noEvents": "No upcoming events",
     "error": "Failed to load event calendar",
-    "stale": "offline, showing last known",
     "errorHint": "Please try again later or visit https://nbtca.space",
     "eventsFound": "events found",
     "dateTime": "Date & Time",
@@ -125,7 +125,6 @@
     "chooseCategory": "Docs",
     "refreshCache": "Refresh cache",
     "cacheCleared": "Documentation cache cleared",
-    "stale": "offline, showing last known docs",
     "currentDir": "Current directory",
     "chooseDoc": "Choose a document or directory",
     "emptyDir": "This directory is empty",

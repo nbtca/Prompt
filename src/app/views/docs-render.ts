@@ -1,6 +1,7 @@
 import { type, space } from '../../core/theme.js';
 import { t } from '../../i18n/index.js';
 import { type ListField, renderListFieldWithContext } from '../fields/list-field.js';
+import { offlineNotice } from '../chrome.js';
 import type { TextField } from '../fields/text-field.js';
 import type { DocLink } from '../../features/docs.js';
 import { visualWidth, wrapAnsiWithIndent } from '../../core/text.js';
@@ -82,7 +83,7 @@ export function renderDocs(
     case 'sections':
       lines = state.sectionsField
         ? renderListFieldWithContext(
-            state.stale ? [...hintLines(trans.docs.stale, cols), ''] : [],
+            state.stale ? offlineNotice(cols) : [],
             state.sectionsField,
             bodyRows,
             cols,

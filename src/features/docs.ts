@@ -802,7 +802,7 @@ async function loadSections(): Promise<DocSection[] | null> {
       return null;
     }
     s.stop();
-    warning(trans.docs.stale);
+    warning(trans.common.offline);
     return cached;
   }
 }

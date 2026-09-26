@@ -3,6 +3,7 @@ import { marked } from 'marked';
 import { renderDocs, type DocsViewState } from './docs-render.js';
 import { ListField } from '../fields/list-field.js';
 import { TextField } from '../fields/text-field.js';
+import { offlineNotice } from '../chrome.js';
 import { setLanguage } from '../../i18n/index.js';
 import { resetIconCache } from '../../core/icons.js';
 import { stripAnsi, visualWidth } from '../../core/text.js';
@@ -20,6 +21,12 @@ describe('renderDocs', () => {
   it('loading mode shows a loading hint', () => {
     const out = stripAnsi(renderDocs({ mode: 'loading' }).join('\n'));
     expect(out.trim().length).toBeGreaterThan(0);
+  });
+
+  it('opens a stale sections list with the shared offline notice', () => {
+    const sectionsField = new ListField({ options: [{ value: 'guide', label: 'Guide' }] });
+    const lines = renderDocs({ mode: 'sections', sectionsField, stale: true }, 80, 30);
+    expect(lines.slice(0, 2)).toEqual(offlineNotice(80));
   });
 
   it('sections mode renders the sections list field', () => {

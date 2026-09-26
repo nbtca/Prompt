@@ -1,8 +1,8 @@
-import { type, space, glyph, brandMark } from '../core/theme.js';
+import { c, type, space, glyph, brandMark } from '../core/theme.js';
 import { pickIcon } from '../core/icons.js';
 import { t } from '../i18n/index.js';
 import type { ViewId } from './keys.js';
-import { clipAnsiToVisualWidth, visualWidth } from '../core/text.js';
+import { clipAnsiToVisualWidth, visualWidth, wrapAnsiWithIndent } from '../core/text.js';
 
 export const HEADER_LINES = 3;
 export const FOOTER_LINES = 2;
@@ -108,6 +108,11 @@ export function renderHeader(
   if (lineCount === 1) return [tabs];
   if (lineCount === 2) return [brand, tabs];
   return [brand, tabs, rule];
+}
+
+export function offlineNotice(cols: number): string[] {
+  const notice = `${c.warn(pickIcon('⚠', '!'))} ${t().common.offline}`;
+  return [...wrapAnsiWithIndent(notice, cols, space.indent), ''];
 }
 
 export function fitFooterHint(cols: number, ...candidates: string[]): string {

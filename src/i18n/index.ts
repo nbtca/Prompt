@@ -22,6 +22,7 @@ export interface Translations {
     current: string;
     moreAbove: string;
     moreBelow: string;
+    offline: string;
   };
   menu: {
     home: string;
@@ -75,7 +76,6 @@ export interface Translations {
     loading: string;
     noEvents: string;
     error: string;
-    stale: string;
     errorHint: string;
     eventsFound: string;
     dateTime: string;
@@ -136,7 +136,6 @@ export interface Translations {
     chooseCategory: string;
     refreshCache: string;
     cacheCleared: string;
-    stale: string;
     currentDir: string;
     chooseDoc: string;
     emptyDir: string;

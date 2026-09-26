@@ -374,7 +374,7 @@ describe('docsView native reader (no shell-out to less/glow)', () => {
     await loading;
     const out = stripAnsi(freshDocsView.render(ctx).join('\n'));
     expect(out).toContain('Guide');
-    expect(out).toContain('offline, showing last known docs');
+    expect(out).toContain('Offline, showing last fetched data');
   });
 
   it('keeps the reader open when the background refresh lands', async () => {
