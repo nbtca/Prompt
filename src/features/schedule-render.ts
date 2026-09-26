@@ -4,14 +4,36 @@ import type {
   TimetableOccurrence,
   TimetablePeriod,
   TimetableUnresolvedItem,
+  Weekday,
 } from '@nbtca/nbtcal/timetable';
 import { campusDateTime, campusIsoDate, createTimetableSchedule } from '@nbtca/nbtcal/timetable';
-import { countdownParts, isCountdownUrgent } from './calendar-query.js';
-import { c, type, space, glyph } from '../core/theme.js';
+import { countdownParts, isCountdownUrgent, type Countdown } from './calendar-query.js';
+import { c, type, space, glyph, MAX_FRAME_COLS } from '../core/theme.js';
 import { pickIcon } from '../core/icons.js';
 import { padEndV, truncate, visualWidth, wrapAnsiToVisualWidth } from '../core/text.js';
 import { addLocalDays, parseLocalMonday } from '../core/calendar-day.js';
 import { t, fmt, getCurrentLanguage, type Language } from '../i18n/index.js';
+
+const ellipsis = (): string => pickIcon('…', '...');
+
+function clip(text: string, width: number): string {
+  return truncate(text, width, ellipsis());
+}
+
+export function formatClassCountdown(p: Countdown): string {
+  const trans = t().timetable;
+  if (p.past) return trans.nowLabel;
+  const values = { days: String(p.days), hours: String(p.hours), minutes: String(p.minutes) };
+  if (p.days > 0) return fmt(trans.countdownDays, values);
+  if (p.hours > 0) return fmt(trans.countdownHours, values);
+  return fmt(trans.countdownMinutes, values);
+}
+
+function formatMinutesLeft(end: Date, now: Date): string {
+  const p = countdownParts(end, now);
+  const minutes = p.days * 1440 + p.hours * 60 + p.minutes;
+  return fmt(t().timetable.minutesRemaining, { minutes: String(minutes) });
+}
 
 function span(m: TimetableMeeting, periods: readonly TimetablePeriod[]): string {
   const s = periods.find((p) => p.period === m.startPeriod)?.start ?? '';
@@ -28,13 +50,7 @@ export function renderNextClassBanner(
   const trans = t();
   if (!next) return '';
   const p = countdownParts(next.start, now);
-  const when = p.past
-    ? trans.timetable.nowLabel
-    : p.days > 0
-      ? `${p.days}d ${p.hours}h`
-      : p.hours > 0
-        ? `${p.hours}h ${p.minutes}m`
-        : `${p.minutes}m`;
+  const when = formatClassCountdown(p);
   const styleWhen = isCountdownUrgent(p) ? c.warn : type.hint;
   const whenStyled = styleWhen(when);
   const dot = pickIcon('·', '-');
@@ -56,7 +72,7 @@ export function renderNextClassBanner(
   for (const prefix of prefixes) {
     const courseWidth = Math.floor(cols - visualWidth(prefix) - visualWidth(suffix));
     if (courseWidth < 3) continue;
-    return `${prefix}${type.body(truncate(courseName, courseWidth))}${suffix}`;
+    return `${prefix}${type.body(clip(courseName, courseWidth))}${suffix}`;
   }
 
   const countdownOnly = [
@@ -68,7 +84,7 @@ export function renderNextClassBanner(
 
   const whenWidth = Math.max(0, Math.floor(cols));
   if (whenWidth === 0) return '';
-  if (whenWidth >= 3) return styleWhen(truncate(when, whenWidth));
+  if (whenWidth >= 3) return styleWhen(clip(when, whenWidth));
   let compactWhen = '';
   for (const char of when) {
     if (visualWidth(compactWhen + char) > whenWidth) break;
@@ -91,18 +107,43 @@ export function weekdayShortLabel(wd: number): string {
   return labels[wd - 1] ?? '';
 }
 
+function weekdayLongLabel(wd: number): string {
+  return new Intl.DateTimeFormat(getCurrentLanguage() === 'zh' ? 'zh-CN' : 'en-US', {
+    weekday: 'long',
+    timeZone: 'UTC',
+  }).format(Date.UTC(2024, 0, wd));
+}
+
+export function lineBudget(cols: number): number {
+  return Number.isFinite(cols)
+    ? Math.max(1, Math.min(Math.floor(cols), MAX_FRAME_COLS) - visualWidth(space.indent))
+    : Number.POSITIVE_INFINITY;
+}
+
+interface TimelineDay {
+  weekday: number;
+  isToday: boolean;
+}
+
 function renderTimeline(
   meetings: readonly TimetableMeeting[],
   periods: readonly TimetablePeriod[],
   now: Date,
-  isToday: boolean,
+  day: TimelineDay,
   alwaysShowLocation: boolean,
   cursorPeriod?: number,
   cols = Number.POSITIVE_INFINITY,
 ): string {
   const trans = t();
+  const width = lineBudget(cols);
+  const fits = (line: string): boolean => visualWidth(line) <= width;
   const sorted = [...meetings].sort((a, b) => a.startPeriod - b.startPeriod);
-  if (sorted.length === 0) return `${space.indent}${type.hint(trans.timetable.noClassToday)}`;
+  if (sorted.length === 0) {
+    const empty = day.isToday
+      ? trans.timetable.noClassToday
+      : fmt(trans.timetable.noClassOnDay, { weekday: weekdayLongLabel(day.weekday) });
+    return `${space.indent}${type.hint(empty)}`;
+  }
 
   const today = campusIsoDate(now);
   const minute = Math.floor(now.getTime() / 60_000) * 60_000;
@@ -117,8 +158,8 @@ function renderTimeline(
     const endStr = periods.find((p) => p.period === m.endPeriod)?.end ?? '23:59';
     const end = campusDateTime(today, endStr);
     const isLive =
-      isToday && campusDateTime(today, startStr).getTime() <= minute && minute <= end.getTime();
-    const isDone = isToday && minute > end.getTime();
+      day.isToday && campusDateTime(today, startStr).getTime() <= minute && minute <= end.getTime();
+    const isDone = day.isToday && minute > end.getTime();
     const isCursor =
       cursorPeriod !== undefined && m.startPeriod <= cursorPeriod && cursorPeriod <= m.endPeriod;
     const connector = i === 0 ? topConnector : midConnector;
@@ -127,17 +168,13 @@ function renderTimeline(
     const styleName = (name: string): string =>
       isLive ? type.active(name) : isDone ? type.hint(name) : type.body(name);
 
-    let statusText = '';
-    let compactStatusText = '';
-    if (isDone) {
-      statusText = trans.timetable.classDone;
-      compactStatusText = statusText;
-    } else if (isLive) {
-      const remaining = countdownParts(end, now);
-      const mins = remaining.days * 1440 + remaining.hours * 60 + remaining.minutes;
-      statusText = `${trans.timetable.classLive}  ${dot}  ${fmt(trans.timetable.minutesRemaining, { minutes: String(mins) })}`;
-      compactStatusText = `${mins}m`;
-    }
+    const minutesLeft = isLive ? formatMinutesLeft(end, now) : '';
+    const statusText = isDone
+      ? trans.timetable.classDone
+      : isLive
+        ? `${trans.timetable.classLive}  ${dot}  ${minutesLeft}`
+        : '';
+    const compactStatusText = isDone ? trans.timetable.classDone : minutesLeft;
     const showLoc = alwaysShowLocation ? Boolean(m.location) : isLive && Boolean(m.location);
     const locationText = showLoc ? (m.location ?? '') : '';
     const renderLine = (
@@ -153,52 +190,45 @@ function renderTimeline(
       return `${indent}${isCursor ? type.cursor(content) : content}`;
     };
 
-    const full = renderLine(m.courseName, statusText, locationText);
-    if (!Number.isFinite(cols) || visualWidth(full) <= cols) return full;
+    const whole = [
+      renderLine(m.courseName, statusText, locationText),
+      renderLine(m.courseName, statusText, ''),
+      renderLine(m.courseName, compactStatusText, ''),
+    ].find(fits);
+    if (whole) return whole;
 
-    const compactWithLocation = renderLine(m.courseName, compactStatusText, locationText);
-    if (visualWidth(compactWithLocation) <= cols) return compactWithLocation;
-
-    const compact = renderLine(m.courseName, compactStatusText, '');
-    if (visualWidth(compact) <= cols) return compact;
-
-    const adaptiveStatuses = compactStatusText ? [compactStatusText, ''] : [''];
-    for (const status of adaptiveStatuses) {
-      const courseWidth = Math.floor(cols - visualWidth(renderLine('', status, '')));
-      if (courseWidth < 3) continue;
-      return renderLine(truncate(m.courseName, courseWidth), status, '');
+    for (const status of compactStatusText ? [compactStatusText, ''] : ['']) {
+      const courseWidth = Math.floor(width - visualWidth(renderLine('', status, '')));
+      if (courseWidth <= visualWidth(ellipsis())) continue;
+      return renderLine(clip(m.courseName, courseWidth), status, '');
     }
 
     const compactTimeCol = `${marker}${type.hint(startStr)}`;
     for (const indent of [space.indent, '']) {
       const courseWidth = Math.floor(
-        cols - visualWidth(renderLine('', '', '', compactTimeCol, indent)),
+        width - visualWidth(renderLine('', '', '', compactTimeCol, indent)),
       );
-      if (courseWidth < 3) continue;
-      return renderLine(truncate(m.courseName, courseWidth), '', '', compactTimeCol, indent);
+      if (courseWidth <= visualWidth(ellipsis())) continue;
+      return renderLine(clip(m.courseName, courseWidth), '', '', compactTimeCol, indent);
     }
 
     const timeOnly = [`${space.indent}${compactTimeCol}`, compactTimeCol, type.hint(startStr)].find(
-      (candidate) => visualWidth(candidate) <= cols,
+      fits,
     );
     if (timeOnly) return timeOnly;
-    return type.hint(startStr.slice(0, Math.max(0, Math.floor(cols))));
+    return type.hint(startStr.slice(0, Math.max(0, Math.floor(width))));
   });
 
   const last = sorted.at(-1);
   if (!last) return lines.join('\n');
   const lastEnd = periods.find((p) => p.period === last.endPeriod)?.end ?? '23:59';
-  const fullEnd = `${space.indent} ${type.hint(lastEnd)} ${rule}${bottomConnector}${rule} ${type.hint(trans.timetable.timelineEnd)}`;
-  if (!Number.isFinite(cols) || visualWidth(fullEnd) <= cols) {
-    lines.push(fullEnd);
-  } else {
-    const compactEnd = [
-      `${space.indent}${type.hint(lastEnd)} ${rule}${bottomConnector}${rule}`,
-      `${space.indent}${type.hint(lastEnd)}`,
-      type.hint(lastEnd),
-    ].find((candidate) => visualWidth(candidate) <= cols);
-    lines.push(compactEnd ?? type.hint(lastEnd.slice(0, Math.max(0, Math.floor(cols)))));
-  }
+  const endLine = [
+    `${space.indent} ${type.hint(lastEnd)} ${rule}${bottomConnector}${rule} ${type.hint(trans.timetable.timelineEnd)}`,
+    `${space.indent}${type.hint(lastEnd)} ${rule}${bottomConnector}${rule}`,
+    `${space.indent}${type.hint(lastEnd)}`,
+    type.hint(lastEnd),
+  ].find(fits);
+  lines.push(endLine ?? type.hint(lastEnd.slice(0, Math.max(0, Math.floor(width)))));
 
   return lines.join('\n');
 }
@@ -209,18 +239,26 @@ export function renderTodayTimeline(
   now: Date,
   cols = Number.POSITIVE_INFINITY,
 ): string {
-  return renderTimeline(meetings, periods, now, true, false, undefined, cols);
+  return renderTimeline(
+    meetings,
+    periods,
+    now,
+    { weekday: 0, isToday: true },
+    false,
+    undefined,
+    cols,
+  );
 }
 
 export function renderDayTimeline(
   meetings: readonly TimetableMeeting[],
   periods: readonly TimetablePeriod[],
   now: Date,
-  isToday: boolean,
+  day: TimelineDay,
   cursorPeriod?: number,
   cols = Number.POSITIVE_INFINITY,
 ): string {
-  return renderTimeline(meetings, periods, now, isToday, true, cursorPeriod, cols);
+  return renderTimeline(meetings, periods, now, day, true, cursorPeriod, cols);
 }
 
 export function renderDaySwitcher(
@@ -313,11 +351,16 @@ export function renderWeekGrid(
   });
   const fixedOverhead = space.indent.length + rowHeadW + 6 * sepW;
   const availableForCols = Math.max(0, cols - fixedOverhead);
+  const evenColW = Math.max(...idealColWidths);
   const totalIdealColW = idealColWidths.reduce((a, b) => a + b, 0);
   const colWidths =
-    totalIdealColW <= availableForCols
-      ? idealColWidths
-      : idealColWidths.map((w) => Math.max(3, Math.floor(w * (availableForCols / totalIdealColW))));
+    evenColW * 7 <= availableForCols
+      ? idealColWidths.map(() => evenColW)
+      : totalIdealColW <= availableForCols
+        ? idealColWidths
+        : idealColWidths.map((w) =>
+            Math.max(3, Math.floor(w * (availableForCols / totalIdealColW))),
+          );
   const totalW = rowHeadW + colWidths.reduce((a, b) => a + b, 0) + 6 * sepW;
 
   const startingAt = (wd: number, period: number) =>
@@ -332,7 +375,7 @@ export function renderWeekGrid(
     const d = weekdayShortLabel(wd);
     const label = wd === todayWd ? `${d}${todayMark}` : d;
     const colWidth = colWidths[i] ?? 3;
-    const padded = centerInWidth(truncate(label, colWidth), colWidth);
+    const padded = centerInWidth(clip(label, colWidth), colWidth);
     return wd === todayWd ? type.active(padded) : type.hint(padded);
   }).join(sep);
   lines.push(space.indent + blankHead + headerCells);
@@ -352,12 +395,12 @@ export function renderWeekGrid(
 
       const rawName = starting ? starting.courseName : isContinuation ? connector : emptyGlyph;
       const rawLoc = starting ? (starting.location ?? '') : isContinuation ? connector : '';
-      const paddedName = centerInWidth(truncate(rawName, colW), colW);
-      const paddedLoc = centerInWidth(truncate(rawLoc, colW), colW);
+      const paddedName = centerInWidth(clip(rawName, colW), colW);
+      const paddedLoc = centerInWidth(clip(rawLoc, colW), colW);
 
       if (isCursor) {
-        nameCells.push(type.cursor(paddedName));
-        locCells.push(type.cursor(paddedLoc));
+        nameCells.push(type.active(centerInWidth(`[${clip(rawName, colW - 2)}]`, colW)));
+        locCells.push(starting ? type.body(paddedLoc) : type.hint(paddedLoc));
       } else if (starting) {
         nameCells.push(isToday ? type.active(paddedName) : type.body(paddedName));
         locCells.push(type.hint(paddedLoc));
@@ -375,6 +418,93 @@ export function renderWeekGrid(
     }
   });
   return lines.join('\n');
+}
+
+export function renderWeekAgenda(
+  timetable: Timetable,
+  weekNumber: number,
+  now: Date,
+  cols = Number.POSITIVE_INFINITY,
+  cursor?: { weekday: number; period: number },
+  oneLinePerDay = false,
+): string[] {
+  const schedule = createTimetableSchedule(timetable);
+  const todayWd = schedule.weekdayAt(now);
+  const width = lineBudget(cols);
+  const todayMark = pickIcon('•', '*');
+  const dot = pickIcon('·', '-');
+  const pointer = glyph.cursor();
+  const labels = WEEKDAY_KEYS.map(
+    (_, i) => `${weekdayShortLabel(i + 1)}${i + 1 === todayWd ? todayMark : ''}`,
+  );
+  const labelW = Math.max(...labels.map(visualWidth));
+  const nameColW = Math.max(
+    0,
+    ...schedule.meetingsInWeek(weekNumber).map((m) => visualWidth(m.courseName)),
+  );
+  const lines: string[] = [];
+
+  WEEKDAY_KEYS.forEach((_, i) => {
+    const wd = i + 1;
+    const meetings = [...schedule.meetingsOnDay(weekNumber, wd as Weekday)].sort(
+      (a, b) => a.startPeriod - b.startPeriod,
+    );
+    const isSelected = (m: TimetableMeeting): boolean =>
+      cursor?.weekday === wd && m.startPeriod <= cursor.period && cursor.period <= m.endPeriod;
+    const selectedIndex = Math.max(0, meetings.findIndex(isSelected));
+    const label = padEndV(labels[i] ?? '', labelW);
+    const head = (row: number): string => {
+      const mark =
+        cursor?.weekday === wd && row === selectedIndex
+          ? type.active(pointer)
+          : ' '.repeat(visualWidth(pointer));
+      const day =
+        row > 0 ? ' '.repeat(labelW) : wd === todayWd ? type.active(label) : type.hint(label);
+      return `${space.indent}${mark} ${day}  `;
+    };
+    const room = Math.max(1, width - visualWidth(head(0)));
+    const nameStyle = (m: TimetableMeeting): ((value: string) => string) =>
+      isSelected(m) ? type.active : type.body;
+
+    if (meetings.length === 0) {
+      lines.push(`${head(0)}${type.hint(dot)}`);
+      return;
+    }
+
+    if (oneLinePerDay) {
+      let used = 0;
+      let text = '';
+      for (const [index, m] of meetings.entries()) {
+        const sep = index === 0 ? '' : `  ${dot}  `;
+        const left = room - used - visualWidth(sep);
+        if (left < 2) {
+          if (used + visualWidth(ellipsis()) + 1 <= room) text += ` ${type.hint(ellipsis())}`;
+          break;
+        }
+        const name = clip(m.courseName, left);
+        text += `${type.hint(sep)}${nameStyle(m)(name)}`;
+        used += visualWidth(sep) + visualWidth(name);
+      }
+      lines.push(`${head(0)}${text}`);
+      return;
+    }
+
+    meetings.forEach((m, row) => {
+      const start = timetable.periods.find((p) => p.period === m.startPeriod)?.start ?? '';
+      const time = `${start} `;
+      const nameRoom = room - visualWidth(time);
+      const location = m.location ?? '';
+      const nameW = [nameColW, visualWidth(m.courseName)].find(
+        (w) => w + 3 + visualWidth(location) <= nameRoom,
+      );
+      const body =
+        location && nameW !== undefined
+          ? `${nameStyle(m)(padEndV(m.courseName, nameW))}   ${type.hint(location)}`
+          : nameStyle(m)(clip(m.courseName, Math.max(1, nameRoom)));
+      lines.push(`${head(row)}${type.hint(time)}${body}`);
+    });
+  });
+  return lines;
 }
 
 function formatWeekRange(weeks: readonly number[]): string {

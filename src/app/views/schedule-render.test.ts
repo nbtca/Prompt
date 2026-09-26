@@ -479,6 +479,23 @@ describe('renderSchedule', () => {
       expect(text).toContain('Log out');
     });
 
+    it('keeps shortcut labels inside the frame in a 40x12 terminal', () => {
+      const lines = renderSchedule(
+        { mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable },
+        campusDateTime('2026-09-07', '07:00'),
+        7,
+        40,
+      );
+      const text = stripAnsi(lines.join('\n'));
+
+      const shortcutLines = lines.filter((line) => /\[(?:w|t|s|e|x)\]/.test(stripAnsi(line)));
+      expect(lines.length).toBeLessThanOrEqual(7);
+      expect(shortcutLines.every((line) => visualWidth(line) <= 37)).toBe(true);
+      for (const label of ['Full grid', 'Term density', 'Switch term', 'Export .ics', 'Log out']) {
+        expect(text).toContain(label);
+      }
+    });
+
     it('keeps every shortcut key visible in a five-row body', () => {
       const lines = renderSchedule(
         {

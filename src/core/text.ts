@@ -83,10 +83,10 @@ export function padEndV(str: string, width: number): string {
   return pad > 0 ? str + ' '.repeat(pad) : str;
 }
 
-export function truncate(str: string, maxWidth: number): string {
+export function truncate(str: string, maxWidth: number, ellipsis = '...'): string {
   if (visualWidth(str) <= maxWidth) return str;
   if (maxWidth <= 0) return '';
-  const marker = maxWidth >= 3 ? '...' : '.'.repeat(maxWidth);
+  const marker = visualWidth(ellipsis) <= maxWidth ? ellipsis : '.'.repeat(maxWidth);
   const available = maxWidth - visualWidth(marker);
   let w = 0;
   let value = '';

@@ -15,6 +15,8 @@ import {
   renderMeetingDetail,
   renderDayTimeline,
   renderDaySwitcher,
+  renderWeekAgenda,
+  formatClassCountdown,
   weekdayShortLabel,
 } from './schedule-render.js';
 import { setLanguage } from '../i18n/index.js';
@@ -395,6 +397,23 @@ describe('renderWeekGrid', () => {
     });
   });
 
+  it('gives every day the same width when the widest day fits seven times', () => {
+    const meetings = [
+      mk({ courseName: '程序设计实践', location: null, weekday: 5, endPeriod: 1 }),
+      mk({ courseName: 'PE', location: null, weekday: 1, endPeriod: 1 }),
+    ];
+    const header = lineAt(
+      stripAnsi(
+        renderWeekGrid(meetings, periods, 1, campusDateTime('2026-09-07', '09:00'), 120),
+      ).split('\n'),
+      0,
+    );
+    const separators = [...header.matchAll(/\|/g)].map((match) => match.index);
+    const gaps = separators.slice(1).map((index, i) => index - (separators[i] ?? 0));
+    expect(new Set(gaps).size).toBe(1);
+    done();
+  });
+
   describe('a vertical separator marks the boundary between adjacent weekday columns', () => {
     it('shows a separator between every pair of adjacent columns, on every row', () => {
       const out = stripAnsi(renderWeekGrid([], periods, 1, campusDateTime('2026-09-07', '09:00')));
@@ -489,19 +508,19 @@ describe('renderWeekGrid', () => {
   });
 
   describe('cursor visual treatment', () => {
-    it('applies a distinct cursor style to the cursor cell, different from the same render with no cursor', () => {
+    it('brackets the cursor cell instead of painting a background', () => {
       const level = chalk.level;
       chalk.level = 3;
       try {
         const meeting = mk({
           courseName: 'Math',
-          location: null,
+          location: 'sl707',
           weekday: 1,
           startPeriod: 1,
           endPeriod: 1,
           weeks: [1],
         });
-        const withCursor = renderWeekGrid(
+        const out = renderWeekGrid(
           [meeting],
           periods,
           1,
@@ -509,15 +528,10 @@ describe('renderWeekGrid', () => {
           80,
           { weekday: 1, period: 1 },
         );
-        const withoutCursor = renderWeekGrid(
-          [meeting],
-          periods,
-          1,
-          campusDateTime('2026-09-07', '09:00'),
-          80,
-        );
-        expect(withCursor).not.toBe(withoutCursor);
-        expect(withCursor).toContain('\x1b[48;2;14;165;233m'); // type.cursor's solid background escape
+        expect(out).not.toContain('\x1b[48;2;14;165;233m');
+        const lines = stripAnsi(out).split('\n');
+        expect(lines.some((line) => line.includes('[Math]'))).toBe(true);
+        expect(lines.some((line) => line.includes('sl707'))).toBe(true);
       } finally {
         chalk.level = level;
       }
@@ -566,73 +580,31 @@ describe('renderWeekGrid', () => {
       done();
     });
 
-    it('pads the cursor cell to the full column width *before* applying the background style, so the highlight covers the whole cell, not just the real text', () => {
+    it('marks an empty cursor cell with a bracketed dot instead of a solid block', () => {
       const level = chalk.level;
       chalk.level = 3;
       try {
         const out = renderWeekGrid([], periods, 1, campusDateTime('2026-09-07', '09:00'), 100, {
-          weekday: 1,
+          weekday: 2,
           period: 1,
         });
-        const BG_OPEN = '\x1b[48;2;14;165;233m';
-        const bgStart = out.indexOf(BG_OPEN);
-        expect(bgStart).toBeGreaterThan(-1);
-        const bgClose = out.indexOf('\x1b[49m', bgStart);
-        expect(bgClose).toBeGreaterThan(bgStart);
-        const spanned = stripAnsi(out.slice(bgStart + BG_OPEN.length, bgClose));
-        expect(spanned.length).toBe(MIN_COL_WIDTH_FOR_TESTS);
+        expect(out).not.toContain('\x1b[48;2;14;165;233m');
+        const firstRow = findLine(stripAnsi(out).split('\n'), (line) => line.includes('08:00'));
+        expect(firstRow).toContain('[.]');
       } finally {
         chalk.level = level;
       }
       done();
     });
 
-    it('covers both the name line and the location line of the cursor cell, not just one', () => {
-      const level = chalk.level;
-      chalk.level = 3;
-      try {
-        const meeting = mk({
-          courseName: 'Math',
-          location: 'sl707',
-          weekday: 1,
-          startPeriod: 1,
-          endPeriod: 1,
-          weeks: [1],
-        });
-        const out = renderWeekGrid(
-          [meeting],
-          periods,
-          1,
-          campusDateTime('2026-09-07', '09:00'),
-          80,
-          {
-            weekday: 1,
-            period: 1,
-          },
-        );
-        const lines = out.split('\n');
-        const nameLine = findLine(lines, (line) => line.includes('Math'));
-        const locLine = lineAt(lines, lines.indexOf(nameLine) + 1);
-        expect(nameLine).toContain('\x1b[48;2;14;165;233m');
-        expect(locLine).toContain('\x1b[48;2;14;165;233m');
-      } finally {
-        chalk.level = level;
-      }
-      done();
-    });
-
-    it("shows the cursor token even when the cursor lands on today's own column", () => {
-      const level = chalk.level;
-      chalk.level = 3;
-      try {
-        const out = renderWeekGrid([], periods, 1, campusDateTime('2026-09-07', '09:00'), 80, {
+    it("keeps the bracket cursor on today's own column", () => {
+      const out = stripAnsi(
+        renderWeekGrid([], periods, 1, campusDateTime('2026-09-07', '09:00'), 100, {
           weekday: 1,
           period: 1,
-        });
-        expect(out).toContain('\x1b[48;2;14;165;233m');
-      } finally {
-        chalk.level = level;
-      }
+        }),
+      );
+      expect(out).toContain('[.]');
       done();
     });
   });
@@ -782,15 +754,41 @@ describe('renderTodayTimeline', () => {
     );
     expect(out).toContain('Data Structures');
     expect(out).toContain('In progress');
-    expect(out).toContain('25m left');
+    expect(out).toContain('25 min left');
     expect(out).toContain('Bldg 1-302');
     done();
   });
 
-  it('compacts a live class before truncating its course at forty columns', () => {
+  it('drops the location first and keeps a live class inside the frame at sixty columns', () => {
     const meetings = [
       mk({
-        courseName: 'Data Structures',
+        courseName: 'Physics',
+        location: 'Engineering Building 1-302',
+        startPeriod: 3,
+        endPeriod: 3,
+      }),
+    ];
+    const lines = renderTodayTimeline(
+      meetings,
+      dayPeriods,
+      campusDateTime('2026-09-07', '14:55'),
+      60,
+    ).split('\n');
+    const classLine = stripAnsi(lines[0] ?? '');
+
+    expect(lines.every((line) => visualWidth(line) <= 60 - space.indent.length)).toBe(true);
+    expect(classLine).toContain('In progress');
+    expect(classLine).toContain('25 min left');
+    expect(classLine).not.toContain('Engineering');
+    done();
+  });
+
+  it('truncates the course with an ellipsis at forty columns', () => {
+    process.env['NBTCA_ICON_MODE'] = 'unicode';
+    resetIconCache();
+    const meetings = [
+      mk({
+        courseName: 'Introduction to Data Structures',
         location: 'Bldg 1-302',
         startPeriod: 3,
         endPeriod: 3,
@@ -804,9 +802,10 @@ describe('renderTodayTimeline', () => {
     ).split('\n');
     const classLine = stripAnsi(lines[0] ?? '');
 
-    expect(lines.every((line) => visualWidth(line) <= 40)).toBe(true);
-    expect(classLine).toContain('Data Structures');
-    expect(classLine).toContain('25m');
+    expect(lines.every((line) => visualWidth(line) <= 40 - space.indent.length)).toBe(true);
+    expect(classLine).toContain('Intro');
+    expect(classLine).toContain('…');
+    expect(classLine).toContain('25 min left');
     expect(classLine).not.toContain('In progress');
     expect(classLine).not.toContain('Bldg 1-302');
     done();
@@ -854,9 +853,24 @@ describe('renderTodayTimeline', () => {
 
 describe('renderDayTimeline', () => {
   it('shows the empty-state line when the viewed day has no classes', () => {
-    expect(stripAnsi(renderDayTimeline([], dayPeriods, new Date(), true))).toContain(
-      'No classes today',
-    );
+    expect(
+      stripAnsi(renderDayTimeline([], dayPeriods, new Date(), { weekday: 1, isToday: true })),
+    ).toContain('No classes today');
+    done();
+  });
+
+  it('names the viewed weekday when it is not today', () => {
+    expect(
+      stripAnsi(renderDayTimeline([], dayPeriods, new Date(), { weekday: 7, isToday: false })),
+    ).toContain('No classes on Sunday');
+    setLanguage('zh');
+    try {
+      expect(
+        stripAnsi(renderDayTimeline([], dayPeriods, new Date(), { weekday: 7, isToday: false })),
+      ).toContain('星期日没有课');
+    } finally {
+      setLanguage('en');
+    }
     done();
   });
 
@@ -865,7 +879,10 @@ describe('renderDayTimeline', () => {
       mk({ courseName: 'Physics', location: 'Bldg 1-302', startPeriod: 2, endPeriod: 2 }),
     ];
     const out = stripAnsi(
-      renderDayTimeline(meetings, dayPeriods, campusDateTime('2026-09-07', '07:00'), true),
+      renderDayTimeline(meetings, dayPeriods, campusDateTime('2026-09-07', '07:00'), {
+        weekday: 1,
+        isToday: true,
+      }),
     );
     expect(out).toContain('Bldg 1-302');
     done();
@@ -879,7 +896,7 @@ describe('renderDayTimeline', () => {
       meetings,
       dayPeriods,
       campusDateTime('2026-09-07', '07:00'),
-      false,
+      { weekday: 1, isToday: false },
       undefined,
       20,
     ).split('\n');
@@ -895,7 +912,10 @@ describe('renderDayTimeline', () => {
   it('marks live/done status when isToday is true, same as renderTodayTimeline', () => {
     const meetings = [mk({ courseName: 'Math', startPeriod: 1, endPeriod: 1 })];
     const out = stripAnsi(
-      renderDayTimeline(meetings, dayPeriods, campusDateTime('2026-09-07', '12:00'), true),
+      renderDayTimeline(meetings, dayPeriods, campusDateTime('2026-09-07', '12:00'), {
+        weekday: 1,
+        isToday: true,
+      }),
     );
     expect(out).toContain('Done');
     done();
@@ -904,7 +924,10 @@ describe('renderDayTimeline', () => {
   it('never marks live/done status when isToday is false, even if the clock time would otherwise match a class', () => {
     const meetings = [mk({ courseName: 'Math', startPeriod: 1, endPeriod: 1 })];
     const out = stripAnsi(
-      renderDayTimeline(meetings, dayPeriods, campusDateTime('2026-09-07', '08:30'), false),
+      renderDayTimeline(meetings, dayPeriods, campusDateTime('2026-09-07', '08:30'), {
+        weekday: 1,
+        isToday: false,
+      }),
     );
     expect(out).not.toContain('Done');
     expect(out).not.toContain('In progress');
@@ -920,7 +943,7 @@ describe('renderDayTimeline', () => {
         meetings,
         dayPeriods,
         campusDateTime('2026-09-07', '07:00'),
-        false,
+        { weekday: 1, isToday: false },
         1,
       );
       expect(startCursor).toContain('\x1b[48;2;14;165;233m');
@@ -928,7 +951,7 @@ describe('renderDayTimeline', () => {
         meetings,
         dayPeriods,
         campusDateTime('2026-09-07', '07:00'),
-        false,
+        { weekday: 1, isToday: false },
       );
       expect(noCursor).not.toContain('\x1b[48;2;14;165;233m');
     } finally {
@@ -939,12 +962,10 @@ describe('renderDayTimeline', () => {
 
   it('never collapses into one array entry when split on newlines', () => {
     const meetings = [mk({ startPeriod: 1, endPeriod: 1 })];
-    const out = renderDayTimeline(
-      meetings,
-      dayPeriods,
-      campusDateTime('2026-09-07', '07:00'),
-      true,
-    );
+    const out = renderDayTimeline(meetings, dayPeriods, campusDateTime('2026-09-07', '07:00'), {
+      weekday: 1,
+      isToday: true,
+    });
     expect(out.split('\n').length).toBeGreaterThan(1);
   });
 });
@@ -1152,5 +1173,88 @@ describe('renderTermDensity', () => {
       resetIconCache();
     }
     done();
+  });
+});
+
+describe('formatClassCountdown', () => {
+  const parts = (days: number, hours: number, minutes: number) => ({
+    past: false,
+    days,
+    hours,
+    minutes,
+  });
+
+  it('reads naturally in English', () => {
+    expect(formatClassCountdown(parts(1, 12, 5))).toBe('in 1d 12h');
+    expect(formatClassCountdown(parts(0, 17, 46))).toBe('in 17h 46m');
+    expect(formatClassCountdown(parts(0, 0, 9))).toBe('in 9m');
+  });
+
+  it('reads naturally in Chinese', () => {
+    setLanguage('zh');
+    try {
+      expect(formatClassCountdown(parts(1, 12, 5))).toBe('1 天 12 小时后');
+      expect(formatClassCountdown(parts(0, 0, 9))).toBe('9 分钟后');
+    } finally {
+      setLanguage('en');
+    }
+  });
+});
+
+describe('renderWeekAgenda', () => {
+  const agendaTimetable: Timetable = {
+    term: { academicYear: '2026', semester: '3' },
+    meetings: [
+      mk({ courseName: 'Math', location: 'Room 201', weekday: 1, startPeriod: 1, endPeriod: 1 }),
+      mk({ courseName: 'Physics', location: 'Lab 3', weekday: 1, startPeriod: 2, endPeriod: 2 }),
+      mk({ courseName: 'History', location: null, weekday: 4, startPeriod: 1, endPeriod: 1 }),
+    ],
+    unresolvedItems: [],
+    periods,
+    calendarDays: [],
+    warnings: [],
+    fetchedAt: new Date('2026-08-01T00:00:00Z'),
+  };
+  const monday = campusDateTime('2026-09-07', '07:00');
+
+  it('lists every weekday with its classes and locations', () => {
+    const lines = renderWeekAgenda(agendaTimetable, 1, monday, 80).map(stripAnsi);
+    expect(lines).toHaveLength(8);
+    for (const day of ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']) {
+      expect(lines.join('\n')).toContain(day);
+    }
+    expect(findLine(lines, (line) => line.includes('Math'))).toContain('Room 201');
+    expect(findLine(lines, (line) => line.includes('Physics'))).toContain('08:55');
+  });
+
+  it('points at the class under the cursor', () => {
+    const lines = renderWeekAgenda(agendaTimetable, 1, monday, 80, {
+      weekday: 1,
+      period: 2,
+    }).map(stripAnsi);
+    expect(
+      findLine(lines, (line) => line.includes('Physics'))
+        .trim()
+        .startsWith('>'),
+    ).toBe(true);
+    expect(
+      findLine(lines, (line) => line.includes('Math'))
+        .trim()
+        .startsWith('>'),
+    ).toBe(false);
+  });
+
+  it('drops locations before course names at narrow widths', () => {
+    const lines = renderWeekAgenda(agendaTimetable, 1, monday, 24).map(stripAnsi);
+    expect(lines.every((line) => visualWidth(line) <= 24 - space.indent.length)).toBe(true);
+    expect(lines.join('\n')).toContain('Math');
+    expect(lines.join('\n')).not.toContain('Room 201');
+  });
+
+  it('fits a whole day on one line in the dense layout', () => {
+    const lines = renderWeekAgenda(agendaTimetable, 1, monday, 40, undefined, true).map(stripAnsi);
+    expect(lines).toHaveLength(7);
+    expect(lineAt(lines, 0)).toContain('Math');
+    expect(lineAt(lines, 0)).toContain('Physics');
   });
 });

@@ -1,12 +1,13 @@
 import { c, type, space, glyph } from '../../core/theme.js';
-import { t } from '../../i18n/index.js';
+import { t, fmt } from '../../i18n/index.js';
 import { pickIcon } from '../../core/icons.js';
 import { padEndV, visualWidth, wrapAnsiWithIndent } from '../../core/text.js';
 import {
-  peekNextClassLine,
-  peekTodayLines,
-  peekWeekAheadInfo,
-  peekUnresolvedCount,
+  nextClassLine,
+  peekSchedule,
+  todayLines,
+  weekAheadInfo,
+  type CachedSchedule,
   type WeekAheadInfo,
 } from '../../features/schedule-view.js';
 import {
@@ -27,12 +28,10 @@ const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const;
 
 export interface HomeData {
   loading?: boolean;
-  nextClassLine?: string;
-  todayLines?: string[];
+  schedule?: CachedSchedule | null;
   eventLines?: string[];
   eventsLoadFailed?: boolean;
   weekAhead?: { classDays: boolean[]; eventDays?: boolean[] };
-  unresolvedCount?: number;
 }
 
 function wrappedIndentedLines(
@@ -135,22 +134,32 @@ export function renderHome(data: HomeData, now: Date, bodyRows = 100, cols = 80)
   const trans = t();
   const lines: string[] = [];
 
-  const nextClass =
-    data.nextClassLine !== undefined && data.nextClassLine.trim().length > 0
-      ? wrappedRenderedLines(data.nextClassLine, cols)
-      : wrappedIndentedLines(trans.timetable.noNextClass, cols, type.hint);
-  lines.push(...panelHeading(trans.timetable.nextClass, cols));
-  lines.push(...nextClass);
-  lines.push('');
+  if (data.schedule === null) {
+    lines.push(...panelHeading(trans.timetable.menuTitle, cols));
+    lines.push(
+      ...wrappedIndentedLines(
+        fmt(trans.timetable.homeLoginCta, {
+          tab: trans.timetable.menuEntry,
+          action: trans.timetable.publicLoginAction,
+        }),
+        cols,
+        type.hint,
+      ),
+    );
+    lines.push('');
+  } else if (data.schedule) {
+    const next = nextClassLine(data.schedule, now, cols);
+    lines.push(...panelHeading(trans.timetable.nextClass, cols));
+    lines.push(
+      ...(next ? [next] : wrappedIndentedLines(trans.timetable.noNextClass, cols, type.hint)),
+    );
+    lines.push('');
 
-  lines.push(...panelHeading(trans.timetable.hubToday, cols));
-  lines.push(renderDayProgress(now, cols));
-  if (data.todayLines && data.todayLines.length > 0) {
-    for (const line of data.todayLines) lines.push(...wrappedRenderedLines(line, cols));
-  } else {
-    lines.push(...wrappedIndentedLines(trans.timetable.noClassToday, cols, type.hint));
+    lines.push(...panelHeading(trans.timetable.hubToday, cols));
+    lines.push(renderDayProgress(now, cols));
+    lines.push(...todayLines(data.schedule, now, cols));
+    lines.push('');
   }
-  lines.push('');
 
   if (data.weekAhead) {
     lines.push(...panelHeading(trans.timetable.weekOverviewTitle, cols));
@@ -160,10 +169,11 @@ export function renderHome(data: HomeData, now: Date, bodyRows = 100, cols = 80)
     lines.push('');
   }
 
-  if ((data.unresolvedCount ?? 0) > 0) {
+  const unresolvedCount = data.schedule?.timetable.unresolvedItems.length ?? 0;
+  if (unresolvedCount > 0) {
     lines.push(
       ...wrappedIndentedLines(
-        `${pickIcon('⚠', '!')} ${trans.timetable.hubUnresolved} · ${data.unresolvedCount}`,
+        `${pickIcon('⚠', '!')} ${trans.timetable.hubUnresolved} · ${unresolvedCount}`,
         cols,
         c.warn,
       ),
@@ -210,14 +220,14 @@ const HOME_EVENT_FETCH_CAP = 15;
 
 function calendarSnapshot(
   cal: Calendar,
-  weekAheadInfo: WeekAheadInfo | null,
+  weekAhead: WeekAheadInfo | null,
 ): Pick<HomeData, 'eventLines' | 'weekAhead'> {
   const now = new Date();
   const eventLines = currentEvents(cal, now)
     .slice(0, HOME_EVENT_FETCH_CAP)
     .map((event) => renderEventBrief(toDisplayEvent(event), now));
-  if (!weekAheadInfo) return { eventLines };
-  const { weekStart } = weekAheadInfo;
+  if (!weekAhead) return { eventLines };
+  const { weekStart } = weekAhead;
   const monday = campusDateTime(weekStart, '00:00');
   const daySet = new Set(
     cal
@@ -233,7 +243,7 @@ function calendarSnapshot(
   return {
     eventLines,
     weekAhead: {
-      classDays: weekAheadInfo.classDays,
+      classDays: weekAhead.classDays,
       eventDays: WEEKDAYS.map((weekday) => daySet.has(weekday)),
     },
   };
@@ -251,27 +261,22 @@ export const homeView = {
 
   async load(ctx: AppContext): Promise<void> {
     if (ctx.signal?.aborted) return;
-    const weekAheadInfo = peekWeekAheadInfo();
-    try {
-      data = {
-        loading: true,
-        nextClassLine: peekNextClassLine(),
-        todayLines: peekTodayLines(),
-        unresolvedCount: peekUnresolvedCount(),
-        ...(weekAheadInfo ? { weekAhead: { classDays: weekAheadInfo.classDays } } : {}),
-      };
-    } catch {
-      data = { loading: true };
-    }
+    const schedule = peekSchedule();
+    const weekAhead = schedule ? weekAheadInfo(schedule) : null;
+    data = {
+      loading: true,
+      schedule,
+      ...(weekAhead ? { weekAhead: { classDays: weekAhead.classDays } } : {}),
+    };
     const cached = peekCalendar();
-    if (cached) data = { ...data, ...calendarSnapshot(cached, weekAheadInfo) };
+    if (cached) data = { ...data, ...calendarSnapshot(cached, weekAhead) };
     if (ctx.signal?.aborted) return;
     ctx.rerender();
 
     try {
       const cal = await loadCalendarOrThrow(ctx.signal);
       if (ctx.signal?.aborted) return;
-      data = { ...data, ...calendarSnapshot(cal, weekAheadInfo) };
+      data = { ...data, ...calendarSnapshot(cal, weekAhead) };
     } catch {
       if (ctx.signal?.aborted) return;
       data = { ...data, eventsLoadFailed: true };

@@ -494,11 +494,44 @@ describe('scheduleView — hub navigation', () => {
       expect(hint).not.toContain(t().menu.hintOpen);
     });
 
-    it('the standalone week grid is NOT treated as a drill-down -- its arrow/Enter keys genuinely move/open', async () => {
+    it.each(['hub', 'week'])(
+      'the %s footer names what the arrows and Enter do instead of "move · open"',
+      async (mode) => {
+        const ctx = await loadIntoHub();
+        if (mode === 'week') scheduleView.handleKey('w', ctx);
+        const hint = stripAnsi(scheduleView.footerHint(5, 100) ?? '');
+        expect(hint).toContain(`← → ${t().timetable.footerDay}`);
+        expect(hint).toContain(t().timetable.footerClass);
+        expect(hint).toContain(t().timetable.footerDetail);
+        expect(hint).not.toContain(t().menu.hintMove);
+        expect(hint).not.toContain(t().menu.hintOpen);
+      },
+    );
+  });
+
+  it('lists the day-switching arrows in the ? key list', async () => {
+    await loadIntoHub();
+    const keys = scheduleView.shortcuts();
+    expect(keys).toContainEqual({ key: '← →', label: t().timetable.helpSwitchDay });
+    expect(keys.map((shortcut) => shortcut.key)).toContain('w');
+  });
+
+  describe('[s] term switch without a school session', () => {
+    it('explains that switching terms needs a login and offers it', async () => {
       const ctx = await loadIntoHub();
-      scheduleView.handleKey('w', ctx);
-      const hint = scheduleView.footerHint(5, 80);
-      expect(hint).toBeUndefined(); // falls through to chrome's generic hint
+      scheduleView.handleKey('s', ctx);
+      const out = stripAnsi(scheduleView.render(ctx).join('\n'));
+      expect(out).toContain(t().timetable.termPickerNeedsLogin);
+      expect(out).toContain(t().timetable.termPickerLoginAction);
+      expect(out).toContain(t().common.back);
+    });
+
+    it('goes to the student ID field when the login option is chosen', async () => {
+      const ctx = await loadIntoHub();
+      scheduleView.handleKey('s', ctx);
+      scheduleView.handleKey('\r', ctx);
+      expect(scheduleView.capturesInput()).toBe(true);
+      expect(stripAnsi(scheduleView.render(ctx).join('\n'))).toContain(t().timetable.studentId);
     });
   });
 
@@ -561,6 +594,32 @@ describe('scheduleView — hub navigation', () => {
       scheduleView.handleKey('w', ctx);
       const out = stripAnsi(scheduleView.render(ctx).join('\n'));
       expect(out).toContain(t().timetable.hubWeek); // standalone full-screen week mode
+    });
+
+    it.each([
+      [80, 19],
+      [40, 7],
+    ])('shows every weekday on "w" at %i columns and %i rows', async (cols, rows) => {
+      const ctx = await loadIntoShortHub();
+      ctx.size = { rows: rows + 5, cols };
+      ctx.bodyRows = rows;
+      scheduleView.handleKey('w', ctx);
+      const lines = scheduleView.render(ctx).map(stripAnsi);
+      expect(lines.length).toBeLessThanOrEqual(rows);
+      for (const label of ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']) {
+        expect(lines.join('\n')).toContain(label);
+      }
+      expect(lines.join('\n')).toContain('Math');
+      expect(lines.join('\n')).not.toContain(t().timetable.weekTooSmall);
+    });
+
+    it('says the window is too small when not even a line per day fits', async () => {
+      const ctx = await loadIntoShortHub();
+      ctx.size = { rows: 9, cols: 40 };
+      ctx.bodyRows = 4;
+      scheduleView.handleKey('w', ctx);
+      const out = stripAnsi(scheduleView.render(ctx).join('')).replace(/\s/g, '');
+      expect(out).toContain(t().timetable.weekTooSmall.replace(/\s/g, ''));
     });
   });
 });

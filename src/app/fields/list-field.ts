@@ -6,7 +6,7 @@ import {
   parseKey,
   type MenuOption,
 } from '../../core/components/menu.js';
-import { space, type } from '../../core/theme.js';
+import { glyph, space, type } from '../../core/theme.js';
 import { pickIcon } from '../../core/icons.js';
 import { t, fmt } from '../../i18n/index.js';
 import { visualWidth, wrapAnsiToVisualWidth } from '../../core/text.js';
@@ -28,9 +28,13 @@ export function computeMaxVisible(bodyRows: number): number {
   return Math.max(3, bodyRows - 4);
 }
 
-function renderIndentedOutput(value: string, cols: number): string[] {
+function renderIndentedOutput(
+  value: string,
+  cols: number,
+  preferredIndent: string = space.indent,
+): string[] {
   const width = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : Number.POSITIVE_INFINITY;
-  const indent = visualWidth(space.indent) < width ? space.indent : '';
+  const indent = [preferredIndent, space.indent].find((i) => visualWidth(i) < width) ?? '';
   const contentWidth = Math.max(1, width - visualWidth(indent));
   return wrapAnsiToVisualWidth(value, contentWidth).map((line) => `${indent}${line}`);
 }
@@ -98,7 +102,13 @@ export class ListField {
         above > 0 ? fmt(trans.common.moreAbove, { count: above }) : null,
         below > 0 ? fmt(trans.common.moreBelow, { count: below }) : null,
       ].filter((part): part is string => part !== null);
-      lines.push(...renderIndentedOutput(type.hint(parts.join(`  ${pickIcon('·', '-')}  `)), cols));
+      lines.push(
+        ...renderIndentedOutput(
+          type.hint(parts.join(`  ${pickIcon('·', '-')}  `)),
+          cols,
+          `${space.indent}${' '.repeat(visualWidth(glyph.cursor()) + 1)}`,
+        ),
+      );
     }
     if (footer) lines.push('', ...renderIndentedOutput(type.hint(footer), cols));
     return lines;

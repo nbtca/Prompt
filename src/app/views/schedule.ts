@@ -8,13 +8,15 @@ import {
   type Timetable,
 } from '@nbtca/nbtcal/timetable';
 import type { AppContext, View } from '../view.js';
-import { captureFooterHint, passiveFooterHint } from '../chrome.js';
+import { captureFooterHint, digitTabHint, fitFooterHint, passiveFooterHint } from '../chrome.js';
 import { ListField, computeMaxVisible } from '../fields/list-field.js';
 import { TextField } from '../fields/text-field.js';
 import { renderSchedule, hubShortcuts, type ScheduleViewState } from './schedule-render.js';
 import { handleGridKey, todayGridCursor } from './schedule-grid-cursor.js';
 import { setVimKeysActive } from '../../core/vim-keys.js';
 import { t } from '../../i18n/index.js';
+import { pickIcon } from '../../core/icons.js';
+import { glyph } from '../../core/theme.js';
 import { AuthError } from '../../auth/errors.js';
 import {
   loginWithStudentPassword,
@@ -57,6 +59,32 @@ let catalog: AcademicTerm[] = [];
 let pendingId = '';
 let lifecycleGeneration = 0;
 const closingSessions = new WeakMap<AuthenticatedNbtSession, Promise<void>>();
+
+function gridKeys(): { days: string; periods: string; enter: string } {
+  return {
+    days: pickIcon('← →', 'left/right'),
+    periods: glyph.updown(),
+    enter: glyph.enter(),
+  };
+}
+
+function gridFooterHint(tabCount: number, cols: number): string {
+  const trans = t();
+  const dot = pickIcon('·', '-');
+  const keys = gridKeys();
+  const local = `${keys.days} ${trans.timetable.footerDay} ${dot} ${keys.periods} ${trans.timetable.footerClass} ${dot} ${keys.enter} ${trans.timetable.footerDetail}`;
+  const quit = `Esc ${dot} q ${trans.menu.hintQuit}`;
+  return fitFooterHint(
+    cols,
+    `${digitTabHint(tabCount)}${local} ${dot} ${quit} ${dot} ${trans.help.hint}`,
+    `${digitTabHint(tabCount)}${local} ${dot} ${quit}`,
+    `${local} ${dot} ${quit}`,
+    `${local} ${dot} Esc ${dot} q`,
+    local,
+    `Esc ${dot} q`,
+    'q',
+  );
+}
 
 function isLifecycleActive(ctx: AppContext, generation: number): boolean {
   return generation === lifecycleGeneration && ctx.signal?.aborted !== true;
@@ -337,9 +365,16 @@ export const scheduleView = {
   },
 
   shortcuts(): readonly { key: string; label: string }[] {
-    return state.mode === 'hub' && state.timetable
-      ? hubShortcuts(state.timetable).map(({ key, label }) => ({ key, label }))
-      : [];
+    if ((state.mode !== 'hub' && state.mode !== 'week') || !state.timetable) return [];
+    const trans = t();
+    const keys = gridKeys();
+    const grid = [
+      { key: keys.days, label: trans.timetable.helpSwitchDay },
+      { key: keys.periods, label: trans.timetable.helpPickClass },
+      { key: keys.enter, label: trans.timetable.helpOpenClass },
+    ];
+    if (state.mode === 'week') return grid;
+    return [...grid, ...hubShortcuts(state.timetable).map(({ key, label }) => ({ key, label }))];
   },
 
   capturesInput(): boolean {
@@ -367,7 +402,10 @@ export const scheduleView = {
       state.mode === 'meetingDetail' ||
       state.mode === 'unresolved' ||
       state.mode === 'termDensity';
-    return passive ? passiveFooterHint(tabCount, cols) : undefined;
+    if (passive) return passiveFooterHint(tabCount, cols);
+    return state.mode === 'hub' || state.mode === 'week'
+      ? gridFooterHint(tabCount, cols)
+      : undefined;
   },
 
   handleBack(ctx: AppContext): boolean {
@@ -538,12 +576,22 @@ export const scheduleView = {
             label: tm.academicYearLabel,
             ...(tm.current ? { hint: t().common.current } : {}),
           }));
+          const note =
+            options.length > 0
+              ? undefined
+              : session
+                ? t().timetable.noTerms
+                : t().timetable.termPickerNeedsLogin;
+          if (!session && options.length === 0) {
+            options.push({ value: '__login__', label: t().timetable.termPickerLoginAction });
+          }
           options.push({ value: '__back__', label: t().common.back });
           state = {
             ...state,
             mode: 'termPicker',
+            ...(note === undefined ? {} : { termPickerNote: note }),
             termField: new ListField({
-              title: t().timetable.hubSwitchTerm,
+              ...(note === undefined ? { title: t().timetable.hubSwitchTerm } : {}),
               options,
               maxVisible: computeMaxVisible(ctx.bodyRows),
             }),
@@ -619,6 +667,10 @@ export const scheduleView = {
         if (!result?.selected) return;
         if (result.selected === '__back__') {
           returnToHub();
+          return;
+        }
+        if (result.selected === '__login__') {
+          goToLoginId();
           return;
         }
         const term = resolveTerm(catalog, result.selected);
