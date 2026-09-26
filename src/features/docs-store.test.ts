@@ -1,13 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync, utimesSync } from 'fs';
+import { existsSync, mkdtempSync, rmSync, statSync, utimesSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { saveDocsIndex, loadDocsIndex } from './docs-store.js';
-
-const docs = [
-  { name: 'index.md', path: 'about/index.md', type: 'file' as const },
-  { name: 'about', path: 'about', type: 'dir' as const },
-];
+import { createDocsStore } from './docs-store.js';
 
 function withDir(run: (dir: string) => void): void {
   const dir = mkdtempSync(join(tmpdir(), 'docs-'));
@@ -19,46 +14,45 @@ function withDir(run: (dir: string) => void): void {
 }
 
 describe('docs-store', () => {
-  it('round-trips the index via an injected dir', () => {
+  it('round-trips values in a private directory', () => {
     withDir((dir) => {
-      saveDocsIndex(docs, dir);
-      expect(loadDocsIndex(dir)).toEqual(docs);
+      const store = createDocsStore(dir);
+      store.write('tree', '[]');
+      expect(store.read('tree')).toBe('[]');
+      expect(statSync(join(dir, 'docs')).mode & 0o777).toBe(0o700);
+      expect(statSync(join(dir, 'docs', 'tree')).mode & 0o777).toBe(0o600);
     });
   });
 
-  it('reports a miss when nothing was cached', () => {
+  it('throws on a miss so the client treats it as uncached', () => {
     withDir((dir) => {
-      expect(loadDocsIndex(dir)).toBeNull();
+      expect(() => createDocsStore(dir).read('tree')).toThrow();
     });
   });
 
-  it('refuses an index older than the max age', () => {
+  it('refuses keys that could leave the cache directory', () => {
     withDir((dir) => {
-      saveDocsIndex(docs, dir);
-      const longAgo = new Date(Date.now() - 60 * 60 * 1000);
-      utimesSync(join(dir, 'docs-index.json'), longAgo, longAgo);
-      expect(loadDocsIndex(dir, 30 * 60 * 1000)).toBeNull();
-      expect(loadDocsIndex(dir, 2 * 60 * 60 * 1000)).toEqual(docs);
+      const store = createDocsStore(dir);
+      expect(() => {
+        store.write('../escape', 'x');
+      }).toThrow(TypeError);
+      expect(() => store.read('../escape')).toThrow(TypeError);
     });
   });
 
-  it('refuses anything that is not a list of doc items', () => {
-    for (const bad of [
-      '{}',
-      '[{"name":"a"}]',
-      '[{"name":"a","path":"b","type":"other"}]',
-      'nope',
-    ]) {
-      withDir((dir) => {
-        writeFileSync(join(dir, 'docs-index.json'), bad, 'utf8');
-        expect(loadDocsIndex(dir)).toBeNull();
-      });
-    }
-  });
-
-  it('stays quiet when the directory cannot be written', () => {
-    expect(() => {
-      saveDocsIndex(docs, join(tmpdir(), 'docs-missing', 'deeper'));
-    }).not.toThrow();
+  it('evicts the least recently used entries past the size cap', () => {
+    withDir((dir) => {
+      const store = createDocsStore(dir, 10);
+      store.write('blob-a', 'aaaa');
+      store.write('blob-b', 'bbbb');
+      const old = new Date(Date.now() - 60_000);
+      utimesSync(join(dir, 'docs', 'blob-a'), old, old);
+      const recent = new Date(Date.now() - 30_000);
+      utimesSync(join(dir, 'docs', 'blob-b'), recent, recent);
+      store.write('blob-c', 'cccc');
+      expect(existsSync(join(dir, 'docs', 'blob-a'))).toBe(false);
+      expect(store.read('blob-b')).toBe('bbbb');
+      expect(store.read('blob-c')).toBe('cccc');
+    });
   });
 });

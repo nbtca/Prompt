@@ -1,38 +1,47 @@
 import fs from 'fs';
 import path from 'path';
-import type { DocItem } from '@nbtca/docs';
+import type { DocsStore } from '@nbtca/docs';
 import { getStateDir, getWritableStateDir } from '../config/paths.js';
 
-const INDEX_FILE = 'docs-index.json';
-const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const DIR = 'docs';
+const MAX_BYTES = 4 * 1024 * 1024;
+const KEY_RE = /^[\w-]{1,80}$/;
 
-function isDocItem(value: unknown): value is DocItem {
-  const item = value as Partial<DocItem> | null;
-  return (
-    typeof item?.name === 'string' &&
-    typeof item.path === 'string' &&
-    (item.type === 'file' || item.type === 'dir')
-  );
+function keyFile(dir: string, key: string): string {
+  if (!KEY_RE.test(key)) throw new TypeError('Invalid docs cache key.');
+  return path.join(dir, key);
 }
 
-export function saveDocsIndex(docs: readonly DocItem[], dir?: string): void {
-  try {
-    fs.writeFileSync(path.join(dir ?? getWritableStateDir(), INDEX_FILE), JSON.stringify(docs), {
-      encoding: 'utf8',
-      mode: 0o600,
-    });
-  } catch {
-    /* best effort */
+function evict(dir: string, maxBytes: number): void {
+  const files = fs
+    .readdirSync(dir)
+    .map((name) => {
+      const file = path.join(dir, name);
+      const stat = fs.statSync(file);
+      return { file, size: stat.size, usedAt: stat.mtimeMs };
+    })
+    .sort((left, right) => right.usedAt - left.usedAt);
+  let total = 0;
+  for (const { file, size } of files) {
+    total += size;
+    if (total > maxBytes) fs.rmSync(file, { force: true });
   }
 }
 
-export function loadDocsIndex(dir?: string, maxAgeMs = MAX_AGE_MS): DocItem[] | null {
-  try {
-    const file = path.join(dir ?? getStateDir(), INDEX_FILE);
-    if (Date.now() - fs.statSync(file).mtimeMs > maxAgeMs) return null;
-    const parsed: unknown = JSON.parse(fs.readFileSync(file, 'utf8'));
-    return Array.isArray(parsed) && parsed.every(isDocItem) ? parsed : null;
-  } catch {
-    return null;
-  }
+export function createDocsStore(root?: string, maxBytes = MAX_BYTES): DocsStore {
+  return {
+    read(key) {
+      const file = keyFile(path.join(root ?? getStateDir(), DIR), key);
+      const value = fs.readFileSync(file, 'utf8');
+      const now = new Date();
+      fs.utimes(file, now, now, () => undefined);
+      return value;
+    },
+    write(key, value) {
+      const dir = path.join(root ?? getWritableStateDir(), DIR);
+      fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+      fs.writeFileSync(keyFile(dir, key), value, { encoding: 'utf8', mode: 0o600 });
+      evict(dir, maxBytes);
+    },
+  };
 }

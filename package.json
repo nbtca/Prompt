@@ -46,7 +46,7 @@
     "interactive"
   ],
   "dependencies": {
-    "@nbtca/docs": "^0.3.1",
+    "@nbtca/docs": "^0.3.2",
     "@nbtca/nbtcal": "^0.4.2",
     "chalk": "^5.6.2",
     "cheerio": "1.0.0",

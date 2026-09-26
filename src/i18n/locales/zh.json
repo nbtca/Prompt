@@ -112,7 +112,7 @@
     "chooseCategory": "文档",
     "refreshCache": "刷新缓存",
     "cacheCleared": "文档缓存已清除",
-    "usingCachedData": "网络不可用，使用缓存数据",
+    "stale": "离线，显示上次获取的文档",
     "currentDir": "当前目录",
     "chooseDoc": "选择文档或目录:",
     "emptyDir": "该目录为空",
