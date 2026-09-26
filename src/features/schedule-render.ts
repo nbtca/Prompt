@@ -8,7 +8,7 @@ import type {
 } from '@nbtca/nbtcal/timetable';
 import { campusDateTime, campusIsoDate, createTimetableSchedule } from '@nbtca/nbtcal/timetable';
 import { countdownParts, isCountdownUrgent, type Countdown } from './calendar-query.js';
-import { c, type, space, glyph, MAX_FRAME_COLS } from '../core/theme.js';
+import { c, type, space, glyph, MAX_FRAME_COLS, bodyWidth } from '../core/theme.js';
 import { pickIcon } from '../core/icons.js';
 import { padEndV, truncate, visualWidth, wrapAnsiToVisualWidth } from '../core/text.js';
 import { addLocalDays, parseLocalMonday } from '../core/calendar-day.js';
@@ -48,11 +48,12 @@ function span(m: TimetableMeeting, periods: readonly TimetablePeriod[]): string 
 export function renderNextClassBanner(
   next: Pick<TimetableOccurrence, 'meeting' | 'start'> | null,
   now: Date,
-  cols = Number.POSITIVE_INFINITY,
+  terminalCols = Number.POSITIVE_INFINITY,
   labelled = true,
 ): string {
   const trans = t();
   if (!next) return '';
+  const cols = bodyWidth(terminalCols);
   const p = countdownParts(next.start, now);
   const when = formatClassCountdown(p);
   const styleWhen = isCountdownUrgent(p) ? c.warn : type.hint;
@@ -288,8 +289,9 @@ export function renderDayTimeline(
 export function renderDaySwitcher(
   selectedWeekday: number,
   todayWeekday: number,
-  cols = Number.POSITIVE_INFINITY,
+  terminalCols = Number.POSITIVE_INFINITY,
 ): string {
+  const cols = bodyWidth(terminalCols);
   const leftArrow = pickIcon('←', '<');
   const rightArrow = pickIcon('→', '>');
   const todayMark = pickIcon('•', '*');
@@ -596,7 +598,7 @@ export function renderMeetingDetail(
   }
   rows.push([trans.timetable.detailWeeks, formatWeekRange(meeting.weeks)]);
 
-  const width = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : Number.POSITIVE_INFINITY;
+  const width = bodyWidth(cols);
   const indent = visualWidth(space.indent) < width ? space.indent : '';
   const contentWidth = Math.max(1, width - visualWidth(indent));
   const labelWidth = rows.reduce((w, [label]) => Math.max(w, visualWidth(label)), 0);
@@ -634,7 +636,7 @@ export function renderUnresolvedItems(
   cols = Number.POSITIVE_INFINITY,
 ): string {
   const trans = t();
-  const width = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : Number.POSITIVE_INFINITY;
+  const width = bodyWidth(cols);
   const indent = visualWidth(space.indent) < width ? space.indent : '';
   const contentWidth = Math.max(1, width - visualWidth(indent));
   if (items.length === 0) {
@@ -726,7 +728,7 @@ export function renderTermDensity(
 ): string {
   const trans = t().timetable;
   const lang = getCurrentLanguage();
-  const width = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : Number.POSITIVE_INFINITY;
+  const width = bodyWidth(cols);
   const indent = visualWidth(space.indent) < width ? space.indent : '';
   const contentWidth = Math.max(1, width - visualWidth(indent));
   const wrap = (text: string): string[] =>

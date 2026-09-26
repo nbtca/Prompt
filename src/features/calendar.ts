@@ -8,7 +8,7 @@ import {
 } from '@nbtca/nbtcal';
 import type { Calendar, CalendarEvent, FeedValidators, HeatmapBucket } from '@nbtca/nbtcal';
 import chalk from 'chalk';
-import { c, type, space, glyph } from '../core/theme.js';
+import { c, type, space, glyph, bodyWidth } from '../core/theme.js';
 import { pickIcon } from '../core/icons.js';
 import {
   padEndV,
@@ -278,7 +278,7 @@ export function recurringMark(e: Event): string {
 }
 
 function hangingLines(marker: string, content: string, cols: number): string[] {
-  const width = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : Number.POSITIVE_INFINITY;
+  const width = bodyWidth(cols);
   const prefixes = [`${space.indent}${marker} `, `${marker} `, marker, ''];
   const prefix = prefixes.find((candidate) => visualWidth(candidate) < width) ?? '';
   const continuation = ' '.repeat(visualWidth(prefix));

@@ -1,4 +1,4 @@
-import { c, type, space, glyph, brandMark, bodyEdge } from '../core/theme.js';
+import { c, type, space, glyph, brandMark, bodyEdge, bodyWidth } from '../core/theme.js';
 import { pickIcon } from '../core/icons.js';
 import { t } from '../i18n/index.js';
 import type { ViewId } from './keys.js';
@@ -73,9 +73,7 @@ function renderTabs(views: { id: ViewId; title: string }[], active: ViewId, cols
 export function renderContextPath(segments: readonly string[], cols: number): string {
   const chevron = pickIcon('›', '>');
   const ellipsis = pickIcon('…', '...');
-  const width = Number.isFinite(cols)
-    ? bodyEdge(Math.max(1, Math.floor(cols)))
-    : Number.POSITIVE_INFINITY;
+  const width = bodyWidth(cols);
   for (let start = 0; start < segments.length; start += 1) {
     const shown = segments.slice(start);
     const last = shown.length - 1;

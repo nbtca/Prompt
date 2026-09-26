@@ -149,8 +149,8 @@ describe('renderNextClassBanner', () => {
       ),
     );
 
-    expect(visualWidth(out)).toBeLessThanOrEqual(40);
-    expect(out).toContain('Advanced');
+    expect(visualWidth(out)).toBeLessThanOrEqual(37);
+    expect(out).toContain('Advanc');
     expect(out).toContain('1h 30m');
     expect(out).not.toContain('Building 12 Room 304');
     done();
@@ -1099,9 +1099,10 @@ describe('renderDaySwitcher', () => {
   it('shows a balanced weekday window around a late-week selection', () => {
     const out = stripAnsi(renderDaySwitcher(5, 1, 40));
 
-    expect(visualWidth(out)).toBeLessThanOrEqual(40);
+    expect(visualWidth(out)).toBeLessThanOrEqual(37);
     expect(out).toContain('[Fri]');
-    expect(out).toContain('Sun');
+    expect(out).toContain('Thu');
+    expect(out).toContain('Sat');
     expect(out).not.toContain('Mon');
   });
 });

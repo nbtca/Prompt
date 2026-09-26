@@ -93,6 +93,10 @@ export function bodyEdge(cols: number): number {
   return cols >= RIGHT_MARGIN_MIN_COLS ? cols - space.indent.length : cols;
 }
 
+export function bodyWidth(cols: number): number {
+  return Number.isFinite(cols) ? bodyEdge(Math.max(1, Math.floor(cols))) : Number.POSITIVE_INFINITY;
+}
+
 export const type = {
   heading: (s: string) => chalk.bold(s),
   label: (s: string) => s,

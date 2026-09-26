@@ -148,7 +148,7 @@ describe('renderHeatmap', () => {
   it('keeps full month names when the weeks are wide enough', () => {
     setLanguage('zh');
     try {
-      const labels = monthLabels(114);
+      const labels = monthLabels(117);
       expect(labels).toHaveLength(12);
       expect(labels.every((label) => label.endsWith('月'))).toBe(true);
     } finally {
@@ -181,7 +181,7 @@ describe('renderHeatmap', () => {
 
   it('reduces the visible week window to fit a 40-column terminal', () => {
     const lines = renderHeatmap(buckets, today, { color: false, cols: 40 }).split('\n');
-    expect(lines.every((line) => visualWidth(stripAnsi(line)) <= 40)).toBe(true);
-    expect(visualWidth(stripAnsi(lines[2] ?? ''))).toBe(40);
+    expect(lines.every((line) => visualWidth(stripAnsi(line)) <= 37)).toBe(true);
+    expect(visualWidth(stripAnsi(lines[2] ?? ''))).toBe(37);
   });
 });
