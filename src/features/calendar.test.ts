@@ -314,7 +314,7 @@ describe('renderCountdownBanner', () => {
     expect(text).toContain(title.replace(/\s/g, ''));
     expect(text).toContain('Next');
     expect(text).toContain('1d0h');
-    expect(lines.filter((line) => /[→>]/u.test(stripAnsi(line)))).toHaveLength(1);
+    expect(lines.filter((line) => /[●*]/u.test(stripAnsi(line)))).toHaveLength(1);
   });
   it('spells the countdown out in Chinese', () => {
     setLanguage('zh');

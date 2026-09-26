@@ -328,7 +328,7 @@ export function renderCountdownBanner(
   const whenStyled = isCountdownUrgent(p) ? c.warn(when) : type.hint(when);
   const dot = pickIcon('·', '-');
   const content = `${type.label(trans.calendar.next)}  ${dot}  ${type.body(event.title)}  ${dot}  ${whenStyled}`;
-  return hangingLines(type.active(glyph.cursor()), content, cols).join('\n');
+  return hangingLines(type.active(glyph.dot()), content, cols).join('\n');
 }
 
 export function exportEventIcs(
