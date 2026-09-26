@@ -112,6 +112,14 @@ export interface Translations {
     exportError: string;
     recurringLabel: string;
     inPrefix: string;
+    searchNoResultsFor: string;
+    noEventsInRange: string;
+    endedLabel: string;
+    duration: {
+      days: string;
+      hours: string;
+      minutes: string;
+    };
   };
   docs: {
     loading: string;

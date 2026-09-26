@@ -77,11 +77,11 @@ describe('renderEvents', () => {
   });
 
   it.each([
-    ['en', 'International innovation and entrepreneurship competition', 'Next'],
-    ['zh', '国际创新创业项目成果展示交流活动', '下一场'],
+    ['en', 'International innovation and entrepreneurship competition', 'Next', 'in1d0h'],
+    ['zh', '国际创新创业项目成果展示交流活动', '下一场', '还有1天0小时'],
   ] as const)(
     'fits a complete %s countdown banner within twenty columns',
-    (language, title, nextLabel) => {
+    (language, title, nextLabel, countdown) => {
       setLanguage(language);
       try {
         const nextEvent = {
@@ -116,7 +116,7 @@ describe('renderEvents', () => {
         expect(lines.every((line) => !line.includes('\n'))).toBe(true);
         expect(text).toContain(title.replace(/\s/g, ''));
         expect(text).toContain(nextLabel);
-        expect(text).toContain('1d0h');
+        expect(text).toContain(countdown);
         expect(text).toContain('Events');
       } finally {
         setLanguage('en');
@@ -265,6 +265,22 @@ describe('renderEvents', () => {
       ).join('\n'),
     );
     expect(out).not.toContain('Coming up');
+  });
+
+  it('hub mode says there are no upcoming events above the browse list', () => {
+    const hubField = new ListField({
+      title: 'Browse',
+      options: [{ value: 'upcoming', label: 'Next 30 Days' }],
+    });
+    const lines = renderEvents(
+      { mode: 'hub', hubField, heatmapBuckets: [], recentEvents: [] },
+      new Date(),
+      20,
+      80,
+    ).map(stripAnsi);
+    const notice = lines.findIndex((line) => line.includes('No upcoming events'));
+    expect(notice).toBeGreaterThan(-1);
+    expect(notice).toBeLessThan(lines.findIndex((line) => line.includes('Browse')));
   });
 
   it('hub mode windows the menu against actual content height instead of overflowing', () => {

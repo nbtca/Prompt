@@ -3,7 +3,11 @@ import { type, space } from '../../core/theme.js';
 import { t } from '../../i18n/index.js';
 import { type ListField, renderListFieldWithContext } from '../fields/list-field.js';
 import type { TextField } from '../fields/text-field.js';
-import { renderCountdownBanner, renderEventBrief, type Event } from '../../features/calendar.js';
+import {
+  renderCountdownBanner,
+  renderEventBriefLines,
+  type Event,
+} from '../../features/calendar.js';
 import { renderHeatmap } from '../../features/calendar-heatmap.js';
 import { wrapAnsiWithIndent } from '../../core/text.js';
 import { loadingLines } from '../../core/components/spinner.js';
@@ -20,6 +24,8 @@ export interface EventsViewState {
   recentEvents?: Event[];
   hubField?: ListField;
   listField?: ListField;
+  listTitle?: string;
+  listNotice?: string;
   detailField?: ListField;
   detailTitle?: string;
   detailMeta?: string;
@@ -34,11 +40,6 @@ function wrappedIndentedLines(
   style: (value: string) => string,
 ): string[] {
   return wrapAnsiWithIndent(style(label), cols ?? Number.POSITIVE_INFINITY, space.indent);
-}
-
-function wrappedRenderedLine(line: string, cols: number | undefined): string[] {
-  const content = line.startsWith(space.indent) ? line.slice(space.indent.length) : line;
-  return wrappedIndentedLines(content, cols, (value) => value);
 }
 
 const EXPANDED_HUB_MIN_BODY_ROWS = 29;
@@ -79,7 +80,7 @@ function renderHubBody(
       );
       const collected: string[] = [];
       for (const event of state.recentEvents ?? []) {
-        const wrapped = wrappedRenderedLine(renderEventBrief(event, now), cols);
+        const wrapped = renderEventBriefLines(event, now, cols);
         if (collected.length + wrapped.length > budget) break;
         collected.push(...wrapped);
       }
@@ -90,6 +91,10 @@ function renderHubBody(
       eventLines = collectEventLines(Math.min(3, rows));
     }
     if (eventLines.length > 0) lines.push(...activityHeading, ...eventLines, '');
+  } else if (!state.nextEvent) {
+    const notice = [...wrappedIndentedLines(trans.calendar.noEvents, cols, type.hint), ''];
+    const fieldRows = state.hubField?.render(Number.POSITIVE_INFINITY, cols).length ?? 0;
+    if (lines.length + notice.length + fieldRows <= rows) lines.push(...notice);
   }
   if (state.hubField) {
     return renderListFieldWithContext(lines, state.hubField, bodyRows, cols);
@@ -116,8 +121,17 @@ export function renderEvents(
             ...(cols === undefined ? {} : { cols }),
           }).split('\n')
         : wrappedIndentedLines(trans.calendar.noEvents, cols, type.hint);
-    case 'list':
-      return state.listField?.render(bodyRows, cols) ?? [];
+    case 'list': {
+      if (!state.listField) return [];
+      if (state.listNotice === undefined) return state.listField.render(bodyRows, cols);
+      const context = [
+        ...wrappedIndentedLines(state.listTitle ?? '', cols, type.heading),
+        '',
+        ...wrappedIndentedLines(state.listNotice, cols, type.hint),
+        '',
+      ];
+      return renderListFieldWithContext(context, state.listField, bodyRows, cols);
+    }
     case 'detail': {
       const context = [
         ...wrappedIndentedLines(state.detailTitle ?? '', cols, type.heading),

@@ -1,5 +1,6 @@
 import { glyph, type, space } from '../theme.js';
-import { visualWidth, padEndV, wrapAnsiToVisualWidth } from '../text.js';
+import { visualWidth, padEndV, wrapAnsiToVisualWidth, clipAnsiToVisualWidth } from '../text.js';
+import { pickIcon } from '../icons.js';
 import { createPainter } from './painter.js';
 import { startRawInput } from './input-session.js';
 import { t } from '../../i18n/index.js';
@@ -69,6 +70,23 @@ export interface MenuOption {
   value: string;
   label: string;
   hint?: string;
+  dim?: boolean;
+  hintColumn?: boolean;
+}
+
+export interface MenuColumns {
+  label: number;
+  hint: number;
+}
+
+export function menuColumns(options: readonly MenuOption[]): MenuColumns {
+  return options.reduce<MenuColumns>(
+    (widths, option) => ({
+      label: Math.max(widths.label, visualWidth(option.label)),
+      hint: Math.max(widths.hint, option.hint ? visualWidth(option.hint) : 0),
+    }),
+    { label: 0, hint: 0 },
+  );
 }
 
 export interface MenuState {
@@ -93,10 +111,49 @@ function renderIndentedText(
   return wrapAnsiToVisualWidth(style(label), contentWidth).map((line) => `${indent}${line}`);
 }
 
+const MIN_LABEL_COLUMN = 24;
+
+function clipWithEllipsis(value: string, width: number): string {
+  if (visualWidth(value) <= width) return value;
+  const ellipsis = pickIcon('…', '~');
+  return clipAnsiToVisualWidth(value, width - visualWidth(ellipsis)) + ellipsis;
+}
+
+function fitColumns(columns: MenuColumns, contentWidth: number): MenuColumns | undefined {
+  if (columns.label + 2 + columns.hint <= contentWidth) return columns;
+  const hint = Math.min(
+    columns.hint,
+    Math.max(contentWidth - 2 - columns.label, Math.ceil(contentWidth / 3)),
+  );
+  const label = Math.min(columns.label, contentWidth - 2 - hint);
+  return label >= MIN_LABEL_COLUMN ? { label, hint } : undefined;
+}
+
+function optionCells(
+  option: MenuOption,
+  columns: MenuColumns,
+  contentWidth: number,
+): { label: string; hint: string } {
+  const hint = option.hint ?? '';
+  if (option.hintColumn) {
+    const fitted = fitColumns(columns, contentWidth);
+    return fitted
+      ? {
+          label: padEndV(clipWithEllipsis(option.label, fitted.label), fitted.label),
+          hint: clipWithEllipsis(hint, fitted.hint),
+        }
+      : { label: option.label, hint: '' };
+  }
+  const hintWidth = hint ? 2 + visualWidth(hint) : 0;
+  const labelWidth =
+    columns.label + hintWidth <= contentWidth ? columns.label : visualWidth(option.label);
+  return { label: padEndV(option.label, labelWidth), hint };
+}
+
 export function renderMenuOption(
   option: MenuOption,
   selected: boolean,
-  labelWidth = visualWidth(option.label),
+  columns: MenuColumns = menuColumns([option]),
   cols = Number.POSITIVE_INFINITY,
 ): string[] {
   const width = normalizedWidth(cols);
@@ -107,27 +164,21 @@ export function renderMenuOption(
   const prefix = prefixes.find((candidate) => visualWidth(candidate) < width) ?? '';
   const continuation = ' '.repeat(visualWidth(prefix));
   const contentWidth = Math.max(1, width - visualWidth(prefix));
-  const hintWidth = option.hint ? 2 + visualWidth(option.hint) : 0;
-  const paddedWidth =
-    labelWidth + hintWidth <= contentWidth ? labelWidth : visualWidth(option.label);
-  const padded = padEndV(option.label, paddedWidth);
-  const label = selected ? type.active(padded) : type.body(padded);
-  const hint = option.hint ? `  ${type.hint(option.hint)}` : '';
+  const cells = optionCells(option, columns, contentWidth);
+  const style = selected ? type.active : option.dim ? type.hint : type.body;
+  const hint = cells.hint ? `  ${type.hint(cells.hint)}` : '';
+  const label = style(cells.label);
   return wrapAnsiToVisualWidth(`${label}${hint}`, contentWidth).map(
     (line, index) => `${index === 0 ? prefix : continuation}${line}`,
   );
 }
 
 export function renderMenu(state: MenuState, cols = Number.POSITIVE_INFINITY): string {
-  const labelWidth = state.options.reduce(
-    (width, option) => Math.max(width, visualWidth(option.label)),
-    0,
-  );
-
+  const columns = menuColumns(state.options);
   const lines = state.title ? [...renderIndentedText(state.title, cols, type.heading), ''] : [];
 
   state.options.forEach((option, index) => {
-    lines.push(...renderMenuOption(option, index === state.selectedIndex, labelWidth, cols));
+    lines.push(...renderMenuOption(option, index === state.selectedIndex, columns, cols));
   });
 
   if (state.footer) {
