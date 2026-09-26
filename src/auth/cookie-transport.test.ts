@@ -110,7 +110,7 @@ describe('cookie transport', () => {
     }) as unknown as typeof fetch;
     const session = createCampusCookieSession({ baseFetch });
     await session.request(new URL('https://webvpn.nbt.edu.cn/'));
-    expect((await session.serialize()).cookies).toHaveLength(1);
+    expect(session.serialize().cookies).toHaveLength(1);
     await expect(
       session.request(new URL('https://webvpn.nbt.edu.cn/'), {
         headers: { Cookie: 'attacker=value' },
@@ -119,7 +119,7 @@ describe('cookie transport', () => {
     await session.close();
   });
 
-  it('preserves jar cookies when fetch-cookie follows a Request redirect', async () => {
+  it('preserves jar cookies across a redirect', async () => {
     let redirectedCookie: string | null = null;
     const baseFetch = vi.fn((input: string | URL | Request, init?: RequestInit) => {
       const url = new URL(input instanceof Request ? input.url : input.toString());
@@ -208,5 +208,108 @@ describe('cookie transport', () => {
       server.closeAllConnections();
       server.close();
     }
+  });
+});
+
+describe('redirect following', () => {
+  interface Hop {
+    url: string;
+    method: string;
+    body: unknown;
+    cookie: string | null;
+    contentType: string | null;
+  }
+
+  function redirectingFetch(routes: Record<string, ResponseInit>, hops: Hop[]): typeof fetch {
+    return ((input: URL, init: RequestInit) => {
+      const headers = new Headers(init.headers);
+      hops.push({
+        url: input.href,
+        method: init.method ?? 'GET',
+        body: init.body,
+        cookie: headers.get('cookie'),
+        contentType: headers.get('content-type'),
+      });
+      return Promise.resolve(new Response('', routes[input.pathname] ?? {}));
+    }) as unknown as typeof fetch;
+  }
+
+  it('keeps cookies from every hop and reports the final URL', async () => {
+    const hops: Hop[] = [];
+    const session = createCampusCookieSession({
+      baseFetch: redirectingFetch(
+        {
+          '/': {
+            status: 302,
+            headers: [
+              ['location', '/users/sign_in'],
+              ['set-cookie', 'a=1; Path=/'],
+              ['set-cookie', 'b=2; Domain=nbt.edu.cn; Path=/'],
+            ],
+          },
+          '/users/sign_in': {
+            status: 301,
+            headers: [
+              ['location', 'https://jwxt-443.webvpn.nbt.edu.cn/sso/jziotlogin'],
+              ['set-cookie', 'a=3; Path=/'],
+            ],
+          },
+        },
+        hops,
+      ),
+    });
+    const response = await session.request(new URL('https://webvpn.nbt.edu.cn/'));
+    expect(response.url).toBe('https://jwxt-443.webvpn.nbt.edu.cn/sso/jziotlogin');
+    expect(hops.map((hop) => hop.cookie)).toEqual([null, 'a=1; b=2', 'b=2']);
+  });
+
+  it.each([
+    [302, 'GET', null],
+    [303, 'GET', null],
+    [307, 'POST', 'x=1'],
+    [308, 'POST', 'x=1'],
+  ])('follows a %i after a POST with %s', async (status, method, body) => {
+    const hops: Hop[] = [];
+    const session = createCampusCookieSession({
+      baseFetch: redirectingFetch(
+        { '/authserver/login': { status, headers: { location: 'https://webvpn.nbt.edu.cn/' } } },
+        hops,
+      ),
+    });
+    await session.request(new URL('https://authserver-443.webvpn.nbt.edu.cn/authserver/login'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'x=1',
+    });
+    expect(hops[1]).toMatchObject({
+      method,
+      body,
+      contentType: body === null ? null : 'application/x-www-form-urlencoded',
+    });
+  });
+
+  it('checks every hop against the campus allowlist before fetching it', async () => {
+    const hops: Hop[] = [];
+    const session = createCampusCookieSession({
+      baseFetch: redirectingFetch(
+        { '/': { status: 302, headers: { location: 'https://evil.example/steal' } } },
+        hops,
+      ),
+    });
+    await expect(session.request(new URL('https://webvpn.nbt.edu.cn/'))).rejects.toMatchObject({
+      code: 'UNTRUSTED_URL',
+    });
+    expect(hops).toHaveLength(1);
+  });
+
+  it('gives up after eight redirects', async () => {
+    const hops: Hop[] = [];
+    const session = createCampusCookieSession({
+      baseFetch: redirectingFetch({ '/': { status: 302, headers: { location: '/' } } }, hops),
+    });
+    await expect(session.request(new URL('https://webvpn.nbt.edu.cn/'))).rejects.toMatchObject({
+      code: 'NETWORK',
+    });
+    expect(hops).toHaveLength(9);
   });
 });

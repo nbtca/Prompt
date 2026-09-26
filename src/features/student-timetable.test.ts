@@ -76,12 +76,7 @@ function persisted(): PersistedNbtSession {
   return {
     version: 1,
     provider: 'nbt-webvpn',
-    jar: {
-      version: 'tough-cookie@6.0.0',
-      storeType: 'MemoryCookieStore',
-      rejectPublicSuffixes: true,
-      cookies: [],
-    },
+    jar: { version: 1, cookies: [] },
     authenticatedAt: '2026-07-10T00:00:00.000Z',
     validatedAt: '2026-07-10T00:00:00.000Z',
     expiresAt: '2026-07-17T00:00:00.000Z',

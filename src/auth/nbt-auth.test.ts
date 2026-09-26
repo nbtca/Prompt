@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { encryptCampusPassword, loginWithStudentPassword } from './nbt-auth.js';
+import { encryptCampusPassword, loginWithStudentPassword, restoreNbtSession } from './nbt-auth.js';
+import type { PersistedNbtSession } from './session-store.js';
 import { AuthError } from './errors.js';
 
 function mockResponse(url: string, body: string, init: ResponseInit = {}): Response {
@@ -345,5 +346,24 @@ describe('loginWithStudentPassword', () => {
     ],
   ])('classifies a rejection page with %s', async (_name, tips, code) => {
     await expect(rejectionCode(tips + loginPage)).resolves.toMatchObject({ code });
+  });
+});
+
+describe('restoreNbtSession', () => {
+  it('treats a session saved by tough-cookie as expired', async () => {
+    await expect(
+      restoreNbtSession({
+        version: 1,
+        provider: 'nbt-webvpn',
+        jar: {
+          version: 'tough-cookie@6.0.0',
+          storeType: 'MemoryCookieStore',
+          rejectPublicSuffixes: true,
+          cookies: [{ key: 'sid', value: 'opaque', domain: 'webvpn.nbt.edu.cn', path: '/' }],
+        } as unknown as PersistedNbtSession['jar'],
+        authenticatedAt: '2026-07-10T00:00:00.000Z',
+        validatedAt: '2026-07-10T00:00:00.000Z',
+      }),
+    ).rejects.toMatchObject({ code: 'SESSION_EXPIRED' });
   });
 });

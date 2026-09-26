@@ -49,9 +49,7 @@
     "@nbtca/docs": "^0.3.2",
     "@nbtca/nbtcal": "^0.4.2",
     "chalk": "^5.6.2",
-    "fetch-cookie": "^3.2.0",
-    "marked": "^15.0.12",
-    "tough-cookie": "^6.0.2"
+    "marked": "^15.0.12"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

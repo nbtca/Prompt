@@ -260,17 +260,17 @@ function createAuthenticatedSession(
   return {
     accountHint: metadata.accountHint,
     timetableTransport: (url, init) => cookies.timetableTransport(url, init),
-    async snapshot(validatedAt = new Date()) {
+    snapshot(validatedAt = new Date()) {
       const validatedAtText = validatedAt.toISOString();
-      return {
+      return Promise.resolve({
         version: 1,
         provider: 'nbt-webvpn',
-        jar: await cookies.serialize(),
+        jar: cookies.serialize(),
         ...(metadata.accountHint === undefined ? {} : { accountHint: metadata.accountHint }),
         authenticatedAt: metadata.authenticatedAt,
         validatedAt: validatedAtText,
         expiresAt: new Date(validatedAt.getTime() + SESSION_MAX_AGE_MS).toISOString(),
-      };
+      });
     },
     close: () => cookies.close(),
   };
@@ -401,13 +401,16 @@ export async function loginWithStudentPassword(
   }
 }
 
-export async function restoreNbtSession(
+export function restoreNbtSession(
   persisted: PersistedNbtSession,
   options: Omit<CreateCampusCookieSessionOptions, 'jar'> = {},
 ): Promise<AuthenticatedNbtSession> {
-  const cookies = await cookieSessionFromSerialized(persisted.jar, options);
-  return createAuthenticatedSession(cookies, {
-    ...(persisted.accountHint === undefined ? {} : { accountHint: persisted.accountHint }),
-    authenticatedAt: persisted.authenticatedAt,
+  return new Promise((resolve) => {
+    resolve(
+      createAuthenticatedSession(cookieSessionFromSerialized(persisted.jar, options), {
+        ...(persisted.accountHint === undefined ? {} : { accountHint: persisted.accountHint }),
+        authenticatedAt: persisted.authenticatedAt,
+      }),
+    );
   });
 }
