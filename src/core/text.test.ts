@@ -108,6 +108,16 @@ describe('wrapAnsiToVisualWidth', () => {
     expect(lines.every((line) => line.includes('\x1b['))).toBe(true);
   });
 
+  it('breaks inside a CJK run instead of back at an earlier space', () => {
+    expect(wrapAnsiToVisualWidth('从 2002 年创立至今，每一代都在调整', 16)).toEqual([
+      '从 2002 年创立至',
+      '今，每一代都在调',
+      '整',
+    ]);
+    expect(wrapAnsiToVisualWidth('见 PATH 里的目录', 8)).toEqual(['见 PATH', '里的目录']);
+    expect(wrapAnsiToVisualWidth('跑的不是 curl，而是', 13)).toEqual(['跑的不是', 'curl，而是']);
+  });
+
   it('breaks English text at whitespace when possible', () => {
     expect(wrapAnsiToVisualWidth('alpha beta gamma', 10)).toEqual(['alpha beta', 'gamma']);
   });
