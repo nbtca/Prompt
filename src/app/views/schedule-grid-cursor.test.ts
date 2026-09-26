@@ -36,6 +36,7 @@ describe('defaultGridCursor', () => {
   it('falls back to Monday on a weekend', () => {
     expect(defaultGridCursor(6, periods)).toEqual({ weekday: 1, period: 1 });
     expect(defaultGridCursor(7, periods)).toEqual({ weekday: 1, period: 1 });
+    expect(defaultGridCursor(6, periods, true)).toEqual({ weekday: 6, period: 1 });
   });
   it('uses the lowest period number when the period table starts above 1', () => {
     const laterPeriods = [{ period: 3, label: null, start: '10:00', end: '10:45' }];

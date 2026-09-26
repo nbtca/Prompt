@@ -23,6 +23,7 @@ export function renderNextClassBanner(
   next: Pick<TimetableOccurrence, 'meeting' | 'start'> | null,
   now: Date,
   cols = Number.POSITIVE_INFINITY,
+  labelled = true,
 ): string {
   const trans = t();
   if (!next) return '';
@@ -39,7 +40,9 @@ export function renderNextClassBanner(
   const dot = pickIcon('·', '-');
   const marker = type.active(glyph.cursor());
   const separator = `  ${dot}  `;
-  const detailedPrefix = `${space.indent}${marker} ${type.label(trans.timetable.nextClass)}${separator}`;
+  const detailedPrefix = labelled
+    ? `${space.indent}${marker} ${type.label(trans.timetable.nextClass)}${separator}`
+    : `${space.indent}${marker} `;
   const suffix = `${separator}${whenStyled}`;
   const courseName = next.meeting.courseName;
   const location = next.meeting.location ? `${separator}${next.meeting.location}` : '';
@@ -185,7 +188,7 @@ function renderTimeline(
   const last = sorted.at(-1);
   if (!last) return lines.join('\n');
   const lastEnd = periods.find((p) => p.period === last.endPeriod)?.end ?? '23:59';
-  const fullEnd = `${space.indent}  ${type.hint(lastEnd)} ${rule}${bottomConnector}${rule} ${type.hint(trans.timetable.timelineEnd)}`;
+  const fullEnd = `${space.indent} ${type.hint(lastEnd)} ${rule}${bottomConnector}${rule} ${type.hint(trans.timetable.timelineEnd)}`;
   if (!Number.isFinite(cols) || visualWidth(fullEnd) <= cols) {
     lines.push(fullEnd);
   } else {

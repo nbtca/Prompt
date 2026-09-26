@@ -28,6 +28,7 @@
     "hint": "? keys"
   },
   "menu": {
+    "home": "Home",
     "events": "Events",
     "eventsDesc": "Upcoming activities",
     "docs": "Docs",
@@ -84,6 +85,8 @@
     "viewPastDetail": "Select an event for details:",
     "next": "Next",
     "recentActivity": "Recent",
+    "browse": "Browse",
+    "next30Days": "Next 30 days",
     "inPrefix": "in",
     "startingNow": "starting now",
     "thisWeek": "This Week",
@@ -286,7 +289,7 @@
     "classDone": "Done",
     "classLive": "In progress",
     "minutesRemaining": "{minutes}m left",
-    "timelineEnd": "—",
+    "timelineEnd": "End of day",
     "termNotStarted": "Term hasn't started yet",
     "termStartsIn": "Classes begin {date} · {days} days to go",
     "hubTermDensity": "Term density",
@@ -321,7 +324,7 @@
     "updated": "Theme setting updated",
     "updatedSessionOnly": "Theme setting updated for this session only (failed to save config)",
     "reset": "Theme settings reset",
-    "resetLabel": "Reset",
+    "resetLabel": "Reset to defaults",
     "resetSessionOnly": "Theme settings reset for this session only (failed to save config)",
     "usage": "Usage: nbtca theme | nbtca theme icon <auto|ascii|unicode> | nbtca theme color <auto|on|off> | nbtca theme reset",
     "invalidValue": "Invalid value. Use one of:"

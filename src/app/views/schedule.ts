@@ -12,7 +12,7 @@ import { captureFooterHint, passiveFooterHint } from '../chrome.js';
 import { ListField, computeMaxVisible } from '../fields/list-field.js';
 import { TextField } from '../fields/text-field.js';
 import { renderSchedule, hubShortcuts, type ScheduleViewState } from './schedule-render.js';
-import { defaultGridCursor, handleGridKey } from './schedule-grid-cursor.js';
+import { handleGridKey, todayGridCursor } from './schedule-grid-cursor.js';
 import { setVimKeysActive } from '../../core/vim-keys.js';
 import { t } from '../../i18n/index.js';
 import { AuthError } from '../../auth/errors.js';
@@ -112,7 +112,7 @@ function returnToHub(): boolean {
       ...(state.term ? { term: state.term } : {}),
       weekOne: backWeekOne,
       timetable: tt,
-      gridCursor: state.gridCursor ?? defaultGridCursor(schedule.weekdayAt(new Date()), tt.periods),
+      gridCursor: state.gridCursor ?? todayGridCursor(schedule, tt.periods, new Date()),
     };
     return true;
   }
@@ -254,7 +254,7 @@ async function fetchAndShowHub(
       term,
       weekOne,
       timetable,
-      gridCursor: defaultGridCursor(schedule.weekdayAt(new Date()), timetable.periods),
+      gridCursor: todayGridCursor(schedule, timetable.periods, new Date()),
     };
   } catch (err) {
     if (!isLifecycleActive(ctx, generation)) return;
@@ -312,7 +312,7 @@ export const scheduleView = {
         key: ptr.termKey,
         weekOne: ptr.weekOneMonday,
         timetable: cached,
-        gridCursor: defaultGridCursor(schedule.weekdayAt(new Date()), cached.periods),
+        gridCursor: todayGridCursor(schedule, cached.periods, new Date()),
       };
     } else {
       state = { mode: 'loading' };
@@ -500,7 +500,7 @@ export const scheduleView = {
         {
           const schedule = createTimetableSchedule(tt, { weekOneMonday: hubWeekOne });
           const now = new Date();
-          const cursor = state.gridCursor ?? defaultGridCursor(schedule.weekdayAt(now), tt.periods);
+          const cursor = state.gridCursor ?? todayGridCursor(schedule, tt.periods, now);
           const week = Math.max(1, schedule.weekAt(now));
           const nav = handleGridKey(key, cursor, tt, week);
           if (nav.kind === 'moveCursor') {
@@ -582,7 +582,7 @@ export const scheduleView = {
         }
         const schedule = createTimetableSchedule(tt, { weekOneMonday: weekOne });
         const now = new Date();
-        const cursor = state.gridCursor ?? defaultGridCursor(schedule.weekdayAt(now), tt.periods);
+        const cursor = state.gridCursor ?? todayGridCursor(schedule, tt.periods, now);
         const week = Math.max(1, schedule.weekAt(now));
         const nav = handleGridKey(key, cursor, tt, week);
         if (nav.kind === 'moveCursor') {

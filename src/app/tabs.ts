@@ -9,7 +9,7 @@ export interface AppTab {
 export function getAppTabs(): AppTab[] {
   const trans = t();
   return [
-    { id: 'home', title: 'Home' },
+    { id: 'home', title: trans.menu.home },
     { id: 'schedule', title: trans.timetable.menuEntry },
     { id: 'events', title: trans.menu.events },
     { id: 'docs', title: trans.menu.docs },

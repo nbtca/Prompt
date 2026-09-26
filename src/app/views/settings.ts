@@ -28,6 +28,25 @@ function currentHint(current: boolean, hint: string): { hint?: string } {
   return current ? { hint } : {};
 }
 
+function modeLabel(mode: IconMode | ColorMode): string {
+  const theme = t().theme;
+  return {
+    auto: theme.modeAuto,
+    ascii: theme.modeAscii,
+    unicode: theme.modeUnicode,
+    on: theme.modeOn,
+    off: theme.modeOff,
+  }[mode];
+}
+
+function modeOptions<T extends IconMode | ColorMode>(modes: readonly T[], current: T) {
+  return modes.map((mode) => ({
+    value: mode,
+    label: modeLabel(mode),
+    ...currentHint(mode === current, t().common.current),
+  }));
+}
+
 function buildMenuField(statusMessage?: string): SettingsViewState {
   const trans = t();
   const prefs = loadPreferences();
@@ -38,8 +57,8 @@ function buildMenuField(statusMessage?: string): SettingsViewState {
       label: trans.language.selectLanguage,
       hint: currentLang === 'zh' ? trans.language.zh : trans.language.en,
     },
-    { value: 'icon', label: trans.theme.iconMode, hint: prefs.iconMode },
-    { value: 'color', label: trans.theme.colorMode, hint: prefs.colorMode },
+    { value: 'icon', label: trans.theme.iconMode, hint: modeLabel(prefs.iconMode) },
+    { value: 'color', label: trans.theme.colorMode, hint: modeLabel(prefs.colorMode) },
     { value: 'reset', label: trans.theme.resetLabel },
     { value: 'about', label: trans.about.title },
   ];
@@ -115,23 +134,7 @@ export const settingsView = {
         }
         if (result.selected === 'icon') {
           const prefs = loadPreferences();
-          const options = [
-            {
-              value: 'auto',
-              label: trans.theme.modeAuto,
-              ...currentHint(prefs.iconMode === 'auto', trans.common.current),
-            },
-            {
-              value: 'ascii',
-              label: trans.theme.modeAscii,
-              ...currentHint(prefs.iconMode === 'ascii', trans.common.current),
-            },
-            {
-              value: 'unicode',
-              label: trans.theme.modeUnicode,
-              ...currentHint(prefs.iconMode === 'unicode', trans.common.current),
-            },
-          ];
+          const options = modeOptions(['auto', 'ascii', 'unicode'] as const, prefs.iconMode);
           const idx = Math.max(
             0,
             options.findIndex((o) => o.value === prefs.iconMode),
@@ -148,23 +151,7 @@ export const settingsView = {
         }
         if (result.selected === 'color') {
           const prefs = loadPreferences();
-          const options = [
-            {
-              value: 'auto',
-              label: trans.theme.modeAuto,
-              ...currentHint(prefs.colorMode === 'auto', trans.common.current),
-            },
-            {
-              value: 'on',
-              label: trans.theme.modeOn,
-              ...currentHint(prefs.colorMode === 'on', trans.common.current),
-            },
-            {
-              value: 'off',
-              label: trans.theme.modeOff,
-              ...currentHint(prefs.colorMode === 'off', trans.common.current),
-            },
-          ];
+          const options = modeOptions(['auto', 'on', 'off'] as const, prefs.colorMode);
           const idx = Math.max(
             0,
             options.findIndex((o) => o.value === prefs.colorMode),

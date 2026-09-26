@@ -3,6 +3,7 @@ import {
   type Timetable,
   type TimetableMeeting,
   type TimetablePeriod,
+  type TimetableSchedule,
   type Weekday,
 } from '@nbtca/nbtcal/timetable';
 
@@ -21,11 +22,28 @@ export const KEY_ENTER_LF = '\n';
 export function defaultGridCursor(
   todayWeekday: number,
   periods: readonly TimetablePeriod[],
+  todayHasClasses = false,
 ): GridCursor {
   const sorted = [...periods].sort((a, b) => a.period - b.period);
   const firstPeriod = sorted[0]?.period ?? 1;
-  const weekday = (todayWeekday >= 1 && todayWeekday <= 5 ? todayWeekday : 1) as Weekday;
+  const weekday = (
+    (todayWeekday >= 1 && todayWeekday <= 5) || todayHasClasses ? todayWeekday : 1
+  ) as Weekday;
   return { weekday, period: firstPeriod };
+}
+
+export function todayGridCursor(
+  schedule: TimetableSchedule,
+  periods: readonly TimetablePeriod[],
+  now: Date,
+): GridCursor {
+  const weekday = schedule.weekdayAt(now);
+  const week = schedule.weekAt(now);
+  return defaultGridCursor(
+    weekday,
+    periods,
+    week >= 1 && schedule.meetingsOnDay(week, weekday).length > 0,
+  );
 }
 
 export function moveCursorWeekday(cursor: GridCursor, delta: -1 | 1): GridCursor {

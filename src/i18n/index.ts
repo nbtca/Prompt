@@ -24,6 +24,7 @@ export interface Translations {
     moreBelow: string;
   };
   menu: {
+    home: string;
     events: string;
     eventsDesc: string;
     docs: string;
@@ -95,6 +96,8 @@ export interface Translations {
     viewPastDetail: string;
     next: string;
     recentActivity: string;
+    browse: string;
+    next30Days: string;
     startingNow: string;
     thisWeek: string;
     thisMonth: string;
