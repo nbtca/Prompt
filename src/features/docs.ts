@@ -1,5 +1,4 @@
-import { marked } from 'marked';
-import { markedTerminal } from 'marked-terminal';
+import { marked, type Token } from 'marked';
 import chalk from 'chalk';
 import { createHash } from 'node:crypto';
 import { runMenu, menuFooter } from '../core/components/menu.js';
@@ -11,7 +10,8 @@ import { spawn, execFileSync } from 'child_process';
 import { URLS } from '../config/data.js';
 import { t, fmt, getCurrentLanguage, type Translations } from '../i18n/index.js';
 import { enterScreen, breadcrumb } from '../core/transitions.js';
-import { sanitizeTerminalLine, sanitizeTerminalText, stripAnsi, truncate } from '../core/text.js';
+import { sanitizeTerminalLine, sanitizeTerminalText, truncate } from '../core/text.js';
+import { isInternalHref, renderMarkdown } from './docs-markdown.js';
 import { clearDocsClients, peekDocs, runDocsClientOperation } from './docs-client.js';
 import { launchBrowserUrl } from './links.js';
 import type { DocItem, DocPage, DocsSearchResult } from '@nbtca/docs';
@@ -64,106 +64,10 @@ function hasGlow(): boolean {
   return _hasGlow;
 }
 
-function isInternalHref(href: string): boolean {
-  return /^\.{0,2}\/./.test(href);
-}
-
-let _markedConfigured = false;
-export function ensureMarkedConfigured(): void {
-  if (_markedConfigured) return;
-  _markedConfigured = true;
-  const terminalType = getTerminalType();
-  const extension = markedTerminal(getRendererOptions(terminalType));
-  const renderer = extension.renderer ?? (extension.renderer = {});
-
-  const renderExternalLink = renderer.link;
-  if (renderExternalLink) {
-    renderer.link = function (token) {
-      if (isInternalHref(token.href)) return chalk.cyan.underline(token.text);
-      return renderExternalLink.call(this, token);
-    };
-  }
-
-  const renderPlainText = renderer.text;
-  if (renderPlainText) {
-    renderer.text = function (token) {
-      const withTokens = token as typeof token & { tokens?: unknown[] };
-      if (Array.isArray(withTokens.tokens) && withTokens.tokens.length > 0) {
-        return (this as { parser: { parseInline: (t: unknown[]) => string } }).parser.parseInline(
-          withTokens.tokens,
-        );
-      }
-      return renderPlainText.call(this, token);
-    };
-  }
-
-  marked.use(extension);
-}
-
-function getRendererOptions(type: TerminalType): Record<string, unknown> {
-  const width = 80;
-
-  const unicodeTableChars = {
-    top: '─',
-    'top-mid': '┬',
-    'top-left': '┌',
-    'top-right': '┐',
-    bottom: '─',
-    'bottom-mid': '┴',
-    'bottom-left': '└',
-    'bottom-right': '┘',
-    left: '│',
-    'left-mid': '├',
-    mid: '─',
-    'mid-mid': '┼',
-    right: '│',
-    'right-mid': '┤',
-    middle: '│',
-  };
-
-  const asciiTableChars = {
-    top: '-',
-    'top-mid': '+',
-    'top-left': '+',
-    'top-right': '+',
-    bottom: '-',
-    'bottom-mid': '+',
-    'bottom-left': '+',
-    'bottom-right': '+',
-    left: '|',
-    'left-mid': '+',
-    mid: '-',
-    'mid-mid': '+',
-    right: '|',
-    'right-mid': '+',
-    middle: '|',
-  };
-
-  return {
-    width,
-    emoji: true,
-    unescape: true,
-    showSectionPrefix: false,
-    firstHeading: chalk.bold.cyan,
-    heading: chalk.bold.white,
-    codespan: chalk.yellowBright,
-    code: chalk.yellow,
-    blockquote: chalk.italic.gray,
-    strong: chalk.bold,
-    em: chalk.italic,
-    del: chalk.dim.strikethrough,
-    link: chalk.cyan,
-    href: chalk.cyan.underline,
-    tableOptions: {
-      chars: type === 'basic' ? asciiTableChars : unicodeTableChars,
-    },
-  };
-}
-
 interface RenderedDoc {
   fingerprint: string;
   cleaned: string;
-  rendered: string;
+  render: (width: number) => string[];
   title: string;
   readTime: string;
 }
@@ -273,16 +177,12 @@ function loadDocMetadata(path: string, signal?: AbortSignal): Promise<DocMetadat
   });
 }
 
-function normalizeRenderedTasks(content: string, type: TerminalType): string {
-  if (type !== 'basic') return content;
-  return content
-    .split('\n')
-    .map((line) =>
-      /^\s*(?:[-*+]|\d+[.)])\s+\[X\](?:\s|$)/.test(stripAnsi(line))
-        ? line.replace('[X]', '[x]')
-        : line,
-    )
-    .join('\n');
+function memoizedRender(tokens: readonly Token[]): (width: number) => string[] {
+  let last: { width: number; lines: string[] } | null = null;
+  return (width) => {
+    if (last?.width !== width) last = { width, lines: renderMarkdown(tokens, width) };
+    return last.lines;
+  };
 }
 
 async function loadRenderedDoc(
@@ -305,11 +205,10 @@ async function loadRenderedDoc(
   const cleaned = cleanMarkdownContent(rawContent, terminalType);
   const title =
     sanitizeTerminalLine(page.title) || cleanFileName(filePath.split('/').pop() ?? filePath);
-  const markedOutput = normalizeRenderedTasks(await marked(cleaned), terminalType);
   const renderedDoc = {
     fingerprint,
     cleaned,
-    rendered: chalk.level === 0 ? sanitizeTerminalText(markedOutput) : markedOutput,
+    render: memoizedRender(marked.lexer(cleaned)),
     title,
     readTime: estimateReadTime(cleaned),
   };
@@ -357,8 +256,7 @@ function processFencedCodeBlocks(content: string): string {
           const icon = pickIcon('📊', '[diagram]');
           result.push(`> ${icon} **${firstToken}** — _${trans.docs.mermaidHint}_`);
         } else {
-          if (blockLang) result.push(`\`${blockLang}\``);
-          result.push(fence);
+          result.push(fence + blockLang);
           result.push(...blockBody);
           result.push(fence);
         }
@@ -701,12 +599,11 @@ export function resolveInternalHref(href: string, fromPath: string): string {
 export interface ReaderDoc {
   path: string;
   title: string;
-  lines: string[];
+  render: (width: number) => string[];
   links: DocLink[];
 }
 
 export async function loadDocForReader(filePath: string, signal?: AbortSignal): Promise<ReaderDoc> {
-  ensureMarkedConfigured();
   const { renderedDoc } = await loadRenderedDoc(filePath, signal);
 
   const seen = new Set<string>();
@@ -721,7 +618,7 @@ export async function loadDocForReader(filePath: string, signal?: AbortSignal): 
   return {
     path: filePath,
     title: renderedDoc.title,
-    lines: renderedDoc.rendered.split('\n'),
+    render: renderedDoc.render,
     links,
   };
 }
@@ -958,15 +855,12 @@ export async function displayWithGlow(cleanedMarkdown: string): Promise<boolean>
   return pipeToPager('glow', ['--pager', '--width', cols, '-'], cleanedMarkdown);
 }
 
-async function displayWithLess(
-  rendered: string,
-  title: string,
-  filePath: string,
-  readTime: string,
-  toc: string[],
-): Promise<void> {
+async function displayWithLess(doc: RenderedDoc, filePath: string): Promise<void> {
   const trans = t();
   const cols = Math.min(process.stdout.columns || 80, 80);
+  const { title, readTime } = doc;
+  const toc = extractTOC(doc.cleaned);
+  const rendered = doc.render(cols).join('\n');
   const rule = chalk.dim('─'.repeat(cols));
 
   const tocBlock =
@@ -1097,33 +991,15 @@ async function showArchivedSection(files: ListedDoc[]): Promise<void> {
 
 async function viewMarkdownFile(filePath: string): Promise<void> {
   const trans = t();
-  ensureMarkedConfigured();
   const s = createSpinner(`${trans.docs.loadingFile}: ${filePath}`);
   try {
     const { rawContent, renderedDoc } = await loadRenderedDoc(filePath);
 
     s.stop(`${chalk.bold(renderedDoc.title)}  ${chalk.dim(renderedDoc.readTime)}`);
 
-    const toc = extractTOC(renderedDoc.cleaned);
-    if (chalk.level > 0 && hasGlow()) {
-      if (!(await displayWithGlow(renderedDoc.cleaned))) {
-        await displayWithLess(
-          renderedDoc.rendered,
-          renderedDoc.title,
-          filePath,
-          renderedDoc.readTime,
-          toc,
-        );
-      }
-    } else {
-      await displayWithLess(
-        renderedDoc.rendered,
-        renderedDoc.title,
-        filePath,
-        renderedDoc.readTime,
-        toc,
-      );
-    }
+    const shownWithGlow =
+      chalk.level > 0 && hasGlow() && (await displayWithGlow(renderedDoc.cleaned));
+    if (!shownWithGlow) await displayWithLess(renderedDoc, filePath);
 
     const needsBrowser = hasMarkdownTable(rawContent) || hasMermaidBlock(rawContent);
     const action = await runMenu({

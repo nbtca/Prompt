@@ -3,7 +3,7 @@ import { t } from '../../i18n/index.js';
 import { type ListField, renderListFieldWithContext } from '../fields/list-field.js';
 import type { TextField } from '../fields/text-field.js';
 import type { DocLink } from '../../features/docs.js';
-import { visualWidth, wrapAnsiHanging, wrapAnsiWithIndent } from '../../core/text.js';
+import { visualWidth, wrapAnsiWithIndent } from '../../core/text.js';
 import { loadingLines } from '../../core/components/spinner.js';
 
 export type DocsMode =
@@ -31,7 +31,7 @@ export interface DocsViewState {
   searchResultsField?: ListField;
   searchResultsEmpty?: boolean;
   readerTitle?: string;
-  readerLines?: string[];
+  readerRender?: (width: number) => string[];
   readerLinks?: DocLink[];
   readerLinksField?: ListField;
 }
@@ -40,11 +40,9 @@ function hintLines(label: string, cols: number): string[] {
   return wrapAnsiWithIndent(type.hint(label), cols, space.indent);
 }
 
-function renderReader(lines: string[], cols: number): string[] {
+function renderReader(render: (width: number) => string[], cols: number): string[] {
   const contentWidth = Math.max(1, Math.min(80, cols - visualWidth(space.indent)));
-  return lines.flatMap((line) =>
-    wrapAnsiHanging(line, contentWidth).map((part) => `${space.indent}${part}`),
-  );
+  return render(contentWidth).map((line) => (line ? `${space.indent}${line}` : ''));
 }
 
 function listFieldForState(state: DocsViewState): ListField | undefined {
@@ -126,7 +124,7 @@ export function renderDocs(
     case 'reader':
       lines = state.readerLinksField
         ? state.readerLinksField.render(bodyRows, cols)
-        : renderReader(state.readerLines ?? [], cols);
+        : renderReader(state.readerRender ?? (() => []), cols);
       break;
     case 'error':
       return hintLines(state.errorMessage ?? trans.docs.loadError, cols);

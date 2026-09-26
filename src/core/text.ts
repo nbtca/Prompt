@@ -270,6 +270,12 @@ function applyKinsoku(tokens: readonly WrapToken[], start: number, end: number):
   return end;
 }
 
+function isWideBoundary(tokens: readonly WrapToken[], index: number): boolean {
+  return (
+    (visibleAt(tokens, index)?.width ?? 0) > 1 || (visibleAt(tokens, index - 1)?.width ?? 0) > 1
+  );
+}
+
 export function wrapAnsiToVisualWidth(
   str: string,
   maxWidth: number,
@@ -289,6 +295,8 @@ export function wrapAnsiToVisualWidth(
     let width = 0;
     let hasVisible = false;
     let lastWhitespace = -1;
+    let lastWideBoundary = -1;
+    let previousWide = false;
     let index = start;
 
     while (index < tokens.length) {
@@ -298,10 +306,13 @@ export function wrapAnsiToVisualWidth(
         index += 1;
         continue;
       }
+      const wide = token.width > 1;
+      if (hasVisible && (wide || previousWide) && !token.whitespace) lastWideBoundary = index;
       const limit = lines.length === 0 ? widthLimit : nextLimit;
       if (width + token.width > limit && hasVisible) break;
       width += token.width;
       hasVisible = true;
+      previousWide = wide;
       if (token.whitespace) lastWhitespace = index;
       index += 1;
     }
@@ -314,8 +325,13 @@ export function wrapAnsiToVisualWidth(
     const overflow = tokens[index];
     let end = index;
     let next = index;
+    const wideBreak =
+      lastWideBoundary > lastWhitespace + 1 ? applyKinsoku(tokens, start, lastWideBoundary) : -1;
     if (overflow?.whitespace) {
       next = index + 1;
+    } else if (wideBreak > lastWhitespace + 1 && isWideBoundary(tokens, wideBreak)) {
+      end = wideBreak;
+      next = wideBreak;
     } else if (lastWhitespace >= start) {
       end = lastWhitespace;
       next = lastWhitespace + 1;
@@ -339,22 +355,6 @@ export function wrapAnsiToVisualWidth(
   }
 
   return lines.length > 0 ? lines : [''];
-}
-
-const LEADING_MARKER = /^(\s*)((?:[-*+•]|\d{1,3}[.)])\s+)?/u;
-
-export function wrapAnsiHanging(str: string, maxWidth: number): string[] {
-  const width = Number.isFinite(maxWidth)
-    ? Math.max(1, Math.floor(maxWidth))
-    : Number.POSITIVE_INFINITY;
-  const match = LEADING_MARKER.exec(stripAnsi(str));
-  const hang = visualWidth((match?.[1] ?? '') + (match?.[2] ?? ''));
-  if (hang === 0 || hang >= width) return wrapAnsiToVisualWidth(str, width);
-
-  const continuation = ' '.repeat(hang);
-  return wrapAnsiToVisualWidth(str, width, width - hang).map((line, index) =>
-    index === 0 ? line : continuation + line,
-  );
 }
 
 export function wrapAnsiWithIndent(str: string, maxWidth: number, preferredIndent = ''): string[] {

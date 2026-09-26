@@ -18,13 +18,13 @@ const readerDocs: Record<string, ReaderDoc> = {
   'tutorial/manual/os-skills.md': {
     path: 'tutorial/manual/os-skills.md',
     title: 'OS Skills',
-    lines: ['OS Skills content', '', 'See also linked doc.'],
+    render: () => ['OS Skills content', '', 'See also linked doc.'],
     links: [{ href: 'tutorial/manual/other-doc.md', text: 'linked doc' }],
   },
   'tutorial/manual/other-doc.md': {
     path: 'tutorial/manual/other-doc.md',
     title: 'Other Doc',
-    lines: ['Other doc content, no further links.'],
+    render: () => ['Other doc content, no further links.'],
     links: [],
   },
 };

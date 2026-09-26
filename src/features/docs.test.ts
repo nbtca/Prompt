@@ -2,7 +2,6 @@ import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import type { ChildProcess } from 'node:child_process';
-import { marked } from 'marked';
 import chalk from 'chalk';
 import open from 'open';
 import {
@@ -10,7 +9,6 @@ import {
   displayDocTitle,
   buildSections,
   cleanMarkdownContent,
-  ensureMarkedConfigured,
   resolveInternalHref,
   docsRouteFromPath,
   docsUrlFromPath,
@@ -365,7 +363,7 @@ describe('document rendering', () => {
 
     try {
       const doc = await loadDocForReader('guide/table.md');
-      const rendered = doc.lines.join('\n');
+      const rendered = doc.render(80).join('\n');
       expect(rendered).toContain('Alpha');
       expect(rendered).toBe(stripAnsi(rendered));
       expect(rendered).not.toMatch(/[\u001B\u009B\u009D]/u);
@@ -380,9 +378,9 @@ describe('document rendering', () => {
 
     try {
       chalk.level = 0;
-      const plain = (await loadDocForReader('guide/table.md')).lines.join('\n');
+      const plain = (await loadDocForReader('guide/table.md')).render(80).join('\n');
       chalk.level = 3;
-      const colored = (await loadDocForReader('guide/table.md')).lines.join('\n');
+      const colored = (await loadDocForReader('guide/table.md')).render(80).join('\n');
 
       expect(plain).toBe(stripAnsi(plain));
       expect(colored).not.toBe(stripAnsi(colored));
@@ -425,24 +423,5 @@ describe('document rendering', () => {
     } finally {
       chalk.level = level;
     }
-  });
-});
-
-describe('internal wiki link rendering (via the configured marked/marked-terminal pipeline)', () => {
-  ensureMarkedConfigured();
-
-  it('strips the path from internal links (./x, ../x, /x) -- text only, no dead path', async () => {
-    const out = stripAnsi(
-      await marked('见 [计算机学院](/concepts/college) 和 [什么是 NBTCA](./what-is-nbtca) 词条。'),
-    );
-    expect(out).toContain('计算机学院');
-    expect(out).toContain('什么是 NBTCA');
-    expect(out).not.toContain('/concepts/college');
-    expect(out).not.toContain('./what-is-nbtca');
-  });
-
-  it('leaves external links untouched -- those resolve to something real if followed', async () => {
-    const out = stripAnsi(await marked('见 [学校官网](https://www.nbt.edu.cn) 。'));
-    expect(out).toContain('www.nbt.edu.cn');
   });
 });

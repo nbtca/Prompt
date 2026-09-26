@@ -22,7 +22,7 @@ it('keeps task markers lowercase in a basic terminal reader', async () => {
     import('../core/text.js'),
   ]);
 
-  const output = (await loadDocForReader('guide/tasks.md')).lines.join('\n');
+  const output = (await loadDocForReader('guide/tasks.md')).render(80).join('\n');
   const plain = stripAnsi(output);
 
   expect(output).toContain('[x]');

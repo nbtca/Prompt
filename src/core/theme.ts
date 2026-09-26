@@ -27,6 +27,7 @@ export const c = {
 
   label: (s: string) => chalk.bold.cyan(s),
   url: (s: string) => chalk.dim.underline(s),
+  code: (s: string) => chalk.yellow(s),
   version: (s: string) => chalk.dim(s),
 
   latency: (ms: number): string => {
@@ -40,6 +41,7 @@ export const c = {
 export const glyph = {
   cursor: () => pickIcon('→', '>'),
   rule: () => pickIcon('─', '-'),
+  bar: () => pickIcon('│', '|'),
   bullet: () => pickIcon('·', '.'),
   dot: () => pickIcon('●', '*'),
   updown: () => pickIcon('↑↓', 'up/down'),
