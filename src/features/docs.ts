@@ -786,9 +786,14 @@ export async function searchDocuments(
 ): Promise<SearchDoc[]> {
   if (onProgress) {
     const items = await fetchAllDocs(signal);
-    let done = 0;
+    let pending = items.filter((item) => !peekDocMetadata(item));
+    if (pending.length > METADATA_CONCURRENCY) {
+      await runDocsClientOperation(signal, (client) => client.prefetch());
+      pending = pending.filter((item) => !peekDocMetadata(item));
+    }
+    let done = items.length - pending.length;
     onProgress(done, items.length);
-    await fetchDocMetadata(items, signal, () => {
+    await fetchDocMetadata(pending, signal, () => {
       done += 1;
       onProgress(done, items.length);
     });
