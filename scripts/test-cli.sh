@@ -71,7 +71,7 @@ if [[ "$(node dist/index.js -v)" != "$version_output" ]]; then
 fi
 
 help_output="$(node dist/index.js --help)"
-if [[ "$help_output" != *"Usage:"* || "$help_output" != *"--heatmap"* ]]; then
+if [[ "$help_output" != *"Usage:"* || "$help_output" != *"--heatmap"* || "$help_output" != *"events         Upcoming activities"* ]]; then
   echo "help output is incomplete" >&2
   exit 1
 fi
