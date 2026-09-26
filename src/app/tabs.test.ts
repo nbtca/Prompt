@@ -8,7 +8,7 @@ describe('getAppTabs', () => {
     try {
       setLanguage('zh');
       expect(getAppTabs().map((tab) => tab.title)).toEqual([
-        'Home',
+        '首页',
         '课表',
         '活动',
         '文档',

@@ -88,6 +88,19 @@ function findLine(lines: readonly string[], predicate: (line: string) => boolean
 }
 
 describe('renderNextClassBanner', () => {
+  it('drops its own label when a heading already names it', () => {
+    const out = stripAnsi(
+      renderNextClassBanner(
+        { meeting: mk({}), start: campusDateTime('2026-09-07', '08:00') },
+        campusDateTime('2026-09-07', '06:30'),
+        Number.POSITIVE_INFINITY,
+        false,
+      ),
+    );
+    expect(out).not.toContain('Next');
+    expect(out).toContain('Math');
+  });
+
   it('shows the course + countdown', () => {
     const out = stripAnsi(
       renderNextClassBanner(
@@ -807,6 +820,17 @@ describe('renderTodayTimeline', () => {
     expect(out).toContain('Physics');
     expect(out).not.toContain('Done');
     expect(out).not.toContain('In progress');
+    done();
+  });
+
+  it('lines the closing connector up with the class connectors', () => {
+    const meetings = [mk({ startPeriod: 1, endPeriod: 1 }), mk({ startPeriod: 2, endPeriod: 2 })];
+    const lines = stripAnsi(
+      renderTodayTimeline(meetings, dayPeriods, campusDateTime('2026-09-07', '07:00')),
+    ).split('\n');
+    const connector = (line = '') => line.search(/[┬┼┴+]/);
+    expect(connector(lines.at(-1))).toBe(connector(lines[0]));
+    expect(connector(lines[0])).toBeGreaterThan(0);
     done();
   });
 

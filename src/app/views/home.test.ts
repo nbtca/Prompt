@@ -306,14 +306,14 @@ describe('renderHome — week overview panel', () => {
     expect(lines[titleIdx + 4]).toContain('N/A');
   });
 
-  it('hardcodes weekend cells on the class row regardless of classDays data', () => {
+  it('shows weekend classes as busy and an empty weekend as none', () => {
     process.env['NBTCA_ICON_MODE'] = 'unicode';
     resetIconCache();
     try {
       const lines = renderHome(
         {
           loading: false,
-          weekAhead: { classDays: [false, false, false, false, false, true, true] },
+          weekAhead: { classDays: [false, false, false, false, false, true, false] },
         },
         noon,
       ).map((l) => stripAnsi(l));
@@ -322,7 +322,7 @@ describe('renderHome — week overview panel', () => {
         .trim()
         .split(/\s+/)
         .slice(1);
-      expect(classCells[5]).toBe('··');
+      expect(classCells[5]).toBe('▓▓');
       expect(classCells[6]).toBe('··');
     } finally {
       process.env['NBTCA_ICON_MODE'] = 'unicode';

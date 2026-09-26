@@ -33,14 +33,14 @@ function backLabel(): string {
 function buildHubField(): ListField {
   const trans = t();
   const options = [
-    { value: 'upcoming', label: trans.menu.events },
+    { value: 'upcoming', label: trans.calendar.next30Days },
     { value: 'week', label: trans.calendar.thisWeek },
     { value: 'month', label: trans.calendar.thisMonth },
     { value: 'search', label: trans.calendar.search },
     { value: 'past', label: trans.calendar.pastEvents },
     { value: 'heatmap', label: trans.calendar.heatmap.title },
   ];
-  return new ListField({ title: trans.menu.events, options });
+  return new ListField({ title: trans.calendar.browse, options });
 }
 
 function buildListField(title: string, events: CalendarEvent[], maxVisible: number): ListField {
@@ -174,7 +174,7 @@ export const eventsView = {
         if (!result?.selected) return;
         const now = new Date();
         if (result.selected === 'upcoming') {
-          showList(t().menu.events, currentEvents(calendar, now), ctx);
+          showList(t().calendar.next30Days, currentEvents(calendar, now), ctx);
           return;
         }
         if (result.selected === 'week') {

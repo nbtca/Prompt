@@ -45,7 +45,7 @@ export function peekNextClassLine(now: Date = new Date()): string {
     const schedule = createTimetableSchedule(cached.timetable, {
       weekOneMonday: cached.weekOneMonday,
     });
-    return renderNextClassBanner(schedule.next(now), now);
+    return renderNextClassBanner(schedule.next(now), now, Number.POSITIVE_INFINITY, false);
   } catch {
     return '';
   }

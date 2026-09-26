@@ -165,7 +165,7 @@ describe('renderEvents', () => {
         new Date('2026-07-15'),
       ).join('\n'),
     );
-    expect(out).toContain('Recent');
+    expect(out).toContain('Coming up');
     expect(out).toContain('NWDC');
   });
 
@@ -264,7 +264,7 @@ describe('renderEvents', () => {
         new Date(),
       ).join('\n'),
     );
-    expect(out).not.toContain('Recent');
+    expect(out).not.toContain('Coming up');
   });
 
   it('hub mode windows the menu against actual content height instead of overflowing', () => {
