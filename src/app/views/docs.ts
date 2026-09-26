@@ -114,9 +114,7 @@ async function openUrlFromView(
 
   state = {
     ...state,
-    errorMessage: sanitizeTerminalLine(
-      `${t().docs.browserError}. ${fmt(t().links.openManually, { url })}`,
-    ),
+    errorMessage: sanitizeTerminalLine(fmt(t().docs.browserErrorManual, { url })),
   };
   ctx.rerender();
 }

@@ -141,6 +141,7 @@
     "opening": "正在打开浏览器...",
     "browserOpened": "已在浏览器中打开知识库",
     "browserError": "无法打开浏览器",
+    "browserErrorManual": "无法打开浏览器，请手动打开：{url}",
     "retry": "是否重试？",
     "tocTitle": "目录",
     "tableHint": "图表与表格在浏览器中效果更佳",

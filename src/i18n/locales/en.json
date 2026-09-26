@@ -141,6 +141,7 @@
     "opening": "Opening browser...",
     "browserOpened": "Knowledge base opened in browser",
     "browserError": "Failed to open browser",
+    "browserErrorManual": "Failed to open browser. Open manually: {url}",
     "retry": "Retry?",
     "tocTitle": "Table of Contents",
     "tableHint": "diagrams and tables render better in browser",

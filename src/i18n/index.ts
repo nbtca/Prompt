@@ -152,6 +152,7 @@ export interface Translations {
     opening: string;
     browserOpened: string;
     browserError: string;
+    browserErrorManual: string;
     retry: string;
     endOfDocument: string;
     githubRateLimited: string;
