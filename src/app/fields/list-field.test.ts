@@ -87,6 +87,14 @@ describe('ListField scrolling (maxVisible)', () => {
     expect(text).toMatch(/15/); // 15 more below
   });
 
+  it('lines the more-indicator up with the option labels', () => {
+    const field = new ListField({ options: manyOptions, maxVisible: 5 });
+    const lines = field.render().map(stripAnsi);
+    const labelColumn = (lines[1] ?? '').indexOf('Item 1');
+    const more = lines.find((line) => line.includes('more below')) ?? '';
+    expect(more.search(/\S/)).toBe(labelColumn);
+  });
+
   it('the more-indicator separator degrades in ASCII icon mode instead of leaking a raw Unicode dot', async () => {
     process.env['NBTCA_ICON_MODE'] = 'ascii';
     const { resetIconCache } = await import('../../core/icons.js');
