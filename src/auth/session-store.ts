@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import type { SerializedCookieJar } from 'tough-cookie';
+import type { SerializedCookieJar } from './cookie-jar.js';
 import { getStateDir, getWritableStateDir } from '../config/paths.js';
 
 export const SESSION_SCHEMA_VERSION = 1 as const;

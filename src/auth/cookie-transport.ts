@@ -1,6 +1,15 @@
-import makeFetchCookie from 'fetch-cookie';
-import { CookieJar, type SerializedCookieJar } from 'tough-cookie';
+import { createCookieJar, type CookieJar, type SerializedCookieJar } from './cookie-jar.js';
 import { AuthError, SessionExpiredError, type AuthStage } from './errors.js';
+
+const MAX_REDIRECTS = 8;
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+const BODY_HEADERS = [
+  'content-type',
+  'content-length',
+  'content-encoding',
+  'content-language',
+  'content-location',
+];
 
 const WEBVPN_HOST = 'webvpn.nbt.edu.cn';
 const AUTH_HOST = 'authserver-443.webvpn.nbt.edu.cn';
@@ -162,7 +171,7 @@ function safeFetchError(error: unknown, stage: AuthStage): Error {
 export interface CampusCookieSession {
   request(url: URL, init?: RequestInit, stage?: AuthStage): Promise<Response>;
   timetableTransport(url: URL, init: RequestInit): Promise<Response>;
-  serialize(): Promise<SerializedCookieJar>;
+  serialize(): SerializedCookieJar;
   close(): Promise<void>;
 }
 
@@ -175,24 +184,8 @@ export interface CreateCampusCookieSessionOptions {
 export function createCampusCookieSession(
   options: CreateCampusCookieSessionOptions = {},
 ): CampusCookieSession {
-  // Tough Cookie's secure defaults reject public suffixes and use strict
-  // parsing while tolerating legacy prefix mistakes. The campus WebVPN relies
-  // on its default special-domain handling during the CAS callback.
-  const jar = options.jar ?? new CookieJar();
+  const jar = options.jar ?? createCookieJar();
   const baseFetch = options.baseFetch ?? globalThis.fetch;
-  const guardedFetch: typeof fetch = async (input, init) => {
-    const url = new URL(input instanceof Request ? input.url : input.toString());
-    assertAllowedCampusUrl(url);
-    // Caller headers were checked before fetch-cookie received them. A Cookie
-    // header at this layer was added by the private jar and is expected.
-    const headers = new Headers(input instanceof Request ? input.headers : undefined);
-    for (const [name, value] of new Headers(init?.headers)) headers.set(name, value);
-    if (headers.has('authorization') || headers.has('host')) {
-      throw new AuthError('UNTRUSTED_URL', 'session', 'Authentication headers are not allowed.');
-    }
-    return baseFetch(input, init);
-  };
-  const cookieFetch = makeFetchCookie(guardedFetch, jar, false);
   const timeoutMs = options.timeoutMs ?? 15_000;
 
   async function request(
@@ -214,13 +207,39 @@ export function createCampusCookieSession(
     }, timeoutMs).unref();
     // Keep the timer running after the headers: the caller still has to read the body.
     const signal = init.signal ? AbortSignal.any([init.signal, timeout.signal]) : timeout.signal;
+    const headers = new Headers(safeHeaders(init.headers));
+    let method = init.method ?? 'GET';
+    let body = init.body ?? null;
     try {
-      return await cookieFetch(url, {
-        ...init,
-        headers: safeHeaders(init.headers),
-        signal,
-        maxRedirect: 8,
-      });
+      for (let redirects = 0; ; redirects += 1) {
+        const cookie = jar.cookieHeader(url);
+        if (cookie) headers.set('cookie', cookie);
+        else headers.delete('cookie');
+        const response = await baseFetch(url, {
+          ...init,
+          method,
+          body,
+          headers,
+          signal,
+          redirect: 'manual',
+        });
+        const responseUrl = new URL(response.url || url);
+        jar.store(responseUrl, response.headers.getSetCookie());
+        const location = response.headers.get('location');
+        if (!REDIRECT_STATUSES.has(response.status) || location === null) {
+          Object.defineProperty(response, 'url', { value: responseUrl.href });
+          return response;
+        }
+        await response.body?.cancel();
+        if (redirects >= MAX_REDIRECTS) throw new Error('Too many campus redirects.');
+        if (response.status === 303 || (method === 'POST' && response.status <= 302)) {
+          method = 'GET';
+          body = null;
+          for (const name of BODY_HEADERS) headers.delete(name);
+        }
+        url = new URL(location, responseUrl);
+        assertAllowedCampusUrl(url);
+      }
     } catch (error) {
       throw safeFetchError(error, stage);
     }
@@ -257,17 +276,20 @@ export function createCampusCookieSession(
     request,
     timetableTransport,
     serialize: () => jar.serialize(),
-    close: () => jar.removeAllCookies(),
+    close: () => {
+      jar.clear();
+      return Promise.resolve();
+    },
   };
 }
 
-export async function cookieSessionFromSerialized(
-  serialized: SerializedCookieJar,
+export function cookieSessionFromSerialized(
+  serialized: unknown,
   options: Omit<CreateCampusCookieSessionOptions, 'jar'> = {},
-): Promise<CampusCookieSession> {
+): CampusCookieSession {
   let jar: CookieJar;
   try {
-    jar = await CookieJar.deserialize(serialized);
+    jar = createCookieJar(serialized);
   } catch {
     throw new SessionExpiredError();
   }
