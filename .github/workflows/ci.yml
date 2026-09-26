@@ -40,6 +40,12 @@ jobs:
       - name: Check
         run: npm run check
 
+      - name: Test outside campus time
+        if: matrix.node-version == '24'
+        run: npx vitest run
+        env:
+          TZ: America/Los_Angeles
+
   package-integration:
     name: Local package integration
     runs-on: ubuntu-latest
