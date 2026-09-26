@@ -97,6 +97,12 @@ describe('clipAnsiToVisualWidth', () => {
 });
 
 describe('wrapAnsiToVisualWidth', () => {
+  it('never ends a line with an opening quote or starts one with a closing quote', () => {
+    const lines = wrapAnsiToVisualWidth('一二三四五六七“八九”十一二三四五', 16);
+    expect(lines.every((line) => !line.endsWith('“') && !line.startsWith('”'))).toBe(true);
+    expect(lines.join('')).toBe('一二三四五六七“八九”十一二三四五');
+  });
+
   it('preserves styled Chinese text across wrapped lines', () => {
     const source = '中文正文不会被截断';
     const lines = wrapAnsiToVisualWidth(`\x1b[36m${source}\x1b[39m`, 6);

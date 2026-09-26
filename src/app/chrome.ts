@@ -130,8 +130,8 @@ export function captureFooterHint(cols = Number.POSITIVE_INFINITY): string {
   const dot = pickIcon('·', '-');
   return fitFooterHint(
     cols,
-    `Ctrl+C ${trans.common.exit} ${dot} Esc ${trans.common.back} ${dot} Enter ${trans.common.confirm}`,
-    'Ctrl+C Esc Enter',
+    `${glyph.enter()} ${trans.common.confirm} ${dot} Esc ${trans.common.back} ${dot} Ctrl+C ${trans.common.exit}`,
+    `${glyph.enter()} Esc Ctrl+C`,
     'Ctrl+C Esc',
     'Ctrl+C',
   );

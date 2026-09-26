@@ -241,8 +241,8 @@ function renderWrappedSegment(
   return osc8AtEnd ? `${withReset}${OSC8_CLOSE}` : withReset;
 }
 
-const NO_LINE_START = /^[。．、，；：？！）］｝〉》」』】〕・ー～…‥%‰°℃,.;:?!)\]}>]$/u;
-const NO_LINE_END = /^[（［｛〈《「『【〔([{<]$/u;
+const NO_LINE_START = /^[。．、，；：？！）］｝〉》」』】〕・ー～…‥%‰°℃,.;:?!)\]}>”’]$/u;
+const NO_LINE_END = /^[（［｛〈《「『【〔([{<“‘]$/u;
 
 function visibleAt(tokens: readonly WrapToken[], index: number): WrapToken | undefined {
   const token = tokens[index];
