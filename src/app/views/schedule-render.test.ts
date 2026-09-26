@@ -448,12 +448,77 @@ describe('renderSchedule', () => {
           timetable: busyTimetable,
         },
         campusDateTime('2026-09-07', '07:00'),
-        19,
+        12,
         80,
       ).map(stripAnsi);
 
       expect(lines.filter((line) => line.includes('08:00'))).toHaveLength(1);
     });
+
+    it('shows the week agenda instead of one day when it fits below a hundred columns', () => {
+      const lines = renderSchedule(
+        { mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: busyTimetable },
+        campusDateTime('2026-09-07', '07:00'),
+        25,
+        100,
+      ).map(stripAnsi);
+      const out = lines.join('\n');
+
+      expect(out).toMatch(/Mon\S? +08:00 Math/);
+      expect(out).toMatch(/ +10:00 Physics/);
+      expect(out).toContain('Sun');
+      expect(lines.some((line) => line.trimStart().startsWith('←'))).toBe(false);
+    });
+
+    it('hides [w] while the hub already shows the whole week grid', () => {
+      const render = (rows: number, cols: number): string =>
+        stripAnsi(
+          renderSchedule(
+            { mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: busyTimetable },
+            campusDateTime('2026-09-07', '07:00'),
+            rows,
+            cols,
+          ).join('\n'),
+        );
+
+      expect(render(45, 120)).toMatch(/19:00.19:45/);
+      expect(render(45, 120)).not.toContain('[w]');
+      expect(render(25, 100)).toContain('[w]');
+    });
+
+    it.each([
+      ['en', 'Saved: '],
+      ['zh', '已保存：'],
+    ] as const)(
+      'keeps the grid after an export and shows the path on one line (%s)',
+      (lang, prefix) => {
+        setLanguage(lang);
+        try {
+          const exportedPath = `/Users/someone/${'nested-directory/'.repeat(8)}timetable-2026-3.ics`;
+          const lines = renderSchedule(
+            {
+              mode: 'hub',
+              key: '2026-3',
+              weekOne: '2026-09-07',
+              timetable: busyTimetable,
+              exportedPath,
+            },
+            campusDateTime('2026-09-07', '07:00'),
+            35,
+            120,
+          ).map(stripAnsi);
+          const status = lines.filter((line) => line.includes(prefix));
+
+          expect(lines.join('\n')).toContain('19:00');
+          expect(status).toHaveLength(1);
+          expect(status[0]).toMatch(/^ {3}\S.*\/Users\/someone\/.*….*\/timetable-2026-3\.ics$/);
+          expect(lines.every((line) => visualWidth(line) <= 120 - 3)).toBe(true);
+          expect(lines.length).toBeLessThanOrEqual(35);
+        } finally {
+          setLanguage('en');
+        }
+      },
+    );
 
     it('wraps the full shortcut bar within a narrow terminal', () => {
       const lines = renderSchedule(
@@ -524,7 +589,7 @@ describe('renderSchedule', () => {
           gridCursor: { weekday: 6, period: 1 },
         },
         campusDateTime('2026-09-07', '07:00'),
-        15,
+        12,
         40,
       );
       const switcher = lines.find((line) => stripAnsi(line).includes('[Sat]'));
@@ -575,8 +640,8 @@ describe('renderSchedule', () => {
       }
     });
 
-    it('threads the real terminal column width down to the grid, so a wide terminal stops truncating real course names', () => {
-      const longName = '习近平新时代中国特色社会主义思想概论';
+    it('prefers the agenda over a grid that would clip names, until the frame cannot grow', () => {
+      const longName = '习近平新时代中国特色社会主义';
       const longNameTimetable: Timetable = {
         ...timetable,
         meetings: [
@@ -613,18 +678,14 @@ describe('renderSchedule', () => {
         },
         campusDateTime('2026-09-07', '07:00'),
         45,
-        210,
+        120,
       ).map((l) => stripAnsi(l));
-      const narrowHeadingIdx = narrowLines.findIndex((l) => l.includes('This week'));
-      const wideHeadingIdx = wideLines.findIndex((l) => l.includes('This week'));
-      const narrowGridRow = defined(
-        narrowLines.slice(narrowHeadingIdx).find((l) => l.trim().startsWith('08:00')),
-      );
-      const wideGridRow = defined(
-        wideLines.slice(wideHeadingIdx).find((l) => l.trim().startsWith('08:00')),
-      );
-      expect(narrowGridRow).not.toContain(longName);
-      expect(wideGridRow).toContain(longName);
+      const gridRow = (lines: string[]): string | undefined =>
+        lines.find((l) => /^\s*08:00.08:45 /.test(l));
+
+      expect(gridRow(narrowLines)).toBeUndefined();
+      expect(narrowLines.join('\n')).toMatch(new RegExp(`08:00 ${longName}`));
+      expect(gridRow(wideLines)).toContain(longName);
     });
   });
 
@@ -819,11 +880,12 @@ describe('renderSchedule', () => {
       20,
     );
     const plain = lines.map(stripAnsi);
-    const densityLines = plain.filter((line) => /^\s*(?:█\s*)+$/.test(line));
+    const weekNumbers = plain
+      .filter((line) => /^\s+\d+(?:\s+\d+)*$/.test(line))
+      .flatMap((line) => line.trim().split(/\s+/).map(Number));
 
     expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
-    expect(densityLines).toHaveLength(2);
-    expect(densityLines.join('').match(/█/g)).toHaveLength(18);
+    expect(weekNumbers).toEqual(weeks);
     expect(plain.some((line) => line.includes('This week'))).toBe(true);
   });
 

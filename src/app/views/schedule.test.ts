@@ -6,6 +6,7 @@ import type * as TimetableModule from '@nbtca/nbtcal/timetable';
 import type * as NbtAuthModule from '../../auth/nbt-auth.js';
 import type * as ScheduleStoreModule from '../../features/schedule-store.js';
 import type * as CalendarModule from '../../features/calendar.js';
+import type * as StudentTimetableModule from '../../features/student-timetable.js';
 
 const sessionStoreClear = vi.fn();
 const sessionStoreLoad = vi.fn();
@@ -59,6 +60,12 @@ vi.mock('@nbtca/nbtcal/timetable', async (importOriginal) => {
     createNbtTimetableClient: () => ({ listTerms, fetchTerm }),
   };
 });
+
+const writePrivateIcsMock = vi.hoisted(() => vi.fn());
+vi.mock('../../features/student-timetable.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof StudentTimetableModule>()),
+  writePrivateIcs: writePrivateIcsMock,
+}));
 
 const loadWeekOneMock = vi.fn();
 const saveWeekOneMock = vi.fn();
@@ -509,6 +516,25 @@ describe('scheduleView — hub navigation', () => {
     );
   });
 
+  it('labels Esc in the hub footer when the row has room', async () => {
+    await loadIntoHub();
+    const hint = stripAnsi(scheduleView.footerHint(5, 120) ?? '');
+    expect(hint).toContain(`Esc ${t().menu.hintBack}`);
+    expect(hint).toContain('⏎');
+  });
+
+  it('reports an export on one status line and keeps the hub', async () => {
+    const ctx = await loadIntoHub();
+    scheduleView.handleKey('e', ctx);
+    const lines = scheduleView.render(ctx).map(stripAnsi);
+    const status = lines.filter((line) => line.includes('Saved: '));
+
+    expect(writePrivateIcsMock).toHaveBeenCalledWith('timetable-2026-3.ics', expect.any(String));
+    expect(status).toHaveLength(1);
+    expect(status[0]).toMatch(/timetable-2026-3\.ics$/);
+    expect(lines.join('\n')).toContain(t().timetable.hubLogout);
+  });
+
   it('lists the day-switching arrows in the ? key list', async () => {
     await loadIntoHub();
     const keys = scheduleView.shortcuts();
@@ -558,7 +584,7 @@ describe('scheduleView — hub navigation', () => {
 
     async function loadIntoShortHub(): Promise<AppContext> {
       const ctx = await loadIntoHub({ periods: busyPeriods, meetings: busyMeetings });
-      ctx.bodyRows = 19;
+      ctx.bodyRows = 12;
       return ctx;
     }
 

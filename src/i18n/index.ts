@@ -315,6 +315,12 @@ export interface Translations {
     hubTermDensity: string;
     termDensityTitle: string;
     termDensityThisWeek: string;
+    termDensityWeeks: string;
+    termDensityPerWeek: string;
+    termDensityFreeWeeks: string;
+    termDensityCurrent: string;
+    termDensityEmpty: string;
+    exportSaved: string;
     weekOverviewTitle: string;
     weekAheadClasses: string;
     weekAheadBusy: string;

@@ -73,11 +73,14 @@ function gridFooterHint(tabCount: number, cols: number): string {
   const dot = pickIcon('·', '-');
   const keys = gridKeys();
   const local = `${keys.days} ${trans.timetable.footerDay} ${dot} ${keys.periods} ${trans.timetable.footerClass} ${dot} ${keys.enter} ${trans.timetable.footerDetail}`;
+  const labelled = `Esc ${trans.menu.hintBack} ${dot} q ${trans.menu.hintQuit}`;
   const quit = `Esc ${dot} q ${trans.menu.hintQuit}`;
   return fitFooterHint(
     cols,
-    `${digitTabHint(tabCount)}${local} ${dot} ${quit} ${dot} ${trans.help.hint}`,
+    `${digitTabHint(tabCount)}${local} ${dot} ${labelled} ${dot} ${trans.help.hint}`,
+    `${digitTabHint(tabCount)}${local} ${dot} ${labelled}`,
     `${digitTabHint(tabCount)}${local} ${dot} ${quit}`,
+    `${local} ${dot} ${labelled}`,
     `${local} ${dot} ${quit}`,
     `${local} ${dot} Esc ${dot} q`,
     local,
@@ -606,9 +609,11 @@ export const scheduleView = {
             });
             const out = `timetable-${hubKey}.ics`;
             writePrivateIcs(out, ics);
-            state = { ...state, statusMessage: `${t().common.success}: ${path.resolve(out)}` };
+            state = { ...state, exportedPath: path.resolve(out) };
+            delete state.statusMessage;
           } catch (error) {
             state = { ...state, statusMessage: safeMessage(error) };
+            delete state.exportedPath;
           }
           return;
         }
