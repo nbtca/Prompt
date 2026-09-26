@@ -70,7 +70,7 @@ function gridKeys(): { days: string; periods: string; enter: string } {
 
 function gridFooterHint(tabCount: number, cols: number): string {
   const trans = t();
-  const dot = pickIcon('·', '-');
+  const dot = glyph.sep();
   const keys = gridKeys();
   const local = `${keys.days} ${trans.timetable.footerDay} ${dot} ${keys.periods} ${trans.timetable.footerClass} ${dot} ${keys.enter} ${trans.timetable.footerDetail}`;
   const labelled = `Esc ${trans.menu.hintBack} ${dot} q ${trans.menu.hintQuit}`;
@@ -651,6 +651,7 @@ export const scheduleView = {
           };
           return;
         }
+        if (nav.kind === 'emptyCell') return;
         returnToHub();
         return;
       }

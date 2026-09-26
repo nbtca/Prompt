@@ -7,7 +7,6 @@ import {
   type MenuOption,
 } from '../../core/components/menu.js';
 import { bodyEdge, glyph, space, type } from '../../core/theme.js';
-import { pickIcon } from '../../core/icons.js';
 import { t, fmt } from '../../i18n/index.js';
 import { visualWidth, wrapAnsiToVisualWidth } from '../../core/text.js';
 
@@ -104,7 +103,7 @@ export class ListField {
       ].filter((part): part is string => part !== null);
       lines.push(
         ...renderIndentedOutput(
-          type.hint(parts.join(`  ${pickIcon('·', '-')}  `)),
+          type.hint(parts.join(`  ${glyph.sep()}  `)),
           cols,
           `${space.indent}${' '.repeat(visualWidth(glyph.cursor()) + 1)}`,
         ),

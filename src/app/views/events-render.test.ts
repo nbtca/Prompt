@@ -62,7 +62,7 @@ describe('renderEvents', () => {
   it.each([
     [
       'Events',
-      ['Events', 'This week', 'This month', 'Search', 'Past events', 'Activity (last 12 months)'],
+      ['Events', 'This week', 'This month', 'Search', 'Past events', 'Activity (Last 12 Months)'],
     ],
     [
       '活动',
@@ -145,7 +145,7 @@ describe('renderEvents', () => {
         '\n',
       ),
     );
-    expect(out).not.toContain('Activity (last 12 months)');
+    expect(out).not.toContain('Activity (Last 12 Months)');
     expect(out).not.toContain('Less');
   });
 
@@ -393,7 +393,7 @@ describe('renderEvents — adaptive hub density', () => {
         45,
       ).join('\n'),
     );
-    expect(out).toContain('Activity (last 12 months)');
+    expect(out).toContain('Activity (Last 12 Months)');
     expect(out).toContain('Less');
     expect(out).toContain('NWDC');
     expect(out).toContain('Events'); // the hub menu itself
@@ -415,7 +415,7 @@ describe('renderEvents — adaptive hub density', () => {
         20,
       ).join('\n'),
     );
-    expect(out).not.toContain('Activity (last 12 months)');
+    expect(out).not.toContain('Activity (Last 12 Months)');
   });
 
   it('never collapses a multi-line renderer output into one array entry, even in the expanded layout', () => {
@@ -632,7 +632,7 @@ describe('renderEvents — list/detail/search/error modes', () => {
       expect(line).not.toContain('\n');
     }
     expect(lines.length).toBeGreaterThan(10);
-    expect(stripAnsi(lines.join('\n'))).toContain('Activity (last 12 months)');
+    expect(stripAnsi(lines.join('\n'))).toContain('Activity (Last 12 Months)');
   });
 
   it('passes the terminal width through to heatmap rendering', () => {

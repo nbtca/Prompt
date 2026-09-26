@@ -12,9 +12,7 @@ export type Language = 'zh' | 'en';
 export interface Translations {
   common: {
     back: string;
-    exit: string;
     cancel: string;
-    confirm: string;
     loading: string;
     error: string;
     success: string;
@@ -35,14 +33,13 @@ export interface Translations {
     timetable: string;
     timetableDesc: string;
     links: string;
-    linksDesc: string;
     settings: string;
-    settingsDesc: string;
     chooseAction: string;
     hintMove: string;
     hintTabs: string;
     hintBack: string;
     hintOpen: string;
+    hintConfirm: string;
     hintQuit: string;
   };
   about: {
@@ -109,6 +106,7 @@ export interface Translations {
     searchPrompt: string;
     searchPlaceholder: string;
     searchNoResults: string;
+    searchResultsTitle: string;
     exportIcs: string;
     exportSuccess: string;
     exportError: string;
@@ -154,6 +152,7 @@ export interface Translations {
     opening: string;
     browserOpened: string;
     browserError: string;
+    browserErrorManual: string;
     retry: string;
     endOfDocument: string;
     githubRateLimited: string;

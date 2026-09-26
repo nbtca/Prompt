@@ -114,21 +114,24 @@ async function openUrlFromView(
 
   state = {
     ...state,
-    errorMessage: sanitizeTerminalLine(
-      `${t().docs.browserError}. ${fmt(t().links.openManually, { url })}`,
-    ),
+    errorMessage: sanitizeTerminalLine(fmt(t().docs.browserErrorManual, { url })),
   };
   ctx.rerender();
 }
 
+function countHints(counts: readonly number[]): string[] {
+  const width = Math.max(0, ...counts.map((count) => String(count).length));
+  return counts.map((count) => String(count).padStart(width));
+}
+
 function buildSectionsField(): ListField {
   const trans = t();
-  const countWidth = Math.max(0, ...sections.map((sec) => String(sec.count).length));
+  const counts = countHints(sections.map((sec) => sec.count));
   const options = [
-    ...sections.map((sec) => ({
+    ...sections.map((sec, index) => ({
       value: sec.key,
       label: sec.label,
-      hint: String(sec.count).padStart(countWidth),
+      hint: counts[index] ?? '',
     })),
     { value: '__search__', label: trans.docs.searchPrompt },
     { value: '__refresh__', label: trans.docs.refreshCache },
@@ -168,8 +171,9 @@ function buildArchivedGroupsField(
     if (bYear) return 1;
     return a.localeCompare(b);
   });
+  const counts = countHints(sortedKeys.map((k) => groups.get(k)?.length ?? 0));
   const options = [
-    ...sortedKeys.map((k) => ({ value: k, label: k, hint: String(groups.get(k)?.length ?? 0) })),
+    ...sortedKeys.map((k, index) => ({ value: k, label: k, hint: counts[index] ?? '' })),
     { value: '__back__', label: backLabel() },
   ];
   return new ListField({ title: trans.docs.categoryArchived, options, maxVisible, initialIndex });
@@ -191,7 +195,7 @@ function buildArchivedFilesField(
         ...docLabel(f),
         ...optionalHint(
           subDirs.size > 1
-            ? [sanitizeTerminalLine(sub), f.summary].filter(Boolean).join(' · ')
+            ? [sanitizeTerminalLine(sub), f.summary].filter(Boolean).join(` ${glyph.sep()} `)
             : f.summary,
         ),
       };
@@ -199,7 +203,7 @@ function buildArchivedFilesField(
     { value: '__back__', label: backLabel() },
   ];
   return new ListField({
-    title: `${trans.docs.categoryArchived} · ${groupKey}`,
+    title: `${trans.docs.categoryArchived} ${glyph.sep()} ${groupKey}`,
     options,
     maxVisible,
     initialIndex,
@@ -239,11 +243,16 @@ function buildSearchResultsField(
             ? sanitizeTerminalLine(result.path.split('/').slice(0, -1).join('/'))
             : undefined),
       ),
+      hintFocus: currentSearchQuery,
     })),
     { value: '__back__', label: backLabel() },
   ];
   return new ListField({
-    title: fmt(trans.docs.searchResultsTitle, { query: currentSearchQuery, count: matches.length }),
+    title: fmt(trans.docs.searchResultsTitle, {
+      query: currentSearchQuery,
+      count: matches.length,
+      sep: glyph.sep(),
+    }),
     options,
     maxVisible,
     initialIndex,
@@ -681,7 +690,7 @@ export const docsView = {
     }
     if (state.mode === 'reader' && !state.readerLinksField) {
       const trans = t();
-      const dot = pickIcon('·', '-');
+      const dot = glyph.sep();
       const hasLinks = (state.readerLinks?.length ?? 0) > 0;
       const linkHint = hasLinks ? `f ${trans.docs.readerLinksHint} ${dot} ` : '';
       const pageHint = `${glyph.updown()} PgUp/PgDn ${dot} `;

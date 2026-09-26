@@ -204,6 +204,21 @@ describe('renderMenu with a hint column', () => {
     expect(lines[0]).toContain('…');
   });
 
+  it('windows a hint around its focus text instead of cutting the focus off', () => {
+    const docs = [
+      {
+        value: 'a',
+        label: 'Printing',
+        hint: 'The lab opens every weekday evening and the printer needs paper from you',
+        hintColumn: true,
+        hintFocus: 'PRINTER',
+      },
+    ];
+    const line = stripAnsi(renderMenu({ options: docs, selectedIndex: 0 }, 60));
+    expect(line).toContain('printer');
+    expect(visualWidth(line)).toBeLessThanOrEqual(57);
+  });
+
   it('drops a summary column that would be too narrow to read', () => {
     const docs = [
       { value: 'a', label: 'Infrastructure and projects', hint: 'Servers, serverless functions' },

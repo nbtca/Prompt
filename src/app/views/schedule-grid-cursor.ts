@@ -69,6 +69,7 @@ export function moveCursorPeriod(
 export type GridKeyResult =
   | { kind: 'moveCursor'; cursor: GridCursor }
   | { kind: 'openDetail'; meeting: TimetableMeeting }
+  | { kind: 'emptyCell' }
   | { kind: 'none' };
 
 export function handleGridKey(
@@ -85,7 +86,7 @@ export function handleGridKey(
     return { kind: 'moveCursor', cursor: moveCursorPeriod(cursor, tt.periods, 1) };
   if (key === KEY_ENTER_CR || key === KEY_ENTER_LF) {
     const meeting = createTimetableSchedule(tt).meetingAt(week, cursor.weekday, cursor.period);
-    return meeting ? { kind: 'openDetail', meeting } : { kind: 'none' };
+    return meeting ? { kind: 'openDetail', meeting } : { kind: 'emptyCell' };
   }
   return { kind: 'none' };
 }

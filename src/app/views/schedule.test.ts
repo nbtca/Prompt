@@ -405,6 +405,15 @@ describe('scheduleView — hub navigation', () => {
     expect(out).toContain(t().timetable.hubLogout);
   });
 
+  it('stays in the week grid when Enter lands on an empty cell', async () => {
+    const ctx = await loadIntoHub();
+    scheduleView.handleKey('w', ctx);
+    scheduleView.handleKey('\r', ctx);
+    const out = stripAnsi(scheduleView.render(ctx).join('\n'));
+    expect(out).toContain(t().timetable.hubWeek);
+    expect(out).not.toContain(t().timetable.hubLogout);
+  });
+
   it('opens a meeting detail card on Enter when the cursor cell has a class, and returns to the hub on any key', async () => {
     const ctx = await loadIntoHub({
       meetings: [

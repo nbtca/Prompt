@@ -8,7 +8,7 @@ import {
 } from '@nbtca/nbtcal';
 import type { Calendar, CalendarEvent, FeedValidators, HeatmapBucket } from '@nbtca/nbtcal';
 import chalk from 'chalk';
-import { c, type, space, glyph } from '../core/theme.js';
+import { c, type, space, glyph, bodyWidth } from '../core/theme.js';
 import { pickIcon } from '../core/icons.js';
 import {
   padEndV,
@@ -278,7 +278,7 @@ export function recurringMark(e: Event): string {
 }
 
 function hangingLines(marker: string, content: string, cols: number): string[] {
-  const width = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : Number.POSITIVE_INFINITY;
+  const width = bodyWidth(cols);
   const prefixes = [`${space.indent}${marker} `, `${marker} `, marker, ''];
   const prefix = prefixes.find((candidate) => visualWidth(candidate) < width) ?? '';
   const continuation = ' '.repeat(visualWidth(prefix));
@@ -293,7 +293,7 @@ export function renderEventBriefLines(
   now: Date,
   cols = Number.POSITIVE_INFINITY,
 ): string[] {
-  const dot = pickIcon('·', '-');
+  const dot = glyph.sep();
   const proximity = eventProximity(e.startDate, now);
   const dateStyle =
     proximity === 'today'
@@ -303,8 +303,7 @@ export function renderEventBriefLines(
         : proximity === 'week'
           ? type.body
           : type.hint;
-  const marker =
-    proximity === 'today' ? type.active(pickIcon('●', '*')) : dateStyle(pickIcon('·', '-'));
+  const marker = proximity === 'today' ? type.active(pickIcon('●', '*')) : dateStyle(glyph.sep());
   const titleStyled = styleTitle(e.title, proximity === 'today' ? type.active : type.body);
   const content = `${dateStyle(eventWhen(e))}  ${type.hint(dot)}  ${titleStyled}${type.hint(recurringMark(e))}`;
   return hangingLines(marker, content, cols);
@@ -326,7 +325,7 @@ export function renderCountdownBanner(
     ? trans.calendar.startingNow
     : `${trans.calendar.inPrefix} ${formatDuration(p)}`;
   const whenStyled = isCountdownUrgent(p) ? c.warn(when) : type.hint(when);
-  const dot = pickIcon('·', '-');
+  const dot = glyph.sep();
   const content = `${type.label(trans.calendar.next)}  ${dot}  ${type.body(event.title)}  ${dot}  ${whenStyled}`;
   return hangingLines(type.active(glyph.dot()), content, cols).join('\n');
 }

@@ -23,7 +23,7 @@ import { setLanguage } from '../i18n/index.js';
 import { resetIconCache } from '../core/icons.js';
 import { campusDateTime } from '@nbtca/nbtcal/timetable';
 import { stripAnsi, visualWidth } from '../core/text.js';
-import { space } from '../core/theme.js';
+import { bodyEdge, space } from '../core/theme.js';
 
 beforeAll(() => {
   setLanguage('en');
@@ -149,8 +149,8 @@ describe('renderNextClassBanner', () => {
       ),
     );
 
-    expect(visualWidth(out)).toBeLessThanOrEqual(40);
-    expect(out).toContain('Advanced');
+    expect(visualWidth(out)).toBeLessThanOrEqual(37);
+    expect(out).toContain('Advanc');
     expect(out).toContain('1h 30m');
     expect(out).not.toContain('Building 12 Room 304');
     done();
@@ -648,6 +648,26 @@ describe('renderWeekGrid', () => {
       done();
     });
 
+    it.each([1, 4, 7] as const)(
+      'keeps a column-filling name whole under the cursor on weekday %i',
+      (weekday) => {
+        const meetings = ([1, 2, 3, 4, 5, 6, 7] as const).map((wd) =>
+          mk({ courseName: 'Calculus', location: null, weekday: wd, weeks: [1] }),
+        );
+        const at = { weekday, period: 1 };
+        const now = campusDateTime('2026-09-07', '09:00');
+        const plain = stripAnsi(renderWeekGrid(meetings, periods, 1, now, 100)).split('\n');
+        const cursor = stripAnsi(renderWeekGrid(meetings, periods, 1, now, 100, at)).split('\n');
+        const row = (lines: string[]) => findLine(lines, (line) => line.includes('08:00'));
+        expect(row(plain)).not.toContain('…');
+        expect(row(cursor)).toContain('[Calculus]');
+        expect(visualWidth(row(cursor))).toBeLessThanOrEqual(bodyEdge(100));
+        const bars = (line: string) => [...line.matchAll(/\|/g)].map((match) => match.index);
+        expect(bars(row(cursor))).toEqual(bars(row(plain)));
+        done();
+      },
+    );
+
     it("keeps the bracket cursor on today's own column", () => {
       const out = stripAnsi(
         renderWeekGrid([], periods, 1, campusDateTime('2026-09-07', '09:00'), 100, {
@@ -1099,9 +1119,10 @@ describe('renderDaySwitcher', () => {
   it('shows a balanced weekday window around a late-week selection', () => {
     const out = stripAnsi(renderDaySwitcher(5, 1, 40));
 
-    expect(visualWidth(out)).toBeLessThanOrEqual(40);
+    expect(visualWidth(out)).toBeLessThanOrEqual(37);
     expect(out).toContain('[Fri]');
-    expect(out).toContain('Sun');
+    expect(out).toContain('Thu');
+    expect(out).toContain('Sat');
     expect(out).not.toContain('Mon');
   });
 });

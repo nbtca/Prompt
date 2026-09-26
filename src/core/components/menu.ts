@@ -1,5 +1,11 @@
 import { glyph, type, space, bodyEdge } from '../theme.js';
-import { visualWidth, padEndV, wrapAnsiToVisualWidth, clipAnsiToVisualWidth } from '../text.js';
+import {
+  visualWidth,
+  padEndV,
+  wrapAnsiToVisualWidth,
+  clipAnsiToVisualWidth,
+  excerptAround,
+} from '../text.js';
 import { pickIcon } from '../icons.js';
 import { createPainter } from './painter.js';
 import { startRawInput } from './input-session.js';
@@ -72,6 +78,7 @@ export interface MenuOption {
   hint?: string;
   dim?: boolean;
   hintColumn?: boolean;
+  hintFocus?: string;
 }
 
 export interface MenuColumns {
@@ -114,10 +121,11 @@ function renderIndentedText(
 const MIN_LABEL_COLUMN = 24;
 const MIN_HINT_COLUMN = 16;
 
+const ellipsis = (): string => pickIcon('…', '~');
+
 function clipWithEllipsis(value: string, width: number): string {
   if (visualWidth(value) <= width) return value;
-  const ellipsis = pickIcon('…', '~');
-  return clipAnsiToVisualWidth(value, width - visualWidth(ellipsis)) + ellipsis;
+  return clipAnsiToVisualWidth(value, width - visualWidth(ellipsis())) + ellipsis();
 }
 
 function fitColumns(columns: MenuColumns, contentWidth: number): MenuColumns | undefined {
@@ -144,7 +152,9 @@ function optionCells(
     return fitted
       ? {
           label: padEndV(clipWithEllipsis(option.label, fitted.label), fitted.label),
-          hint: clipWithEllipsis(hint, fitted.hint),
+          hint: option.hintFocus
+            ? excerptAround(hint, option.hintFocus, fitted.hint, ellipsis())
+            : clipWithEllipsis(hint, fitted.hint),
         }
       : { label: option.label, hint: '' };
   }

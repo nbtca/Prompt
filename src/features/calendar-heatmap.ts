@@ -1,6 +1,6 @@
 import type { HeatmapBucket } from '@nbtca/nbtcal';
 import { pickIcon } from '../core/icons.js';
-import { c, space, type } from '../core/theme.js';
+import { bodyWidth, c, space, type } from '../core/theme.js';
 import { t, getCurrentLanguage } from '../i18n/index.js';
 import { visualWidth } from '../core/text.js';
 
@@ -68,12 +68,9 @@ export function renderHeatmap(
 ): string {
   const useColor = options?.color === true;
   const trans = t();
-  const cellWidth =
-    options?.cols !== undefined && options.cols < GRID_PREFIX_WIDTH + MAX_WEEK_COLUMNS * 2 ? 1 : 2;
-  const availableColumns =
-    options?.cols === undefined
-      ? MAX_WEEK_COLUMNS
-      : Math.floor((options.cols - GRID_PREFIX_WIDTH) / cellWidth);
+  const cols = bodyWidth(options?.cols ?? Number.POSITIVE_INFINITY);
+  const cellWidth = cols < GRID_PREFIX_WIDTH + MAX_WEEK_COLUMNS * 2 ? 1 : 2;
+  const availableColumns = Math.floor((cols - GRID_PREFIX_WIDTH) / cellWidth);
   const numCols = Math.max(1, Math.min(MAX_WEEK_COLUMNS, availableColumns));
 
   const countByDate = new Map<string, number>();

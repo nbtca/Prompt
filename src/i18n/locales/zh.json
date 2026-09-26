@@ -1,9 +1,7 @@
 {
   "common": {
     "back": "返回",
-    "exit": "退出",
     "cancel": "取消",
-    "confirm": "确认",
     "loading": "加载中...",
     "error": "错误",
     "success": "成功",
@@ -39,14 +37,13 @@
     "timetable": "我的课表",
     "timetableDesc": "登录教务、查询学期并导出 ICS",
     "links": "链接",
-    "linksDesc": "官网 · GitHub · 路线图",
     "settings": "设置",
-    "settingsDesc": "语言 · 主题 · 关于",
     "chooseAction": "nbtca",
     "hintMove": "移动",
     "hintTabs": "切换",
     "hintBack": "返回",
     "hintOpen": "打开",
+    "hintConfirm": "确认",
     "hintQuit": "退出"
   },
   "about": {
@@ -73,7 +70,7 @@
     "untitledEvent": "未命名活动",
     "tbdLocation": "待定",
     "subscribeHint": "订阅日历",
-    "viewDetail": "选择活动查看详情:",
+    "viewDetail": "选择活动查看详情：",
     "noDescription": "暂无详细信息",
     "heatmap": {
       "title": "近一年活跃度",
@@ -84,7 +81,7 @@
     "pastEvents": "历史活动",
     "pastEventsDesc": "近期活动记录",
     "noPastEvents": "近一年没有已结束的活动",
-    "viewPastDetail": "选择活动查看详情:",
+    "viewPastDetail": "选择活动查看详情：",
     "next": "下一场",
     "recentActivity": "近期安排",
     "browse": "浏览",
@@ -95,8 +92,9 @@
     "thisMonth": "本月",
     "search": "搜索",
     "searchPrompt": "搜索活动",
-    "searchPlaceholder": "关键词…",
+    "searchPlaceholder": "输入关键词...",
     "searchNoResults": "没有匹配的活动",
+    "searchResultsTitle": "“{query}”的搜索结果 {sep} {count} 场",
     "exportIcs": "导出 .ics",
     "exportSuccess": "已保存",
     "exportError": "无法写入 .ics 文件",
@@ -143,16 +141,17 @@
     "opening": "正在打开浏览器...",
     "browserOpened": "已在浏览器中打开知识库",
     "browserError": "无法打开浏览器",
+    "browserErrorManual": "无法打开浏览器，请手动打开：{url}",
     "retry": "是否重试？",
     "tocTitle": "目录",
     "tableHint": "图表与表格在浏览器中效果更佳",
     "mermaidHint": "在浏览器中查看图表",
-    "endOfDocument": "文档结束  ·  q 退出  ·  / 搜索",
+    "endOfDocument": "文档结束  {sep}  q 退出  {sep}  / 搜索",
     "githubRateLimited": "GitHub API 速率限制已达上限，将在 {time} 重置。",
     "githubForbidden": "GitHub API 拒绝访问 (403)。",
-    "githubTokenHint": "提示: 设置 GITHUB_TOKEN 环境变量可获得更高的速率限制。",
-    "fetchDirFailed": "无法获取目录内容: {error}",
-    "fetchFileFailed": "无法获取文件内容: {error}",
+    "githubTokenHint": "提示：设置 GITHUB_TOKEN 环境变量可获得更高的速率限制。",
+    "fetchDirFailed": "无法获取目录内容：{error}",
+    "fetchFileFailed": "无法获取文件内容：{error}",
     "searchPrompt": "搜索文档",
     "searchPlaceholder": "输入关键词...",
     "searching": "正在搜索文档...",
@@ -165,7 +164,7 @@
     "offlineError": "无法加载文档目录，可能是网络没有连接。",
     "offlineHint": "请稍后重试，或者到 https://docs.nbtca.space 阅读",
     "retryLoad": "重试",
-    "searchResultsTitle": "“{query}”的搜索结果 · {count} 篇",
+    "searchResultsTitle": "“{query}”的搜索结果 {sep} {count} 篇",
     "searchProgress": "正在逐篇检索文档，已检索 {done} / {total} 篇"
   },
   "links": {
@@ -177,7 +176,7 @@
     "opening": "正在打开...",
     "opened": "已在浏览器中打开",
     "error": "无法打开浏览器",
-    "openManually": "请手动打开: {url}"
+    "openManually": "请手动打开：{url}"
   },
   "status": {
     "checking": "正在检查服务状态...",
@@ -288,7 +287,7 @@
     "semester2": "第二学期",
     "weekLabel2": "第 {week} 周",
     "academicYearSuffix": "{year}学年",
-    "onBreak": "假期中 · {title}",
+    "onBreak": "假期中 {sep} {title}",
     "publicUnavailable": "校历数据暂不可用",
     "daysUntilBreak": "距离{title}还有 {days} 天",
     "publicLoginAction": "登录查看我的课表",
@@ -301,13 +300,13 @@
     "weekdayFri": "五",
     "weekdaySat": "六",
     "weekdaySun": "日",
-    "todayHeading": "今日 · 周{weekday} · 第 {week} 教学周",
+    "todayHeading": "今日 {sep} 周{weekday} {sep} 第 {week} 教学周",
     "classDone": "已结束",
     "classLive": "进行中",
     "minutesRemaining": "还剩 {minutes} 分钟",
     "timelineEnd": "放学",
     "termNotStarted": "本学期尚未开始",
-    "termStartsIn": "{date} 开学 · 还有 {days} 天",
+    "termStartsIn": "{date} 开学 {sep} 还有 {days} 天",
     "hubTermDensity": "学期活跃度",
     "termDensityTitle": "学期活跃度",
     "termDensityThisWeek": "本周",
@@ -365,7 +364,7 @@
     "colorUpdated": "颜色模式已更新",
     "colorUpdatedSessionOnly": "颜色模式仅在当前会话生效（无法写入配置文件）",
     "usage": "用法: nbtca theme | nbtca theme icon <auto|ascii|unicode> | nbtca theme color <auto|on|off> | nbtca theme reset",
-    "invalidValue": "无效取值，可选:"
+    "invalidValue": "无效取值，可选："
   },
   "language": {
     "selectLanguage": "语言",
@@ -375,10 +374,10 @@
     "changedSessionOnly": "语言仅在当前会话生效（无法写入配置文件）"
   },
   "update": {
-    "available": "有新版本可用: {current} → {latest}",
-    "upToDate": "已是最新版本 ({version})",
+    "available": "有新版本可用：{current} → {latest}",
+    "upToDate": "已是最新版本（{version}）",
     "checkFailed": "无法检查更新",
-    "command": "运行: npm i -g @nbtca/prompt"
+    "command": "运行：npm i -g @nbtca/prompt"
   },
   "cli": {
     "usage": "用法:",
@@ -415,16 +414,16 @@
     "flagTerm": "选择学年学期（例如 2026:3）",
     "flagOutput": "ICS 输出路径",
     "flagWeekOne": "第一教学周周一（教务未返回日期时使用）",
-    "unknownCommand": "未知命令: {command}",
+    "unknownCommand": "未知命令：{command}",
     "unknownCommandHint": "运行 `nbtca --help` 查看可用命令。",
-    "unknownFlag": "未知选项: {flag}",
+    "unknownFlag": "未知选项：{flag}",
     "unknownFlagHint": "运行 `nbtca --help` 查看可用选项。",
     "invalidFlag": "选项 {flag} 对此命令无效。",
     "invalidFlagHint": "运行 `nbtca --help` 查看命令用法。",
     "invalidLang": "无效语言。请使用 `zh` 或 `en`。",
     "invalidNext": "无效的 --next 值。请使用 --next=<数字>（>= 1）。",
     "eventsHeatmapConflict": "--heatmap 不能与 --today、--week、--month、--next 或 --search 同时使用。",
-    "eventsRangeConflict": "活动时间范围只能选择一个: --today、--week 或 --month。",
+    "eventsRangeConflict": "活动时间范围只能选择一个：--today、--week 或 --month。",
     "unexpectedArguments": "{command} 不接受多余参数。",
     "requiresTty": "交互模式需要 TTY 终端。",
     "requiresTtyHint": "使用 `nbtca --help` 查看命令模式。"

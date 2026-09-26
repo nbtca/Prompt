@@ -66,6 +66,7 @@ export const glyph = {
   rule: () => pickIcon('─', '-'),
   bar: () => pickIcon('│', '|'),
   bullet: () => pickIcon('·', '.'),
+  sep: () => pickIcon('·', '-'),
   dot: () => pickIcon('●', '*'),
   updown: () => pickIcon('↑↓', 'up/down'),
   enter: () => pickIcon('⏎', 'enter'),
@@ -91,6 +92,10 @@ const RIGHT_MARGIN_MIN_COLS = 40;
 
 export function bodyEdge(cols: number): number {
   return cols >= RIGHT_MARGIN_MIN_COLS ? cols - space.indent.length : cols;
+}
+
+export function bodyWidth(cols: number): number {
+  return Number.isFinite(cols) ? bodyEdge(Math.max(1, Math.floor(cols))) : Number.POSITIVE_INFINITY;
 }
 
 export const type = {

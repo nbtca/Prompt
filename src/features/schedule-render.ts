@@ -8,7 +8,7 @@ import type {
 } from '@nbtca/nbtcal/timetable';
 import { campusDateTime, campusIsoDate, createTimetableSchedule } from '@nbtca/nbtcal/timetable';
 import { countdownParts, isCountdownUrgent, type Countdown } from './calendar-query.js';
-import { c, type, space, glyph, MAX_FRAME_COLS } from '../core/theme.js';
+import { c, type, space, glyph, MAX_FRAME_COLS, bodyWidth } from '../core/theme.js';
 import { pickIcon } from '../core/icons.js';
 import { padEndV, truncate, visualWidth, wrapAnsiToVisualWidth } from '../core/text.js';
 import { addLocalDays, parseLocalMonday } from '../core/calendar-day.js';
@@ -48,16 +48,17 @@ function span(m: TimetableMeeting, periods: readonly TimetablePeriod[]): string 
 export function renderNextClassBanner(
   next: Pick<TimetableOccurrence, 'meeting' | 'start'> | null,
   now: Date,
-  cols = Number.POSITIVE_INFINITY,
+  terminalCols = Number.POSITIVE_INFINITY,
   labelled = true,
 ): string {
   const trans = t();
   if (!next) return '';
+  const cols = bodyWidth(terminalCols);
   const p = countdownParts(next.start, now);
   const when = formatClassCountdown(p);
   const styleWhen = isCountdownUrgent(p) ? c.warn : type.hint;
   const whenStyled = styleWhen(when);
-  const dot = pickIcon('·', '-');
+  const dot = glyph.sep();
   const marker = type.active(glyph.dot());
   const separator = `  ${dot}  `;
   const detailedPrefix = labelled
@@ -151,7 +152,7 @@ function renderTimeline(
 
   const today = campusIsoDate(now);
   const minute = Math.floor(now.getTime() / 60_000) * 60_000;
-  const dot = pickIcon('·', '-');
+  const dot = glyph.sep();
   const rule = pickIcon('─', '-');
   const midConnector = pickIcon('┼', '+');
   const topConnector = pickIcon('┬', '+');
@@ -288,8 +289,9 @@ export function renderDayTimeline(
 export function renderDaySwitcher(
   selectedWeekday: number,
   todayWeekday: number,
-  cols = Number.POSITIVE_INFINITY,
+  terminalCols = Number.POSITIVE_INFINITY,
 ): string {
+  const cols = bodyWidth(terminalCols);
   const leftArrow = pickIcon('←', '<');
   const rightArrow = pickIcon('→', '>');
   const todayMark = pickIcon('•', '*');
@@ -355,6 +357,7 @@ function spreadWidths(ideal: readonly number[], available: number): number[] {
 }
 
 const GRID_SEP_W = 3;
+const GRID_CURSOR_TAIL_W = 1;
 
 interface GridMetrics {
   rowHeadW: number;
@@ -386,7 +389,9 @@ function weekGridMetrics(timetable: Timetable, weekNumber: number, now: Date): G
 
 export function weekGridFullWidth(timetable: Timetable, weekNumber: number, now: Date): number {
   const { rowHeadW, totalIdealColW } = weekGridMetrics(timetable, weekNumber, now);
-  return visualWidth(space.indent) * 2 + rowHeadW + totalIdealColW + 6 * GRID_SEP_W;
+  return (
+    visualWidth(space.indent) * 2 + rowHeadW + totalIdealColW + 6 * GRID_SEP_W + GRID_CURSOR_TAIL_W
+  );
 }
 
 export function renderWeekGrid(
@@ -404,11 +409,12 @@ export function renderWeekGrid(
   const connector = pickIcon('│', '|');
   const emptyGlyph = pickIcon('·', '.');
   const sepGlyph = pickIcon('│', '|');
-  const sep = type.hint(` ${sepGlyph} `);
+  const gap = ` ${sepGlyph} `;
+  const sep = type.hint(gap);
   const { rowHeadW, idealColWidths, totalIdealColW } = weekGridMetrics(timetable, weekNumber, now);
   const availableForCols = Math.max(
     0,
-    lineBudget(cols) - visualWidth(space.indent) - rowHeadW - 6 * GRID_SEP_W,
+    lineBudget(cols) - visualWidth(space.indent) - rowHeadW - 6 * GRID_SEP_W - GRID_CURSOR_TAIL_W,
   );
   const colWidths =
     totalIdealColW <= availableForCols
@@ -435,9 +441,9 @@ export function renderWeekGrid(
 
   const sorted = [...periods].sort((a, b) => a.period - b.period);
   sorted.forEach((p, i) => {
-    const rowHead = type.hint(padEndV(rangeLabel(p.start, p.end), rowHeadW));
     const nameCells: string[] = [];
     const locCells: string[] = [];
+    let widened = -1;
     for (let wdIdx = 0; wdIdx < 7; wdIdx++) {
       const wd = wdIdx + 1;
       const colW = colWidths[wdIdx] ?? 3;
@@ -452,7 +458,10 @@ export function renderWeekGrid(
       const paddedLoc = centerInWidth(clip(rawLoc, colW), colW);
 
       if (isCursor) {
-        nameCells.push(type.active(centerInWidth(`[${clip(rawName, colW - 2)}]`, colW)));
+        const wide = visualWidth(rawName) > colW - 2;
+        if (wide) widened = wdIdx;
+        const inner = wide ? colW : colW - 2;
+        nameCells.push(type.active(centerInWidth(`[${clip(rawName, inner)}]`, inner + 2)));
         locCells.push(starting ? type.body(paddedLoc) : type.hint(paddedLoc));
       } else if (starting) {
         nameCells.push(isToday ? type.active(paddedName) : type.body(paddedName));
@@ -462,7 +471,17 @@ export function renderWeekGrid(
         locCells.push(type.hint(paddedLoc));
       }
     }
-    lines.push(space.indent + rowHead + nameCells.join(sep));
+    const rowHead = type.hint(
+      padEndV(rangeLabel(p.start, p.end), rowHeadW - (widened === 0 ? 1 : 0)),
+    );
+    const nameRow = nameCells
+      .map((cell, index) =>
+        index === 0
+          ? cell
+          : type.hint(gap.slice(index - 1 === widened ? 1 : 0, index === widened ? 2 : 3)) + cell,
+      )
+      .join('');
+    lines.push(space.indent + rowHead + nameRow);
     lines.push(space.indent + blankHead + locCells.join(sep));
 
     const next = sorted[i + 1];
@@ -485,7 +504,7 @@ export function renderWeekAgenda(
   const todayWd = schedule.weekdayAt(now);
   const width = lineBudget(cols);
   const todayMark = pickIcon('•', '*');
-  const dot = pickIcon('·', '-');
+  const dot = glyph.sep();
   const pointer = glyph.cursor();
   const labels = WEEKDAY_KEYS.map(
     (_, i) => `${weekdayShortLabel(i + 1)}${i + 1 === todayWd ? todayMark : ''}`,
@@ -596,7 +615,7 @@ export function renderMeetingDetail(
   }
   rows.push([trans.timetable.detailWeeks, formatWeekRange(meeting.weeks)]);
 
-  const width = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : Number.POSITIVE_INFINITY;
+  const width = bodyWidth(cols);
   const indent = visualWidth(space.indent) < width ? space.indent : '';
   const contentWidth = Math.max(1, width - visualWidth(indent));
   const labelWidth = rows.reduce((w, [label]) => Math.max(w, visualWidth(label)), 0);
@@ -634,7 +653,7 @@ export function renderUnresolvedItems(
   cols = Number.POSITIVE_INFINITY,
 ): string {
   const trans = t();
-  const width = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : Number.POSITIVE_INFINITY;
+  const width = bodyWidth(cols);
   const indent = visualWidth(space.indent) < width ? space.indent : '';
   const contentWidth = Math.max(1, width - visualWidth(indent));
   if (items.length === 0) {
@@ -642,7 +661,7 @@ export function renderUnresolvedItems(
       .map((part) => `${indent}${part}`)
       .join('\n');
   }
-  const dot = pickIcon('·', '-');
+  const dot = glyph.sep();
   const lines: string[] = [];
   for (const item of items) {
     const name = item.sourceFields.kcmc ?? trans.timetable.unresolvedUnknownItem;
@@ -726,7 +745,7 @@ export function renderTermDensity(
 ): string {
   const trans = t().timetable;
   const lang = getCurrentLanguage();
-  const width = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : Number.POSITIVE_INFINITY;
+  const width = bodyWidth(cols);
   const indent = visualWidth(space.indent) < width ? space.indent : '';
   const contentWidth = Math.max(1, width - visualWidth(indent));
   const wrap = (text: string): string[] =>
@@ -763,7 +782,7 @@ export function renderTermDensity(
   ];
   const summaryLines: string[] = [];
   for (const part of summary) {
-    const joined = `${summaryLines.at(-1) ?? ''}  ${pickIcon('·', '-')}  ${part}`;
+    const joined = `${summaryLines.at(-1) ?? ''}  ${glyph.sep()}  ${part}`;
     if (summaryLines.length > 0 && visualWidth(joined) <= contentWidth) {
       summaryLines[summaryLines.length - 1] = joined;
     } else {

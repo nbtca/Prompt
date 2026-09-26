@@ -120,7 +120,9 @@ describe('handleGridKey', () => {
   });
 
   it('is a no-op on Enter when the cursor cell is empty', () => {
-    expect(handleGridKey(KEY_ENTER_CR, { weekday: 2, period: 1 }, tt, 1)).toEqual({ kind: 'none' });
+    expect(handleGridKey(KEY_ENTER_CR, { weekday: 2, period: 1 }, tt, 1)).toEqual({
+      kind: 'emptyCell',
+    });
   });
 
   it('is a no-op for any other key', () => {
