@@ -40,3 +40,31 @@ function localDayIndex(date: Date): number {
 export function localDayDifference(start: Date, end: Date): number {
   return localDayIndex(end) - localDayIndex(start);
 }
+
+const CAMPUS_CLOCK = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Shanghai',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
+
+export function campusClock(value: Date): { date: string; time: string } {
+  const part = Object.fromEntries(
+    CAMPUS_CLOCK.formatToParts(value).map(({ type, value }) => [type, value]),
+  );
+  return {
+    date: `${part['year']}-${part['month']}-${part['day']}`,
+    time: `${part['hour']}:${part['minute']}`,
+  };
+}
+
+export function campusDateTime(date: string, time = '00:00'): Date {
+  return new Date(`${date}T${time}:00+08:00`);
+}
+
+export function isoDayDifference(start: string, end: string): number {
+  return (Date.parse(end) - Date.parse(start)) / DAY_MS;
+}

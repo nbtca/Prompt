@@ -10,7 +10,12 @@ import { countdownParts, isCountdownUrgent } from './calendar-query.js';
 import { c, type, space, glyph } from '../core/theme.js';
 import { pickIcon } from '../core/icons.js';
 import { padEndV, truncate, visualWidth, wrapAnsiToVisualWidth } from '../core/text.js';
-import { addLocalDays, parseLocalMonday } from '../core/calendar-day.js';
+import {
+  addLocalDays,
+  campusClock,
+  campusDateTime,
+  parseLocalMonday,
+} from '../core/calendar-day.js';
 import { t, fmt, getCurrentLanguage, type Language } from '../i18n/index.js';
 
 function span(m: TimetableMeeting, periods: readonly TimetablePeriod[]): string {
@@ -74,29 +79,6 @@ export function renderNextClassBanner(
   return styleWhen(compactWhen);
 }
 
-export function renderTodayClasses(
-  meetings: readonly TimetableMeeting[],
-  periods: readonly TimetablePeriod[],
-  now: Date,
-): string {
-  const trans = t();
-  const sorted = [...meetings].sort((a, b) => a.startPeriod - b.startPeriod);
-  if (sorted.length === 0) return `${space.indent}${type.hint(trans.timetable.noClassToday)}`;
-  const dot = pickIcon('·', '-');
-  const marker = pickIcon('▸', '>');
-  const lines = sorted.map((m) => {
-    const time = span(m, periods);
-    const startStr = periods.find((p) => p.period === m.startPeriod)?.start ?? '00:00';
-    const endStr = periods.find((p) => p.period === m.endPeriod)?.end ?? '23:59';
-    const nowStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    const live = nowStr >= startStr && nowStr <= endStr;
-    const head = live ? `${type.active(marker)} ` : '  ';
-    const loc = m.location ? `  ${dot}  ${type.hint(m.location)}` : '';
-    return `${space.indent}${head}${type.hint(time)}  ${live ? type.active(m.courseName) : type.body(m.courseName)}${loc}`;
-  });
-  return lines.join('\n');
-}
-
 export function weekdayShortLabel(wd: number): string {
   const trans = t();
   const labels = [
@@ -124,7 +106,7 @@ function renderTimeline(
   const sorted = [...meetings].sort((a, b) => a.startPeriod - b.startPeriod);
   if (sorted.length === 0) return `${space.indent}${type.hint(trans.timetable.noClassToday)}`;
 
-  const nowStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  const { date: today, time: nowStr } = campusClock(now);
   const dot = pickIcon('·', '-');
   const rule = pickIcon('─', '-');
   const midConnector = pickIcon('┼', '+');
@@ -150,15 +132,7 @@ function renderTimeline(
       statusText = trans.timetable.classDone;
       compactStatusText = statusText;
     } else if (isLive) {
-      const end = new Date(now);
-      const [eh, em] = endStr.split(':').map((x) => Number.parseInt(x, 10));
-      end.setHours(
-        eh !== undefined && Number.isFinite(eh) ? eh : 0,
-        em !== undefined && Number.isFinite(em) ? em : 0,
-        0,
-        0,
-      );
-      const remaining = countdownParts(end, now);
+      const remaining = countdownParts(campusDateTime(today, endStr), now);
       const mins = remaining.days * 1440 + remaining.hours * 60 + remaining.minutes;
       statusText = `${trans.timetable.classLive}  ${dot}  ${fmt(trans.timetable.minutesRemaining, { minutes: String(mins) })}`;
       compactStatusText = `${mins}m`;

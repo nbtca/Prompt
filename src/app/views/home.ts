@@ -16,7 +16,7 @@ import {
   renderEventBrief,
 } from '../../features/calendar.js';
 import { weekdayShortLabel } from '../../features/schedule-render.js';
-import { addLocalDays } from '../../core/calendar-day.js';
+import { campusClock, campusDateTime } from '../../core/calendar-day.js';
 import type { View, AppContext } from '../view.js';
 import { passiveFooterHint } from '../chrome.js';
 import { campusWeekday } from '@nbtca/nbtcal/timetable';
@@ -54,8 +54,8 @@ function wrappedRenderedLines(line: string, cols: number): string[] {
 const DAY_PROGRESS_WIDTH = 20;
 
 function renderDayProgress(now: Date, cols: number): string {
-  const minutesElapsed = now.getHours() * 60 + now.getMinutes();
-  const fraction = Math.min(1, Math.max(0, minutesElapsed / 1440));
+  const midnight = campusDateTime(campusClock(now).date);
+  const fraction = Math.min(1, Math.max(0, (now.getTime() - midnight.getTime()) / 86_400_000));
   const pct = Math.round(fraction * 100);
   const percentage = `${pct}%`;
   const width = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : Number.POSITIVE_INFINITY;
@@ -229,9 +229,10 @@ function calendarSnapshot(
     .slice(0, HOME_EVENT_FETCH_CAP)
     .map((event) => renderEventBrief(toDisplayEvent(event), now));
   if (!weekAheadInfo) return { eventLines };
-  const weekEnd = addLocalDays(weekAheadInfo.weekStartDate, 7);
   const daySet = new Set(
-    cal.inRange(weekAheadInfo.weekStartDate, weekEnd).map((event) => campusWeekday(event.start)),
+    cal
+      .inRange(weekAheadInfo.weekStartDate, weekAheadInfo.weekEndDate)
+      .map((event) => campusWeekday(event.start)),
   );
   return {
     eventLines,

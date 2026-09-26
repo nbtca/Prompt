@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach, beforeAll, beforeEach, vi } from 'vitest';
 import { SessionExpiredError } from '../../auth/errors.js';
+import { campusDateTime } from '../../core/calendar-day.js';
 import type * as NbtcalModule from '@nbtca/nbtcal';
 import type * as TimetableModule from '@nbtca/nbtcal/timetable';
 import type * as NbtAuthModule from '../../auth/nbt-auth.js';
@@ -327,7 +328,7 @@ describe('scheduleView — hub navigation', () => {
   // clock leaves the fixture's week one.
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(new Date(2026, 8, 7, 9, 0));
+    vi.setSystemTime(campusDateTime('2026-09-07', '09:00'));
   });
 
   afterEach(() => {

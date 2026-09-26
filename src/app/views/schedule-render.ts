@@ -24,7 +24,7 @@ import {
 import type { AcademicWindow, OnBreak } from '@nbtca/nbtcal';
 import type { GridCursor } from './schedule-grid-cursor.js';
 import { sanitizeTerminalLine, visualWidth, wrapAnsiWithIndent } from '../../core/text.js';
-import { localDayDifference, parseLocalDate, parseLocalMonday } from '../../core/calendar-day.js';
+import { campusClock, isoDayDifference } from '../../core/calendar-day.js';
 import { loadingLines } from '../../core/components/spinner.js';
 
 export type ScheduleMode =
@@ -173,7 +173,7 @@ function hubPreGridLines(
       hint(
         fmt(trans.timetable.termStartsIn, {
           date: state.weekOne,
-          days: String(daysBetween(now, new Date(`${state.weekOne}T00:00:00`))),
+          days: String(daysUntil(now, state.weekOne)),
         }),
       ),
     );
@@ -295,9 +295,7 @@ function renderTermProgressBar(w: AcademicWindow, cols: number): string[] | null
   if (!w.nextBreakStart) return null;
   const totalWeeks = Math.max(
     1,
-    Math.round(
-      localDayDifference(parseLocalMonday(w.weekOneMonday), parseLocalDate(w.nextBreakStart)) / 7,
-    ),
+    Math.round(isoDayDifference(w.weekOneMonday, w.nextBreakStart) / 7),
   );
   const currentWeek = w.currentWeek;
   const labelText = fmt(t().timetable.weekLabel2, { week: `${currentWeek}/${totalWeeks}` });
@@ -320,8 +318,8 @@ function renderTermProgressBar(w: AcademicWindow, cols: number): string[] | null
     : [`${indent}${bar}`, ...hintLines(labelText, cols)];
 }
 
-function daysBetween(a: Date, b: Date): number {
-  return Math.max(0, localDayDifference(a, b));
+function daysUntil(now: Date, date: string): number {
+  return Math.max(0, isoDayDifference(campusClock(now).date, date));
 }
 
 function renderPublicBody(
@@ -361,7 +359,7 @@ function renderPublicBody(
         ...hintLines(
           fmt(trans.timetable.daysUntilBreak, {
             title: sanitizeTerminalLine(w.nextBreakTitle),
-            days: String(daysBetween(now, parseLocalDate(w.nextBreakStart))),
+            days: String(daysUntil(now, w.nextBreakStart)),
           }),
           cols,
         ),

@@ -4,6 +4,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { setLanguage, t } from '../../i18n/index.js';
 import { resetIconCache } from '../../core/icons.js';
+import { campusDateTime } from '../../core/calendar-day.js';
 import { stripAnsi, visualWidth } from '../../core/text.js';
 import type { AppContext } from '../view.js';
 import type * as CalendarModule from '../../features/calendar.js';
@@ -30,7 +31,7 @@ beforeAll(() => {
   resetIconCache();
 });
 
-const noon = new Date('2026-07-15T12:00:00');
+const noon = campusDateTime('2026-07-15', '12:00');
 const FIXTURE_TERM_KEY = '2020-1';
 const FIXTURE_WEEK_ONE = '2020-01-06';
 
@@ -260,9 +261,9 @@ describe('renderHome day-progress bar', () => {
   });
 
   it('is empty at midnight and full just before it', () => {
-    const out = stripAnsi(renderHome({}, new Date('2026-07-15T00:00:00')).join('\n'));
+    const out = stripAnsi(renderHome({}, campusDateTime('2026-07-15', '00:00')).join('\n'));
     expect(out).toContain('0%');
-    const lateOut = stripAnsi(renderHome({}, new Date('2026-07-15T23:59:00')).join('\n'));
+    const lateOut = stripAnsi(renderHome({}, campusDateTime('2026-07-15', '23:59')).join('\n'));
     expect(lateOut).toContain('100%');
   });
 
@@ -589,7 +590,7 @@ describe('homeView.load()', () => {
   it('fills in weekAhead.eventDays from the real week-of-events after the network call resolves', async () => {
     writeSetUpFixture(dir);
     calendarInRange.mockReturnValue([
-      { start: new Date(`${FIXTURE_WEEK_ONE}T18:00:00`), title: 'Club meetup' },
+      { start: campusDateTime(FIXTURE_WEEK_ONE, '18:00'), title: 'Club meetup' },
     ]);
     const ctx = fakeCtx();
     await homeView.load(ctx);

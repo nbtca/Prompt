@@ -10,11 +10,8 @@ import {
 } from './schedule-view.js';
 import { setLanguage } from '../i18n/index.js';
 import { resetIconCache } from '../core/icons.js';
+import { campusDateTime } from '../core/calendar-day.js';
 import { stripAnsi } from '../core/text.js';
-
-function campusDateTime(value: string): Date {
-  return new Date(`${value}+08:00`);
-}
 
 describe('peekNextClassLine', () => {
   let dir: string;
@@ -95,7 +92,7 @@ describe('peekTodayLines', () => {
       }),
     );
 
-    const monday = campusDateTime('2026-09-14T20:00:00');
+    const monday = campusDateTime('2026-09-14', '20:00');
     const lines = peekTodayLines(monday);
     const out = stripAnsi(lines.join('\n'));
     expect(out).toContain('Math');
@@ -142,7 +139,7 @@ describe('peekWeekAheadInfo', () => {
         fetchedAt: '2026-09-14T00:00:00Z',
       }),
     );
-    expect(peekWeekAheadInfo(campusDateTime('2026-09-14T12:00:00'))).toBeNull();
+    expect(peekWeekAheadInfo(campusDateTime('2026-09-14', '12:00'))).toBeNull();
   });
 
   it('computes raw per-day classDays with no weekend override applied', () => {
@@ -186,12 +183,12 @@ describe('peekWeekAheadInfo', () => {
         fetchedAt: '2026-09-14T00:00:00Z',
       }),
     );
-    const info = peekWeekAheadInfo(campusDateTime('2026-09-14T12:00:00'));
+    const info = peekWeekAheadInfo(campusDateTime('2026-09-14', '12:00'));
     expect(info).not.toBeNull();
     expect(info?.classDays).toEqual([true, false, false, false, false, true, false]);
   });
 
-  it('returns the Monday of the current campus week as weekStartDate', () => {
+  it('spans the current campus week from Monday midnight', () => {
     mkdirSync(join(dir, 'nbtca'), { recursive: true });
     writeFileSync(
       join(dir, 'nbtca', 'current-term.json'),
@@ -209,11 +206,10 @@ describe('peekWeekAheadInfo', () => {
         fetchedAt: '2026-09-14T00:00:00Z',
       }),
     );
-    const info = peekWeekAheadInfo(campusDateTime('2026-09-23T12:00:00'));
+    const info = peekWeekAheadInfo(campusDateTime('2026-09-23', '12:00'));
     expect(info).not.toBeNull();
-    expect(info?.weekStartDate.getFullYear()).toBe(2026);
-    expect(info?.weekStartDate.getMonth()).toBe(8); // September, 0-indexed
-    expect(info?.weekStartDate.getDate()).toBe(21);
+    expect(info?.weekStartDate).toEqual(campusDateTime('2026-09-21'));
+    expect(info?.weekEndDate).toEqual(campusDateTime('2026-09-28'));
   });
 
   it('never throws even with a corrupt cache', () => {
