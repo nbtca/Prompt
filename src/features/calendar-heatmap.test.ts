@@ -43,7 +43,7 @@ describe('renderHeatmap', () => {
 
   it('contains the title from i18n', () => {
     const output = renderHeatmap(buckets, today, { color: false });
-    expect(output).toContain('Activity (last 12 months)');
+    expect(output).toContain('Activity (Last 12 Months)');
   });
 
   it('contains legend words', () => {

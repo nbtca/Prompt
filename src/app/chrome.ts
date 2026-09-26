@@ -30,7 +30,7 @@ function renderRule(cols: number): string {
 }
 
 function renderTabs(views: { id: ViewId; title: string }[], active: ViewId, cols: number): string {
-  const dot = pickIcon('·', '-');
+  const dot = glyph.sep();
   const full =
     space.indent +
     views
@@ -125,10 +125,10 @@ export function fitFooterHint(cols: number, ...candidates: string[]): string {
 
 export function captureFooterHint(cols = Number.POSITIVE_INFINITY): string {
   const trans = t();
-  const dot = pickIcon('·', '-');
+  const dot = glyph.sep();
   return fitFooterHint(
     cols,
-    `${glyph.enter()} ${trans.common.confirm} ${dot} Esc ${trans.common.back} ${dot} Ctrl+C ${trans.common.exit}`,
+    `${glyph.enter()} ${trans.menu.hintConfirm} ${dot} Esc ${trans.menu.hintBack} ${dot} Ctrl+C ${trans.menu.hintQuit}`,
     `${glyph.enter()} Esc Ctrl+C`,
     'Ctrl+C Esc',
     'Ctrl+C',
@@ -136,7 +136,7 @@ export function captureFooterHint(cols = Number.POSITIVE_INFINITY): string {
 }
 
 export function digitTabHint(tabCount: number): string {
-  const dot = pickIcon('·', '-');
+  const dot = glyph.sep();
   return tabCount > 1 ? `1-${tabCount} / Tab ${t().menu.hintTabs} ${dot} ` : '';
 }
 
@@ -146,7 +146,7 @@ export function passiveFooterHint(
   canGoBack = true,
 ): string {
   const trans = t();
-  const dot = pickIcon('·', '-');
+  const dot = glyph.sep();
   const compactTabs = tabCount > 1 ? `1-${tabCount}/Tab ${dot} ` : '';
   const back = canGoBack ? `Esc ${trans.menu.hintBack} ${dot} ` : '';
   const backKey = canGoBack ? `Esc ${dot} ` : '';
@@ -163,7 +163,7 @@ export function passiveFooterHint(
 
 function interactiveFooterHint(tabCount: number, cols: number): string {
   const trans = t();
-  const dot = pickIcon('·', '-');
+  const dot = glyph.sep();
   const compactTabs = tabCount > 1 ? `1-${tabCount}/Tab ${dot} ` : '';
   const move = `${glyph.updown()} ${trans.menu.hintMove} ${dot} ${glyph.enter()} ${trans.menu.hintOpen}`;
   const quit = `q ${trans.menu.hintQuit}`;

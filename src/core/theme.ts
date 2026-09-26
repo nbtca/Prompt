@@ -66,6 +66,7 @@ export const glyph = {
   rule: () => pickIcon('─', '-'),
   bar: () => pickIcon('│', '|'),
   bullet: () => pickIcon('·', '.'),
+  sep: () => pickIcon('·', '-'),
   dot: () => pickIcon('●', '*'),
   updown: () => pickIcon('↑↓', 'up/down'),
   enter: () => pickIcon('⏎', 'enter'),

@@ -5,7 +5,7 @@ import { ListField, computeMaxVisible } from '../fields/list-field.js';
 import { TextField } from '../fields/text-field.js';
 import { hubShowsHeatmap, renderEvents, type EventsViewState } from './events-render.js';
 import { setVimKeysActive } from '../../core/vim-keys.js';
-import { pickIcon } from '../../core/icons.js';
+import { glyph } from '../../core/theme.js';
 import { padEndV, visualWidth } from '../../core/text.js';
 import type { MenuOption } from '../../core/components/menu.js';
 import { fmt, t } from '../../i18n/index.js';
@@ -74,7 +74,7 @@ function showList(
   isEnded: (event: CalendarEvent) => boolean = () => false,
 ): void {
   const trans = t();
-  const dot = pickIcon('·', '-');
+  const dot = glyph.sep();
   const display = events.map(toDisplayEvent);
   const whenWidth = Math.max(0, ...display.map((event) => visualWidth(eventWhen(event))));
   const options: MenuOption[] = [
@@ -125,7 +125,7 @@ function showDetail(raw: CalendarEvent): void {
   const trans = t();
   listState = state;
   const e = toDisplayEvent(raw);
-  const dot = pickIcon('·', '-');
+  const dot = glyph.sep();
   state = {
     mode: 'detail',
     detailTitle: e.title,
@@ -335,7 +335,11 @@ export const eventsView = {
           const trans = t();
           showList(
             ctx,
-            `${trans.calendar.search}: ${query}`,
+            fmt(trans.calendar.searchResultsTitle, {
+              query,
+              count: upcoming.length + past.length,
+              sep: glyph.sep(),
+            }),
             [...upcoming, ...past],
             fmt(trans.calendar.searchNoResultsFor, { query }),
             (event) => hasEnded(event, now),

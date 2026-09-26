@@ -58,7 +58,7 @@ export function renderNextClassBanner(
   const when = formatClassCountdown(p);
   const styleWhen = isCountdownUrgent(p) ? c.warn : type.hint;
   const whenStyled = styleWhen(when);
-  const dot = pickIcon('·', '-');
+  const dot = glyph.sep();
   const marker = type.active(glyph.dot());
   const separator = `  ${dot}  `;
   const detailedPrefix = labelled
@@ -152,7 +152,7 @@ function renderTimeline(
 
   const today = campusIsoDate(now);
   const minute = Math.floor(now.getTime() / 60_000) * 60_000;
-  const dot = pickIcon('·', '-');
+  const dot = glyph.sep();
   const rule = pickIcon('─', '-');
   const midConnector = pickIcon('┼', '+');
   const topConnector = pickIcon('┬', '+');
@@ -504,7 +504,7 @@ export function renderWeekAgenda(
   const todayWd = schedule.weekdayAt(now);
   const width = lineBudget(cols);
   const todayMark = pickIcon('•', '*');
-  const dot = pickIcon('·', '-');
+  const dot = glyph.sep();
   const pointer = glyph.cursor();
   const labels = WEEKDAY_KEYS.map(
     (_, i) => `${weekdayShortLabel(i + 1)}${i + 1 === todayWd ? todayMark : ''}`,
@@ -661,7 +661,7 @@ export function renderUnresolvedItems(
       .map((part) => `${indent}${part}`)
       .join('\n');
   }
-  const dot = pickIcon('·', '-');
+  const dot = glyph.sep();
   const lines: string[] = [];
   for (const item of items) {
     const name = item.sourceFields.kcmc ?? trans.timetable.unresolvedUnknownItem;
@@ -782,7 +782,7 @@ export function renderTermDensity(
   ];
   const summaryLines: string[] = [];
   for (const part of summary) {
-    const joined = `${summaryLines.at(-1) ?? ''}  ${pickIcon('·', '-')}  ${part}`;
+    const joined = `${summaryLines.at(-1) ?? ''}  ${glyph.sep()}  ${part}`;
     if (summaryLines.length > 0 && visualWidth(joined) <= contentWidth) {
       summaryLines[summaryLines.length - 1] = joined;
     } else {

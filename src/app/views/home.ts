@@ -174,7 +174,7 @@ export function renderHome(data: HomeData, now: Date, bodyRows = 100, cols = 80)
   if (unresolvedCount > 0) {
     lines.push(
       ...wrappedIndentedLines(
-        `${pickIcon('⚠', '!')} ${trans.timetable.hubUnresolved} · ${unresolvedCount}`,
+        `${pickIcon('⚠', '!')} ${trans.timetable.hubUnresolved} ${glyph.sep()} ${unresolvedCount}`,
         cols,
         c.warn,
       ),

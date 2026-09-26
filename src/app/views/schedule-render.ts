@@ -186,6 +186,7 @@ function hubPreGridLines(
         fmt(trans.timetable.termStartsIn, {
           date: state.weekOne,
           days: String(daysUntil(now, state.weekOne)),
+          sep: glyph.sep(),
         }),
       ),
     );
@@ -201,6 +202,7 @@ function hubPreGridLines(
       fmt(trans.timetable.todayHeading, {
         weekday: weekdayShortLabel(todayWd),
         week: String(week),
+        sep: glyph.sep(),
       }),
     ),
     ...renderTodayTimeline(today, tt.periods, now, cols).split('\n'),
@@ -455,7 +457,10 @@ function renderPublicBody(
   } else if (w.status === 'onBreak') {
     lines.push(
       ...headingLines(
-        fmt(trans.timetable.onBreak, { title: sanitizeTerminalLine(w.breakTitle) }),
+        fmt(trans.timetable.onBreak, {
+          title: sanitizeTerminalLine(w.breakTitle),
+          sep: glyph.sep(),
+        }),
         cols,
       ),
     );
@@ -464,7 +469,11 @@ function renderPublicBody(
       w.semester === '1' ? trans.timetable.semester1 : trans.timetable.semester2;
     lines.push(
       ...headingLines(
-        `${fmt(trans.timetable.academicYearSuffix, { year: sanitizeTerminalLine(w.academicYear) })} · ${semesterLabel} · ${fmt(trans.timetable.weekLabel2, { week: String(w.currentWeek) })}`,
+        [
+          fmt(trans.timetable.academicYearSuffix, { year: sanitizeTerminalLine(w.academicYear) }),
+          semesterLabel,
+          fmt(trans.timetable.weekLabel2, { week: String(w.currentWeek) }),
+        ].join(` ${glyph.sep()} `),
         cols,
       ),
     );

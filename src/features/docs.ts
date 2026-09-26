@@ -8,6 +8,7 @@ import { warning, createSpinner } from '../core/ui.js';
 import { pickIcon } from '../core/icons.js';
 import { spawn, execFileSync } from 'child_process';
 import { URLS } from '../config/data.js';
+import { glyph } from '../core/theme.js';
 import { t, fmt, getCurrentLanguage, type Translations } from '../i18n/index.js';
 import { enterScreen, breadcrumb } from '../core/transitions.js';
 import { sanitizeTerminalLine, sanitizeTerminalText, truncate } from '../core/text.js';
@@ -939,13 +940,18 @@ async function displayWithLess(doc: RenderedDoc, filePath: string): Promise<void
   const header = [
     '',
     chalk.bold.cyan(`  ${title}`),
-    chalk.dim(`  ${filePath}`) + chalk.dim(`  ·  ${readTime}`),
+    chalk.dim(`  ${filePath}`) + chalk.dim(`  ${glyph.sep()}  ${readTime}`),
     rule,
     ...(tocBlock ? [tocBlock] : []),
     '',
   ].join('\n');
 
-  const footer = ['', rule, chalk.dim(`  ${trans.docs.endOfDocument}`), ''].join('\n');
+  const footer = [
+    '',
+    rule,
+    chalk.dim(`  ${fmt(trans.docs.endOfDocument, { sep: glyph.sep() })}`),
+    '',
+  ].join('\n');
 
   const plain = chalk.level === 0;
   const fullContent = plain
@@ -1032,7 +1038,7 @@ async function showArchivedSection(files: ListedDoc[]): Promise<void> {
   spinner.stop();
   const subDirs = new Set(groupFiles.map((f) => f.path.split('/')[2]).filter(Boolean));
   const fileSelected = await runMenu({
-    title: `${trans.docs.categoryArchived} · ${groupKey}`,
+    title: `${trans.docs.categoryArchived} ${glyph.sep()} ${groupKey}`,
     options: [
       ...groupFiles.map((f) => {
         const sub = f.path.split('/').slice(2, -1).join('/');

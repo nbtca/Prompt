@@ -197,7 +197,7 @@ function buildArchivedFilesField(
         ...docLabel(f),
         ...optionalHint(
           subDirs.size > 1
-            ? [sanitizeTerminalLine(sub), f.summary].filter(Boolean).join(' · ')
+            ? [sanitizeTerminalLine(sub), f.summary].filter(Boolean).join(` ${glyph.sep()} `)
             : f.summary,
         ),
       };
@@ -205,7 +205,7 @@ function buildArchivedFilesField(
     { value: '__back__', label: backLabel() },
   ];
   return new ListField({
-    title: `${trans.docs.categoryArchived} · ${groupKey}`,
+    title: `${trans.docs.categoryArchived} ${glyph.sep()} ${groupKey}`,
     options,
     maxVisible,
     initialIndex,
@@ -250,7 +250,11 @@ function buildSearchResultsField(
     { value: '__back__', label: backLabel() },
   ];
   return new ListField({
-    title: fmt(trans.docs.searchResultsTitle, { query: currentSearchQuery, count: matches.length }),
+    title: fmt(trans.docs.searchResultsTitle, {
+      query: currentSearchQuery,
+      count: matches.length,
+      sep: glyph.sep(),
+    }),
     options,
     maxVisible,
     initialIndex,
@@ -688,7 +692,7 @@ export const docsView = {
     }
     if (state.mode === 'reader' && !state.readerLinksField) {
       const trans = t();
-      const dot = pickIcon('·', '-');
+      const dot = glyph.sep();
       const hasLinks = (state.readerLinks?.length ?? 0) > 0;
       const linkHint = hasLinks ? `f ${trans.docs.readerLinksHint} ${dot} ` : '';
       const pageHint = `${glyph.updown()} PgUp/PgDn ${dot} `;

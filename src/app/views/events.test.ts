@@ -394,6 +394,7 @@ describe('eventsView navigation', () => {
     expect(old).toBeGreaterThan(next);
     expect(lines[old]).toContain(t().calendar.endedLabel);
     expect(lines[next]).not.toContain(t().calendar.endedLabel);
+    expect(lines).toContain('   Results for “meetup” · 2');
   });
 
   it('marks recurring events in lists and lines up all-day titles with timed ones', async () => {
