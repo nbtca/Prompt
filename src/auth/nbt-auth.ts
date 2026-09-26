@@ -1,6 +1,6 @@
 import { createCipheriv, randomFillSync } from 'node:crypto';
-import { load } from 'cheerio';
 import { AuthError } from './errors.js';
+import { elements, outermost, parseHtml, textContent, type HtmlElement } from './html.js';
 import {
   JWXT_HOST,
   cookieSessionFromSerialized,
@@ -95,17 +95,34 @@ export function encryptCampusPassword(
   }
 }
 
+type Match = (element: HtmlElement) => boolean;
+
+const hasId =
+  (id: string): Match =>
+  (element) =>
+    element.attributes.get('id') === id;
+
+const namedInput =
+  (name: string): Match =>
+  (element) =>
+    element.name === 'input' && element.attributes.get('name') === name;
+
+function inputValue(element: HtmlElement | undefined): string {
+  if (element?.name === 'textarea') return textContent(element).trim();
+  if (element?.name === 'input' || element?.name === 'option')
+    return element.attributes.get('value')?.trim() ?? '';
+  return '';
+}
+
 function parseLoginForm(html: string, responseUrl: string): LoginForm {
-  const $ = load(html);
-  const form = $('#pwdFromId');
-  const execution = String(
-    form.find('input[name="execution"], #execution').first().val() ?? '',
-  ).trim();
-  const salt = String(
-    form.find('#pwdEncryptSalt, input[name="pwdEncryptSalt"]').first().val() ?? '',
-  ).trim();
-  const actionValue = form.attr('action');
-  if (form.length === 0 || !execution || !salt || !actionValue) {
+  const forms = outermost(parseHtml(html), hasId('pwdFromId'));
+  const fields = forms.flatMap((form) => elements(form, false));
+  const first = (...matches: Match[]) =>
+    inputValue(fields.find((element) => matches.some((match) => match(element))));
+  const execution = first(namedInput('execution'), hasId('execution'));
+  const salt = first(hasId('pwdEncryptSalt'), namedInput('pwdEncryptSalt'));
+  const actionValue = forms[0]?.attributes.get('action');
+  if (!execution || !salt || !actionValue) {
     throw new AuthError(
       'LOGIN_PAGE_CHANGED',
       'login-page',
@@ -135,12 +152,15 @@ function hasLoginFingerprint(html: string): boolean {
 }
 
 function classifyRejectedLogin(html: string): AuthError {
-  const $ = load(html);
+  const root = parseHtml(html);
+  const text = (match: Match) => outermost(root, match).map(textContent).join('');
   const visibleError = [
-    $('#showErrorTip').text(),
-    $('#showWarnTip').text(),
-    $('#errorMsg').text(),
-    $('.alert-danger').text(),
+    text(hasId('showErrorTip')),
+    text(hasId('showWarnTip')),
+    text(hasId('errorMsg')),
+    text((element) =>
+      (element.attributes.get('class') ?? '').split(/[\t\n\f\r ]+/).includes('alert-danger'),
+    ),
   ]
     .join(' ')
     .replace(/\s+/g, ' ')
