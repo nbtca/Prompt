@@ -51,8 +51,6 @@ npm run check
 `check` runs formatting, lint, full TypeScript validation, tests, build, package
 consumer checks and dependency audit.
 
-Project guides and release notes live in the [Wiki](https://github.com/nbtca/Prompt/wiki).
-
 ## License
 
 MIT
