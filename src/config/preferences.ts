@@ -106,5 +106,5 @@ export function applyColorModePreference(forcePlain: boolean): void {
   else process.env['NO_COLOR'] = inheritedNoColor;
   if (inheritedForceColor === undefined) delete process.env['FORCE_COLOR'];
   else process.env['FORCE_COLOR'] = inheritedForceColor;
-  chalk.level = detectedColorLevel;
+  chalk.level = inheritedNoColor ? 0 : detectedColorLevel;
 }

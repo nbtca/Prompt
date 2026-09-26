@@ -1,5 +1,5 @@
 import chalk from 'chalk';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { applyColorModePreference } from './preferences.js';
 
 const originalColorMode = process.env['NBTCA_COLOR_MODE'];
@@ -38,5 +38,20 @@ describe('applyColorModePreference', () => {
     applyColorModePreference(false);
     expect(process.env['NO_COLOR']).toBe(originalNoColor);
     expect(process.env['FORCE_COLOR']).toBe(originalForceColor);
+  });
+
+  it('honors an inherited NO_COLOR in auto mode', async () => {
+    vi.resetModules();
+    process.env['NO_COLOR'] = '1';
+    process.env['NBTCA_COLOR_MODE'] = 'auto';
+    const freshChalk = (await import('chalk')).default;
+    freshChalk.level = 3;
+    const fresh = await import('./preferences.js');
+    fresh.applyColorModePreference(false);
+    expect(freshChalk.level).toBe(0);
+
+    process.env['NBTCA_COLOR_MODE'] = 'on';
+    fresh.applyColorModePreference(false);
+    expect(freshChalk.level).toBe(3);
   });
 });
