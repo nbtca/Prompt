@@ -143,7 +143,7 @@ describe('checkServices', () => {
     expect(fetchMock).toHaveBeenCalledTimes(8);
   });
 
-  it('times out ignored requests, cleans race listeners, and preserves retries', async () => {
+  it('times out ignored requests, cleans race listeners, and retries all but campus-only services', async () => {
     const listenerSpies: {
       add: ReturnType<typeof vi.spyOn>;
       remove: ReturnType<typeof vi.spyOn>;
@@ -163,8 +163,8 @@ describe('checkServices', () => {
     const result = await settleWithin(checkServices({ timeoutMs: 5, retries: 1 }), 200);
 
     expect(result.every((item) => !item.ok && item.error === 'Request timed out')).toBe(true);
-    expect(fetchMock).toHaveBeenCalledTimes(16);
-    expect(listenerSpies).toHaveLength(16);
+    expect(fetchMock).toHaveBeenCalledTimes(14);
+    expect(listenerSpies).toHaveLength(14);
     for (const { add, remove } of listenerSpies) {
       expect(add).toHaveBeenCalledOnce();
       expect(remove).toHaveBeenCalledOnce();

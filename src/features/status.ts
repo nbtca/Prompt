@@ -160,6 +160,9 @@ async function checkService(
   }
 }
 
+// Campus-only hosts answer fast on the campus network and never off it.
+const INTRANET_TIMEOUT_MS = 1500;
+
 async function checkServiceWithRetry(
   target: ServiceTarget,
   timeoutMs: number,
@@ -189,7 +192,9 @@ export async function checkServices(options: StatusCheckOptions = {}): Promise<S
   if (options.signal?.aborted) throw abortError(options.signal);
   return Promise.all(
     getServiceTargets().map((target) =>
-      checkServiceWithRetry(target, timeoutMs, retries, options.signal),
+      target.intranet
+        ? checkServiceWithRetry(target, Math.min(timeoutMs, INTRANET_TIMEOUT_MS), 0, options.signal)
+        : checkServiceWithRetry(target, timeoutMs, retries, options.signal),
     ),
   );
 }
