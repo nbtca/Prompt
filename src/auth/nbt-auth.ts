@@ -1,6 +1,6 @@
 import { createCipheriv, randomFillSync } from 'node:crypto';
-import { load } from 'cheerio';
 import { AuthError } from './errors.js';
+import { errorText, hasClass, hasId, readLoginForm } from './login-page.js';
 import {
   JWXT_HOST,
   cookieSessionFromSerialized,
@@ -96,16 +96,8 @@ export function encryptCampusPassword(
 }
 
 function parseLoginForm(html: string, responseUrl: string): LoginForm {
-  const $ = load(html);
-  const form = $('#pwdFromId');
-  const execution = String(
-    form.find('input[name="execution"], #execution').first().val() ?? '',
-  ).trim();
-  const salt = String(
-    form.find('#pwdEncryptSalt, input[name="pwdEncryptSalt"]').first().val() ?? '',
-  ).trim();
-  const actionValue = form.attr('action');
-  if (form.length === 0 || !execution || !salt || !actionValue) {
+  const { action: actionValue, execution, salt } = readLoginForm(html);
+  if (!execution || !salt || !actionValue) {
     throw new AuthError(
       'LOGIN_PAGE_CHANGED',
       'login-page',
@@ -135,12 +127,11 @@ function hasLoginFingerprint(html: string): boolean {
 }
 
 function classifyRejectedLogin(html: string): AuthError {
-  const $ = load(html);
   const visibleError = [
-    $('#showErrorTip').text(),
-    $('#showWarnTip').text(),
-    $('#errorMsg').text(),
-    $('.alert-danger').text(),
+    errorText(html, hasId('showErrorTip')),
+    errorText(html, hasId('showWarnTip')),
+    errorText(html, hasId('errorMsg')),
+    errorText(html, hasClass('alert-danger')),
   ]
     .join(' ')
     .replace(/\s+/g, ' ')
