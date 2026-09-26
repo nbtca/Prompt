@@ -82,7 +82,7 @@ const RENDER_CACHE_MAX = 50;
 const renderCache = new Map<string, CacheEntry<RenderedDoc>>();
 const METADATA_CACHE_TTL_MS = 10 * 60 * 1000;
 const METADATA_CACHE_MAX = 200;
-const METADATA_CONCURRENCY = 4;
+const METADATA_CONCURRENCY = 6;
 
 interface DocMetadata {
   title: string;
@@ -570,15 +570,20 @@ function hasMermaidBlock(content: string): boolean {
 export interface DocLink {
   href: string;
   text: string;
+  external?: boolean;
 }
 
-function extractInternalLinks(markdown: string): DocLink[] {
+function isExternalHref(href: string): boolean {
+  return /^https?:\/\//i.test(href);
+}
+
+function extractLinks(markdown: string): DocLink[] {
   const links: DocLink[] = [];
-  const re = /\[([^\]]+)\]\(([^)]+)\)/g;
+  const re = /\[([^\]]+)\]\(([^)\s]+)[^)]*\)/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(markdown))) {
     const href = m[2] ?? '';
-    if (isInternalHref(href)) links.push({ text: m[1] ?? '', href });
+    if (isInternalHref(href) || isExternalHref(href)) links.push({ text: m[1] ?? '', href });
   }
   return links;
 }
@@ -618,11 +623,14 @@ export async function loadDocForReader(filePath: string, signal?: AbortSignal): 
 
   const seen = new Set<string>();
   const links: DocLink[] = [];
-  for (const raw of extractInternalLinks(renderedDoc.cleaned)) {
-    const resolved = resolveInternalHref(raw.href, filePath);
-    if (seen.has(resolved)) continue;
-    seen.add(resolved);
-    links.push({ text: sanitizeTerminalLine(raw.text), href: resolved });
+  for (const raw of extractLinks(renderedDoc.cleaned)) {
+    const external = isExternalHref(raw.href);
+    const href = external
+      ? sanitizeTerminalLine(raw.href)
+      : resolveInternalHref(raw.href, filePath);
+    if (seen.has(href)) continue;
+    seen.add(href);
+    links.push({ text: sanitizeTerminalLine(raw.text), href, ...(external ? { external } : {}) });
   }
 
   return {
@@ -685,14 +693,19 @@ function listedDoc(item: DocItem, metadata?: DocMetadata): ListedDoc {
   return {
     ...item,
     name: sanitizeTerminalLine(item.name),
-    title: displayDocTitle(item.name, metadata?.title),
+    title: metadata ? displayDocTitle(item.name, metadata.title) : '',
     summary: sanitizeTerminalLine(metadata?.summary ?? ''),
   };
+}
+
+export function withFileNameTitle(doc: ListedDoc): ListedDoc {
+  return doc.title ? doc : { ...doc, title: displayDocTitle(doc.name) };
 }
 
 export async function fetchDocMetadata(
   items: readonly DocItem[],
   signal?: AbortSignal,
+  onDoc?: (index: number, doc: ListedDoc) => void,
 ): Promise<ListedDoc[]> {
   const results = items.map((item) => listedDoc(item));
   let nextIndex = 0;
@@ -713,8 +726,9 @@ export async function fetchDocMetadata(
         results[index] = listedDoc(item, await loadDocMetadata(item.path, signal));
       } catch (error) {
         if (signal?.aborted) throw error;
-        results[index] = listedDoc(item);
+        results[index] = withFileNameTitle(listedDoc(item));
       }
+      onDoc?.(index, results[index]);
     }
   }
 
@@ -723,15 +737,15 @@ export async function fetchDocMetadata(
   return results;
 }
 
-export function peekListedDocs<T extends DocItem>(
-  items: readonly T[],
-): { docs: (T | ListedDoc)[]; complete: boolean } {
+export function peekListedDocs(items: readonly DocItem[]): {
+  docs: ListedDoc[];
+  complete: boolean;
+} {
   let complete = true;
   const docs = items.map((item) => {
     const metadata = peekDocMetadata(item);
-    if (metadata) return listedDoc(item, metadata);
-    complete = false;
-    return item;
+    if (!metadata) complete = false;
+    return listedDoc(item, metadata);
   });
   return { docs, complete };
 }
@@ -739,26 +753,46 @@ export function peekListedDocs<T extends DocItem>(
 export async function fetchSectionMetadata(
   section: DocSection,
   signal?: AbortSignal,
+  onDoc?: (index: number, doc: ListedDoc) => void,
 ): Promise<DocSection> {
-  const files = await fetchDocMetadata(section.files, signal);
+  const files = await fetchDocMetadata(section.files, signal, onDoc);
   return { ...section, count: files.length, files };
 }
 
+function withoutLeadingTitle(excerpt: string, title: string): string {
+  const text = excerpt.trim();
+  return title && text.startsWith(title) ? text.slice(title.length).trimStart() : text;
+}
+
 function searchDoc(result: DocsSearchResult): SearchDoc {
+  const title = displayDocTitle(result.name, result.title);
   return {
     name: sanitizeTerminalLine(result.name),
     path: result.path,
     type: 'file',
-    title: displayDocTitle(result.name, result.title),
+    title,
     summary: sanitizeTerminalLine(result.summary),
-    excerpt: sanitizeTerminalLine(result.excerpt),
+    excerpt: withoutLeadingTitle(sanitizeTerminalLine(result.excerpt), title),
     route: result.route,
     score: result.score,
     section: result.section,
   };
 }
 
-export async function searchDocuments(query: string, signal?: AbortSignal): Promise<SearchDoc[]> {
+export async function searchDocuments(
+  query: string,
+  signal?: AbortSignal,
+  onProgress?: (done: number, total: number) => void,
+): Promise<SearchDoc[]> {
+  if (onProgress) {
+    const items = await fetchAllDocs(signal);
+    let done = 0;
+    onProgress(done, items.length);
+    await fetchDocMetadata(items, signal, () => {
+      done += 1;
+      onProgress(done, items.length);
+    });
+  }
   return (
     await runDocsClientOperation(signal, (client) => client.search(query, { limit: 20 }))
   ).map(searchDoc);
