@@ -41,6 +41,7 @@ const searchDocumentsMock = vi.fn().mockResolvedValue([]);
 const openDocsInBrowserMock = vi.fn().mockResolvedValue(true);
 const clearDocsCacheMock = vi.fn();
 const peekSectionsMock = vi.fn((): DocSection[] | null => null);
+const peekListedDocsMock = vi.fn((): ListedDoc[] | undefined => undefined);
 
 function deferred<T>(): {
   promise: Promise<T>;
@@ -59,6 +60,7 @@ vi.mock('../../features/docs.js', async (importOriginal) => {
     ...actual,
     fetchSections: fetchSectionsMock,
     peekSections: peekSectionsMock,
+    peekListedDocs: peekListedDocsMock,
     fetchDocMetadata: fetchDocMetadataMock,
     fetchSectionMetadata: fetchSectionMetadataMock,
     searchDocuments: searchDocumentsMock,
@@ -194,6 +196,7 @@ describe('docsView', () => {
       setFreshLanguage('zh');
       await freshDocsView.load(ctx);
       freshDocsView.handleKey('\r', ctx);
+      await new Promise((resolve) => setTimeout(resolve, 0));
       freshDocsView.handleKey('\x1b[B', ctx);
 
       setLanguage('en');
@@ -237,6 +240,7 @@ describe('docsView', () => {
       freshDocsView.handleKey('\r', ctx);
       freshDocsView.handleKey('\x1b[B', ctx);
       freshDocsView.handleKey('\r', ctx);
+      await new Promise((resolve) => setTimeout(resolve, 0));
       freshDocsView.handleKey('\x1b[B', ctx);
 
       setLanguage('en');
@@ -306,6 +310,7 @@ describe('docsView file list', () => {
     const ctx = fakeCtx();
     await docsView.load(ctx);
     docsView.handleKey('\r', ctx); // sections field has one option (tutorial) selected by default
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     const out = stripAnsi(docsView.render(ctx).join('\n'));
     expect(out).toContain('Os Skills');
@@ -344,6 +349,7 @@ describe('docsView native reader (no shell-out to less/glow)', () => {
   async function openTutorialFiles(ctx: AppContext): Promise<void> {
     await freshDocsView.load(ctx);
     freshDocsView.handleKey('\r', ctx); // sections -> files
+    await flush();
   }
 
   function flush(): Promise<void> {
@@ -399,6 +405,7 @@ describe('docsView native reader (no shell-out to less/glow)', () => {
     const ctx = fakeCtx();
     const loading = freshDocsView.load(ctx);
     freshDocsView.handleKey('\r', ctx);
+    await flush();
     freshDocsView.handleKey('\r', ctx);
     await flush();
     expect(stripAnsi(freshDocsView.render(ctx).join('\n'))).toContain('OS Skills content');
@@ -515,7 +522,34 @@ describe('docsView native reader (no shell-out to less/glow)', () => {
     expect(stripAnsi(freshDocsView.render(ctx).join('\n'))).not.toContain('OS Skills content');
   });
 
-  it('replaces filename fallbacks with document titles without moving the selection', async () => {
+  it('shows stored document titles at once instead of filenames', async () => {
+    peekListedDocsMock.mockReturnValueOnce([
+      {
+        name: 'index.md',
+        path: 'tutorial/index.md',
+        type: 'file',
+        title: 'Guide landing page',
+        summary: '',
+      },
+      {
+        name: 'os-skills.md',
+        path: 'tutorial/manual/os-skills.md',
+        type: 'file',
+        title: 'Operating Systems Handbook',
+        summary: 'Practical workstation skills',
+      },
+    ]);
+    const ctx = fakeCtx();
+    await freshDocsView.load(ctx);
+    freshDocsView.handleKey('\r', ctx);
+
+    const out = stripAnsi(freshDocsView.render(ctx).join('\n'));
+    expect(out).toContain('Operating Systems Handbook');
+    expect(out).not.toContain('Os Skills');
+    expect(fetchSectionMetadataMock).not.toHaveBeenCalled();
+  });
+
+  it('shows a loading state rather than filenames until titles arrive', async () => {
     let resolveMetadata!: (section: DocSection) => void;
     fetchSectionMetadataMock.mockImplementationOnce(
       () =>
@@ -525,7 +559,11 @@ describe('docsView native reader (no shell-out to less/glow)', () => {
     );
     const ctx = fakeCtx();
     await openTutorialFiles(ctx);
-    freshDocsView.handleKey('\x1b[B', ctx);
+    const loading = stripAnsi(freshDocsView.render(ctx).join('\n'));
+    expect(loading).toContain('Loading');
+    expect(loading).not.toContain('Os Skills');
+    expect(freshDocsView.isBusy()).toBe(true);
+    expect(freshDocsView.contextPath()).toEqual(['Docs', 'Guide']);
 
     resolveMetadata({
       key: 'guide',
@@ -553,11 +591,20 @@ describe('docsView native reader (no shell-out to less/glow)', () => {
     const out = stripAnsi(freshDocsView.render(ctx).join('\n'));
     expect(out).toContain('Operating Systems Handbook');
     expect(out).toContain('Practical workstation skills');
-    const selected = out.split('\n').find((line) => line.includes('Operating Systems Handbook'));
-    expect(selected?.trim().startsWith('→')).toBe(true);
+    expect(freshDocsView.isBusy()).toBe(false);
   });
 
-  it('does not let late metadata replace a document opened from the fallback list', async () => {
+  it('falls back to filename titles with an error when the titles cannot load', async () => {
+    fetchSectionMetadataMock.mockRejectedValueOnce(new Error('offline'));
+    const ctx = fakeCtx();
+    await openTutorialFiles(ctx);
+
+    const out = stripAnsi(freshDocsView.render(ctx).join('\n'));
+    expect(out).toContain('Os Skills');
+    expect(out).toContain(t().docs.loadError);
+  });
+
+  it('ignores titles that arrive after leaving the section', async () => {
     let resolveMetadata!: (section: DocSection) => void;
     fetchSectionMetadataMock.mockImplementationOnce(
       () =>
@@ -567,19 +614,14 @@ describe('docsView native reader (no shell-out to less/glow)', () => {
     );
     const ctx = fakeCtx();
     await openTutorialFiles(ctx);
-    freshDocsView.handleKey('\x1b[B', ctx);
-    freshDocsView.handleKey('\r', ctx);
+    expect(freshDocsView.handleBack(ctx)).toBe(true);
+
+    resolveMetadata({ key: 'guide', label: 'Guide', count: 0, files: [] });
     await flush();
 
-    resolveMetadata({
-      key: 'guide',
-      label: 'Guide',
-      count: 0,
-      files: [],
-    });
-    await flush();
-
-    expect(stripAnsi(freshDocsView.render(ctx).join('\n'))).toContain('OS Skills content');
+    const out = stripAnsi(freshDocsView.render(ctx).join('\n'));
+    expect(out).toContain(t().docs.searchPrompt);
+    expect(out).not.toContain('Overview');
   });
 
   it('ignores search results that arrive after leaving the search screen', async () => {

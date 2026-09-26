@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { createDocsClient } from '@nbtca/docs';
-import type { DocItem, DocsClient } from '@nbtca/docs';
+import { createDocsClient, parseDoc } from '@nbtca/docs';
+import type { DocItem, DocPage, DocsClient } from '@nbtca/docs';
 import { createDocsStore } from './docs-store.js';
 
 interface DocsFetchStore {
@@ -207,6 +207,16 @@ function clientFor(signal: AbortSignal | undefined): DocsClient {
 
 export function peekDocs(): DocItem[] | undefined {
   return defaultClient.peekAll();
+}
+
+export function peekDocument(item: DocItem): DocPage | undefined {
+  if (!item.sha) return undefined;
+  try {
+    const content = store.read(`blob-${item.sha}`);
+    return content === undefined ? undefined : parseDoc(item.path, content);
+  } catch {
+    return undefined;
+  }
 }
 
 export function clearDocsClients(): void {

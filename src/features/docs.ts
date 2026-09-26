@@ -12,7 +12,7 @@ import { t, fmt, getCurrentLanguage, type Translations } from '../i18n/index.js'
 import { enterScreen, breadcrumb } from '../core/transitions.js';
 import { sanitizeTerminalLine, sanitizeTerminalText, truncate } from '../core/text.js';
 import { isInternalHref, renderMarkdown } from './docs-markdown.js';
-import { clearDocsClients, peekDocs, runDocsClientOperation } from './docs-client.js';
+import { clearDocsClients, peekDocs, peekDocument, runDocsClientOperation } from './docs-client.js';
 import { launchBrowserUrl } from './links.js';
 import type { DocItem, DocPage, DocsSearchResult } from '@nbtca/docs';
 
@@ -163,6 +163,16 @@ function setMetadata(path: string, value: DocMetadata): void {
     const oldest = metadataCache.keys().next().value;
     if (oldest) metadataCache.delete(oldest);
   }
+}
+
+function peekDocMetadata(item: DocItem): DocMetadata | undefined {
+  const cached = getFreshMetadata(item.path);
+  if (cached) return cached;
+  const page = peekDocument(item);
+  if (!page) return undefined;
+  const metadata = metadataFromPage(page);
+  setMetadata(item.path, metadata);
+  return metadata;
 }
 
 function loadDocMetadata(path: string, signal?: AbortSignal): Promise<DocMetadata> {
@@ -711,6 +721,16 @@ export async function fetchDocMetadata(
   const workerCount = Math.min(METADATA_CONCURRENCY, items.length);
   await Promise.all(Array.from({ length: workerCount }, worker));
   return results;
+}
+
+export function peekListedDocs(items: readonly DocItem[]): ListedDoc[] | undefined {
+  const listed: ListedDoc[] = [];
+  for (const item of items) {
+    const metadata = peekDocMetadata(item);
+    if (!metadata) return undefined;
+    listed.push(listedDoc(item, metadata));
+  }
+  return listed;
 }
 
 export async function fetchSectionMetadata(

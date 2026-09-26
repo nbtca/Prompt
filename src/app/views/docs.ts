@@ -14,6 +14,7 @@ import {
   peekSections,
   fetchDocMetadata,
   fetchSectionMetadata,
+  peekListedDocs,
   searchDocuments,
   getArchivedGroups,
   displayDocTitle,
@@ -239,12 +240,12 @@ function relocalizeStateFields(value: DocsViewState, maxVisible: number): DocsVi
   if (value.mode === 'sections') {
     return { ...value, sectionsField: buildSectionsField() };
   }
-  if (value.mode === 'files' && currentSectionKey) {
+  if (value.mode === 'files' && value.filesField && currentSectionKey) {
     const section = sections.find((candidate) => candidate.key === currentSectionKey);
     return section
       ? {
           ...value,
-          filesField: buildFilesField(section, maxVisible, value.filesField?.selectedIndex),
+          filesField: buildFilesField(section, maxVisible, value.filesField.selectedIndex),
         }
       : value;
   }
@@ -258,14 +259,14 @@ function relocalizeStateFields(value: DocsViewState, maxVisible: number): DocsVi
       ),
     };
   }
-  if (value.mode === 'archivedFiles' && currentArchivedGroupKey) {
+  if (value.mode === 'archivedFiles' && value.archivedFilesField && currentArchivedGroupKey) {
     return {
       ...value,
       archivedFilesField: buildArchivedFilesField(
         currentArchivedGroupKey,
         archivedGroups.get(currentArchivedGroupKey) ?? [],
         maxVisible,
-        value.archivedFilesField?.selectedIndex,
+        value.archivedFilesField.selectedIndex,
       ),
     };
   }
@@ -308,10 +309,14 @@ async function openSectionFiles(ctx: AppContext, section: DocSection): Promise<v
   if (!isLifecycleActive(ctx, generation)) return;
   const requestId = ++metadataRequestId;
   currentSectionKey = section.key;
-  state = {
-    mode: 'files',
-    filesField: buildFilesField(section, computeMaxVisible(ctx.bodyRows)),
-  };
+  const stored = peekListedDocs(section.files);
+  if (stored) {
+    const ready = { ...section, files: stored };
+    replaceSection(ready);
+    state = { mode: 'files', filesField: buildFilesField(ready, computeMaxVisible(ctx.bodyRows)) };
+    return;
+  }
+  state = { mode: 'files' };
   ctx.rerender();
   try {
     const hydrated = await fetchSectionMetadata(section, ctx.signal);
@@ -340,7 +345,11 @@ async function openSectionFiles(ctx: AppContext, section: DocSection): Promise<v
       currentSectionKey !== section.key
     )
       return;
-    state = { ...state, errorMessage: t().docs.loadError };
+    state = {
+      mode: 'files',
+      filesField: buildFilesField(section, computeMaxVisible(ctx.bodyRows)),
+      errorMessage: t().docs.loadError,
+    };
   }
   if (isLifecycleActive(ctx, generation)) ctx.rerender();
 }
@@ -354,14 +363,20 @@ async function openArchivedFiles(
   if (!isLifecycleActive(ctx, generation)) return;
   const requestId = ++metadataRequestId;
   currentArchivedGroupKey = groupKey;
-  state = {
-    mode: 'archivedFiles',
-    archivedFilesField: buildArchivedFilesField(
-      groupKey,
-      groupFiles,
-      computeMaxVisible(ctx.bodyRows),
-    ),
-  };
+  const stored = peekListedDocs(groupFiles);
+  if (stored) {
+    archivedGroups.set(groupKey, stored);
+    state = {
+      mode: 'archivedFiles',
+      archivedFilesField: buildArchivedFilesField(
+        groupKey,
+        stored,
+        computeMaxVisible(ctx.bodyRows),
+      ),
+    };
+    return;
+  }
+  state = { mode: 'archivedFiles' };
   ctx.rerender();
   try {
     const hydrated = await fetchDocMetadata(groupFiles, ctx.signal);
@@ -391,7 +406,12 @@ async function openArchivedFiles(
     )
       return;
     state = {
-      ...state,
+      mode: 'archivedFiles',
+      archivedFilesField: buildArchivedFilesField(
+        groupKey,
+        groupFiles,
+        computeMaxVisible(ctx.bodyRows),
+      ),
       errorMessage: t().docs.loadError,
     };
   }
@@ -538,7 +558,11 @@ export const docsView = {
 
   isBusy(): boolean {
     return (
-      state.mode === 'loading' || state.mode === 'searchLoading' || state.mode === 'readerLoading'
+      state.mode === 'loading' ||
+      state.mode === 'searchLoading' ||
+      state.mode === 'readerLoading' ||
+      (state.mode === 'files' && !state.filesField) ||
+      (state.mode === 'archivedFiles' && !state.archivedFilesField)
     );
   },
 

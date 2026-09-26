@@ -91,13 +91,15 @@ export function renderDocs(
         : [];
       break;
     case 'files':
-      lines = state.filesField?.render(bodyRows, cols) ?? [];
+      lines = state.filesField?.render(bodyRows, cols) ?? loadingLines(trans.common.loading, cols);
       break;
     case 'archivedGroups':
       lines = state.archivedGroupsField?.render(bodyRows, cols) ?? [];
       break;
     case 'archivedFiles':
-      lines = state.archivedFilesField?.render(bodyRows, cols) ?? [];
+      lines =
+        state.archivedFilesField?.render(bodyRows, cols) ??
+        loadingLines(trans.common.loading, cols);
       break;
     case 'search':
       lines = state.searchField?.render(cols) ?? [];
