@@ -5,7 +5,7 @@ import { ListField } from '../fields/list-field.js';
 import { TextField } from '../fields/text-field.js';
 import { setLanguage } from '../../i18n/index.js';
 import { resetIconCache } from '../../core/icons.js';
-import { campusDateTime } from '../../core/calendar-day.js';
+import { campusDateTime } from '@nbtca/nbtcal/timetable';
 import { stripAnsi, visualWidth } from '../../core/text.js';
 import type { Timetable } from '@nbtca/nbtcal/timetable';
 import type { Event } from '../../features/calendar.js';
@@ -933,7 +933,7 @@ describe('renderSchedule — public mode', () => {
         nextBreakTitle: '寒假',
       },
     };
-    const out = stripAnsi(renderSchedule(state, campusDateTime('2026-10-01')).join('\n'));
+    const out = stripAnsi(renderSchedule(state, campusDateTime('2026-10-01', '00:00')).join('\n'));
     expect(out).toContain('2026-2027');
     expect(out).toContain('Term 1');
     expect(out).toContain('Week 3');
@@ -965,7 +965,7 @@ describe('renderSchedule — public mode', () => {
               nextBreakTitle: breakTitle,
             },
           },
-          campusDateTime('2026-10-01'),
+          campusDateTime('2026-10-01', '00:00'),
           100,
           20,
         );
@@ -993,7 +993,9 @@ describe('renderSchedule — public mode', () => {
         nextBreakTitle: '寒假',
       },
     };
-    const lines = renderSchedule(state, campusDateTime('2026-10-01')).map((l) => stripAnsi(l));
+    const lines = renderSchedule(state, campusDateTime('2026-10-01', '00:00')).map((l) =>
+      stripAnsi(l),
+    );
     const headingIndex = lines.findIndex((l) => l.includes('2026-2027'));
     const barIndex = lines.findIndex((l) => /\d+\/\d+/.test(l));
     expect(lines[headingIndex + 1]?.trim()).not.toBe('');
@@ -1011,7 +1013,7 @@ describe('renderSchedule — public mode', () => {
         currentWeek: 3,
       },
     };
-    expect(() => renderSchedule(state, campusDateTime('2026-10-01'))).not.toThrow();
+    expect(() => renderSchedule(state, campusDateTime('2026-10-01', '00:00'))).not.toThrow();
   });
 
   it('renders the login action field', () => {
@@ -1082,7 +1084,7 @@ describe('renderSchedule — public mode', () => {
       ] as Event[],
       publicField,
     };
-    for (const line of renderSchedule(state, campusDateTime('2026-10-01'))) {
+    for (const line of renderSchedule(state, campusDateTime('2026-10-01', '00:00'))) {
       expect(line).not.toContain('\n');
     }
   });

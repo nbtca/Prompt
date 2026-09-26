@@ -5,17 +5,12 @@ import type {
   TimetablePeriod,
   TimetableUnresolvedItem,
 } from '@nbtca/nbtcal/timetable';
-import { createTimetableSchedule } from '@nbtca/nbtcal/timetable';
+import { campusDateTime, campusIsoDate, createTimetableSchedule } from '@nbtca/nbtcal/timetable';
 import { countdownParts, isCountdownUrgent } from './calendar-query.js';
 import { c, type, space, glyph } from '../core/theme.js';
 import { pickIcon } from '../core/icons.js';
 import { padEndV, truncate, visualWidth, wrapAnsiToVisualWidth } from '../core/text.js';
-import {
-  addLocalDays,
-  campusClock,
-  campusDateTime,
-  parseLocalMonday,
-} from '../core/calendar-day.js';
+import { addLocalDays, parseLocalMonday } from '../core/calendar-day.js';
 import { t, fmt, getCurrentLanguage, type Language } from '../i18n/index.js';
 
 function span(m: TimetableMeeting, periods: readonly TimetablePeriod[]): string {
@@ -106,7 +101,8 @@ function renderTimeline(
   const sorted = [...meetings].sort((a, b) => a.startPeriod - b.startPeriod);
   if (sorted.length === 0) return `${space.indent}${type.hint(trans.timetable.noClassToday)}`;
 
-  const { date: today, time: nowStr } = campusClock(now);
+  const today = campusIsoDate(now);
+  const minute = Math.floor(now.getTime() / 60_000) * 60_000;
   const dot = pickIcon('·', '-');
   const rule = pickIcon('─', '-');
   const midConnector = pickIcon('┼', '+');
@@ -116,8 +112,10 @@ function renderTimeline(
   const lines = sorted.map((m, i) => {
     const startStr = periods.find((p) => p.period === m.startPeriod)?.start ?? '00:00';
     const endStr = periods.find((p) => p.period === m.endPeriod)?.end ?? '23:59';
-    const isLive = isToday && nowStr >= startStr && nowStr <= endStr;
-    const isDone = isToday && nowStr > endStr;
+    const end = campusDateTime(today, endStr);
+    const isLive =
+      isToday && campusDateTime(today, startStr).getTime() <= minute && minute <= end.getTime();
+    const isDone = isToday && minute > end.getTime();
     const isCursor =
       cursorPeriod !== undefined && m.startPeriod <= cursorPeriod && cursorPeriod <= m.endPeriod;
     const connector = i === 0 ? topConnector : midConnector;
@@ -132,7 +130,7 @@ function renderTimeline(
       statusText = trans.timetable.classDone;
       compactStatusText = statusText;
     } else if (isLive) {
-      const remaining = countdownParts(campusDateTime(today, endStr), now);
+      const remaining = countdownParts(end, now);
       const mins = remaining.days * 1440 + remaining.hours * 60 + remaining.minutes;
       statusText = `${trans.timetable.classLive}  ${dot}  ${fmt(trans.timetable.minutesRemaining, { minutes: String(mins) })}`;
       compactStatusText = `${mins}m`;

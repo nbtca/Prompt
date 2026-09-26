@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
-import { campusClock, campusDateTime, parseLocalDate, parseLocalMonday } from './calendar-day.js';
+import { parseLocalDate, parseLocalMonday } from './calendar-day.js';
 
 describe('local calendar days', () => {
   it('rejects normalized and non-Monday week-one dates', () => {
@@ -34,19 +34,6 @@ describe('local calendar days', () => {
       fall: [2026, 11, 2, 0],
       springDays: 7,
       fallDays: 7,
-    });
-  });
-});
-
-describe('campus clock', () => {
-  it('reads the campus date and 24-hour time whatever the host zone', () => {
-    expect(campusClock(new Date('2026-09-06T16:00:00Z'))).toEqual({
-      date: '2026-09-07',
-      time: '00:00',
-    });
-    expect(campusClock(campusDateTime('2026-09-07', '23:59'))).toEqual({
-      date: '2026-09-07',
-      time: '23:59',
     });
   });
 });

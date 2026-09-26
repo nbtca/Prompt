@@ -4,7 +4,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { setLanguage, t } from '../../i18n/index.js';
 import { resetIconCache } from '../../core/icons.js';
-import { campusDateTime } from '../../core/calendar-day.js';
+import { campusDateTime } from '@nbtca/nbtcal/timetable';
 import { stripAnsi, visualWidth } from '../../core/text.js';
 import type { AppContext } from '../view.js';
 import type * as CalendarModule from '../../features/calendar.js';
@@ -585,6 +585,31 @@ describe('homeView.load()', () => {
     };
     await homeView.load(ctx);
     expect(capturedSync).toBe(true);
+  });
+
+  it('places week events on their own campus or all-day date east of campus time', async () => {
+    const previousTimeZone = process.env.TZ;
+    process.env.TZ = 'Pacific/Auckland';
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(campusDateTime('2020-01-08', '12:00'));
+    try {
+      writeSetUpFixture(dir);
+      calendarInRange.mockReturnValue([
+        { start: new Date(2020, 0, 6), isAllDay: true, title: 'All-day Monday' },
+        { start: campusDateTime('2020-01-12', '23:00'), title: 'Late Sunday' },
+        { start: campusDateTime('2020-01-05', '23:00'), title: 'Previous Sunday' },
+      ]);
+      const ctx = fakeCtx();
+      await homeView.load(ctx);
+      const lines = stripAnsi(homeView.render(ctx).join('\n')).split('\n');
+      const titleIdx = lines.findIndex((l) => l.includes('Week overview'));
+      const cells = defined(lines[titleIdx + 3]).match(/▓▓|░░/g);
+      expect(cells).toEqual(['▓▓', '░░', '░░', '░░', '░░', '░░', '▓▓']);
+    } finally {
+      vi.useRealTimers();
+      if (previousTimeZone === undefined) delete process.env.TZ;
+      else process.env.TZ = previousTimeZone;
+    }
   });
 
   it('fills in weekAhead.eventDays from the real week-of-events after the network call resolves', async () => {

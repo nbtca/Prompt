@@ -10,7 +10,7 @@ import {
 } from './schedule-view.js';
 import { setLanguage } from '../i18n/index.js';
 import { resetIconCache } from '../core/icons.js';
-import { campusDateTime } from '../core/calendar-day.js';
+import { campusDateTime } from '@nbtca/nbtcal/timetable';
 import { stripAnsi } from '../core/text.js';
 
 describe('peekNextClassLine', () => {
@@ -208,8 +208,7 @@ describe('peekWeekAheadInfo', () => {
     );
     const info = peekWeekAheadInfo(campusDateTime('2026-09-23', '12:00'));
     expect(info).not.toBeNull();
-    expect(info?.weekStartDate).toEqual(campusDateTime('2026-09-21'));
-    expect(info?.weekEndDate).toEqual(campusDateTime('2026-09-28'));
+    expect(info?.weekStart).toBe('2026-09-21');
   });
 
   it('never throws even with a corrupt cache', () => {

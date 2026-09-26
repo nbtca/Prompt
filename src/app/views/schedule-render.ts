@@ -1,4 +1,5 @@
 import {
+  campusIsoDate,
   createTimetableSchedule,
   type AcademicTerm,
   type Timetable,
@@ -24,7 +25,7 @@ import {
 import type { AcademicWindow, OnBreak } from '@nbtca/nbtcal';
 import type { GridCursor } from './schedule-grid-cursor.js';
 import { sanitizeTerminalLine, visualWidth, wrapAnsiWithIndent } from '../../core/text.js';
-import { campusClock, isoDayDifference } from '../../core/calendar-day.js';
+import { isoDayDifference } from '../../core/calendar-day.js';
 import { loadingLines } from '../../core/components/spinner.js';
 
 export type ScheduleMode =
@@ -319,7 +320,7 @@ function renderTermProgressBar(w: AcademicWindow, cols: number): string[] | null
 }
 
 function daysUntil(now: Date, date: string): number {
-  return Math.max(0, isoDayDifference(campusClock(now).date, date));
+  return Math.max(0, isoDayDifference(campusIsoDate(now), date));
 }
 
 function renderPublicBody(

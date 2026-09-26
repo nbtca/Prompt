@@ -19,7 +19,7 @@ import {
 } from './schedule-render.js';
 import { setLanguage } from '../i18n/index.js';
 import { resetIconCache } from '../core/icons.js';
-import { campusDateTime } from '../core/calendar-day.js';
+import { campusDateTime } from '@nbtca/nbtcal/timetable';
 import { stripAnsi, visualWidth } from '../core/text.js';
 import { space } from '../core/theme.js';
 
