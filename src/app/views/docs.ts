@@ -7,7 +7,7 @@ import { setVimKeysActive } from '../../core/vim-keys.js';
 import { pickIcon } from '../../core/icons.js';
 import { glyph } from '../../core/theme.js';
 import { fmt, getCurrentLanguage, t, type Language } from '../../i18n/index.js';
-import { sanitizeTerminalLine, truncate } from '../../core/text.js';
+import { sanitizeTerminalLine } from '../../core/text.js';
 import {
   localizeDocSections,
   fetchSections,
@@ -48,8 +48,6 @@ let readerLoadingPrevState: DocsViewState | null = null;
 let readerRequestId = 0;
 let lifecycleGeneration = 0;
 
-const DOC_HINT_WIDTH = 44;
-
 function isLifecycleActive(ctx: AppContext, generation: number): boolean {
   return generation === lifecycleGeneration && ctx.signal?.aborted !== true;
 }
@@ -66,12 +64,8 @@ function backLabel(): string {
   return t().common.back;
 }
 
-function optionalHint(hint: string | undefined): { hint?: string } {
-  return hint === undefined ? {} : { hint };
-}
-
-function docHint(value: string | undefined): string | undefined {
-  return value ? truncate(value, DOC_HINT_WIDTH) : undefined;
+function optionalHint(hint: string | undefined): { hint?: string; hintColumn?: boolean } {
+  return hint ? { hint, hintColumn: true } : {};
 }
 
 function withoutReaderLinksField(value: DocsViewState): DocsViewState {
@@ -141,7 +135,7 @@ function buildFilesField(section: DocSection, maxVisible: number, initialIndex =
     ...files.map((file) => ({
       value: file.path,
       label: displayDocTitle(file.name, file.title),
-      ...optionalHint(docHint(file.summary)),
+      ...optionalHint(file.summary),
     })),
     { value: '__back__', label: backLabel() },
   ];
@@ -184,11 +178,9 @@ function buildArchivedFilesField(
         value: f.path,
         label: displayDocTitle(f.name, f.title),
         ...optionalHint(
-          docHint(
-            subDirs.size > 1
-              ? [sanitizeTerminalLine(sub), f.summary].filter(Boolean).join(' · ')
-              : f.summary,
-          ),
+          subDirs.size > 1
+            ? [sanitizeTerminalLine(sub), f.summary].filter(Boolean).join(' · ')
+            : f.summary,
         ),
       };
     }),
@@ -222,13 +214,11 @@ function buildSearchResultsField(
       value: result.path,
       label: displayDocTitle(result.name, result.title),
       ...optionalHint(
-        docHint(
-          result.excerpt ||
-            result.summary ||
-            (result.path.includes('/')
-              ? sanitizeTerminalLine(result.path.split('/').slice(0, -1).join('/'))
-              : undefined),
-        ),
+        result.excerpt ||
+          result.summary ||
+          (result.path.includes('/')
+            ? sanitizeTerminalLine(result.path.split('/').slice(0, -1).join('/'))
+            : undefined),
       ),
     })),
     { value: '__back__', label: backLabel() },

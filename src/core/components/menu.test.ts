@@ -184,6 +184,34 @@ describe('renderMenu with a hint column', () => {
     expect(text.replace(/\s/g, '')).toContain('EveningtalkonRustownership');
   });
 
+  it('keeps a summary column beside short labels instead of dropping it', () => {
+    const docs = [
+      {
+        value: 'a',
+        label: 'Join',
+        hint: 'Anyone curious about computers is welcome here, students or not',
+      },
+      {
+        value: 'b',
+        label: 'Infrastructure',
+        hint: 'Servers, serverless functions and public repos',
+      },
+    ].map((option) => ({ ...option, hintColumn: true }));
+    const lines = renderMenu({ options: docs, selectedIndex: 0 }, 60).split('\n').map(stripAnsi);
+    expect(lines).toHaveLength(2);
+    expect(lines.every((line) => visualWidth(line) <= 60)).toBe(true);
+    expect(lines[0]?.indexOf('Anyone')).toBe(lines[1]?.indexOf('Servers'));
+    expect(lines[0]).toContain('…');
+  });
+
+  it('drops a summary column that would be too narrow to read', () => {
+    const docs = [
+      { value: 'a', label: 'Infrastructure and projects', hint: 'Servers, serverless functions' },
+    ].map((option) => ({ ...option, hintColumn: true }));
+    const text = renderMenu({ options: docs, selectedIndex: 0 }, 44);
+    expect(stripAnsi(text)).not.toContain('Servers');
+  });
+
   it('dims an option marked as dim', () => {
     const level = chalk.level;
     chalk.level = 3;

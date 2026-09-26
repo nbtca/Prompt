@@ -555,6 +555,32 @@ describe('docsView native reader (no shell-out to less/glow)', () => {
     expect(fetchSectionMetadataMock).not.toHaveBeenCalled();
   });
 
+  it('lets summaries fill a wide terminal in one aligned column', async () => {
+    const summary = 'Practical workstation skills for every new member, from shells to editors';
+    peekListedDocsMock.mockReturnValueOnce({
+      complete: true,
+      docs: [
+        { name: 'a.md', path: 'tutorial/a.md', type: 'file', title: 'Handbook', summary },
+        {
+          name: 'b.md',
+          path: 'tutorial/b.md',
+          type: 'file',
+          title: 'Shells',
+          summary: 'Terminals',
+        },
+      ],
+    });
+    const ctx = { ...fakeCtx(), size: { rows: 40, cols: 120 }, bodyRows: 35 };
+    await freshDocsView.load(ctx);
+    freshDocsView.handleKey('\r', ctx);
+
+    const lines = stripAnsi(freshDocsView.render(ctx).join('\n')).split('\n');
+    const first = lines.find((line) => line.includes('Handbook')) ?? '';
+    const second = lines.find((line) => line.includes('Shells')) ?? '';
+    expect(first).toContain(summary);
+    expect(first.indexOf('Practical')).toBe(second.indexOf('Terminals'));
+  });
+
   it('shows filenames at once and swaps in titles when they arrive', async () => {
     let resolveMetadata!: (section: DocSection) => void;
     fetchSectionMetadataMock.mockImplementationOnce(
