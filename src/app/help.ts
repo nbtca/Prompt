@@ -1,4 +1,4 @@
-import { type, space, glyph } from '../core/theme.js';
+import { type, space, glyph, bodyEdge } from '../core/theme.js';
 import { pickIcon } from '../core/icons.js';
 import { t } from '../i18n/index.js';
 import { padEndV, visualWidth, wrapAnsiWithIndent } from '../core/text.js';
@@ -11,7 +11,7 @@ export interface Shortcut {
 function row(shortcut: Shortcut, keyWidth: number, cols: number): string[] {
   const key = padEndV(type.label(shortcut.key), keyWidth);
   const line = `${space.indent}${space.indent}${key}  ${type.hint(shortcut.label)}`;
-  if (visualWidth(line) <= cols) return [line];
+  if (visualWidth(line) <= bodyEdge(cols)) return [line];
   return wrapAnsiWithIndent(
     `${type.label(shortcut.key)} ${type.hint(shortcut.label)}`,
     cols,

@@ -201,3 +201,14 @@ describe('renderMenu with a hint column', () => {
     expect(out.split('\n')[1]).toMatch(/\x1b\[2m/);
   });
 });
+
+describe('renderMenu width', () => {
+  it('ends every option where the rule ends', () => {
+    const options = [{ value: 'a', label: 'word '.repeat(20).trim(), hint: 'hint' }];
+    const lines = renderMenu({ title: 'word '.repeat(16).trim(), options, selectedIndex: 0 }, 80)
+      .split('\n')
+      .filter(Boolean);
+    expect(lines.length).toBeGreaterThan(2);
+    for (const line of lines) expect(visualWidth(line)).toBeLessThanOrEqual(77);
+  });
+});

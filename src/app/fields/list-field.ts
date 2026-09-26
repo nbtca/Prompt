@@ -6,7 +6,7 @@ import {
   parseKey,
   type MenuOption,
 } from '../../core/components/menu.js';
-import { glyph, space, type } from '../../core/theme.js';
+import { bodyEdge, glyph, space, type } from '../../core/theme.js';
 import { pickIcon } from '../../core/icons.js';
 import { t, fmt } from '../../i18n/index.js';
 import { visualWidth, wrapAnsiToVisualWidth } from '../../core/text.js';
@@ -35,7 +35,7 @@ function renderIndentedOutput(
 ): string[] {
   const width = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : Number.POSITIVE_INFINITY;
   const indent = [preferredIndent, space.indent].find((i) => visualWidth(i) < width) ?? '';
-  const contentWidth = Math.max(1, width - visualWidth(indent));
+  const contentWidth = Math.max(1, bodyEdge(width) - visualWidth(indent));
   return wrapAnsiToVisualWidth(value, contentWidth).map((line) => `${indent}${line}`);
 }
 

@@ -166,6 +166,16 @@ describe('wrapAnsiToVisualWidth kinsoku', () => {
 });
 
 describe('wrapAnsiWithIndent', () => {
+  it('keeps the indent and wraps before the right margin', () => {
+    const lines = wrapAnsiWithIndent('word '.repeat(16).trim(), 80, '   ');
+
+    expect(lines).toHaveLength(2);
+    for (const line of lines) {
+      expect(line.startsWith('   ')).toBe(true);
+      expect(visualWidth(line)).toBeLessThanOrEqual(77);
+    }
+  });
+
   it('drops an indent that would overflow a wide grapheme', () => {
     const lines = wrapAnsiWithIndent('界abc', 4, '   ');
 

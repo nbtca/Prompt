@@ -1,6 +1,13 @@
 import { ansi, ensureCursorRestored } from '../core/canvas.js';
-import { composeFrameLines, computeBodyRows, diffFrame, frameWidth } from './frame.js';
-import { isPrintableKey, KeyStreamDecoder, routeGlobalKey, type ViewId } from './keys.js';
+import { composeFrameLines, computeBodyRows, diffFrame } from './frame.js';
+import { frameWidth } from '../core/theme.js';
+import {
+  isPrintableKey,
+  KeyStreamDecoder,
+  routeGlobalKey,
+  type GlobalKeyResult,
+  type ViewId,
+} from './keys.js';
 import { renderHeader, renderFooter, resolveChromeLayout } from './chrome.js';
 import type { AppContext, AppSize, View } from './view.js';
 import { homeView } from './views/home.js';
@@ -105,7 +112,7 @@ export async function runApp(): Promise<void> {
       tabs.length,
       helpOpen ? t().help.close : active?.footerHint?.(tabs.length, cols),
       chrome.footerLines,
-      !helpOpen && active?.scrollsBody?.() === true ? scrollPercent() : undefined,
+      helpOpen || active?.scrollsBody?.() === true ? scrollPercent() : undefined,
     );
     const lines = composeFrameLines(header, body, footer, rows, terminalCols, bodyScroll);
     const patch = diffFrame(painted?.cols === terminalCols ? painted.lines : undefined, lines);
@@ -154,15 +161,8 @@ export async function runApp(): Promise<void> {
       render();
       return;
     }
-    if (helpOpen) {
-      if (key === '?' || key === '\x1b') {
-        helpOpen = false;
-        render();
-      }
-      return;
-    }
-    if (key === '?') {
-      helpOpen = true;
+    if (key === '?' || (helpOpen && key === '\x1b')) {
+      helpOpen = !helpOpen;
       scroll = 0;
       render();
       return;
@@ -170,6 +170,10 @@ export async function runApp(): Promise<void> {
     const g = routeGlobalKey(key, viewIds, view);
     if (g.quit) {
       quit();
+      return;
+    }
+    if (helpOpen) {
+      scrollBody(g);
       return;
     }
     if (g.back) {
@@ -187,25 +191,24 @@ export async function runApp(): Promise<void> {
       switchTo(g.switchTo);
       return;
     }
-    if (g.scrollBy) {
-      if (active?.capturesPageKeys?.()) {
-        active.handleKey?.(key, ctx);
-        scroll = 0;
-        render();
-        return;
-      }
-      const page = Math.max(1, ctx.bodyRows - 2);
-      scrollTo(scroll + g.scrollBy * page);
+    if (g.scrollBy && active?.capturesPageKeys?.()) {
+      active.handleKey?.(key, ctx);
+      scroll = 0;
+      render();
       return;
     }
-    if ((g.scrollLines !== undefined || g.scrollTo !== undefined) && active?.scrollsBody?.()) {
-      if (g.scrollTo === 'top') scrollTo(0);
-      else if (g.scrollTo === 'end') scrollTo(maxScroll());
-      else scrollTo(scroll + (g.scrollLines ?? 0));
-      return;
-    }
+    if ((g.scrollBy || active?.scrollsBody?.()) && scrollBody(g)) return;
     active?.handleKey?.(key, ctx);
     render();
+  }
+
+  function scrollBody(g: GlobalKeyResult): boolean {
+    if (g.scrollBy) scrollTo(scroll + g.scrollBy * Math.max(1, ctx.bodyRows - 2));
+    else if (g.scrollTo === 'top') scrollTo(0);
+    else if (g.scrollTo === 'end') scrollTo(maxScroll());
+    else if (g.scrollLines !== undefined) scrollTo(scroll + g.scrollLines);
+    else return false;
+    return true;
   }
 
   function dispatchKeys(keys: readonly string[]): void {

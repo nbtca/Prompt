@@ -11,7 +11,7 @@
     "current": "current",
     "moreAbove": "{count} more above",
     "moreBelow": "{count} more below",
-    "offline": "Offline, showing last fetched data"
+    "offline": "Offline, showing cached data"
   },
   "help": {
     "title": "Keys",

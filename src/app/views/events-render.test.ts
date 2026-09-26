@@ -21,8 +21,8 @@ describe('renderEvents', () => {
 
   it.each([
     ['en', 'loading', 'Loading event calendar...', 2],
-    ['en', 'heatmap', 'No upcoming events', 1],
-    ['zh', 'loading', '正在获取活动日历...', 1],
+    ['en', 'heatmap', 'No upcoming events', 2],
+    ['zh', 'loading', '正在获取活动日历...', 2],
     ['zh', 'heatmap', '近期暂无活动安排', 1],
   ] as const)(
     'wraps the complete %s %s status within twenty columns',
