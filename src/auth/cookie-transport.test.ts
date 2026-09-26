@@ -145,6 +145,29 @@ describe('cookie transport', () => {
     await session.close();
   });
 
+  it('treats a redirect to the JWXT login page as an expired session', async () => {
+    const baseFetch = vi.fn((input: string | URL | Request) => {
+      const url = new URL(input instanceof Request ? input.url : input.toString());
+      if (url.pathname === '/jwglxt/kbcx/xskbcx_cxXsgrkb.html') {
+        return Promise.resolve(
+          mockResponse(url.href, '', {
+            status: 302,
+            headers: { location: '/jwglxt/xtgl/login_slogin.html' },
+          }),
+        );
+      }
+      return Promise.resolve(mockResponse(url.href, '<form id="login"></form>'));
+    }) as unknown as typeof fetch;
+    const session = createCampusCookieSession({ baseFetch });
+    await expect(
+      session.timetableTransport(
+        new URL('https://jwxt-443.webvpn.nbt.edu.cn/jwglxt/kbcx/xskbcx_cxXsgrkb.html'),
+        { method: 'POST' },
+      ),
+    ).rejects.toMatchObject({ code: 'SESSION_EXPIRED' });
+    await session.close();
+  });
+
   it('does not expose an underlying abort message', async () => {
     const session = createCampusCookieSession({
       baseFetch: () => Promise.reject(new DOMException('private abort marker', 'AbortError')),
