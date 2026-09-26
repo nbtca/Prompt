@@ -1,6 +1,6 @@
 {
   "name": "@nbtca/prompt",
-  "version": "1.5.12",
+  "version": "1.5.13",
   "type": "module",
   "main": "dist/index.js",
   "exports": {
@@ -47,7 +47,7 @@
   ],
   "dependencies": {
     "@nbtca/docs": "^0.3.1",
-    "@nbtca/nbtcal": "^0.4.1",
+    "@nbtca/nbtcal": "^0.4.2",
     "chalk": "^5.6.2",
     "cheerio": "1.0.0",
     "fetch-cookie": "^3.2.0",
