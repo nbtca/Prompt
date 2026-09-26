@@ -1,12 +1,12 @@
 import {
-  fetchFeed,
+  fetchFeedConditional,
   parseCalendar,
   createCalendar,
   FeedFetchError,
   FeedParseError,
   eventToICS,
 } from '@nbtca/nbtcal';
-import type { Calendar, CalendarEvent, HeatmapBucket } from '@nbtca/nbtcal';
+import type { Calendar, CalendarEvent, FeedValidators, HeatmapBucket } from '@nbtca/nbtcal';
 import chalk from 'chalk';
 import { c, type, space, glyph } from '../core/theme.js';
 import { pickIcon } from '../core/icons.js';
@@ -28,7 +28,7 @@ import {
   formatDuration,
   pastYearRange,
 } from './calendar-query.js';
-import { loadFeedCache, saveFeedCache } from './calendar-store.js';
+import { loadFeedCache, saveFeedCache, touchFeedCache } from './calendar-store.js';
 import { writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 
@@ -72,16 +72,20 @@ function formatTime(date: Date): string {
 
 const MEMO_TTL_MS = 5 * 60 * 1000;
 
-let memo: { calendar: Calendar; fetchedAt: number } | undefined;
+let memo: { calendar: Calendar; validators: FeedValidators; fetchedAt: number } | undefined;
 let inFlight: Promise<Calendar> | undefined;
+
+function remember(text: string, validators: FeedValidators, fetchedAt: number): Calendar {
+  memo = { calendar: createCalendar(parseCalendar(text)), validators, fetchedAt };
+  return memo.calendar;
+}
 
 export function peekCalendar(): Calendar | undefined {
   if (memo) return memo.calendar;
-  const text = loadFeedCache();
-  if (text === null) return undefined;
+  const cache = loadFeedCache();
+  if (cache === null) return undefined;
   try {
-    memo = { calendar: createCalendar(parseCalendar(text)), fetchedAt: 0 };
-    return memo.calendar;
+    return remember(cache.text, cache.validators, 0);
   } catch {
     return undefined;
   }
@@ -89,12 +93,20 @@ export function peekCalendar(): Calendar | undefined {
 
 async function refetchCalendar(signal?: AbortSignal): Promise<Calendar> {
   try {
-    const text = await fetchFeed(undefined, {
+    peekCalendar();
+    const result = await fetchFeedConditional(undefined, {
       timeoutMs: 15000,
       ...(signal === undefined ? {} : { signal }),
+      validators: memo?.validators ?? {},
     });
-    memo = { calendar: createCalendar(parseCalendar(text)), fetchedAt: Date.now() };
-    saveFeedCache(text);
+    if (result.status === 'modified') {
+      const calendar = remember(result.text, result.validators, Date.now());
+      saveFeedCache(result);
+      return calendar;
+    }
+    if (!memo) throw new FeedFetchError('Feed request failed: HTTP 304');
+    memo = { ...memo, validators: result.validators, fetchedAt: Date.now() };
+    touchFeedCache(result.validators);
     return memo.calendar;
   } catch (err) {
     const detail = sanitizeTerminalLine(
