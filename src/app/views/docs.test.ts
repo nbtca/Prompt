@@ -248,6 +248,35 @@ describe('docsView', () => {
     }
   });
 
+  it('right-aligns the archived year counts', async () => {
+    fetchSectionsMock.mockResolvedValueOnce([
+      {
+        key: 'archived',
+        label: 'Archived',
+        count: 11,
+        files: [
+          ...Array.from({ length: 10 }, (_, index) => ({
+            name: `a${index}.md`,
+            path: `archived/2026/a${index}.md`,
+            type: 'file' as const,
+          })),
+          { name: 'b.md', path: 'archived/2025/b.md', type: 'file' as const },
+        ],
+      },
+    ]);
+    vi.resetModules();
+    const { docsView: freshDocsView } = await import('./docs.js');
+    const ctx = fakeCtx();
+    await freshDocsView.load(ctx);
+    freshDocsView.handleKey('\r', ctx);
+    const lines = freshDocsView.render(ctx).map((line) => stripAnsi(line).trimEnd());
+    const ten = lines.find((line) => line.includes('2026')) ?? '';
+    const one = lines.find((line) => line.includes('2025')) ?? '';
+    expect(ten.endsWith('10')).toBe(true);
+    expect(one.endsWith(' 1')).toBe(true);
+    expect(one.length).toBe(ten.length);
+  });
+
   it('rebuilds cached archived navigation in place after a language change', async () => {
     setLanguage('zh');
     fetchSectionsMock.mockClear();

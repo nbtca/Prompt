@@ -121,14 +121,19 @@ async function openUrlFromView(
   ctx.rerender();
 }
 
+function countHints(counts: readonly number[]): string[] {
+  const width = Math.max(0, ...counts.map((count) => String(count).length));
+  return counts.map((count) => String(count).padStart(width));
+}
+
 function buildSectionsField(): ListField {
   const trans = t();
-  const countWidth = Math.max(0, ...sections.map((sec) => String(sec.count).length));
+  const counts = countHints(sections.map((sec) => sec.count));
   const options = [
-    ...sections.map((sec) => ({
+    ...sections.map((sec, index) => ({
       value: sec.key,
       label: sec.label,
-      hint: String(sec.count).padStart(countWidth),
+      hint: counts[index] ?? '',
     })),
     { value: '__search__', label: trans.docs.searchPrompt },
     { value: '__refresh__', label: trans.docs.refreshCache },
@@ -168,8 +173,9 @@ function buildArchivedGroupsField(
     if (bYear) return 1;
     return a.localeCompare(b);
   });
+  const counts = countHints(sortedKeys.map((k) => groups.get(k)?.length ?? 0));
   const options = [
-    ...sortedKeys.map((k) => ({ value: k, label: k, hint: String(groups.get(k)?.length ?? 0) })),
+    ...sortedKeys.map((k, index) => ({ value: k, label: k, hint: counts[index] ?? '' })),
     { value: '__back__', label: backLabel() },
   ];
   return new ListField({ title: trans.docs.categoryArchived, options, maxVisible, initialIndex });
