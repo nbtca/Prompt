@@ -14,6 +14,7 @@ import {
   peekSections,
   fetchDocMetadata,
   fetchSectionMetadata,
+  peekListedDocs,
   searchDocuments,
   getArchivedGroups,
   displayDocTitle,
@@ -239,12 +240,12 @@ function relocalizeStateFields(value: DocsViewState, maxVisible: number): DocsVi
   if (value.mode === 'sections') {
     return { ...value, sectionsField: buildSectionsField() };
   }
-  if (value.mode === 'files' && currentSectionKey) {
+  if (value.mode === 'files' && value.filesField && currentSectionKey) {
     const section = sections.find((candidate) => candidate.key === currentSectionKey);
     return section
       ? {
           ...value,
-          filesField: buildFilesField(section, maxVisible, value.filesField?.selectedIndex),
+          filesField: buildFilesField(section, maxVisible, value.filesField.selectedIndex),
         }
       : value;
   }
@@ -258,14 +259,14 @@ function relocalizeStateFields(value: DocsViewState, maxVisible: number): DocsVi
       ),
     };
   }
-  if (value.mode === 'archivedFiles' && currentArchivedGroupKey) {
+  if (value.mode === 'archivedFiles' && value.archivedFilesField && currentArchivedGroupKey) {
     return {
       ...value,
       archivedFilesField: buildArchivedFilesField(
         currentArchivedGroupKey,
         archivedGroups.get(currentArchivedGroupKey) ?? [],
         maxVisible,
-        value.archivedFilesField?.selectedIndex,
+        value.archivedFilesField.selectedIndex,
       ),
     };
   }
@@ -308,10 +309,13 @@ async function openSectionFiles(ctx: AppContext, section: DocSection): Promise<v
   if (!isLifecycleActive(ctx, generation)) return;
   const requestId = ++metadataRequestId;
   currentSectionKey = section.key;
-  state = {
-    mode: 'files',
-    filesField: buildFilesField(section, computeMaxVisible(ctx.bodyRows)),
-  };
+  const stored = peekListedDocs(section.files);
+  const known = { ...section, files: stored.docs };
+  state = { mode: 'files', filesField: buildFilesField(known, computeMaxVisible(ctx.bodyRows)) };
+  if (stored.complete) {
+    replaceSection(known);
+    return;
+  }
   ctx.rerender();
   try {
     const hydrated = await fetchSectionMetadata(section, ctx.signal);
@@ -340,7 +344,11 @@ async function openSectionFiles(ctx: AppContext, section: DocSection): Promise<v
       currentSectionKey !== section.key
     )
       return;
-    state = { ...state, errorMessage: t().docs.loadError };
+    state = {
+      mode: 'files',
+      filesField: buildFilesField(section, computeMaxVisible(ctx.bodyRows)),
+      errorMessage: t().docs.loadError,
+    };
   }
   if (isLifecycleActive(ctx, generation)) ctx.rerender();
 }
@@ -354,14 +362,19 @@ async function openArchivedFiles(
   if (!isLifecycleActive(ctx, generation)) return;
   const requestId = ++metadataRequestId;
   currentArchivedGroupKey = groupKey;
+  const stored = peekListedDocs(groupFiles);
   state = {
     mode: 'archivedFiles',
     archivedFilesField: buildArchivedFilesField(
       groupKey,
-      groupFiles,
+      stored.docs,
       computeMaxVisible(ctx.bodyRows),
     ),
   };
+  if (stored.complete) {
+    archivedGroups.set(groupKey, stored.docs);
+    return;
+  }
   ctx.rerender();
   try {
     const hydrated = await fetchDocMetadata(groupFiles, ctx.signal);
@@ -391,7 +404,12 @@ async function openArchivedFiles(
     )
       return;
     state = {
-      ...state,
+      mode: 'archivedFiles',
+      archivedFilesField: buildArchivedFilesField(
+        groupKey,
+        groupFiles,
+        computeMaxVisible(ctx.bodyRows),
+      ),
       errorMessage: t().docs.loadError,
     };
   }

@@ -354,7 +354,7 @@ export function renderWeekGrid(
   const evenColW = Math.max(...idealColWidths);
   const totalIdealColW = idealColWidths.reduce((a, b) => a + b, 0);
   const colWidths =
-    evenColW * 7 <= availableForCols
+    evenColW * 7 <= availableForCols - space.indent.length
       ? idealColWidths.map(() => evenColW)
       : totalIdealColW <= availableForCols
         ? idealColWidths

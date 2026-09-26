@@ -414,6 +414,15 @@ describe('renderWeekGrid', () => {
     done();
   });
 
+  it('keeps equal-width days inside the rule, which is inset by the indent on the right', () => {
+    const meetings = [mk({ courseName: '程序设计实践', location: null, weekday: 5, endPeriod: 1 })];
+    const lines = stripAnsi(
+      renderWeekGrid(meetings, periods, 1, campusDateTime('2026-09-07', '09:00'), 117),
+    ).split('\n');
+    for (const line of lines) expect(visualWidth(line)).toBeLessThanOrEqual(114);
+    done();
+  });
+
   describe('a vertical separator marks the boundary between adjacent weekday columns', () => {
     it('shows a separator between every pair of adjacent columns, on every row', () => {
       const out = stripAnsi(renderWeekGrid([], periods, 1, campusDateTime('2026-09-07', '09:00')));

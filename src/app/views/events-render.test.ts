@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { renderEvents, type EventsViewState } from './events-render.js';
 import { ListField } from '../fields/list-field.js';
 import { TextField } from '../fields/text-field.js';
+import { offlineNotice } from '../chrome.js';
 import { setLanguage } from '../../i18n/index.js';
 import { resetIconCache } from '../../core/icons.js';
 import { stripAnsi, visualWidth } from '../../core/text.js';
@@ -40,6 +41,12 @@ describe('renderEvents', () => {
       }
     },
   );
+
+  it('opens the hub with the shared offline notice when the feed is stale', () => {
+    const hubField = new ListField({ options: [{ value: 'upcoming', label: 'Events' }] });
+    const lines = renderEvents({ mode: 'hub', hubField, stale: true }, new Date(), 30, 80);
+    expect(lines.slice(0, 2)).toEqual(offlineNotice(80));
+  });
 
   it('hub mode shows the hub action list', () => {
     const hubField = new ListField({

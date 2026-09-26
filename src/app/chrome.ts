@@ -1,8 +1,8 @@
-import { type, space, glyph, brandMark, MAX_FRAME_COLS } from '../core/theme.js';
+import { c, type, space, glyph, brandMark } from '../core/theme.js';
 import { pickIcon } from '../core/icons.js';
 import { t } from '../i18n/index.js';
 import type { ViewId } from './keys.js';
-import { clipAnsiToVisualWidth, visualWidth } from '../core/text.js';
+import { clipAnsiToVisualWidth, visualWidth, wrapAnsiWithIndent } from '../core/text.js';
 
 export const HEADER_LINES = 3;
 export const FOOTER_LINES = 2;
@@ -23,8 +23,7 @@ export function resolveChromeLayout(rows: number): ChromeLayout {
 }
 
 function renderRule(cols: number): string {
-  const terminal = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : 80;
-  const width = Math.min(terminal, MAX_FRAME_COLS);
+  const width = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : 80;
   const indent = visualWidth(space.indent) < width ? space.indent : '';
   const ruleWidth = Math.max(1, width - visualWidth(indent) * 2);
   return indent + type.hint(glyph.rule().repeat(ruleWidth));
@@ -109,6 +108,11 @@ export function renderHeader(
   if (lineCount === 1) return [tabs];
   if (lineCount === 2) return [brand, tabs];
   return [brand, tabs, rule];
+}
+
+export function offlineNotice(cols: number): string[] {
+  const notice = `${c.warn(pickIcon('⚠', '!'))} ${t().common.offline}`;
+  return [...wrapAnsiWithIndent(notice, cols, space.indent), ''];
 }
 
 export function fitFooterHint(cols: number, ...candidates: string[]): string {
@@ -199,9 +203,8 @@ function withPosition(
   cols: number,
 ): string {
   if (position === undefined) return hint;
-  const frame = Math.min(cols, MAX_FRAME_COLS);
-  const margin = visualWidth(space.indent) < frame ? space.indent : '';
-  const gap = frame - visualWidth(indent + hintText) - visualWidth(position) - visualWidth(margin);
+  const margin = visualWidth(space.indent) < cols ? space.indent : '';
+  const gap = cols - visualWidth(indent + hintText) - visualWidth(position) - visualWidth(margin);
   if (gap < 2) return hint;
   return hint + ' '.repeat(gap) + type.hint(position) + margin;
 }

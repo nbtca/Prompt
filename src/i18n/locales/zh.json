@@ -10,7 +10,8 @@
     "goodbye": "再见！",
     "current": "当前",
     "moreAbove": "上方还有 {count} 项",
-    "moreBelow": "下方还有 {count} 项"
+    "moreBelow": "下方还有 {count} 项",
+    "offline": "当前离线，显示的是上次获取的内容"
   },
   "help": {
     "title": "快捷键",
@@ -64,7 +65,6 @@
     "loading": "正在获取活动日历...",
     "noEvents": "近期暂无活动安排",
     "error": "无法获取活动日历",
-    "stale": "离线，显示上次获取的数据",
     "errorHint": "请稍后重试或访问 https://nbtca.space",
     "eventsFound": "个活动",
     "dateTime": "日期时间",
@@ -125,7 +125,6 @@
     "chooseCategory": "文档",
     "refreshCache": "刷新缓存",
     "cacheCleared": "文档缓存已清除",
-    "stale": "离线，显示上次获取的文档",
     "currentDir": "当前目录",
     "chooseDoc": "选择文档或目录",
     "emptyDir": "该目录为空",

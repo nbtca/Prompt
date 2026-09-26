@@ -7,6 +7,7 @@ import { resetIconCache } from '../../core/icons.js';
 import { campusDateTime } from '@nbtca/nbtcal/timetable';
 import { stripAnsi, visualWidth } from '../../core/text.js';
 import type { AppContext } from '../view.js';
+import { offlineNotice } from '../chrome.js';
 import type * as CalendarModule from '../../features/calendar.js';
 import type { CachedSchedule } from '../../features/schedule-view.js';
 
@@ -164,6 +165,17 @@ describe('renderHome (schedule-first dashboard)', () => {
     const out = stripAnsi(renderHome({ eventsLoadFailed: true, loading: false }, noon).join('\n'));
     expect(out).toContain('Failed to load event calendar');
     expect(out).not.toContain('No upcoming events');
+  });
+
+  it('puts the shared offline notice above every panel when showing stored events', () => {
+    const lines = renderHome(
+      { eventLines: ['   09-26  Meetup'], eventsLoadFailed: true },
+      noon,
+      40,
+      80,
+    );
+    expect(lines.slice(0, 2)).toEqual(offlineNotice(80));
+    expect(lines.map(stripAnsi)).toContain('   Events');
   });
 
   it.each(['en', 'zh'] as const)(

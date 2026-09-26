@@ -2,6 +2,7 @@ import type { CalendarEvent, HeatmapBucket } from '@nbtca/nbtcal';
 import { type, space } from '../../core/theme.js';
 import { t } from '../../i18n/index.js';
 import { type ListField, renderListFieldWithContext } from '../fields/list-field.js';
+import { offlineNotice } from '../chrome.js';
 import type { TextField } from '../fields/text-field.js';
 import {
   renderCountdownBanner,
@@ -55,7 +56,7 @@ function renderHubBody(
   const rows = Number.isFinite(bodyRows)
     ? Math.max(0, Math.floor(bodyRows))
     : Number.POSITIVE_INFINITY;
-  if (state.stale) lines.push(...wrappedIndentedLines(trans.calendar.stale, cols, type.hint), '');
+  if (state.stale) lines.push(...offlineNotice(cols ?? Number.POSITIVE_INFINITY));
   const banner = renderCountdownBanner(state.nextEvent, now, cols);
   if (banner) lines.push(...banner.split('\n'), '');
   const buckets = state.heatmapBuckets;

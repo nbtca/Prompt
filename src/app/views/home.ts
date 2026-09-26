@@ -18,7 +18,7 @@ import {
 } from '../../features/calendar.js';
 import { weekdayShortLabel } from '../../features/schedule-render.js';
 import type { View, AppContext } from '../view.js';
-import { passiveFooterHint } from '../chrome.js';
+import { offlineNotice, passiveFooterHint } from '../chrome.js';
 import { campusDateTime, campusIsoDate } from '@nbtca/nbtcal/timetable';
 import { isoDayDifference, localDayDifference, parseLocalDate } from '../../core/calendar-day.js';
 import { currentEvents } from '../../features/calendar-query.js';
@@ -132,7 +132,8 @@ function renderWeekAheadGrid(
 
 export function renderHome(data: HomeData, now: Date, bodyRows = 100, cols = 80): string[] {
   const trans = t();
-  const lines: string[] = [];
+  const eventsStale = data.eventsLoadFailed === true && (data.eventLines?.length ?? 0) > 0;
+  const lines: string[] = eventsStale ? offlineNotice(cols) : [];
 
   if (data.schedule === null) {
     lines.push(...panelHeading(trans.timetable.menuTitle, cols));
@@ -181,16 +182,7 @@ export function renderHome(data: HomeData, now: Date, bodyRows = 100, cols = 80)
     lines.push('');
   }
 
-  const eventsStale = data.eventsLoadFailed === true && (data.eventLines?.length ?? 0) > 0;
-  lines.push(
-    ...(eventsStale
-      ? wrappedIndentedLines(
-          `${type.heading(trans.menu.events)}  ${type.hint(`${pickIcon('·', '-')} ${trans.calendar.stale}`)}`,
-          cols,
-          (value) => value,
-        )
-      : panelHeading(trans.menu.events, cols)),
-  );
+  lines.push(...panelHeading(trans.menu.events, cols));
   if (data.eventLines && data.eventLines.length > 0) {
     const remaining = Number.isFinite(bodyRows)
       ? Math.max(0, Math.floor(bodyRows) - lines.length)

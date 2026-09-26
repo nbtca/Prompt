@@ -1,5 +1,5 @@
 import { ansi, ensureCursorRestored } from '../core/canvas.js';
-import { composeFrameLines, computeBodyRows, diffFrame } from './frame.js';
+import { composeFrameLines, computeBodyRows, diffFrame, frameWidth } from './frame.js';
 import { isPrintableKey, KeyStreamDecoder, routeGlobalKey, type ViewId } from './keys.js';
 import { renderHeader, renderFooter, resolveChromeLayout } from './chrome.js';
 import type { AppContext, AppSize, View } from './view.js';
@@ -51,8 +51,13 @@ export async function runApp(): Promise<void> {
     pendingLoads.set(id, pending);
   }
 
-  function size(): AppSize {
+  function terminalSize(): AppSize {
     return { rows: process.stdout.rows || 24, cols: process.stdout.columns || 80 };
+  }
+
+  function size(): AppSize {
+    const terminal = terminalSize();
+    return { rows: terminal.rows, cols: frameWidth(terminal.cols) };
   }
 
   const ctx: AppContext = {
@@ -82,6 +87,7 @@ export async function runApp(): Promise<void> {
   function render(): void {
     if (suspended || !running) return;
     const { rows, cols } = size();
+    const terminalCols = terminalSize().cols;
     const active = nativeViews[view];
     const tabs = getAppTabs();
     const chrome = resolveChromeLayout(rows);
@@ -101,9 +107,9 @@ export async function runApp(): Promise<void> {
       chrome.footerLines,
       !helpOpen && active?.scrollsBody?.() === true ? scrollPercent() : undefined,
     );
-    const lines = composeFrameLines(header, body, footer, rows, cols, bodyScroll);
-    const patch = diffFrame(painted?.cols === cols ? painted.lines : undefined, lines);
-    painted = { cols, lines };
+    const lines = composeFrameLines(header, body, footer, rows, terminalCols, bodyScroll);
+    const patch = diffFrame(painted?.cols === terminalCols ? painted.lines : undefined, lines);
+    painted = { cols: terminalCols, lines };
     if (patch) process.stdout.write(patch);
     scheduleBusyTick(active?.isBusy?.() === true);
   }

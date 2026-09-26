@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import {
   captureFooterHint,
+  offlineNotice,
   renderHeader,
   renderContextPath,
   renderFooter,
@@ -77,13 +78,33 @@ describe('renderHeader', () => {
   });
 });
 
+describe('offlineNotice', () => {
+  it('leads with a warning icon and leaves a blank line before the content', () => {
+    const lines = offlineNotice(80);
+    expect(lines.map(stripAnsi)).toEqual(['   ! Offline, showing last fetched data', '']);
+  });
+
+  it('keeps its indent on one line at forty columns in both languages', () => {
+    for (const language of ['en', 'zh'] as const) {
+      setLanguage(language);
+      const [line, blank] = offlineNotice(40);
+      expect(stripAnsi(line ?? '').startsWith('   ')).toBe(true);
+      expect(blank).toBe('');
+    }
+    setLanguage('en');
+  });
+
+  it('wraps within narrow terminals', () => {
+    for (const line of offlineNotice(20)) expect(visualWidth(line)).toBeLessThanOrEqual(20);
+  });
+});
+
 describe('frame width', () => {
-  it('stops the rules growing once the terminal is wider than the app', () => {
+  it('insets the rule by the indent on both sides', () => {
     const at = (cols: number) =>
       visualWidth(stripAnsi(renderHeader(views, 'docs', cols, 3)[2] ?? ''));
     expect(at(60)).toBe(57);
     expect(at(100)).toBe(97);
-    expect(at(180)).toBe(at(100));
   });
 
   it('keeps the scroll position on the same edge as the rule', () => {

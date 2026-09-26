@@ -299,7 +299,7 @@ async function runEventsCommand(flags: Set<string>): Promise<void> {
   }
 
   const { calendar, stale } = await loadCalendarOrCache();
-  if (stale) console.error(chalk.yellow(t().calendar.stale));
+  if (stale) console.error(chalk.yellow(t().common.offline));
   const now = new Date();
 
   if (flags.has('--heatmap')) {
