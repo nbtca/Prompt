@@ -7,6 +7,7 @@ import {
   timetableToIcs,
   TimetableError,
   type AcademicTerm,
+  type TimetableCalendarDay,
 } from '@nbtca/nbtcal/timetable';
 import { runSecretInput, runTextInput } from '../core/components/text-input.js';
 import { AuthError } from '../auth/errors.js';
@@ -16,7 +17,9 @@ import {
   type AuthenticatedNbtSession,
 } from '../auth/nbt-auth.js';
 import { createSessionStore, type SessionStore } from '../auth/session-store.js';
+import { isoDayDifference, parseLocalMonday } from '../core/calendar-day.js';
 import { clearScheduleCache, termKey } from './schedule-store.js';
+import { sanitizeTerminalLine } from '../core/text.js';
 import { fmt, t } from '../i18n/index.js';
 import { sanitizeAcademicTerm, sanitizeTimetable } from './timetable-sanitize.js';
 
@@ -64,6 +67,39 @@ function displaySemesterLabel(term: AcademicTerm): string {
     : term.semesterLabel;
 }
 
+class WeekOneError extends Error {
+  constructor(readonly reason: 'invalid' | 'conflict') {
+    super(`--week-one is ${reason}.`);
+  }
+}
+
+export function assertWeekOne(
+  weekOneMonday: string,
+  calendarDays: readonly TimetableCalendarDay[] = [],
+): void {
+  try {
+    parseLocalMonday(weekOneMonday);
+  } catch {
+    throw new WeekOneError('invalid');
+  }
+  if (
+    calendarDays.some(
+      (day) => isoDayDifference(weekOneMonday, day.date) !== (day.week - 1) * 7 + day.weekday - 1,
+    )
+  ) {
+    throw new WeekOneError('conflict');
+  }
+}
+
+class IcsWriteError extends Error {
+  constructor(
+    readonly file: string,
+    readonly reason: string,
+  ) {
+    super(`Could not write ${file}.`);
+  }
+}
+
 export function isSessionExpired(error: unknown): boolean {
   return (
     (error instanceof AuthError && error.code === 'SESSION_EXPIRED') ||
@@ -73,6 +109,15 @@ export function isSessionExpired(error: unknown): boolean {
 
 export function safeMessage(error: unknown): string {
   const trans = t().timetable;
+  if (error instanceof IcsWriteError) {
+    return fmt(trans.writeFailed, {
+      file: sanitizeTerminalLine(error.file),
+      reason: sanitizeTerminalLine(error.reason),
+    });
+  }
+  if (error instanceof WeekOneError) {
+    return error.reason === 'invalid' ? trans.invalidWeekOne : trans.weekOneConflict;
+  }
   if (error instanceof AuthError) {
     switch (error.code) {
       case 'INVALID_CREDENTIALS':
@@ -139,6 +184,13 @@ export function safeMessage(error: unknown): string {
   return trans.genericError;
 }
 
+class PromptCancelledError extends Error {}
+
+function answered(value: string | null): string {
+  if (value === null) throw new PromptCancelledError();
+  return value;
+}
+
 async function interactiveLogin(isInteractive: boolean): Promise<AuthenticatedNbtSession> {
   const trans = t().timetable;
   if (!isInteractive) {
@@ -148,19 +200,20 @@ async function interactiveLogin(isInteractive: boolean): Promise<AuthenticatedNb
       'Interactive login requires a terminal.',
     );
   }
-  const username = await runTextInput({
-    message: trans.studentId,
-    placeholder: trans.studentIdHint,
-    allowEmpty: false,
-  });
-  if (!username)
-    throw new AuthError('INVALID_CREDENTIALS', 'credentials', 'Student id is required.');
-  const password = await runSecretInput({
-    message: trans.password,
-    placeholder: trans.passwordHint,
-    allowEmpty: false,
-  });
-  if (!password) throw new AuthError('INVALID_CREDENTIALS', 'credentials', 'Password is required.');
+  const username = answered(
+    await runTextInput({
+      message: trans.studentId,
+      placeholder: trans.studentIdHint,
+      allowEmpty: false,
+    }),
+  );
+  const password = answered(
+    await runSecretInput({
+      message: trans.password,
+      placeholder: trans.passwordHint,
+      allowEmpty: false,
+    }),
+  );
   return loginWithStudentPassword(username, password);
 }
 
@@ -239,6 +292,10 @@ export function writePrivateIcs(filePath: string, contents: string): void {
     } catch {
       /* Best effort on non-POSIX filesystems. */
     }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    // Node appends the syscall and the temporary path; keep only "CODE: description".
+    throw new IcsWriteError(resolved, /^(.+?), \w+ '/.exec(message)?.[1] ?? message);
   } finally {
     try {
       fs.unlinkSync(temporaryPath);
@@ -260,12 +317,15 @@ async function resolveWeekOneMonday(
   if (hasAuthoritativeDates) return explicitValue;
   if (explicitValue) return explicitValue;
   if (!isInteractive) return undefined;
-  const value = await runTextInput({
-    message: t().timetable.weekOne,
-    placeholder: t().timetable.weekOneHint,
-    allowEmpty: false,
-  });
-  return value === null || value === '' ? undefined : value;
+  const value = answered(
+    await runTextInput({
+      message: t().timetable.weekOne,
+      placeholder: t().timetable.weekOneHint,
+      allowEmpty: false,
+    }),
+  ).trim();
+  assertWeekOne(value);
+  return value;
 }
 
 export async function runStudentTimetableCommand(
@@ -303,7 +363,10 @@ export async function runStudentTimetableCommand(
     return 1;
   }
 
+  const weekOneFlag = flagValue(options.flags, '--week-one=');
+
   try {
+    if (weekOneFlag !== undefined) assertWeekOne(weekOneFlag);
     if (subcommand === 'logout') {
       store.clear();
       clearScheduleCache();
@@ -352,10 +415,11 @@ export async function runStudentTimetableCommand(
             ? `timetable-${termKey(selected)}.ics`
             : outputFlag;
         const weekOneMonday = await resolveWeekOneMonday(
-          flagValue(options.flags, '--week-one='),
+          weekOneFlag,
           timetable.calendarDays.length > 0,
           isInteractive,
         );
+        if (weekOneMonday !== undefined) assertWeekOne(weekOneMonday, timetable.calendarDays);
         const ics = timetableToIcs(timetable, {
           ...(weekOneMonday === undefined ? {} : { weekOneMonday }),
           calendarName: fmt(trans.calendarName, {
@@ -386,6 +450,7 @@ export async function runStudentTimetableCommand(
       { oneShot, isInteractive, store, stderr },
     );
   } catch (error) {
+    if (error instanceof PromptCancelledError) return 130;
     if (!isInteractive && error instanceof AuthError && error.code === 'INVALID_CREDENTIALS') {
       stderr.write(`${trans.noSession}\n`);
       return 2;

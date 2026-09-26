@@ -1,3 +1,5 @@
+import http from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { describe, expect, it, vi } from 'vitest';
 import { AuthError, type AuthErrorCode } from './errors.js';
 import { assertAllowedCampusUrl, createCampusCookieSession } from './cookie-transport.js';
@@ -155,5 +157,33 @@ describe('cookie transport', () => {
     }
     expect(caught).toMatchObject({ name: 'AbortError' });
     expect(String(caught)).not.toContain('private abort marker');
+  });
+
+  it.each([
+    ['before the headers', false],
+    ['after the headers', true],
+  ])('times out a response that stalls %s', async (_label, sendHeaders) => {
+    const server = http.createServer((_request, response) => {
+      if (!sendHeaders) return;
+      response.writeHead(200, { 'content-type': 'text/html' });
+      response.write('<html>');
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as AddressInfo;
+    try {
+      const session = createCampusCookieSession({
+        timeoutMs: 200,
+        baseFetch: (_input, init) => globalThis.fetch(`http://127.0.0.1:${port}/`, init),
+      });
+      const caught = await session
+        .request(new URL('https://webvpn.nbt.edu.cn/'))
+        .then((response) => response.text())
+        .catch((error: unknown) => error);
+      expect(caught).toBeInstanceOf(AuthError);
+      expect(caught).toMatchObject({ code: 'TIMEOUT' });
+    } finally {
+      server.closeAllConnections();
+      server.close();
+    }
   });
 });

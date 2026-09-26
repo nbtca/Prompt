@@ -1,17 +1,40 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { SessionExpiredError } from '../auth/errors.js';
 import type { AcademicTerm } from '@nbtca/nbtcal/timetable';
 import type { AuthenticatedNbtSession } from '../auth/nbt-auth.js';
 import type { PersistedNbtSession, SessionStore } from '../auth/session-store.js';
+import { runSecretInput, runTextInput } from '../core/components/text-input.js';
+import { t } from '../i18n/index.js';
 import {
+  assertWeekOne,
   relevantTerms,
   resolveTerm,
+  runStudentTimetableCommand,
+  safeMessage,
   withAuthenticatedSession,
   writePrivateIcs,
 } from './student-timetable.js';
+
+vi.mock('../core/components/text-input.js', () => ({
+  runTextInput: vi.fn(),
+  runSecretInput: vi.fn(),
+}));
+
+function captured(): { stream: Pick<NodeJS.WriteStream, 'write'>; text: () => string } {
+  let text = '';
+  return {
+    stream: {
+      write: (chunk: string | Uint8Array) => {
+        text += String(chunk);
+        return true;
+      },
+    },
+    text: () => text,
+  };
+}
 
 const catalog: [AcademicTerm, AcademicTerm] = [
   {
@@ -196,6 +219,90 @@ describe('private ICS output', () => {
     } finally {
       fs.rmSync(directory, { recursive: true, force: true });
     }
+  });
+
+  it.each([
+    ['an existing directory', 'existing', 'EISDIR'],
+    ['a missing parent directory', path.join('missing', 'schedule.ics'), 'ENOENT'],
+  ])('names the path and the reason when the output is %s', (_label, output, code) => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'nbtca-ics-'));
+    try {
+      fs.mkdirSync(path.join(directory, 'existing'));
+      const target = path.join(directory, output);
+      let caught: unknown;
+      try {
+        writePrivateIcs(target, 'contents');
+      } catch (error) {
+        caught = error;
+      }
+      const message = safeMessage(caught);
+      expect(message).toContain(target);
+      expect(message).toContain(code);
+      expect(message).not.toContain('.tmp');
+      expect(fs.readdirSync(directory)).toEqual(['existing']);
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('cancelled prompts', () => {
+  it.each([
+    ['student id', null, null],
+    ['password', '20260001', null],
+  ])('exits quietly when the %s prompt is cancelled', async (_label, username, password) => {
+    vi.mocked(runTextInput).mockResolvedValue(username);
+    vi.mocked(runSecretInput).mockResolvedValue(password);
+    const stdout = captured();
+    const stderr = captured();
+    const code = await runStudentTimetableCommand('login', {
+      flags: new Set(['--one-shot']),
+      isInteractive: true,
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+    });
+    expect(code).toBe(130);
+    expect(stdout.text()).toBe('');
+    expect(stderr.text()).toBe('');
+  });
+});
+
+describe('--week-one', () => {
+  it.each(['2026-09-08', 'next-monday', '2026-02-30'])(
+    'rejects %s before touching the session',
+    async (value) => {
+      const stderr = captured();
+      const store: SessionStore = {
+        filePath: '/unused',
+        load: () => {
+          throw new Error('must not load');
+        },
+        save: () => undefined,
+        clear: () => undefined,
+      };
+      const code = await runStudentTimetableCommand('export', {
+        flags: new Set([`--week-one=${value}`]),
+        isInteractive: false,
+        store,
+        stdout: captured().stream,
+        stderr: stderr.stream,
+      });
+      expect(code).toBe(1);
+      expect(stderr.text()).toBe(`${t().timetable.invalidWeekOne}\n`);
+    },
+  );
+
+  it('must agree with every date JWXT supplied', () => {
+    const calendarDays = [
+      { week: 1, weekday: 1, date: '2026-09-07' },
+      { week: 2, weekday: 3, date: '2026-09-16' },
+    ] as const;
+    expect(() => {
+      assertWeekOne('2026-09-07', calendarDays);
+    }).not.toThrow();
+    expect(() => {
+      assertWeekOne('2026-09-14', calendarDays);
+    }).toThrow(expect.objectContaining({ reason: 'conflict' }));
   });
 });
 
