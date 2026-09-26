@@ -357,6 +357,7 @@ function spreadWidths(ideal: readonly number[], available: number): number[] {
 }
 
 const GRID_SEP_W = 3;
+const GRID_CURSOR_TAIL_W = 1;
 
 interface GridMetrics {
   rowHeadW: number;
@@ -388,7 +389,9 @@ function weekGridMetrics(timetable: Timetable, weekNumber: number, now: Date): G
 
 export function weekGridFullWidth(timetable: Timetable, weekNumber: number, now: Date): number {
   const { rowHeadW, totalIdealColW } = weekGridMetrics(timetable, weekNumber, now);
-  return visualWidth(space.indent) * 2 + rowHeadW + totalIdealColW + 6 * GRID_SEP_W;
+  return (
+    visualWidth(space.indent) * 2 + rowHeadW + totalIdealColW + 6 * GRID_SEP_W + GRID_CURSOR_TAIL_W
+  );
 }
 
 export function renderWeekGrid(
@@ -406,11 +409,12 @@ export function renderWeekGrid(
   const connector = pickIcon('│', '|');
   const emptyGlyph = pickIcon('·', '.');
   const sepGlyph = pickIcon('│', '|');
-  const sep = type.hint(` ${sepGlyph} `);
+  const gap = ` ${sepGlyph} `;
+  const sep = type.hint(gap);
   const { rowHeadW, idealColWidths, totalIdealColW } = weekGridMetrics(timetable, weekNumber, now);
   const availableForCols = Math.max(
     0,
-    lineBudget(cols) - visualWidth(space.indent) - rowHeadW - 6 * GRID_SEP_W,
+    lineBudget(cols) - visualWidth(space.indent) - rowHeadW - 6 * GRID_SEP_W - GRID_CURSOR_TAIL_W,
   );
   const colWidths =
     totalIdealColW <= availableForCols
@@ -437,9 +441,9 @@ export function renderWeekGrid(
 
   const sorted = [...periods].sort((a, b) => a.period - b.period);
   sorted.forEach((p, i) => {
-    const rowHead = type.hint(padEndV(rangeLabel(p.start, p.end), rowHeadW));
     const nameCells: string[] = [];
     const locCells: string[] = [];
+    let widened = -1;
     for (let wdIdx = 0; wdIdx < 7; wdIdx++) {
       const wd = wdIdx + 1;
       const colW = colWidths[wdIdx] ?? 3;
@@ -454,7 +458,10 @@ export function renderWeekGrid(
       const paddedLoc = centerInWidth(clip(rawLoc, colW), colW);
 
       if (isCursor) {
-        nameCells.push(type.active(centerInWidth(`[${clip(rawName, colW - 2)}]`, colW)));
+        const wide = visualWidth(rawName) > colW - 2;
+        if (wide) widened = wdIdx;
+        const inner = wide ? colW : colW - 2;
+        nameCells.push(type.active(centerInWidth(`[${clip(rawName, inner)}]`, inner + 2)));
         locCells.push(starting ? type.body(paddedLoc) : type.hint(paddedLoc));
       } else if (starting) {
         nameCells.push(isToday ? type.active(paddedName) : type.body(paddedName));
@@ -464,7 +471,17 @@ export function renderWeekGrid(
         locCells.push(type.hint(paddedLoc));
       }
     }
-    lines.push(space.indent + rowHead + nameCells.join(sep));
+    const rowHead = type.hint(
+      padEndV(rangeLabel(p.start, p.end), rowHeadW - (widened === 0 ? 1 : 0)),
+    );
+    const nameRow = nameCells
+      .map((cell, index) =>
+        index === 0
+          ? cell
+          : type.hint(gap.slice(index - 1 === widened ? 1 : 0, index === widened ? 2 : 3)) + cell,
+      )
+      .join('');
+    lines.push(space.indent + rowHead + nameRow);
     lines.push(space.indent + blankHead + locCells.join(sep));
 
     const next = sorted[i + 1];
