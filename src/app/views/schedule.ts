@@ -651,6 +651,7 @@ export const scheduleView = {
           };
           return;
         }
+        if (nav.kind === 'emptyCell') return;
         returnToHub();
         return;
       }
