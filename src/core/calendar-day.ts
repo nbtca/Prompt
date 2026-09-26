@@ -40,3 +40,7 @@ function localDayIndex(date: Date): number {
 export function localDayDifference(start: Date, end: Date): number {
   return localDayIndex(end) - localDayIndex(start);
 }
+
+export function isoDayDifference(start: string, end: string): number {
+  return (Date.parse(end) - Date.parse(start)) / DAY_MS;
+}

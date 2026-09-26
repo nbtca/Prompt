@@ -5,7 +5,7 @@ import type {
   TimetablePeriod,
   TimetableUnresolvedItem,
 } from '@nbtca/nbtcal/timetable';
-import { createTimetableSchedule } from '@nbtca/nbtcal/timetable';
+import { campusDateTime, campusIsoDate, createTimetableSchedule } from '@nbtca/nbtcal/timetable';
 import { countdownParts, isCountdownUrgent } from './calendar-query.js';
 import { c, type, space, glyph } from '../core/theme.js';
 import { pickIcon } from '../core/icons.js';
@@ -74,29 +74,6 @@ export function renderNextClassBanner(
   return styleWhen(compactWhen);
 }
 
-export function renderTodayClasses(
-  meetings: readonly TimetableMeeting[],
-  periods: readonly TimetablePeriod[],
-  now: Date,
-): string {
-  const trans = t();
-  const sorted = [...meetings].sort((a, b) => a.startPeriod - b.startPeriod);
-  if (sorted.length === 0) return `${space.indent}${type.hint(trans.timetable.noClassToday)}`;
-  const dot = pickIcon('·', '-');
-  const marker = pickIcon('▸', '>');
-  const lines = sorted.map((m) => {
-    const time = span(m, periods);
-    const startStr = periods.find((p) => p.period === m.startPeriod)?.start ?? '00:00';
-    const endStr = periods.find((p) => p.period === m.endPeriod)?.end ?? '23:59';
-    const nowStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    const live = nowStr >= startStr && nowStr <= endStr;
-    const head = live ? `${type.active(marker)} ` : '  ';
-    const loc = m.location ? `  ${dot}  ${type.hint(m.location)}` : '';
-    return `${space.indent}${head}${type.hint(time)}  ${live ? type.active(m.courseName) : type.body(m.courseName)}${loc}`;
-  });
-  return lines.join('\n');
-}
-
 export function weekdayShortLabel(wd: number): string {
   const trans = t();
   const labels = [
@@ -124,7 +101,8 @@ function renderTimeline(
   const sorted = [...meetings].sort((a, b) => a.startPeriod - b.startPeriod);
   if (sorted.length === 0) return `${space.indent}${type.hint(trans.timetable.noClassToday)}`;
 
-  const nowStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  const today = campusIsoDate(now);
+  const minute = Math.floor(now.getTime() / 60_000) * 60_000;
   const dot = pickIcon('·', '-');
   const rule = pickIcon('─', '-');
   const midConnector = pickIcon('┼', '+');
@@ -134,8 +112,10 @@ function renderTimeline(
   const lines = sorted.map((m, i) => {
     const startStr = periods.find((p) => p.period === m.startPeriod)?.start ?? '00:00';
     const endStr = periods.find((p) => p.period === m.endPeriod)?.end ?? '23:59';
-    const isLive = isToday && nowStr >= startStr && nowStr <= endStr;
-    const isDone = isToday && nowStr > endStr;
+    const end = campusDateTime(today, endStr);
+    const isLive =
+      isToday && campusDateTime(today, startStr).getTime() <= minute && minute <= end.getTime();
+    const isDone = isToday && minute > end.getTime();
     const isCursor =
       cursorPeriod !== undefined && m.startPeriod <= cursorPeriod && cursorPeriod <= m.endPeriod;
     const connector = i === 0 ? topConnector : midConnector;
@@ -150,14 +130,6 @@ function renderTimeline(
       statusText = trans.timetable.classDone;
       compactStatusText = statusText;
     } else if (isLive) {
-      const end = new Date(now);
-      const [eh, em] = endStr.split(':').map((x) => Number.parseInt(x, 10));
-      end.setHours(
-        eh !== undefined && Number.isFinite(eh) ? eh : 0,
-        em !== undefined && Number.isFinite(em) ? em : 0,
-        0,
-        0,
-      );
       const remaining = countdownParts(end, now);
       const mins = remaining.days * 1440 + remaining.hours * 60 + remaining.minutes;
       statusText = `${trans.timetable.classLive}  ${dot}  ${fmt(trans.timetable.minutesRemaining, { minutes: String(mins) })}`;

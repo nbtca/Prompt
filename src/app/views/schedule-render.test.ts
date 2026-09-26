@@ -5,6 +5,7 @@ import { ListField } from '../fields/list-field.js';
 import { TextField } from '../fields/text-field.js';
 import { setLanguage } from '../../i18n/index.js';
 import { resetIconCache } from '../../core/icons.js';
+import { campusDateTime } from '@nbtca/nbtcal/timetable';
 import { stripAnsi, visualWidth } from '../../core/text.js';
 import type { Timetable } from '@nbtca/nbtcal/timetable';
 import type { Event } from '../../features/calendar.js';
@@ -18,10 +19,6 @@ beforeAll(() => {
 function defined<T>(value: T | undefined): T {
   if (value === undefined) throw new Error('Expected fixture value');
   return value;
-}
-
-function campusDateTime(value: string): Date {
-  return new Date(`${value}+08:00`);
 }
 
 const timetable: Timetable = {
@@ -164,7 +161,7 @@ describe('renderSchedule', () => {
           weekOne: '2026-09-07',
           timetable,
         },
-        campusDateTime('2026-09-07T07:00:00'),
+        campusDateTime('2026-09-07', '07:00'),
       ).join('\n'),
     );
     expect(out).toContain('Math');
@@ -176,7 +173,7 @@ describe('renderSchedule', () => {
     const out = stripAnsi(
       renderSchedule(
         { mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: incomplete },
-        campusDateTime('2026-09-07T07:00:00'),
+        campusDateTime('2026-09-07', '07:00'),
       ).join('\n'),
     );
 
@@ -192,7 +189,7 @@ describe('renderSchedule', () => {
         weekOne: '2026-09-07',
         timetable,
       },
-      campusDateTime('2026-09-07T07:00:00'),
+      campusDateTime('2026-09-07', '07:00'),
       19,
       40,
     );
@@ -213,7 +210,7 @@ describe('renderSchedule', () => {
           weekOne: '2026-09-07',
           timetable,
         },
-        campusDateTime('2026-09-07T07:00:00'),
+        campusDateTime('2026-09-07', '07:00'),
       ).join('\n'),
     );
     expect(out).toContain('[w] Full grid');
@@ -233,7 +230,7 @@ describe('renderSchedule', () => {
         timetable,
         statusMessage: message,
       },
-      campusDateTime('2026-09-07T20:00:00'),
+      campusDateTime('2026-09-07', '20:00'),
       19,
       20,
     );
@@ -254,7 +251,7 @@ describe('renderSchedule', () => {
           weekOne: '2099-01-05',
           timetable,
         },
-        campusDateTime('2026-09-07T07:00:00'),
+        campusDateTime('2026-09-07', '07:00'),
       ).join('\n'),
     );
     expect(out).toContain("Term hasn't started yet");
@@ -272,7 +269,7 @@ describe('renderSchedule', () => {
             weekOne: '2099-01-05',
             timetable: busyTimetable,
           },
-          campusDateTime('2026-09-07T07:00:00'),
+          campusDateTime('2026-09-07', '07:00'),
           45,
           150,
         ).join('\n'),
@@ -292,7 +289,7 @@ describe('renderSchedule', () => {
             weekOne: '2099-01-05',
             timetable: busyTimetable,
           },
-          campusDateTime('2026-09-07T07:00:00'),
+          campusDateTime('2026-09-07', '07:00'),
           19,
           150,
         ).join('\n'),
@@ -311,7 +308,7 @@ describe('renderSchedule', () => {
             weekOne: '2099-01-05',
             timetable: busyTimetable,
           },
-          campusDateTime('2026-09-07T07:00:00'),
+          campusDateTime('2026-09-07', '07:00'),
           45,
           80,
         ).join('\n'),
@@ -331,7 +328,7 @@ describe('renderSchedule', () => {
             weekOne: '2099-01-05',
             timetable: emptyTimetable,
           },
-          campusDateTime('2026-09-07T07:00:00'),
+          campusDateTime('2026-09-07', '07:00'),
           45,
           150,
         ),
@@ -344,7 +341,7 @@ describe('renderSchedule', () => {
             weekOne: '2099-01-05',
             timetable: emptyTimetable,
           },
-          campusDateTime('2026-09-07T07:00:00'),
+          campusDateTime('2026-09-07', '07:00'),
           45,
           150,
         ).join('\n'),
@@ -361,7 +358,7 @@ describe('renderSchedule', () => {
           weekOne: '2099-01-05',
           timetable: busyTimetable,
         },
-        campusDateTime('2026-09-07T07:00:00'),
+        campusDateTime('2026-09-07', '07:00'),
         45,
         150,
       );
@@ -379,7 +376,7 @@ describe('renderSchedule', () => {
         weekOne: '2026-09-07',
         timetable,
       },
-      campusDateTime('2026-09-07T07:00:00'),
+      campusDateTime('2026-09-07', '07:00'),
     );
     for (const line of lines) {
       expect(line).not.toContain('\n');
@@ -396,7 +393,7 @@ describe('renderSchedule', () => {
             weekOne: '2026-09-07',
             timetable: busyTimetable,
           },
-          campusDateTime('2026-09-07T07:00:00'),
+          campusDateTime('2026-09-07', '07:00'),
           45,
           150,
         ).join('\n'),
@@ -415,7 +412,7 @@ describe('renderSchedule', () => {
             weekOne: '2026-09-07',
             timetable: busyTimetable,
           },
-          campusDateTime('2026-09-07T07:00:00'),
+          campusDateTime('2026-09-07', '07:00'),
           19,
           150,
         ).join('\n'),
@@ -433,7 +430,7 @@ describe('renderSchedule', () => {
             weekOne: '2026-09-07',
             timetable: busyTimetable,
           },
-          campusDateTime('2026-09-07T07:00:00'),
+          campusDateTime('2026-09-07', '07:00'),
           45,
           80,
         ).join('\n'),
@@ -450,7 +447,7 @@ describe('renderSchedule', () => {
           weekOne: '2026-09-07',
           timetable: busyTimetable,
         },
-        campusDateTime('2026-09-07T07:00:00'),
+        campusDateTime('2026-09-07', '07:00'),
         19,
         80,
       ).map(stripAnsi);
@@ -466,7 +463,7 @@ describe('renderSchedule', () => {
           weekOne: '2026-09-07',
           timetable,
         },
-        campusDateTime('2026-09-07T07:00:00'),
+        campusDateTime('2026-09-07', '07:00'),
         19,
         40,
       );
@@ -490,7 +487,7 @@ describe('renderSchedule', () => {
           weekOne: '2026-09-07',
           timetable,
         },
-        campusDateTime('2026-09-07T07:00:00'),
+        campusDateTime('2026-09-07', '07:00'),
         5,
         40,
       );
@@ -509,7 +506,7 @@ describe('renderSchedule', () => {
           timetable,
           gridCursor: { weekday: 6, period: 1 },
         },
-        campusDateTime('2026-09-07T07:00:00'),
+        campusDateTime('2026-09-07', '07:00'),
         15,
         40,
       );
@@ -531,7 +528,7 @@ describe('renderSchedule', () => {
           weekOne: '2026-09-07',
           timetable: longCourseTimetable,
         },
-        campusDateTime('2026-09-07T07:00:00'),
+        campusDateTime('2026-09-07', '07:00'),
         19,
         40,
       );
@@ -552,7 +549,7 @@ describe('renderSchedule', () => {
           weekOne: '2026-09-07',
           timetable: busyTimetable,
         },
-        campusDateTime('2026-09-07T07:00:00'),
+        campusDateTime('2026-09-07', '07:00'),
         45,
         150,
       );
@@ -586,7 +583,7 @@ describe('renderSchedule', () => {
           weekOne: '2026-09-07',
           timetable: longNameTimetable,
         },
-        campusDateTime('2026-09-07T07:00:00'),
+        campusDateTime('2026-09-07', '07:00'),
         45,
         100,
       ).map((l) => stripAnsi(l));
@@ -597,7 +594,7 @@ describe('renderSchedule', () => {
           weekOne: '2026-09-07',
           timetable: longNameTimetable,
         },
-        campusDateTime('2026-09-07T07:00:00'),
+        campusDateTime('2026-09-07', '07:00'),
         45,
         210,
       ).map((l) => stripAnsi(l));
@@ -623,7 +620,7 @@ describe('renderSchedule', () => {
           weekOne: '2026-09-07',
           timetable,
         },
-        campusDateTime('2026-09-07T09:00:00'),
+        campusDateTime('2026-09-07', '09:00'),
       ).join('\n'),
     );
     expect(out).toContain('Math');
@@ -641,7 +638,7 @@ describe('renderSchedule', () => {
           timetable,
           gridCursor: { weekday: 1, period: 1 },
         },
-        campusDateTime('2026-09-07T09:00:00'),
+        campusDateTime('2026-09-07', '09:00'),
       ).join('\n');
       const without = renderSchedule(
         {
@@ -650,7 +647,7 @@ describe('renderSchedule', () => {
           weekOne: '2026-09-07',
           timetable,
         },
-        campusDateTime('2026-09-07T09:00:00'),
+        campusDateTime('2026-09-07', '09:00'),
       ).join('\n');
       expect(withCursor).not.toBe(without);
     } finally {
@@ -668,7 +665,7 @@ describe('renderSchedule', () => {
           timetable,
           detailMeeting: defined(timetable.meetings[0]),
         },
-        campusDateTime('2026-09-07T09:00:00'),
+        campusDateTime('2026-09-07', '09:00'),
       ).join('\n'),
     );
     expect(out).toContain('Math');
@@ -690,7 +687,7 @@ describe('renderSchedule', () => {
         timetable: { ...timetable, meetings: [detailMeeting] },
         detailMeeting,
       },
-      campusDateTime('2026-09-07T09:00:00'),
+      campusDateTime('2026-09-07', '09:00'),
       100,
       20,
     );
@@ -760,7 +757,7 @@ describe('renderSchedule', () => {
           weekOne: '2026-09-07',
           timetable,
         },
-        campusDateTime('2026-09-07T09:00:00'),
+        campusDateTime('2026-09-07', '09:00'),
       ).join('\n'),
     );
     expect(out).toContain('Term density');
@@ -800,7 +797,7 @@ describe('renderSchedule', () => {
         weekOne: '2026-09-07',
         timetable: densityTimetable,
       },
-      campusDateTime('2027-01-04T09:00:00'),
+      campusDateTime('2027-01-04', '09:00'),
       100,
       20,
     );
@@ -936,7 +933,7 @@ describe('renderSchedule — public mode', () => {
         nextBreakTitle: '寒假',
       },
     };
-    const out = stripAnsi(renderSchedule(state, new Date('2026-10-01')).join('\n'));
+    const out = stripAnsi(renderSchedule(state, campusDateTime('2026-10-01', '00:00')).join('\n'));
     expect(out).toContain('2026-2027');
     expect(out).toContain('Term 1');
     expect(out).toContain('Week 3');
@@ -968,7 +965,7 @@ describe('renderSchedule — public mode', () => {
               nextBreakTitle: breakTitle,
             },
           },
-          new Date('2026-10-01'),
+          campusDateTime('2026-10-01', '00:00'),
           100,
           20,
         );
@@ -996,7 +993,9 @@ describe('renderSchedule — public mode', () => {
         nextBreakTitle: '寒假',
       },
     };
-    const lines = renderSchedule(state, new Date('2026-10-01')).map((l) => stripAnsi(l));
+    const lines = renderSchedule(state, campusDateTime('2026-10-01', '00:00')).map((l) =>
+      stripAnsi(l),
+    );
     const headingIndex = lines.findIndex((l) => l.includes('2026-2027'));
     const barIndex = lines.findIndex((l) => /\d+\/\d+/.test(l));
     expect(lines[headingIndex + 1]?.trim()).not.toBe('');
@@ -1014,7 +1013,7 @@ describe('renderSchedule — public mode', () => {
         currentWeek: 3,
       },
     };
-    expect(() => renderSchedule(state, new Date('2026-10-01'))).not.toThrow();
+    expect(() => renderSchedule(state, campusDateTime('2026-10-01', '00:00'))).not.toThrow();
   });
 
   it('renders the login action field', () => {
@@ -1085,7 +1084,7 @@ describe('renderSchedule — public mode', () => {
       ] as Event[],
       publicField,
     };
-    for (const line of renderSchedule(state, new Date('2026-10-01'))) {
+    for (const line of renderSchedule(state, campusDateTime('2026-10-01', '00:00'))) {
       expect(line).not.toContain('\n');
     }
   });

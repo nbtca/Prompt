@@ -4,6 +4,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { setLanguage, t } from '../../i18n/index.js';
 import { resetIconCache } from '../../core/icons.js';
+import { campusDateTime } from '@nbtca/nbtcal/timetable';
 import { stripAnsi, visualWidth } from '../../core/text.js';
 import type { AppContext } from '../view.js';
 import type * as CalendarModule from '../../features/calendar.js';
@@ -30,7 +31,7 @@ beforeAll(() => {
   resetIconCache();
 });
 
-const noon = new Date('2026-07-15T12:00:00');
+const noon = campusDateTime('2026-07-15', '12:00');
 const FIXTURE_TERM_KEY = '2020-1';
 const FIXTURE_WEEK_ONE = '2020-01-06';
 
@@ -260,9 +261,9 @@ describe('renderHome day-progress bar', () => {
   });
 
   it('is empty at midnight and full just before it', () => {
-    const out = stripAnsi(renderHome({}, new Date('2026-07-15T00:00:00')).join('\n'));
+    const out = stripAnsi(renderHome({}, campusDateTime('2026-07-15', '00:00')).join('\n'));
     expect(out).toContain('0%');
-    const lateOut = stripAnsi(renderHome({}, new Date('2026-07-15T23:59:00')).join('\n'));
+    const lateOut = stripAnsi(renderHome({}, campusDateTime('2026-07-15', '23:59')).join('\n'));
     expect(lateOut).toContain('100%');
   });
 
@@ -586,10 +587,35 @@ describe('homeView.load()', () => {
     expect(capturedSync).toBe(true);
   });
 
+  it('places week events on their own campus or all-day date east of campus time', async () => {
+    const previousTimeZone = process.env.TZ;
+    process.env.TZ = 'Pacific/Auckland';
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(campusDateTime('2020-01-08', '12:00'));
+    try {
+      writeSetUpFixture(dir);
+      calendarInRange.mockReturnValue([
+        { start: new Date(2020, 0, 6), isAllDay: true, title: 'All-day Monday' },
+        { start: campusDateTime('2020-01-12', '23:00'), title: 'Late Sunday' },
+        { start: campusDateTime('2020-01-05', '23:00'), title: 'Previous Sunday' },
+      ]);
+      const ctx = fakeCtx();
+      await homeView.load(ctx);
+      const lines = stripAnsi(homeView.render(ctx).join('\n')).split('\n');
+      const titleIdx = lines.findIndex((l) => l.includes('Week overview'));
+      const cells = defined(lines[titleIdx + 3]).match(/▓▓|░░/g);
+      expect(cells).toEqual(['▓▓', '░░', '░░', '░░', '░░', '░░', '▓▓']);
+    } finally {
+      vi.useRealTimers();
+      if (previousTimeZone === undefined) delete process.env.TZ;
+      else process.env.TZ = previousTimeZone;
+    }
+  });
+
   it('fills in weekAhead.eventDays from the real week-of-events after the network call resolves', async () => {
     writeSetUpFixture(dir);
     calendarInRange.mockReturnValue([
-      { start: new Date(`${FIXTURE_WEEK_ONE}T18:00:00`), title: 'Club meetup' },
+      { start: campusDateTime(FIXTURE_WEEK_ONE, '18:00'), title: 'Club meetup' },
     ]);
     const ctx = fakeCtx();
     await homeView.load(ctx);

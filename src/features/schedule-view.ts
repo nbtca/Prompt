@@ -1,10 +1,16 @@
-import { createTimetableSchedule, type Timetable, type Weekday } from '@nbtca/nbtcal/timetable';
-import { addLocalDays, parseLocalMonday } from '../core/calendar-day.js';
+import {
+  campusDateTime,
+  campusIsoDate,
+  createTimetableSchedule,
+  type Timetable,
+  type Weekday,
+} from '@nbtca/nbtcal/timetable';
 import { renderNextClassBanner, renderTodayTimeline } from './schedule-render.js';
 import { loadCurrentPointer, loadTimetableCache } from './schedule-store.js';
 import { sanitizeTimetable } from './timetable-sanitize.js';
 
 const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const satisfies readonly Weekday[];
+const WEEK_MS = 7 * 86_400_000;
 
 function loadCachedTimetable(): {
   timetable: Timetable;
@@ -61,7 +67,7 @@ export function peekTodayLines(now: Date = new Date()): string[] {
 }
 
 export interface WeekAheadInfo {
-  weekStartDate: Date;
+  weekStart: string;
   classDays: boolean[];
 }
 
@@ -75,8 +81,9 @@ export function peekWeekAheadInfo(now: Date = new Date()): WeekAheadInfo | null 
     const week = schedule.weekAt(now);
     if (week < 1) return null;
     const classDays = WEEKDAYS.map((weekday) => schedule.meetingsOnDay(week, weekday).length > 0);
-    const weekStartDate = addLocalDays(parseLocalMonday(cached.weekOneMonday), (week - 1) * 7);
-    return { weekStartDate, classDays };
+    const weekStart =
+      campusDateTime(cached.weekOneMonday, '00:00').getTime() + (week - 1) * WEEK_MS;
+    return { weekStart: campusIsoDate(new Date(weekStart)), classDays };
   } catch {
     return null;
   }

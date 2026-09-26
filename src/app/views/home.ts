@@ -16,10 +16,10 @@ import {
   renderEventBrief,
 } from '../../features/calendar.js';
 import { weekdayShortLabel } from '../../features/schedule-render.js';
-import { addLocalDays } from '../../core/calendar-day.js';
 import type { View, AppContext } from '../view.js';
 import { passiveFooterHint } from '../chrome.js';
-import { campusWeekday } from '@nbtca/nbtcal/timetable';
+import { campusDateTime, campusIsoDate } from '@nbtca/nbtcal/timetable';
+import { isoDayDifference, localDayDifference, parseLocalDate } from '../../core/calendar-day.js';
 import { loadingLines } from '../../core/components/spinner.js';
 import type { Calendar } from '@nbtca/nbtcal';
 const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const;
@@ -51,11 +51,12 @@ function wrappedRenderedLines(line: string, cols: number): string[] {
   return wrappedIndentedLines(content, cols, (value) => value);
 }
 
+const DAY_MS = 86_400_000;
 const DAY_PROGRESS_WIDTH = 20;
 
 function renderDayProgress(now: Date, cols: number): string {
-  const minutesElapsed = now.getHours() * 60 + now.getMinutes();
-  const fraction = Math.min(1, Math.max(0, minutesElapsed / 1440));
+  const midnight = campusDateTime(campusIsoDate(now), '00:00');
+  const fraction = Math.min(1, Math.max(0, (now.getTime() - midnight.getTime()) / DAY_MS));
   const pct = Math.round(fraction * 100);
   const percentage = `${pct}%`;
   const width = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : Number.POSITIVE_INFINITY;
@@ -229,9 +230,18 @@ function calendarSnapshot(
     .slice(0, HOME_EVENT_FETCH_CAP)
     .map((event) => renderEventBrief(toDisplayEvent(event), now));
   if (!weekAheadInfo) return { eventLines };
-  const weekEnd = addLocalDays(weekAheadInfo.weekStartDate, 7);
+  const { weekStart } = weekAheadInfo;
+  const monday = campusDateTime(weekStart, '00:00');
   const daySet = new Set(
-    cal.inRange(weekAheadInfo.weekStartDate, weekEnd).map((event) => campusWeekday(event.start)),
+    cal
+      .inRange(new Date(monday.getTime() - DAY_MS), new Date(monday.getTime() + 8 * DAY_MS))
+      .map(
+        (event) =>
+          1 +
+          (event.isAllDay
+            ? localDayDifference(parseLocalDate(weekStart), event.start)
+            : isoDayDifference(weekStart, campusIsoDate(event.start))),
+      ),
   );
   return {
     eventLines,

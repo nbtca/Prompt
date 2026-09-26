@@ -8,7 +8,6 @@ import type {
 } from '@nbtca/nbtcal/timetable';
 import {
   renderNextClassBanner,
-  renderTodayClasses,
   renderWeekGrid as renderTimetableWeekGrid,
   renderUnresolvedItems,
   renderTodayTimeline,
@@ -20,6 +19,7 @@ import {
 } from './schedule-render.js';
 import { setLanguage } from '../i18n/index.js';
 import { resetIconCache } from '../core/icons.js';
+import { campusDateTime } from '@nbtca/nbtcal/timetable';
 import { stripAnsi, visualWidth } from '../core/text.js';
 import { space } from '../core/theme.js';
 
@@ -91,8 +91,8 @@ describe('renderNextClassBanner', () => {
   it('shows the course + countdown', () => {
     const out = stripAnsi(
       renderNextClassBanner(
-        { meeting: mk({}), start: new Date('2026-09-07T08:00:00') },
-        new Date('2026-09-07T06:30:00'),
+        { meeting: mk({}), start: campusDateTime('2026-09-07', '08:00') },
+        campusDateTime('2026-09-07', '06:30'),
       ),
     );
     expect(out).toContain('Next');
@@ -113,9 +113,9 @@ describe('renderNextClassBanner', () => {
             courseName: 'Advanced Distributed Systems Architecture',
             location: 'Building 12 Room 304',
           }),
-          start: new Date('2026-09-07T08:00:00'),
+          start: campusDateTime('2026-09-07', '08:00'),
         },
-        new Date('2026-09-07T06:30:00'),
+        campusDateTime('2026-09-07', '06:30'),
         40,
       ),
     );
@@ -132,9 +132,9 @@ describe('renderNextClassBanner', () => {
       renderNextClassBanner(
         {
           meeting: mk({}),
-          start: new Date('2026-09-07T08:00:00'),
+          start: campusDateTime('2026-09-07', '08:00'),
         },
-        new Date('2026-09-07T06:30:00'),
+        campusDateTime('2026-09-07', '06:30'),
         20,
       ),
     );
@@ -144,31 +144,6 @@ describe('renderNextClassBanner', () => {
     expect(out).toContain('1h 30m');
     expect(out).not.toContain('Room 201');
     expect(out).not.toContain('Next');
-    done();
-  });
-});
-
-describe('renderTodayClasses', () => {
-  it('lists a class with its time and location', () => {
-    const out = stripAnsi(renderTodayClasses([mk({})], periods, new Date('2026-09-07T07:00:00')));
-    expect(out).toContain('08:00');
-    expect(out).toContain('Math');
-    expect(out).toContain('Room 201');
-    done();
-  });
-  it('shows an empty-state line when there are none', () => {
-    expect(stripAnsi(renderTodayClasses([], periods, new Date()))).toContain('No classes today');
-    done();
-  });
-  it('marks the in-progress class', () => {
-    const out = stripAnsi(
-      renderTodayClasses(
-        [mk({ startPeriod: 1, endPeriod: 1 })],
-        periods,
-        new Date('2026-09-07T08:10:00'),
-      ),
-    );
-    expect(out).toContain('> '); // ascii in-progress marker
     done();
   });
 });
@@ -189,7 +164,7 @@ describe('renderWeekGrid', () => {
         ],
         periods,
         1,
-        new Date('2026-09-07T09:00:00'),
+        campusDateTime('2026-09-07', '09:00'),
       ),
     );
     expect(out).toMatch(/Mon/); // weekday header
@@ -198,7 +173,7 @@ describe('renderWeekGrid', () => {
   });
 
   it('marks the header of the current weekday and no other', () => {
-    const out = stripAnsi(renderWeekGrid([], periods, 1, new Date('2026-09-07T09:00:00')));
+    const out = stripAnsi(renderWeekGrid([], periods, 1, campusDateTime('2026-09-07', '09:00')));
     const headerLine = lineAt(out.split('\n'), 0);
     expect(headerLine).toMatch(/Mon\*/);
     expect(headerLine).not.toMatch(/Tue\*/);
@@ -207,7 +182,7 @@ describe('renderWeekGrid', () => {
 
   describe('row headers show the real clock time range, not an abstract period number', () => {
     it("shows the period's real start-end time range as the row label", () => {
-      const out = stripAnsi(renderWeekGrid([], periods, 1, new Date('2026-09-07T09:00:00')));
+      const out = stripAnsi(renderWeekGrid([], periods, 1, campusDateTime('2026-09-07', '09:00')));
       const lines = out.split('\n');
       expect(lines.some((l) => l.trim().startsWith('08:00-08:45'))).toBe(true); // period 1
       expect(lines.some((l) => l.trim().startsWith('08:55-09:40'))).toBe(true); // period 2
@@ -232,7 +207,7 @@ describe('renderWeekGrid', () => {
           ],
           periods,
           1,
-          new Date('2026-09-07T09:00:00'),
+          campusDateTime('2026-09-07', '09:00'),
           120,
         ),
       );
@@ -259,7 +234,7 @@ describe('renderWeekGrid', () => {
           ],
           periods,
           1,
-          new Date('2026-09-07T09:00:00'),
+          campusDateTime('2026-09-07', '09:00'),
           60,
         ),
       );
@@ -282,7 +257,7 @@ describe('renderWeekGrid', () => {
           ],
           periods,
           1,
-          new Date('2026-09-07T09:00:00'),
+          campusDateTime('2026-09-07', '09:00'),
         ),
       );
       expect(out).toContain('Math');
@@ -307,7 +282,7 @@ describe('renderWeekGrid', () => {
           ],
           periods,
           1,
-          new Date('2026-09-07T09:00:00'),
+          campusDateTime('2026-09-07', '09:00'),
           120,
         ),
       );
@@ -336,7 +311,7 @@ describe('renderWeekGrid', () => {
         }),
       ];
       const out = stripAnsi(
-        renderWeekGrid(meetings, periods, 1, new Date('2026-09-07T09:00:00'), 250),
+        renderWeekGrid(meetings, periods, 1, campusDateTime('2026-09-07', '09:00'), 250),
       );
       expect(out).toContain(longName); // Tuesday's column grew enough to fit it in full
       const headerLine = lineAt(out.split('\n'), 0);
@@ -346,7 +321,9 @@ describe('renderWeekGrid', () => {
     });
 
     it('keeps a short floor width for a column with no real content', () => {
-      const out = stripAnsi(renderWeekGrid([], periods, 1, new Date('2026-09-07T09:00:00'), 300));
+      const out = stripAnsi(
+        renderWeekGrid([], periods, 1, campusDateTime('2026-09-07', '09:00'), 300),
+      );
       const headerLine = lineAt(out.split('\n'), 0);
       expect(visualWidth(headerLine)).toBe(3 + 12 + 7 * 8 + 6 * 3);
       done();
@@ -368,7 +345,7 @@ describe('renderWeekGrid', () => {
           ],
           periods,
           1,
-          new Date('2026-09-07T09:00:00'),
+          campusDateTime('2026-09-07', '09:00'),
           80,
         ),
       );
@@ -394,7 +371,7 @@ describe('renderWeekGrid', () => {
           ],
           periods,
           1,
-          new Date('2026-09-07T09:00:00'),
+          campusDateTime('2026-09-07', '09:00'),
           60,
         ),
       );
@@ -407,7 +384,7 @@ describe('renderWeekGrid', () => {
 
   describe('a vertical separator marks the boundary between adjacent weekday columns', () => {
     it('shows a separator between every pair of adjacent columns, on every row', () => {
-      const out = stripAnsi(renderWeekGrid([], periods, 1, new Date('2026-09-07T09:00:00')));
+      const out = stripAnsi(renderWeekGrid([], periods, 1, campusDateTime('2026-09-07', '09:00')));
       const lines = out.split('\n').filter((l) => l.trim().length > 0);
       for (const line of lines) {
         expect((line.match(/\|/g) ?? []).length).toBe(6); // 6 separators between 7 columns
@@ -418,7 +395,9 @@ describe('renderWeekGrid', () => {
 
   describe('cell content is centered within each column, not left-anchored', () => {
     it('centers a short empty-cell glyph within a wide column', () => {
-      const out = stripAnsi(renderWeekGrid([], periods, 1, new Date('2026-09-07T09:00:00'), 200));
+      const out = stripAnsi(
+        renderWeekGrid([], periods, 1, campusDateTime('2026-09-07', '09:00'), 200),
+      );
       const lines = out.split('\n');
       const row = findLine(lines, (line) => line.trim().startsWith('08:00'));
       const mondayCell = row.slice(space.indent.length + 12, row.indexOf('|'));
@@ -427,7 +406,9 @@ describe('renderWeekGrid', () => {
     });
 
     it('centers the weekday header label within its column', () => {
-      const out = stripAnsi(renderWeekGrid([], periods, 1, new Date('2026-09-07T09:00:00'), 200));
+      const out = stripAnsi(
+        renderWeekGrid([], periods, 1, campusDateTime('2026-09-07', '09:00'), 200),
+      );
       const headerLine = lineAt(out.split('\n'), 0);
       const monIdx = headerLine.indexOf('Mon');
       expect(monIdx).toBeGreaterThan(space.indent.length + 12);
@@ -451,7 +432,7 @@ describe('renderWeekGrid', () => {
           ],
           periods,
           1,
-          new Date('2026-09-07T09:00:00'),
+          campusDateTime('2026-09-07', '09:00'),
           100,
         ),
       );
@@ -478,7 +459,7 @@ describe('renderWeekGrid', () => {
           ],
           periods,
           1,
-          new Date('2026-09-07T09:00:00'),
+          campusDateTime('2026-09-07', '09:00'),
           100,
         ),
       );
@@ -511,7 +492,7 @@ describe('renderWeekGrid', () => {
           [meeting],
           periods,
           1,
-          new Date('2026-09-07T09:00:00'),
+          campusDateTime('2026-09-07', '09:00'),
           80,
           { weekday: 1, period: 1 },
         );
@@ -519,7 +500,7 @@ describe('renderWeekGrid', () => {
           [meeting],
           periods,
           1,
-          new Date('2026-09-07T09:00:00'),
+          campusDateTime('2026-09-07', '09:00'),
           80,
         );
         expect(withCursor).not.toBe(withoutCursor);
@@ -542,10 +523,17 @@ describe('renderWeekGrid', () => {
           endPeriod: 1,
           weeks: [1],
         });
-        const out = renderWeekGrid([meeting], periods, 1, new Date('2026-09-07T09:00:00'), 80, {
-          weekday: 1,
-          period: 1,
-        });
+        const out = renderWeekGrid(
+          [meeting],
+          periods,
+          1,
+          campusDateTime('2026-09-07', '09:00'),
+          80,
+          {
+            weekday: 1,
+            period: 1,
+          },
+        );
         const mathIndex = out.indexOf('Math');
         const nearMath = out.slice(Math.max(0, mathIndex - 15), mathIndex);
         expect(nearMath).not.toContain('\x1b[48;2;14;165;233m');
@@ -557,7 +545,7 @@ describe('renderWeekGrid', () => {
 
     it('does not crash when the cursor points at an empty cell', () => {
       expect(() =>
-        renderWeekGrid([], periods, 1, new Date('2026-09-07T09:00:00'), 80, {
+        renderWeekGrid([], periods, 1, campusDateTime('2026-09-07', '09:00'), 80, {
           weekday: 1,
           period: 1,
         }),
@@ -569,7 +557,7 @@ describe('renderWeekGrid', () => {
       const level = chalk.level;
       chalk.level = 3;
       try {
-        const out = renderWeekGrid([], periods, 1, new Date('2026-09-07T09:00:00'), 100, {
+        const out = renderWeekGrid([], periods, 1, campusDateTime('2026-09-07', '09:00'), 100, {
           weekday: 1,
           period: 1,
         });
@@ -598,10 +586,17 @@ describe('renderWeekGrid', () => {
           endPeriod: 1,
           weeks: [1],
         });
-        const out = renderWeekGrid([meeting], periods, 1, new Date('2026-09-07T09:00:00'), 80, {
-          weekday: 1,
-          period: 1,
-        });
+        const out = renderWeekGrid(
+          [meeting],
+          periods,
+          1,
+          campusDateTime('2026-09-07', '09:00'),
+          80,
+          {
+            weekday: 1,
+            period: 1,
+          },
+        );
         const lines = out.split('\n');
         const nameLine = findLine(lines, (line) => line.includes('Math'));
         const locLine = lineAt(lines, lines.indexOf(nameLine) + 1);
@@ -617,7 +612,7 @@ describe('renderWeekGrid', () => {
       const level = chalk.level;
       chalk.level = 3;
       try {
-        const out = renderWeekGrid([], periods, 1, new Date('2026-09-07T09:00:00'), 80, {
+        const out = renderWeekGrid([], periods, 1, campusDateTime('2026-09-07', '09:00'), 80, {
           weekday: 1,
           period: 1,
         });
@@ -637,7 +632,9 @@ const periodsWithGap: TimetablePeriod[] = [
 
 describe('renderWeekGrid gap marker', () => {
   it('inserts a separator line when the gap to the next period exceeds 30 minutes', () => {
-    const out = stripAnsi(renderWeekGrid([], periodsWithGap, 1, new Date('2026-09-07T09:00:00')));
+    const out = stripAnsi(
+      renderWeekGrid([], periodsWithGap, 1, campusDateTime('2026-09-07', '09:00')),
+    );
     const lines = out.split('\n');
     const p2Index = lines.findIndex((l) => l.includes('08:55'));
     const p3Index = lines.findIndex((l) => l.includes('13:30'));
@@ -646,7 +643,7 @@ describe('renderWeekGrid gap marker', () => {
     done();
   });
   it('does not insert a separator between adjacent periods', () => {
-    const out = stripAnsi(renderWeekGrid([], periods, 1, new Date('2026-09-07T09:00:00')));
+    const out = stripAnsi(renderWeekGrid([], periods, 1, campusDateTime('2026-09-07', '09:00')));
     const lines = out.split('\n').filter((l) => l.trim().length > 0);
     expect(lines.length).toBe(1 + periods.length * 2);
     done();
@@ -755,7 +752,7 @@ describe('renderTodayTimeline', () => {
   it('marks finished classes as done and lists their start time', () => {
     const meetings = [mk({ courseName: 'Math', startPeriod: 1, endPeriod: 1 })];
     const out = stripAnsi(
-      renderTodayTimeline(meetings, dayPeriods, new Date('2026-09-07T12:00:00')),
+      renderTodayTimeline(meetings, dayPeriods, campusDateTime('2026-09-07', '12:00')),
     );
     expect(out).toContain('08:00');
     expect(out).toContain('Math');
@@ -768,7 +765,7 @@ describe('renderTodayTimeline', () => {
       mk({ courseName: 'Data Structures', location: 'Bldg 1-302', startPeriod: 3, endPeriod: 3 }),
     ];
     const out = stripAnsi(
-      renderTodayTimeline(meetings, dayPeriods, new Date('2026-09-07T14:55:00')),
+      renderTodayTimeline(meetings, dayPeriods, campusDateTime('2026-09-07', '14:55')),
     );
     expect(out).toContain('Data Structures');
     expect(out).toContain('In progress');
@@ -789,7 +786,7 @@ describe('renderTodayTimeline', () => {
     const lines = renderTodayTimeline(
       meetings,
       dayPeriods,
-      new Date('2026-09-07T14:55:00'),
+      campusDateTime('2026-09-07', '14:55'),
       40,
     ).split('\n');
     const classLine = stripAnsi(lines[0] ?? '');
@@ -805,7 +802,7 @@ describe('renderTodayTimeline', () => {
   it('leaves an upcoming class unmarked (no Done/In progress status)', () => {
     const meetings = [mk({ courseName: 'Physics', startPeriod: 2, endPeriod: 2 })];
     const out = stripAnsi(
-      renderTodayTimeline(meetings, dayPeriods, new Date('2026-09-07T07:00:00')),
+      renderTodayTimeline(meetings, dayPeriods, campusDateTime('2026-09-07', '07:00')),
     );
     expect(out).toContain('Physics');
     expect(out).not.toContain('Done');
@@ -816,7 +813,7 @@ describe('renderTodayTimeline', () => {
   it('closes the timeline with the last class end time', () => {
     const meetings = [mk({ startPeriod: 1, endPeriod: 1 })];
     const out = stripAnsi(
-      renderTodayTimeline(meetings, dayPeriods, new Date('2026-09-07T07:00:00')),
+      renderTodayTimeline(meetings, dayPeriods, campusDateTime('2026-09-07', '07:00')),
     );
     expect(out).toContain('09:40'); // period 1's end time closes the timeline
   });
@@ -826,7 +823,7 @@ describe('renderTodayTimeline', () => {
       mk({ startPeriod: 1, endPeriod: 1 }),
       mk({ courseName: 'Physics', startPeriod: 2, endPeriod: 2 }),
     ];
-    const out = renderTodayTimeline(meetings, dayPeriods, new Date('2026-09-07T07:00:00'));
+    const out = renderTodayTimeline(meetings, dayPeriods, campusDateTime('2026-09-07', '07:00'));
     expect(out.split('\n').length).toBeGreaterThan(1);
   });
 });
@@ -844,7 +841,7 @@ describe('renderDayTimeline', () => {
       mk({ courseName: 'Physics', location: 'Bldg 1-302', startPeriod: 2, endPeriod: 2 }),
     ];
     const out = stripAnsi(
-      renderDayTimeline(meetings, dayPeriods, new Date('2026-09-07T07:00:00'), true),
+      renderDayTimeline(meetings, dayPeriods, campusDateTime('2026-09-07', '07:00'), true),
     );
     expect(out).toContain('Bldg 1-302');
     done();
@@ -857,7 +854,7 @@ describe('renderDayTimeline', () => {
     const lines = renderDayTimeline(
       meetings,
       dayPeriods,
-      new Date('2026-09-07T07:00:00'),
+      campusDateTime('2026-09-07', '07:00'),
       false,
       undefined,
       20,
@@ -874,7 +871,7 @@ describe('renderDayTimeline', () => {
   it('marks live/done status when isToday is true, same as renderTodayTimeline', () => {
     const meetings = [mk({ courseName: 'Math', startPeriod: 1, endPeriod: 1 })];
     const out = stripAnsi(
-      renderDayTimeline(meetings, dayPeriods, new Date('2026-09-07T12:00:00'), true),
+      renderDayTimeline(meetings, dayPeriods, campusDateTime('2026-09-07', '12:00'), true),
     );
     expect(out).toContain('Done');
     done();
@@ -883,7 +880,7 @@ describe('renderDayTimeline', () => {
   it('never marks live/done status when isToday is false, even if the clock time would otherwise match a class', () => {
     const meetings = [mk({ courseName: 'Math', startPeriod: 1, endPeriod: 1 })];
     const out = stripAnsi(
-      renderDayTimeline(meetings, dayPeriods, new Date('2026-09-07T08:30:00'), false),
+      renderDayTimeline(meetings, dayPeriods, campusDateTime('2026-09-07', '08:30'), false),
     );
     expect(out).not.toContain('Done');
     expect(out).not.toContain('In progress');
@@ -898,7 +895,7 @@ describe('renderDayTimeline', () => {
       const startCursor = renderDayTimeline(
         meetings,
         dayPeriods,
-        new Date('2026-09-07T07:00:00'),
+        campusDateTime('2026-09-07', '07:00'),
         false,
         1,
       );
@@ -906,7 +903,7 @@ describe('renderDayTimeline', () => {
       const noCursor = renderDayTimeline(
         meetings,
         dayPeriods,
-        new Date('2026-09-07T07:00:00'),
+        campusDateTime('2026-09-07', '07:00'),
         false,
       );
       expect(noCursor).not.toContain('\x1b[48;2;14;165;233m');
@@ -918,7 +915,12 @@ describe('renderDayTimeline', () => {
 
   it('never collapses into one array entry when split on newlines', () => {
     const meetings = [mk({ startPeriod: 1, endPeriod: 1 })];
-    const out = renderDayTimeline(meetings, dayPeriods, new Date('2026-09-07T07:00:00'), true);
+    const out = renderDayTimeline(
+      meetings,
+      dayPeriods,
+      campusDateTime('2026-09-07', '07:00'),
+      true,
+    );
     expect(out.split('\n').length).toBeGreaterThan(1);
   });
 });
@@ -1072,7 +1074,7 @@ describe('renderTermDensity', () => {
       const out = stripAnsi(renderTermDensity(meetings, '2026-09-07', 1));
       const monthLine = out.split('\n')[2] ?? '';
 
-      const base = new Date('2026-09-07T00:00:00');
+      const base = campusDateTime('2026-09-07', '00:00');
       let secondLabelWeekIndex = -1;
       let secondLabelText = '';
       let prevMonth = new Date('2026-09-07T00:00:00').getMonth();
