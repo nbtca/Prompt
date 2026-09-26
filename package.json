@@ -46,7 +46,7 @@
     "interactive"
   ],
   "dependencies": {
-    "@nbtca/docs": "^0.3.2",
+    "@nbtca/docs": "^0.3.3",
     "@nbtca/nbtcal": "^0.4.3",
     "chalk": "^5.6.2",
     "marked": "^15.0.12"
