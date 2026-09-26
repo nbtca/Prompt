@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { createDocsClient, parseDoc } from '@nbtca/docs';
 import type { DocItem, DocPage, DocsClient } from '@nbtca/docs';
+import { URLS } from '../config/data.js';
 import { createDocsStore } from './docs-store.js';
 
 interface DocsFetchStore {
@@ -181,7 +182,8 @@ function beginDocsFetch(): { context: DocsFetchContext; finish(): void } {
 }
 
 const store = createDocsStore();
-const defaultClient = createDocsClient({ store });
+const options = { store, mirror: `${URLS.docs}/docs-api` };
+const defaultClient = createDocsClient(options);
 const clientsBySignal = new WeakMap<AbortSignal, DocsClient>();
 const clients = new Set<DocsClient>([defaultClient]);
 
@@ -190,7 +192,7 @@ function clientFor(signal: AbortSignal | undefined): DocsClient {
   const existing = clientsBySignal.get(signal);
   if (existing) return existing;
 
-  const client = createDocsClient({ store });
+  const client = createDocsClient(options);
   clientsBySignal.set(signal, client);
   clients.add(client);
   signal.addEventListener(
