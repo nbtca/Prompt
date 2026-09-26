@@ -77,6 +77,8 @@ export interface Translations {
     noEvents: string;
     error: string;
     errorHint: string;
+    offlineError: string;
+    retry: string;
     eventsFound: string;
     dateTime: string;
     eventName: string;
@@ -171,6 +173,11 @@ export interface Translations {
     readerLinksTitle: string;
     readerLinksHint: string;
     readerNoLinks: string;
+    offlineError: string;
+    offlineHint: string;
+    retryLoad: string;
+    searchResultsTitle: string;
+    searchProgress: string;
   };
   links: {
     choose: string;

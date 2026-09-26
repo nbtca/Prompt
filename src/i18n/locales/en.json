@@ -108,7 +108,9 @@
       "days": "{days}d {hours}h",
       "hours": "{hours}h {minutes}m",
       "minutes": "{minutes}m"
-    }
+    },
+    "offlineError": "Couldn't load the events calendar. You may be offline.",
+    "retry": "Retry"
   },
   "docs": {
     "loading": "Loading documentation list...",
@@ -159,7 +161,12 @@
     "loadingFile": "Loading",
     "readerLinksTitle": "Jump to",
     "readerLinksHint": "links",
-    "readerNoLinks": "This page has no links to other docs"
+    "readerNoLinks": "This page has no links to other docs",
+    "offlineError": "Couldn't load the docs. You may be offline.",
+    "offlineHint": "Try again later, or read them at https://docs.nbtca.space",
+    "retryLoad": "Retry",
+    "searchResultsTitle": "Results for “{query}” · {count}",
+    "searchProgress": "Searching every document: {done} of {total} checked"
   },
   "links": {
     "choose": "Links",

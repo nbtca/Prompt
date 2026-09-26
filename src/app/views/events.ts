@@ -3,13 +3,14 @@ import type { AppContext, View } from '../view.js';
 import { captureFooterHint, passiveFooterHint } from '../chrome.js';
 import { ListField, computeMaxVisible } from '../fields/list-field.js';
 import { TextField } from '../fields/text-field.js';
-import { renderEvents, type EventsViewState } from './events-render.js';
+import { hubShowsHeatmap, renderEvents, type EventsViewState } from './events-render.js';
 import { setVimKeysActive } from '../../core/vim-keys.js';
 import { pickIcon } from '../../core/icons.js';
 import { padEndV, visualWidth } from '../../core/text.js';
 import type { MenuOption } from '../../core/components/menu.js';
 import { fmt, t } from '../../i18n/index.js';
 import {
+  eventTimeRange,
   eventWhen,
   exportEventIcs,
   loadCalendarOrCache,
@@ -19,6 +20,7 @@ import {
 } from '../../features/calendar.js';
 import {
   currentEvents,
+  hasEnded,
   monthRange,
   pastEvents,
   searchEvents,
@@ -31,12 +33,13 @@ let stale = false;
 let currentList: CalendarEvent[] = [];
 let listState: EventsViewState | undefined;
 let hubField: ListField | undefined;
+let hubValues: string[] = [];
 
 function backLabel(): string {
   return t().common.back;
 }
 
-function buildHubField(initialIndex: number): ListField {
+function buildHubField(selected: string | undefined, withHeatmap: boolean): ListField {
   const trans = t();
   const options = [
     { value: 'upcoming', label: trans.calendar.next30Days },
@@ -44,9 +47,23 @@ function buildHubField(initialIndex: number): ListField {
     { value: 'month', label: trans.calendar.thisMonth },
     { value: 'search', label: trans.calendar.search },
     { value: 'past', label: trans.calendar.pastEvents },
-    { value: 'heatmap', label: trans.calendar.heatmap.title },
+    ...(withHeatmap ? [{ value: 'heatmap', label: trans.calendar.heatmap.title }] : []),
   ];
+  hubValues = options.map((option) => option.value);
+  const initialIndex = Math.max(0, selected === undefined ? 0 : hubValues.indexOf(selected));
   return new ListField({ title: trans.calendar.browse, options, initialIndex });
+}
+
+function selectedHubValue(): string | undefined {
+  return hubField ? hubValues[hubField.selectedIndex] : undefined;
+}
+
+function syncHubField(bodyRows: number): void {
+  if (state.mode !== 'hub') return;
+  const withHeatmap = !hubShowsHeatmap(bodyRows, state.heatmapBuckets);
+  if (hubValues.includes('heatmap') === withHeatmap) return;
+  hubField = buildHubField(selectedHubValue(), withHeatmap);
+  state = { ...state, hubField };
 }
 
 function showList(
@@ -54,7 +71,7 @@ function showList(
   title: string,
   events: CalendarEvent[],
   emptyMessage: string,
-  endedFrom = events.length,
+  isEnded: (event: CalendarEvent) => boolean = () => false,
 ): void {
   const trans = t();
   const dot = pickIcon('·', '-');
@@ -62,7 +79,8 @@ function showList(
   const whenWidth = Math.max(0, ...display.map((event) => visualWidth(eventWhen(event))));
   const options: MenuOption[] = [
     ...display.map((event, index) => {
-      const ended = index >= endedFrom;
+      const raw = events[index];
+      const ended = raw !== undefined && isEnded(raw);
       return {
         value: String(index),
         label: `${padEndV(eventWhen(event), whenWidth)}  ${event.title}${recurringMark(event)}`,
@@ -92,11 +110,11 @@ function goToHub(): void {
   const now = new Date();
   const upcoming = calendar ? currentEvents(calendar, now) : [];
   const nextEvent = upcoming.find((event) => event.start >= now);
-  hubField = buildHubField(hubField?.selectedIndex ?? 0);
+  const withHeatmap = hubValues.length === 0 || hubValues.includes('heatmap');
+  hubField = buildHubField(selectedHubValue(), withHeatmap);
   state = {
     mode: 'hub',
     hubField,
-    ...(stale ? { stale } : {}),
     ...(nextEvent === undefined ? {} : { nextEvent: toDisplayEvent(nextEvent) }),
     heatmapBuckets: calendar ? yearHeatmap(calendar, now) : [],
     recentEvents: upcoming.slice(0, RECENT_EVENTS_CAP).map(toDisplayEvent),
@@ -111,7 +129,7 @@ function showDetail(raw: CalendarEvent): void {
   state = {
     mode: 'detail',
     detailTitle: e.title,
-    detailMeta: `${e.date}${e.time ? ' ' + e.time : ''}  ${dot}  ${e.location}${raw.recurring ? `  ${dot}  ${trans.calendar.recurringLabel}` : ''}`,
+    detailMeta: `${eventTimeRange(raw)}  ${dot}  ${e.location}${raw.recurring ? `  ${dot}  ${trans.calendar.recurringLabel}` : ''}`,
     detailDescription: e.description,
     detailEvent: raw,
     detailField: new ListField({
@@ -132,6 +150,7 @@ export const eventsView = {
     if (ctx.signal?.aborted) return;
     state = { mode: 'loading' };
     hubField = undefined;
+    hubValues = [];
     ctx.rerender();
     try {
       const loaded = await loadCalendarOrCache(ctx.signal);
@@ -141,14 +160,26 @@ export const eventsView = {
       goToHub();
     } catch {
       if (ctx.signal?.aborted) return;
-      state = { mode: 'error', errorMessage: t().calendar.error };
+      state = {
+        mode: 'error',
+        errorMessage: t().calendar.offlineError,
+        errorField: new ListField({
+          options: [{ value: 'retry', label: t().calendar.retry }],
+        }),
+      };
     }
     if (!ctx.signal?.aborted) ctx.rerender();
   },
 
   render(ctx: AppContext): string[] {
     state.listField?.setMaxVisible(computeMaxVisible(ctx.bodyRows));
-    return renderEvents(state, new Date(), ctx.bodyRows, ctx.size.cols);
+    syncHubField(ctx.bodyRows);
+    return renderEvents(
+      stale ? { ...state, stale } : state,
+      new Date(),
+      ctx.bodyRows,
+      ctx.size.cols,
+    );
   },
 
   isBusy(): boolean {
@@ -160,12 +191,17 @@ export const eventsView = {
   },
 
   capturesPageKeys(): boolean {
-    return state.mode === 'hub' || state.mode === 'list' || state.mode === 'detail';
+    return (
+      state.mode === 'hub' ||
+      state.mode === 'list' ||
+      state.mode === 'detail' ||
+      state.mode === 'error'
+    );
   },
 
   footerHint(tabCount: number, cols = Number.POSITIVE_INFINITY): string | undefined {
     if (state.mode === 'search') return captureFooterHint(cols);
-    const passive = state.mode === 'loading' || state.mode === 'error' || state.mode === 'heatmap';
+    const passive = state.mode === 'loading' || state.mode === 'heatmap';
     return passive ? passiveFooterHint(tabCount, cols) : undefined;
   },
 
@@ -188,6 +224,10 @@ export const eventsView = {
   },
 
   handleKey(key: string, ctx: AppContext): void {
+    if (state.mode === 'error') {
+      if (state.errorField?.handleKey(key).selected === 'retry') void eventsView.load(ctx);
+      return;
+    }
     if (!calendar) return;
     switch (state.mode) {
       case 'hub': {
@@ -208,7 +248,13 @@ export const eventsView = {
           const r = result.selected === 'week' ? weekRange(now) : monthRange(now);
           const title =
             result.selected === 'week' ? trans.calendar.thisWeek : trans.calendar.thisMonth;
-          showList(ctx, title, calendar.inRange(r.start, r.end), trans.calendar.noEventsInRange);
+          showList(
+            ctx,
+            title,
+            calendar.inRange(r.start, r.end),
+            trans.calendar.noEventsInRange,
+            (event) => hasEnded(event, now),
+          );
           return;
         }
         if (result.selected === 'past') {
@@ -284,20 +330,20 @@ export const eventsView = {
             goToHub();
             return;
           }
-          const { upcoming, past } = searchEvents(calendar, query, new Date());
+          const now = new Date();
+          const { upcoming, past } = searchEvents(calendar, query, now);
           const trans = t();
           showList(
             ctx,
             `${trans.calendar.search}: ${query}`,
             [...upcoming, ...past],
             fmt(trans.calendar.searchNoResultsFor, { query }),
-            upcoming.length,
+            (event) => hasEnded(event, now),
           );
         }
         return;
       }
       case 'loading':
-      case 'error':
         return;
     }
   },

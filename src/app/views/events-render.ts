@@ -18,6 +18,7 @@ export type EventsMode = 'loading' | 'hub' | 'heatmap' | 'list' | 'detail' | 'se
 export interface EventsViewState {
   mode: EventsMode;
   errorMessage?: string;
+  errorField?: ListField;
   statusMessage?: string;
   stale?: boolean;
   nextEvent?: Event;
@@ -45,6 +46,17 @@ function wrappedIndentedLines(
 
 const EXPANDED_HUB_MIN_BODY_ROWS = 29;
 
+export function hubShowsHeatmap(bodyRows: number, buckets: readonly HeatmapBucket[] = []): boolean {
+  return bodyRows >= EXPANDED_HUB_MIN_BODY_ROWS && buckets.length > 0;
+}
+
+function heatmapLines(buckets: HeatmapBucket[], now: Date, cols?: number): string[] {
+  return renderHeatmap(buckets, now, {
+    color: true,
+    ...(cols === undefined ? {} : { cols }),
+  }).split('\n');
+}
+
 function renderHubBody(
   state: EventsViewState,
   now: Date,
@@ -60,15 +72,8 @@ function renderHubBody(
   const banner = renderCountdownBanner(state.nextEvent, now, cols);
   if (banner) lines.push(...banner.split('\n'), '');
   const buckets = state.heatmapBuckets;
-  if (bodyRows >= EXPANDED_HUB_MIN_BODY_ROWS && buckets && buckets.length > 0) {
-    lines.push(
-      ...renderHeatmap(buckets, now, {
-        color: true,
-        ...(cols === undefined ? {} : { cols }),
-      }).split('\n'),
-    );
-    lines.push('');
-  }
+  if (buckets && hubShowsHeatmap(bodyRows, buckets))
+    lines.push(...heatmapLines(buckets, now, cols), '');
   if (state.recentEvents && state.recentEvents.length > 0) {
     const activityHeading = wrappedIndentedLines(trans.calendar.recentActivity, cols, type.heading);
     const fieldRows = state.hubField
@@ -110,31 +115,36 @@ export function renderEvents(
   cols?: number,
 ): string[] {
   const trans = t();
+  const notice = state.stale ? offlineNotice(cols ?? Number.POSITIVE_INFINITY) : [];
   switch (state.mode) {
     case 'loading':
       return loadingLines(trans.calendar.loading, cols);
     case 'hub':
       return renderHubBody(state, now, bodyRows, cols);
     case 'heatmap':
-      return state.heatmapBuckets && state.heatmapBuckets.length > 0
-        ? renderHeatmap(state.heatmapBuckets, now, {
-            color: true,
-            ...(cols === undefined ? {} : { cols }),
-          }).split('\n')
-        : wrappedIndentedLines(trans.calendar.noEvents, cols, type.hint);
+      return [
+        ...notice,
+        ...(state.heatmapBuckets && state.heatmapBuckets.length > 0
+          ? heatmapLines(state.heatmapBuckets, now, cols)
+          : wrappedIndentedLines(trans.calendar.noEvents, cols, type.hint)),
+      ];
     case 'list': {
       if (!state.listField) return [];
-      if (state.listNotice === undefined) return state.listField.render(bodyRows, cols);
-      const context = [
-        ...wrappedIndentedLines(state.listTitle ?? '', cols, type.heading),
-        '',
-        ...wrappedIndentedLines(state.listNotice, cols, type.hint),
-        '',
-      ];
+      const context =
+        state.listNotice === undefined
+          ? notice
+          : [
+              ...notice,
+              ...wrappedIndentedLines(state.listTitle ?? '', cols, type.heading),
+              '',
+              ...wrappedIndentedLines(state.listNotice, cols, type.hint),
+              '',
+            ];
       return renderListFieldWithContext(context, state.listField, bodyRows, cols);
     }
     case 'detail': {
       const context = [
+        ...notice,
         ...wrappedIndentedLines(state.detailTitle ?? '', cols, type.heading),
         ...wrappedIndentedLines(state.detailMeta ?? '', cols, type.hint),
         '',
@@ -155,9 +165,20 @@ export function renderEvents(
           : context;
     }
     case 'search':
-      return state.searchField?.render(cols) ?? [];
-    case 'error':
-      return wrappedIndentedLines(state.errorMessage ?? trans.calendar.error, cols, type.hint);
+      return [...notice, ...(state.searchField?.render(cols) ?? [])];
+    case 'error': {
+      const context = [
+        ...wrappedIndentedLines(state.errorMessage ?? trans.calendar.error, cols, type.body),
+        ...wrappedIndentedLines(trans.calendar.errorHint, cols, type.hint),
+        '',
+      ];
+      if (state.errorField) {
+        return renderListFieldWithContext(context, state.errorField, bodyRows, cols);
+      }
+      return Number.isFinite(bodyRows)
+        ? context.slice(0, Math.max(0, Math.floor(bodyRows)))
+        : context;
+    }
     default:
       return [];
   }
