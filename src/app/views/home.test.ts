@@ -9,10 +9,8 @@ import { stripAnsi, visualWidth } from '../../core/text.js';
 import type { AppContext } from '../view.js';
 import type * as CalendarModule from '../../features/calendar.js';
 
-const calendarUpcoming = vi.fn().mockReturnValue([]);
 const calendarInRange = vi.fn().mockReturnValue([]);
 const loadCalendarOrThrowMock = vi.fn().mockResolvedValue({
-  upcoming: calendarUpcoming,
   inRange: calendarInRange,
   past: vi.fn().mockReturnValue([]),
   next: vi.fn().mockReturnValue([]),
@@ -463,10 +461,8 @@ describe('homeView.load()', () => {
     process.env['NBTCA_ICON_MODE'] = 'unicode';
     resetIconCache();
     vi.clearAllMocks();
-    calendarUpcoming.mockReturnValue([]);
     calendarInRange.mockReturnValue([]);
     loadCalendarOrThrowMock.mockResolvedValue({
-      upcoming: calendarUpcoming,
       inRange: calendarInRange,
       past: vi.fn().mockReturnValue([]),
       next: vi.fn().mockReturnValue([]),
@@ -521,16 +517,14 @@ describe('homeView.load()', () => {
     const ctx = fakeCtx();
     await homeView.load(ctx);
     expect(loadCalendarOrThrowMock).toHaveBeenCalledTimes(1);
-    expect(calendarUpcoming).toHaveBeenCalledTimes(1);
-    expect(calendarInRange).toHaveBeenCalledTimes(1);
+    expect(calendarInRange).toHaveBeenCalledTimes(2);
   });
 
-  it('does not call inRange at all when there is no set-up personal timetable', async () => {
+  it('does not query the week-ahead range when there is no set-up personal timetable', async () => {
     const ctx = fakeCtx();
     await homeView.load(ctx);
     expect(loadCalendarOrThrowMock).toHaveBeenCalledTimes(1);
-    expect(calendarUpcoming).toHaveBeenCalledTimes(1);
-    expect(calendarInRange).not.toHaveBeenCalled();
+    expect(calendarInRange).toHaveBeenCalledTimes(1);
   });
 
   it('populates unresolvedCount and weekAhead.classDays synchronously, before the network call resolves', async () => {

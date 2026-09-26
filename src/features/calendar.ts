@@ -120,18 +120,20 @@ export function toDisplayEvent(e: CalendarEvent): Event {
   };
 }
 
-export async function fetchEvents(): Promise<Event[]> {
-  return (await loadCalendarOrThrow()).upcoming({ days: 30 }).map(toDisplayEvent);
+export async function loadCalendarOrCache(
+  signal?: AbortSignal,
+): Promise<{ calendar: Calendar; stale: boolean }> {
+  try {
+    return { calendar: await loadCalendarOrThrow(signal), stale: false };
+  } catch (err) {
+    const cached = peekCalendar();
+    if (!cached) throw err;
+    return { calendar: cached, stale: true };
+  }
 }
 
-export async function fetchInRange(start: Date, end: Date): Promise<Event[]> {
-  return (await loadCalendarOrThrow()).inRange(start, end).map(toDisplayEvent);
-}
-
-export async function fetchHeatmapBuckets(): Promise<HeatmapBucket[]> {
-  const now = new Date();
-  const start = addLocalDays(now, -365);
-  return (await loadCalendarOrThrow()).heatmap({ start, end: now, bucket: 'day' });
+export function yearHeatmap(calendar: Calendar, now: Date): HeatmapBucket[] {
+  return calendar.heatmap({ start: addLocalDays(now, -365), end: now, bucket: 'day' });
 }
 
 export function serializeEvents(events: Event[]): EventOutputItem[] {

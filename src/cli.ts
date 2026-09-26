@@ -1,13 +1,15 @@
 import chalk from 'chalk';
 import { main } from './main.js';
 import {
-  fetchEvents,
-  fetchHeatmapBuckets,
+  loadCalendarOrCache,
   renderEventsTable,
   serializeEvents,
+  toDisplayEvent,
+  yearHeatmap,
   type Event,
 } from './features/calendar.js';
 import { renderHeatmap } from './features/calendar-heatmap.js';
+import { currentEvents, dayRange, monthRange, weekRange } from './features/calendar-query.js';
 import {
   checkServices,
   countServiceHealth,
@@ -296,46 +298,38 @@ async function runEventsCommand(flags: Set<string>): Promise<void> {
     process.exit(1);
   }
 
+  const { calendar, stale } = await loadCalendarOrCache();
+  if (stale) console.error(chalk.yellow(t().calendar.stale));
+  const now = new Date();
+
   if (flags.has('--heatmap')) {
-    const buckets = await fetchHeatmapBuckets();
+    const buckets = yearHeatmap(calendar, now);
     if (flags.has('--json')) {
       process.stdout.write(JSON.stringify(buckets, null, 2) + '\n');
     } else {
       const useColor = !flags.has('--plain') && isTty(process.stdout.isTTY);
-      console.log(renderHeatmap(buckets, new Date(), { color: useColor }));
+      const cols = terminalWidth();
+      console.log(
+        renderHeatmap(buckets, now, { color: useColor, ...(cols === undefined ? {} : { cols }) }),
+      );
     }
     return;
   }
 
-  const { weekRange, monthRange } = await import('./features/calendar-query.js');
-  const { fetchInRange } = await import('./features/calendar.js');
-  const now0 = new Date();
-  let events: Event[];
-  if (flags.has('--week')) {
-    const r = weekRange(now0);
-    events = await fetchInRange(r.start, r.end);
-  } else if (flags.has('--month')) {
-    const r = monthRange(now0);
-    events = await fetchInRange(r.start, r.end);
-  } else {
-    events = await fetchEvents();
-  }
+  const range = flags.has('--today')
+    ? dayRange(now)
+    : flags.has('--week')
+      ? weekRange(now)
+      : flags.has('--month')
+        ? monthRange(now)
+        : undefined;
+  let events: Event[] = (
+    range ? calendar.inRange(range.start, range.end) : currentEvents(calendar, now)
+  ).map(toDisplayEvent);
 
   if (searchFlag) {
     const q = searchFlag.slice('--search='.length).toLowerCase();
     events = events.filter((e) => `${e.title} ${e.location}`.toLowerCase().includes(q));
-  }
-
-  if (flags.has('--today')) {
-    const now = new Date();
-    events = events.filter((e) => {
-      const d = e.startDate;
-      return (
-        d.getFullYear() === now.getFullYear() &&
-        d.getMonth() === now.getMonth() &&
-        d.getDate() === now.getDate()
-      );
-    });
   }
 
   if (next !== undefined) events = events.slice(0, next);
