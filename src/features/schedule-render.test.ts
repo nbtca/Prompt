@@ -115,6 +115,20 @@ describe('renderNextClassBanner', () => {
     expect(out).toMatch(/1h/);
     done();
   });
+  it('marks the banner with a dot rather than the selection cursor', () => {
+    process.env['NBTCA_ICON_MODE'] = 'unicode';
+    resetIconCache();
+    const out = stripAnsi(
+      renderNextClassBanner(
+        { meeting: mk({}), start: campusDateTime('2026-09-07', '08:00') },
+        campusDateTime('2026-09-07', '06:30'),
+      ),
+    );
+    expect(out.startsWith(`${space.indent}● `)).toBe(true);
+    expect(out).not.toContain('→');
+    done();
+  });
+
   it('empty when no next class', () => {
     expect(renderNextClassBanner(null, new Date())).toBe('');
     done();
@@ -306,7 +320,7 @@ describe('renderWeekGrid', () => {
     });
 
     it("does not let one day's long course name affect another day's column width", () => {
-      const longName = '习近平新时代中国特色社会主义思想概论'; // 18 CJK chars = 36 display columns
+      const longName = '习近平新时代中国特色社会主义';
       const meetings = [
         mk({
           courseName: 'PE',
@@ -326,21 +340,49 @@ describe('renderWeekGrid', () => {
         }),
       ];
       const out = stripAnsi(
-        renderWeekGrid(meetings, periods, 1, campusDateTime('2026-09-07', '09:00'), 250),
+        renderWeekGrid(meetings, periods, 1, campusDateTime('2026-09-07', '09:00'), 120),
       );
-      expect(out).toContain(longName); // Tuesday's column grew enough to fit it in full
-      const headerLine = lineAt(out.split('\n'), 0);
-      const globalWidthDesignTotal = space.indent.length + 12 + 36 * 7 + 6 * 3;
-      expect(visualWidth(headerLine)).toBeLessThan(globalWidthDesignTotal - 36 * 3);
+      expect(out).toContain(longName);
+      const header = lineAt(out.split('\n'), 0);
+      const [monday = '', tuesday = ''] = header.slice(space.indent.length + 14).split(' | ');
+      expect(visualWidth(monday)).toBeLessThan(visualWidth(longName) / 2);
+      expect(visualWidth(tuesday)).toBe(visualWidth(longName));
       done();
     });
 
-    it('keeps a short floor width for a column with no real content', () => {
+    it('spreads spare width evenly across the days and stays inside the frame', () => {
       const out = stripAnsi(
-        renderWeekGrid([], periods, 1, campusDateTime('2026-09-07', '09:00'), 300),
+        renderWeekGrid(
+          [mk({ courseName: 'Programming Lab', location: null, weekday: 5, endPeriod: 1 })],
+          periods,
+          1,
+          campusDateTime('2026-09-07', '09:00'),
+          115,
+        ),
       );
-      const headerLine = lineAt(out.split('\n'), 0);
-      expect(visualWidth(headerLine)).toBe(3 + 12 + 7 * 8 + 6 * 3);
+      const row = findLine(out.split('\n'), (line) => line.trim().startsWith('08:00'));
+      const cells = row.slice(space.indent.length + 14).split(' | ');
+      const widths = cells.map((cell) => visualWidth(cell));
+
+      expect(visualWidth(row)).toBeGreaterThanOrEqual(115 - space.indent.length - 1);
+      expect(visualWidth(row)).toBeLessThanOrEqual(115 - space.indent.length);
+      const others = widths.filter((_, index) => index !== 4);
+      expect(Math.max(...others) - Math.min(...others)).toBeLessThanOrEqual(1);
+      done();
+    });
+
+    it('keeps a three-column gutter between the time column and the first day', () => {
+      const out = stripAnsi(
+        renderWeekGrid(
+          [mk({ courseName: 'Advanced Maths', location: null, endPeriod: 1 })],
+          periods,
+          1,
+          campusDateTime('2026-09-07', '09:00'),
+          100,
+        ),
+      );
+      const row = findLine(out.split('\n'), (line) => line.trim().startsWith('08:00'));
+      expect(row).toMatch(/08:00-08:45 {3,}Advanced/);
       done();
     });
 
@@ -397,7 +439,7 @@ describe('renderWeekGrid', () => {
     });
   });
 
-  it('gives every day the same width when the widest day fits seven times', () => {
+  it('keeps every day within one column of the others when the widest day nearly fits seven times', () => {
     const meetings = [
       mk({ courseName: '程序设计实践', location: null, weekday: 5, endPeriod: 1 }),
       mk({ courseName: 'PE', location: null, weekday: 1, endPeriod: 1 }),
@@ -410,7 +452,7 @@ describe('renderWeekGrid', () => {
     );
     const separators = [...header.matchAll(/\|/g)].map((match) => match.index);
     const gaps = separators.slice(1).map((index, i) => index - (separators[i] ?? 0));
-    expect(new Set(gaps).size).toBe(1);
+    expect(Math.max(...gaps) - Math.min(...gaps)).toBeLessThanOrEqual(1);
     done();
   });
 
@@ -664,6 +706,23 @@ describe('renderMeetingDetail', () => {
     expect(out).toContain('08:00-09:40');
   });
 
+  it('names the weekday the way the grid header and today heading do in Chinese', () => {
+    process.env['NBTCA_ICON_MODE'] = 'unicode';
+    resetIconCache();
+    setLanguage('zh');
+    try {
+      const out = stripAnsi(renderMeetingDetail(mk({ weekday: 1, endPeriod: 2 }), periods));
+      expect(out).toMatch(/时间\s+周一 08:00–09:40/);
+      const grid = stripAnsi(
+        renderWeekGrid([], periods, 1, campusDateTime('2026-09-07', '09:00'), 120),
+      );
+      expect(grid).toContain('08:00–08:45');
+    } finally {
+      setLanguage('en');
+      done();
+    }
+  });
+
   it('shows the location when present', () => {
     const out = stripAnsi(renderMeetingDetail(mk({ location: 'sl707' }), periods));
     expect(out).toContain('sl707');
@@ -736,6 +795,20 @@ const dayPeriods: TimetablePeriod[] = [
 ];
 
 describe('renderTodayTimeline', () => {
+  it('lines up the status column when course names differ in width', () => {
+    const meetings = [
+      mk({ courseName: '形势与政策', startPeriod: 1, endPeriod: 1 }),
+      mk({ courseName: '社团活动', startPeriod: 2, endPeriod: 2 }),
+    ];
+    const lines = stripAnsi(
+      renderTodayTimeline(meetings, dayPeriods, campusDateTime('2026-09-07', '12:00')),
+    ).split('\n');
+    const column = (line: string): number => visualWidth(line.slice(0, line.indexOf('Done')));
+
+    expect(column(lineAt(lines, 0))).toBe(column(lineAt(lines, 1)));
+    done();
+  });
+
   it('shows the empty-state line when there are no classes today', () => {
     expect(stripAnsi(renderTodayTimeline([], dayPeriods, new Date()))).toContain(
       'No classes today',
@@ -861,6 +934,22 @@ describe('renderTodayTimeline', () => {
 });
 
 describe('renderDayTimeline', () => {
+  it('lines up the location column across finished and upcoming classes', () => {
+    const meetings = [
+      mk({ courseName: 'Policy', location: 'Hall', startPeriod: 1, endPeriod: 1 }),
+      mk({ courseName: 'Club activity', location: 'Maker space', startPeriod: 3, endPeriod: 3 }),
+    ];
+    const lines = stripAnsi(
+      renderDayTimeline(meetings, dayPeriods, campusDateTime('2026-09-07', '10:00'), {
+        weekday: 1,
+        isToday: true,
+      }),
+    ).split('\n');
+
+    expect(lineAt(lines, 0).indexOf('Hall')).toBe(lineAt(lines, 1).indexOf('Maker space'));
+    done();
+  });
+
   it('shows the empty-state line when the viewed day has no classes', () => {
     expect(
       stripAnsi(renderDayTimeline([], dayPeriods, new Date(), { weekday: 1, isToday: true })),
@@ -1069,46 +1158,64 @@ describe('renderUnresolvedItems', () => {
 });
 
 describe('renderTermDensity', () => {
-  it('buckets each week into the correct relative density level', () => {
+  const chartRows = (out: string): string[] =>
+    out.split('\n').filter((line) => /^\s*\d*\s[|+]\s/.test(line));
+
+  it('scales each week against the busiest one', () => {
     process.env['NBTCA_ICON_MODE'] = 'unicode';
     resetIconCache();
     try {
       const meetings: TimetableMeeting[] = [
-        mk({ weeks: [2], startPeriod: 1, endPeriod: 1 }), // 1 slot
-        mk({ weeks: [3], startPeriod: 1, endPeriod: 2 }), // 2 slots
-        mk({ weeks: [4], startPeriod: 1, endPeriod: 3 }), // 3 slots
-        mk({ weeks: [5], startPeriod: 1, endPeriod: 4 }), // 4 slots (max)
+        mk({ weeks: [1], startPeriod: 1, endPeriod: 1 }),
+        mk({ weeks: [2], startPeriod: 1, endPeriod: 4 }),
       ];
-      const out = stripAnsi(renderTermDensity(meetings, '2026-09-07', 1));
-      const lines = out.split('\n');
-      const glyphLine = lines[3] ?? '';
-      expect(glyphLine.trim()).toBe('· ░ ▒ ▓ █');
+      const lines = stripAnsi(renderTermDensity(meetings, '2026-09-07', 1)).split('\n');
+      const top = lines.find((line) => line.includes('┤')) ?? '';
+      const bottom = lines[lines.findIndex((line) => line.includes('└')) - 1] ?? '';
+
+      expect(top).toMatch(/^\s*4 ┤\s+██$/);
+      expect(bottom).toMatch(/[▁▂▃▄▅▆▇█]{2} ██$/);
     } finally {
-      process.env['NBTCA_ICON_MODE'] = 'ascii';
-      resetIconCache();
+      done();
     }
   });
 
-  it('places the current-week marker at the correct column', () => {
-    const meetings: TimetableMeeting[] = [mk({ weeks: [1] }), mk({ weeks: [5] })];
-    const out = stripAnsi(renderTermDensity(meetings, '2026-09-07', 3));
-    const lines = out.split('\n');
-    const markerLine = lines[4] ?? '';
-    expect(markerLine.indexOf('^')).toBe(7);
-    expect(markerLine).toContain('This week');
+  it('summarises the load, free weeks, and this week in words', () => {
+    const meetings: TimetableMeeting[] = [
+      mk({ weeks: [1, 2, 4], startPeriod: 1, endPeriod: 2 }),
+      mk({ weeks: [4], startPeriod: 3, endPeriod: 3 }),
+    ];
+    const out = stripAnsi(renderTermDensity(meetings, '2026-09-07', 2));
+
+    expect(out).toContain('4 weeks');
+    expect(out).toContain('1 without classes');
+    expect(out).toContain('2-3 periods a week');
+    expect(out).toContain('2 this week');
   });
 
-  it('renders a single all-dot week when there are no meetings at all', () => {
-    process.env['NBTCA_ICON_MODE'] = 'unicode';
-    resetIconCache();
-    try {
-      const out = stripAnsi(renderTermDensity([], '2026-09-07', 5));
-      const lines = out.split('\n');
-      expect(lines[3]?.trim()).toBe('·');
-    } finally {
-      process.env['NBTCA_ICON_MODE'] = 'ascii';
-      resetIconCache();
-    }
+  it('breaks the summary between phrases rather than inside one', () => {
+    const lines = stripAnsi(renderTermDensity([mk({ weeks: [1, 2] })], '2026-09-07', 1, 30)).split(
+      '\n',
+    );
+    expect(lines).toContain('   2 weeks');
+    expect(lines).toContain('   2 periods a week');
+    expect(lines).toContain('   2 this week');
+  });
+
+  it('labels every week and marks the current one', () => {
+    const meetings: TimetableMeeting[] = [mk({ weeks: [1, 2, 3, 4, 5] })];
+    const lines = stripAnsi(renderTermDensity(meetings, '2026-09-07', 3)).split('\n');
+    const numbers = lines.find((line) => /^\s+1\s+2\s+3\s+4\s+5$/.test(line)) ?? '';
+    const marker = lines.find((line) => line.includes('This week')) ?? '';
+
+    expect(numbers).not.toBe('');
+    expect(marker.indexOf('^')).toBe(numbers.indexOf('3') - 1);
+  });
+
+  it('shows a plain notice when there are no meetings at all', () => {
+    const out = stripAnsi(renderTermDensity([], '2026-09-07', 5));
+    expect(out).toContain('No classes scheduled this term');
+    expect(chartRows(out)).toHaveLength(0);
   });
 
   it('never collapses into one array entry when split on newlines', () => {
@@ -1118,71 +1225,49 @@ describe('renderTermDensity', () => {
     for (const line of lines) expect(line).not.toContain('\n');
   });
 
-  it('places a CJK month label at its real terminal column even after an earlier CJK label of different width', () => {
+  it('places a CJK month label over the week that starts the month', () => {
     process.env['NBTCA_ICON_MODE'] = 'unicode';
     resetIconCache();
     setLanguage('zh');
-    resetIconCache();
     try {
-      const meetings: TimetableMeeting[] = [mk({ weeks: [1, 14] })];
-      const out = stripAnsi(renderTermDensity(meetings, '2026-09-07', 1));
-      const monthLine = out.split('\n')[2] ?? '';
+      const out = stripAnsi(renderTermDensity([mk({ weeks: [1, 14] })], '2026-09-07', 1));
+      const lines = out.split('\n');
+      const monthLine = lines.find((line) => line.includes('9月')) ?? '';
+      const numbers = lines.find((line) => /^\s+1\s+2\s/.test(line)) ?? '';
+      const octoberWeek = 5;
 
-      const base = campusDateTime('2026-09-07', '00:00');
-      let secondLabelWeekIndex = -1;
-      let secondLabelText = '';
-      let prevMonth = new Date('2026-09-07T00:00:00').getMonth();
-      for (let i = 1; i < 14; i++) {
-        const d = new Date(base.getTime() + i * 7 * 86400000);
-        if (d.getMonth() !== prevMonth) {
-          secondLabelWeekIndex = i;
-          secondLabelText = `${String(d.getMonth() + 1)}月`;
-          break;
-        }
-        prevMonth = d.getMonth();
+      const idx = monthLine.indexOf('10月');
+      expect(visualWidth(monthLine.slice(0, idx))).toBe(numbers.indexOf(` ${octoberWeek} `));
+    } finally {
+      setLanguage('en');
+      done();
+    }
+  });
+
+  it.each(['en', 'zh'] as const)(
+    'shows every week across narrow chunks and keeps a late current week visible (%s)',
+    (language) => {
+      setLanguage(language);
+      try {
+        const weeks = Array.from({ length: 18 }, (_, index) => index + 1);
+        const lines = stripAnsi(renderTermDensity([mk({ weeks })], '2026-09-07', 18, 20)).split(
+          '\n',
+        );
+        const bars = lines.filter((line) => /[|+] (?:## ?)+$/.test(line));
+        const barCount = bars
+          .filter((line) => line.includes('+ '))
+          .join('')
+          .match(/##/g);
+
+        expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+        expect(barCount).toHaveLength(18);
+        expect(lines.some((line) => line.includes('^'))).toBe(true);
+      } finally {
+        setLanguage('en');
+        done();
       }
-      expect(secondLabelWeekIndex).toBeGreaterThan(0); // sanity: the fixture actually crosses a month boundary
-
-      const idx = monthLine.indexOf(secondLabelText);
-      expect(idx).toBeGreaterThan(0);
-      const prefix = monthLine.slice(0, idx);
-      const targetCol = space.indent.length + secondLabelWeekIndex * 2;
-      expect(visualWidth(prefix)).toBe(targetCol);
-    } finally {
-      process.env['NBTCA_ICON_MODE'] = 'ascii';
-      setLanguage('en');
-      resetIconCache();
-    }
-  });
-
-  it('shows every week across narrow chunks and keeps a late current week visible', () => {
-    const weeks = Array.from({ length: 18 }, (_, index) => index + 1);
-    const lines = stripAnsi(renderTermDensity([mk({ weeks })], '2026-09-07', 18, 20)).split('\n');
-    const densityLines = lines.filter((line) => /^\s*(?:=\s*)+$/.test(line));
-
-    expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
-    expect(densityLines).toHaveLength(2);
-    expect(densityLines.join('').match(/=/g)).toHaveLength(18);
-    expect(lines.some((line) => line.includes('This week ^'))).toBe(true);
-    done();
-  });
-
-  it('keeps the Chinese narrow density view within twenty columns', () => {
-    setLanguage('zh');
-    try {
-      const weeks = Array.from({ length: 18 }, (_, index) => index + 1);
-      const lines = stripAnsi(renderTermDensity([mk({ weeks })], '2026-09-07', 18, 20)).split('\n');
-      const densityLines = lines.filter((line) => /^\s*(?:=\s*)+$/.test(line));
-
-      expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
-      expect(densityLines.join('').match(/=/g)).toHaveLength(18);
-      expect(lines.some((line) => line.includes('本周 ^'))).toBe(true);
-    } finally {
-      setLanguage('en');
-      resetIconCache();
-    }
-    done();
-  });
+    },
+  );
 });
 
 describe('formatClassCountdown', () => {

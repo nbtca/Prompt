@@ -35,10 +35,14 @@ function formatMinutesLeft(end: Date, now: Date): string {
   return fmt(t().timetable.minutesRemaining, { minutes: String(minutes) });
 }
 
+function rangeLabel(start: string, end: string): string {
+  return end ? `${start}${pickIcon('–', '-')}${end}` : start;
+}
+
 function span(m: TimetableMeeting, periods: readonly TimetablePeriod[]): string {
   const s = periods.find((p) => p.period === m.startPeriod)?.start ?? '';
   const e = periods.find((p) => p.period === m.endPeriod)?.end ?? '';
-  return e ? `${s}${pickIcon('–', '-')}${e}` : s;
+  return rangeLabel(s, e);
 }
 
 export function renderNextClassBanner(
@@ -54,7 +58,7 @@ export function renderNextClassBanner(
   const styleWhen = isCountdownUrgent(p) ? c.warn : type.hint;
   const whenStyled = styleWhen(when);
   const dot = pickIcon('·', '-');
-  const marker = type.active(glyph.cursor());
+  const marker = type.active(glyph.dot());
   const separator = `  ${dot}  `;
   const detailedPrefix = labelled
     ? `${space.indent}${marker} ${type.label(trans.timetable.nextClass)}${separator}`
@@ -107,9 +111,9 @@ export function weekdayShortLabel(wd: number): string {
   return labels[wd - 1] ?? '';
 }
 
-function weekdayLongLabel(wd: number): string {
+function weekdayName(wd: number, weekday: 'short' | 'long'): string {
   return new Intl.DateTimeFormat(getCurrentLanguage() === 'zh' ? 'zh-CN' : 'en-US', {
-    weekday: 'long',
+    weekday,
     timeZone: 'UTC',
   }).format(Date.UTC(2024, 0, wd));
 }
@@ -141,7 +145,7 @@ function renderTimeline(
   if (sorted.length === 0) {
     const empty = day.isToday
       ? trans.timetable.noClassToday
-      : fmt(trans.timetable.noClassOnDay, { weekday: weekdayLongLabel(day.weekday) });
+      : fmt(trans.timetable.noClassOnDay, { weekday: weekdayName(day.weekday, 'long') });
     return `${space.indent}${type.hint(empty)}`;
   }
 
@@ -153,71 +157,91 @@ function renderTimeline(
   const topConnector = pickIcon('┬', '+');
   const bottomConnector = pickIcon('┴', '+');
 
-  const lines = sorted.map((m, i) => {
+  const rows = sorted.map((m) => {
     const startStr = periods.find((p) => p.period === m.startPeriod)?.start ?? '00:00';
     const endStr = periods.find((p) => p.period === m.endPeriod)?.end ?? '23:59';
     const end = campusDateTime(today, endStr);
     const isLive =
       day.isToday && campusDateTime(today, startStr).getTime() <= minute && minute <= end.getTime();
     const isDone = day.isToday && minute > end.getTime();
-    const isCursor =
-      cursorPeriod !== undefined && m.startPeriod <= cursorPeriod && cursorPeriod <= m.endPeriod;
-    const connector = i === 0 ? topConnector : midConnector;
-    const marker = isLive ? type.active(pickIcon('▶', '>')) : ' ';
-    const timeCol = `${marker}${type.hint(startStr)} ${rule}${connector}${rule}`;
-    const styleName = (name: string): string =>
-      isLive ? type.active(name) : isDone ? type.hint(name) : type.body(name);
-
     const minutesLeft = isLive ? formatMinutesLeft(end, now) : '';
     const statusText = isDone
       ? trans.timetable.classDone
       : isLive
         ? `${trans.timetable.classLive}  ${dot}  ${minutesLeft}`
         : '';
-    const compactStatusText = isDone ? trans.timetable.classDone : minutesLeft;
     const showLoc = alwaysShowLocation ? Boolean(m.location) : isLive && Boolean(m.location);
-    const locationText = showLoc ? (m.location ?? '') : '';
-    const renderLine = (
-      name: string,
-      status: string,
-      location: string,
-      currentTimeCol = timeCol,
-      indent: string = space.indent,
-    ): string => {
-      const statusCol = status ? `   ${type.hint(status)}` : '';
-      const locationCol = location ? `   ${type.hint(location)}` : '';
-      const content = `${currentTimeCol} ${styleName(name)}${statusCol}${locationCol}`;
-      return `${indent}${isCursor ? type.cursor(content) : content}`;
+    return {
+      m,
+      startStr,
+      isLive,
+      isDone,
+      minutesLeft,
+      statusText,
+      locationText: showLoc ? (m.location ?? '') : '',
     };
-
-    const whole = [
-      renderLine(m.courseName, statusText, locationText),
-      renderLine(m.courseName, statusText, ''),
-      renderLine(m.courseName, compactStatusText, ''),
-    ].find(fits);
-    if (whole) return whole;
-
-    for (const status of compactStatusText ? [compactStatusText, ''] : ['']) {
-      const courseWidth = Math.floor(width - visualWidth(renderLine('', status, '')));
-      if (courseWidth <= visualWidth(ellipsis())) continue;
-      return renderLine(clip(m.courseName, courseWidth), status, '');
-    }
-
-    const compactTimeCol = `${marker}${type.hint(startStr)}`;
-    for (const indent of [space.indent, '']) {
-      const courseWidth = Math.floor(
-        width - visualWidth(renderLine('', '', '', compactTimeCol, indent)),
-      );
-      if (courseWidth <= visualWidth(ellipsis())) continue;
-      return renderLine(clip(m.courseName, courseWidth), '', '', compactTimeCol, indent);
-    }
-
-    const timeOnly = [`${space.indent}${compactTimeCol}`, compactTimeCol, type.hint(startStr)].find(
-      fits,
-    );
-    if (timeOnly) return timeOnly;
-    return type.hint(startStr.slice(0, Math.max(0, Math.floor(width))));
   });
+  const nameColW = Math.max(...rows.map((row) => visualWidth(row.m.courseName)));
+  const statusColW = Math.max(...rows.map((row) => visualWidth(row.statusText)));
+
+  const lines = rows.map(
+    ({ m, startStr, isLive, isDone, minutesLeft, statusText, locationText }, i) => {
+      const isCursor =
+        cursorPeriod !== undefined && m.startPeriod <= cursorPeriod && cursorPeriod <= m.endPeriod;
+      const connector = i === 0 ? topConnector : midConnector;
+      const marker = isLive ? type.active(pickIcon('▶', '>')) : ' ';
+      const timeCol = `${marker}${type.hint(startStr)} ${rule}${connector}${rule}`;
+      const styleName = (name: string): string =>
+        isLive ? type.active(name) : isDone ? type.hint(name) : type.body(name);
+
+      const compactStatusText = isDone ? trans.timetable.classDone : minutesLeft;
+      const renderLine = (
+        name: string,
+        status: string,
+        location: string,
+        currentTimeCol = timeCol,
+        indent: string = space.indent,
+      ): string => {
+        const aligned = name === m.courseName;
+        const statusW = aligned && location ? statusColW : 0;
+        const statusCol = status || statusW > 0 ? `   ${type.hint(padEndV(status, statusW))}` : '';
+        const locationCol = location ? `   ${type.hint(location)}` : '';
+        const shownName = aligned && (statusCol || locationCol) ? padEndV(name, nameColW) : name;
+        const content = `${currentTimeCol} ${styleName(shownName)}${statusCol}${locationCol}`;
+        return `${indent}${isCursor ? type.cursor(content) : content}`;
+      };
+
+      const whole = [
+        renderLine(m.courseName, statusText, locationText),
+        renderLine(m.courseName, statusText, ''),
+        renderLine(m.courseName, compactStatusText, ''),
+      ].find(fits);
+      if (whole) return whole;
+
+      for (const status of compactStatusText ? [compactStatusText, ''] : ['']) {
+        const courseWidth = Math.floor(width - visualWidth(renderLine('', status, '')));
+        if (courseWidth <= visualWidth(ellipsis())) continue;
+        return renderLine(clip(m.courseName, courseWidth), status, '');
+      }
+
+      const compactTimeCol = `${marker}${type.hint(startStr)}`;
+      for (const indent of [space.indent, '']) {
+        const courseWidth = Math.floor(
+          width - visualWidth(renderLine('', '', '', compactTimeCol, indent)),
+        );
+        if (courseWidth <= visualWidth(ellipsis())) continue;
+        return renderLine(clip(m.courseName, courseWidth), '', '', compactTimeCol, indent);
+      }
+
+      const timeOnly = [
+        `${space.indent}${compactTimeCol}`,
+        compactTimeCol,
+        type.hint(startStr),
+      ].find(fits);
+      if (timeOnly) return timeOnly;
+      return type.hint(startStr.slice(0, Math.max(0, Math.floor(width))));
+    },
+  );
 
   const last = sorted.at(-1);
   if (!last) return lines.join('\n');
@@ -318,6 +342,53 @@ function centerInWidth(text: string, width: number): string {
 
 const MIN_COL_WIDTH = 8;
 
+function spreadWidths(ideal: readonly number[], available: number): number[] {
+  const widths = [...ideal];
+  const target = Number.isFinite(available) ? available : Math.max(0, ...ideal) * ideal.length;
+  let spare = target - widths.reduce((a, b) => a + b, 0);
+  while (spare > 0 && widths.length > 0) {
+    const narrowest = widths.indexOf(Math.min(...widths));
+    widths[narrowest] = (widths[narrowest] ?? 0) + 1;
+    spare -= 1;
+  }
+  return widths;
+}
+
+const GRID_SEP_W = 3;
+
+interface GridMetrics {
+  rowHeadW: number;
+  idealColWidths: number[];
+  totalIdealColW: number;
+}
+
+function weekGridMetrics(timetable: Timetable, weekNumber: number, now: Date): GridMetrics {
+  const schedule = createTimetableSchedule(timetable);
+  const week = schedule.meetingsInWeek(weekNumber);
+  const todayWd = schedule.weekdayAt(now);
+  const rowHeadW =
+    timetable.periods.reduce((w, p) => Math.max(w, visualWidth(rangeLabel(p.start, p.end))), 0) +
+    GRID_SEP_W;
+  const idealColWidths = WEEKDAY_KEYS.map((_, i) => {
+    const wd = i + 1;
+    const dayMeetings = week.filter((m) => m.weekday === wd);
+    const nameW = dayMeetings.reduce((max, m) => Math.max(max, visualWidth(m.courseName)), 0);
+    const locW = dayMeetings.reduce(
+      (max, m) => Math.max(max, m.location ? visualWidth(m.location) : 0),
+      0,
+    );
+    const headerW =
+      visualWidth(weekdayShortLabel(wd)) + (wd === todayWd ? visualWidth(pickIcon('•', '*')) : 0);
+    return Math.max(nameW, locW, headerW, MIN_COL_WIDTH);
+  });
+  return { rowHeadW, idealColWidths, totalIdealColW: idealColWidths.reduce((a, b) => a + b, 0) };
+}
+
+export function weekGridFullWidth(timetable: Timetable, weekNumber: number, now: Date): number {
+  const { rowHeadW, totalIdealColW } = weekGridMetrics(timetable, weekNumber, now);
+  return visualWidth(space.indent) * 2 + rowHeadW + totalIdealColW + 6 * GRID_SEP_W;
+}
+
 export function renderWeekGrid(
   timetable: Timetable,
   weekNumber: number,
@@ -329,39 +400,21 @@ export function renderWeekGrid(
   const week = schedule.meetingsInWeek(weekNumber);
   const todayWd = schedule.weekdayAt(now);
   const periods = timetable.periods;
-  const rowHeadW = 12;
   const todayMark = pickIcon('•', '*');
   const connector = pickIcon('│', '|');
   const emptyGlyph = pickIcon('·', '.');
   const sepGlyph = pickIcon('│', '|');
   const sep = type.hint(` ${sepGlyph} `);
-  const sepW = 3; // " │ " / " | " -- always 3 display columns regardless of icon mode
-
-  const idealColWidths = WEEKDAY_KEYS.map((_, i) => {
-    const wd = i + 1;
-    const dayMeetings = week.filter((m) => m.weekday === wd);
-    const nameW = dayMeetings.reduce((max, m) => Math.max(max, visualWidth(m.courseName)), 0);
-    const locW = dayMeetings.reduce(
-      (max, m) => Math.max(max, m.location ? visualWidth(m.location) : 0),
-      0,
-    );
-    const headerW =
-      visualWidth(weekdayShortLabel(wd)) + (wd === todayWd ? visualWidth(todayMark) : 0);
-    return Math.max(nameW, locW, headerW, MIN_COL_WIDTH);
-  });
-  const fixedOverhead = space.indent.length + rowHeadW + 6 * sepW;
-  const availableForCols = Math.max(0, cols - fixedOverhead);
-  const evenColW = Math.max(...idealColWidths);
-  const totalIdealColW = idealColWidths.reduce((a, b) => a + b, 0);
+  const { rowHeadW, idealColWidths, totalIdealColW } = weekGridMetrics(timetable, weekNumber, now);
+  const availableForCols = Math.max(
+    0,
+    lineBudget(cols) - visualWidth(space.indent) - rowHeadW - 6 * GRID_SEP_W,
+  );
   const colWidths =
-    evenColW * 7 <= availableForCols - space.indent.length
-      ? idealColWidths.map(() => evenColW)
-      : totalIdealColW <= availableForCols
-        ? idealColWidths
-        : idealColWidths.map((w) =>
-            Math.max(3, Math.floor(w * (availableForCols / totalIdealColW))),
-          );
-  const totalW = rowHeadW + colWidths.reduce((a, b) => a + b, 0) + 6 * sepW;
+    totalIdealColW <= availableForCols
+      ? spreadWidths(idealColWidths, availableForCols)
+      : idealColWidths.map((w) => Math.max(3, Math.floor(w * (availableForCols / totalIdealColW))));
+  const totalW = rowHeadW + colWidths.reduce((a, b) => a + b, 0) + 6 * GRID_SEP_W;
 
   const startingAt = (wd: number, period: number) =>
     week.find((m) => m.weekday === wd && m.startPeriod === period);
@@ -382,7 +435,7 @@ export function renderWeekGrid(
 
   const sorted = [...periods].sort((a, b) => a.period - b.period);
   sorted.forEach((p, i) => {
-    const rowHead = type.hint(padEndV(`${p.start}-${p.end}`, rowHeadW));
+    const rowHead = type.hint(padEndV(rangeLabel(p.start, p.end), rowHeadW));
     const nameCells: string[] = [];
     const locCells: string[] = [];
     for (let wdIdx = 0; wdIdx < 7; wdIdx++) {
@@ -517,7 +570,7 @@ function formatWeekRange(weeks: readonly number[]): string {
   if (isContiguous) {
     const first = sorted[0];
     const last = sorted.at(-1);
-    return sorted.length > 1 ? `${first}-${last}` : `${first}`;
+    return sorted.length > 1 ? rangeLabel(String(first), String(last)) : `${first}`;
   }
   return sorted.join(', ');
 }
@@ -529,7 +582,10 @@ export function renderMeetingDetail(
 ): string {
   const trans = t();
   const rows: [string, string][] = [
-    [trans.timetable.detailTime, `${weekdayShortLabel(meeting.weekday)} ${span(meeting, periods)}`],
+    [
+      trans.timetable.detailTime,
+      `${weekdayName(meeting.weekday, 'short')} ${span(meeting, periods)}`,
+    ],
   ];
   if (meeting.location) rows.push([trans.timetable.detailLocation, meeting.location]);
   if (meeting.teacherNames.length > 0) {
@@ -614,23 +670,13 @@ export function renderUnresolvedItems(
   return lines.join('\n');
 }
 
-const DENSITY_GLYPHS: [string, string][] = [
-  ['·', ' '],
-  ['░', '.'],
-  ['▒', ':'],
-  ['▓', '-'],
-  ['█', '='],
-];
+const DENSITY_HEIGHT = 5;
+const DENSITY_COL = 3;
+const BAR_RAMP = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
 
-function levelGlyph(level: number): string {
-  const pair = DENSITY_GLYPHS[Math.max(0, Math.min(4, level))] ?? ['·', ' '];
-  return pickIcon(pair[0], pair[1]);
-}
-
-function applyDensityColor(glyphChar: string, level: number): string {
-  if (level <= 0) return type.hint(glyphChar);
-  if (level >= 4) return type.active(glyphChar);
-  return c.brand(glyphChar);
+function barGlyph(eighths: number): string {
+  const fill = Math.max(0, Math.min(8, eighths));
+  return pickIcon(BAR_RAMP[fill] ?? ' ', fill >= 4 ? '#' : fill > 0 ? '_' : ' ');
 }
 
 function weekStartDate(weekOneMonday: string, week: number): Date {
@@ -642,7 +688,7 @@ function densityMonthText(
   startWeek: number,
   count: number,
   lang: Language,
-  maxWidth = Number.POSITIVE_INFINITY,
+  maxWidth: number,
 ): string {
   let text = '';
   let visualCol = 0;
@@ -655,22 +701,21 @@ function densityMonthText(
     const label = new Intl.DateTimeFormat(lang === 'zh' ? 'zh-CN' : 'en-US', {
       month: 'short',
     }).format(date);
-    const targetCol = index * 2;
-    if (targetCol + visualWidth(label) > maxWidth) continue;
-    if (targetCol > visualCol) text += ' '.repeat(targetCol - visualCol);
-    text += label;
+    const targetCol = index * DENSITY_COL;
+    if (targetCol < visualCol || targetCol + visualWidth(label) > maxWidth) continue;
+    text += ' '.repeat(targetCol - visualCol) + label;
     visualCol = targetCol + visualWidth(label);
   }
   return text;
 }
 
-function densityMarkerText(index: number, width: number, marker: string, label: string): string {
-  const markerCol = index * 2;
+function densityMarkerLines(index: number, width: number, marker: string, label: string): string[] {
+  const markerCol = index * DENSITY_COL;
   const after = `${' '.repeat(markerCol)}${marker} ${label}`;
-  if (visualWidth(after) <= width) return after;
+  if (visualWidth(after) <= width) return [after];
   const beforeStart = markerCol - visualWidth(label) - 1;
-  if (beforeStart >= 0) return `${' '.repeat(beforeStart)}${label} ${marker}`;
-  return `${' '.repeat(markerCol)}${marker}`;
+  if (beforeStart >= 0) return [`${' '.repeat(beforeStart)}${label} ${marker}`];
+  return [`${' '.repeat(markerCol)}${marker}`, label];
 }
 
 export function renderTermDensity(
@@ -679,110 +724,93 @@ export function renderTermDensity(
   currentWeek: number,
   cols = Number.POSITIVE_INFINITY,
 ): string {
-  const trans = t();
+  const trans = t().timetable;
   const lang = getCurrentLanguage();
-
-  let minWeek = currentWeek;
-  let maxWeek = currentWeek;
-  for (const m of meetings) {
-    for (const w of m.weeks) {
-      if (w < minWeek) minWeek = w;
-      if (w > maxWeek) maxWeek = w;
-    }
-  }
-  const numWeeks = maxWeek - minWeek + 1;
-
-  const weekSlots: number[] = [];
-  for (let w = minWeek; w <= maxWeek; w++) {
-    let slots = 0;
-    for (const m of meetings) {
-      if (m.weeks.includes(w)) slots += m.endPeriod - m.startPeriod + 1;
-    }
-    weekSlots.push(slots);
-  }
-  const max = Math.max(0, ...weekSlots);
-
-  const levels = weekSlots.map((v) => {
-    if (v === 0 || max === 0) return 0;
-    if (v <= max * 0.25) return 1;
-    if (v <= max * 0.5) return 2;
-    if (v <= max * 0.75) return 3;
-    return 4;
-  });
-
-  const monthLabelText = densityMonthText(weekOneMonday, minWeek, numWeeks, lang);
-  const monthLabelLine = `${space.indent}${monthLabelText}`;
-
-  const glyphLine = `${space.indent}${levels.map((lvl) => applyDensityColor(levelGlyph(lvl), lvl)).join(' ')}`;
-
-  const currentWeekIndex = Math.max(0, currentWeek - minWeek);
-  const markerGlyph = pickIcon('↑', '^');
-  const markerLine = `${space.indent}${type.hint(
-    `${' '.repeat(currentWeekIndex * 2)}${markerGlyph} ${trans.timetable.termDensityThisWeek}`,
-  )}`;
-
-  const legendGlyphs = [0, 1, 2, 3, 4].map((lvl) => applyDensityColor(levelGlyph(lvl), lvl));
-  const legendContent = `${type.hint(trans.calendar.heatmap.legendLess)} ${legendGlyphs.join('')} ${type.hint(trans.calendar.heatmap.legendMore)}`;
-  const legendLine = `${space.indent}${legendContent}`;
-
-  const fullLines = [
-    `${space.indent}${type.heading(trans.timetable.termDensityTitle)}`,
-    '',
-    monthLabelLine,
-    glyphLine,
-    markerLine,
-    '',
-    legendLine,
-  ];
   const width = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : Number.POSITIVE_INFINITY;
-  if (!Number.isFinite(width) || fullLines.every((line) => visualWidth(line) <= width)) {
-    return fullLines.join('\n');
-  }
-
   const indent = visualWidth(space.indent) < width ? space.indent : '';
   const contentWidth = Math.max(1, width - visualWidth(indent));
-  const weeksPerChunk = Math.max(1, Math.floor((contentWidth + 1) / 2));
-  const lines = wrapAnsiToVisualWidth(
-    type.heading(trans.timetable.termDensityTitle),
-    contentWidth,
-  ).map((part) => `${indent}${part}`);
-  lines.push('');
+  const wrap = (text: string): string[] =>
+    wrapAnsiToVisualWidth(text, contentWidth).map((part) => `${indent}${part}`);
+  const lines = wrap(type.heading(trans.termDensityTitle));
 
-  for (let start = 0; start < numWeeks; start += weeksPerChunk) {
-    if (start > 0) lines.push('');
-    const count = Math.min(weeksPerChunk, numWeeks - start);
-    const chunkMonthText = densityMonthText(
-      weekOneMonday,
-      minWeek + start,
-      count,
-      lang,
-      contentWidth,
-    );
-    lines.push(`${indent}${chunkMonthText}`);
-    lines.push(
-      `${indent}${levels
-        .slice(start, start + count)
-        .map((level) => applyDensityColor(levelGlyph(level), level))
-        .join(' ')}`,
-    );
-    if (currentWeekIndex >= start && currentWeekIndex < start + count) {
-      const relativeIndex = currentWeekIndex - start;
-      lines.push(
-        `${indent}${type.hint(
-          densityMarkerText(
-            relativeIndex,
-            contentWidth,
-            markerGlyph,
-            trans.timetable.termDensityThisWeek,
-          ),
-        )}`,
-      );
+  const allWeeks = meetings.flatMap((m) => m.weeks);
+  if (allWeeks.length === 0) {
+    return [...lines, ...wrap(type.hint(trans.termDensityEmpty))].join('\n');
+  }
+  const firstWeek = Math.min(1, ...allWeeks);
+  const slots = Array.from({ length: Math.max(...allWeeks) - firstWeek + 1 }, (_, index) =>
+    meetings.reduce(
+      (sum, m) =>
+        m.weeks.includes(firstWeek + index) ? sum + m.endPeriod - m.startPeriod + 1 : sum,
+      0,
+    ),
+  );
+  const busy = slots.filter((value) => value > 0);
+  const low = Math.min(...busy);
+  const high = Math.max(...busy);
+  const current = currentWeek - firstWeek;
+  const currentSlots = slots[current];
+  const freeWeeks = slots.length - busy.length;
+  const summary = [
+    fmt(trans.termDensityWeeks, { weeks: String(slots.length) }),
+    ...(freeWeeks > 0 ? [fmt(trans.termDensityFreeWeeks, { count: String(freeWeeks) })] : []),
+    fmt(trans.termDensityPerWeek, {
+      periods: low === high ? String(high) : rangeLabel(String(low), String(high)),
+    }),
+    ...(currentSlots === undefined
+      ? []
+      : [fmt(trans.termDensityCurrent, { periods: String(currentSlots) })]),
+  ];
+  const summaryLines: string[] = [];
+  for (const part of summary) {
+    const joined = `${summaryLines.at(-1) ?? ''}  ${pickIcon('·', '-')}  ${part}`;
+    if (summaryLines.length > 0 && visualWidth(joined) <= contentWidth) {
+      summaryLines[summaryLines.length - 1] = joined;
+    } else {
+      summaryLines.push(part);
     }
   }
+  lines.push(...summaryLines.flatMap((line) => wrap(type.hint(line))));
 
-  lines.push('');
-  lines.push(
-    ...wrapAnsiToVisualWidth(legendContent, contentWidth).map((part) => `${indent}${part}`),
-  );
+  const axisW = visualWidth(String(high));
+  const gutter = ' '.repeat(axisW + 3);
+  const perChunk = Math.max(1, Math.floor((contentWidth - gutter.length + 1) / DENSITY_COL));
+  for (let start = 0; start < slots.length; start += perChunk) {
+    const chunk = slots.slice(start, start + perChunk);
+    const style = (index: number): ((value: string) => string) =>
+      start + index === current ? type.active : type.body;
+    lines.push('');
+    for (let row = DENSITY_HEIGHT - 1; row >= 0; row -= 1) {
+      const top = row === DENSITY_HEIGHT - 1;
+      const axis = `${(top ? String(high) : '').padStart(axisW)} ${top ? pickIcon('┤', '+') : glyph.bar()}`;
+      const bars = chunk.map((value, index) => {
+        const eighths =
+          value === 0 ? 0 : Math.max(1, Math.round((value / high) * DENSITY_HEIGHT * 8));
+        return style(index)(barGlyph(eighths - row * 8).repeat(DENSITY_COL - 1));
+      });
+      lines.push(`${indent}${type.hint(axis)} ${bars.join(' ')}`);
+    }
+    lines.push(
+      `${indent}${type.hint(`${'0'.padStart(axisW)} ${pickIcon('└', '+')}${glyph.rule().repeat(chunk.length * DENSITY_COL)}`)}`,
+    );
+    const numbers = chunk.map((_, index) => {
+      const label = String(firstWeek + start + index).padStart(DENSITY_COL - 1);
+      return start + index === current ? type.active(label) : type.hint(label);
+    });
+    lines.push(`${indent}${gutter}${numbers.join(' ')}`);
+    const room = contentWidth - gutter.length;
+    lines.push(
+      `${indent}${gutter}${type.hint(densityMonthText(weekOneMonday, firstWeek + start, chunk.length, lang, room))}`,
+    );
+    if (current >= start && current < start + chunk.length) {
+      const marker = densityMarkerLines(
+        current - start,
+        room,
+        pickIcon('↑', '^'),
+        trans.termDensityThisWeek,
+      );
+      lines.push(...marker.map((line) => `${indent}${gutter}${type.hint(line)}`));
+    }
+  }
   return lines.join('\n');
 }
