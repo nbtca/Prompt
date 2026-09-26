@@ -1,6 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { fitLine, fitBody, composeFrameLines, computeBodyRows, diffFrame } from './frame.js';
+import {
+  fitLine,
+  fitBody,
+  composeFrameLines,
+  computeBodyRows,
+  diffFrame,
+  frameWidth,
+} from './frame.js';
 import { visualWidth } from '../core/text.js';
+import { MAX_FRAME_COLS } from '../core/theme.js';
 
 describe('fitLine', () => {
   it('pads a short line to exactly cols', () => {
@@ -39,6 +47,25 @@ describe('composeFrameLines', () => {
     for (const line of f) expect(visualWidth(line)).toBe(3);
     expect(f[0]?.trim()).toBe('H');
     expect(f[4]?.trim()).toBe('F');
+  });
+
+  it('fills the terminal up to the frame cap', () => {
+    expect(frameWidth(80)).toBe(80);
+    expect(frameWidth(MAX_FRAME_COLS + 40)).toBe(MAX_FRAME_COLS);
+    const [line] = composeFrameLines(['H'], [], [], 1, MAX_FRAME_COLS, 0);
+    expect(line?.startsWith('H')).toBe(true);
+  });
+
+  it('centers the whole frame on a wider terminal', () => {
+    const cols = MAX_FRAME_COLS + 41;
+    const wide = 'x'.repeat(MAX_FRAME_COLS + 10);
+    const f = composeFrameLines(['H'], [wide], ['F'], 4, cols, 0);
+    expect(f).toHaveLength(4);
+    for (const line of f) expect(visualWidth(line)).toBe(cols);
+    expect(f[0]?.indexOf('H')).toBe(20);
+    expect(f[1]?.replace(/\x1b\[[0-9;]*m/g, '').trim()).toBe('x'.repeat(MAX_FRAME_COLS));
+    expect(f[1]?.indexOf('x')).toBe(20);
+    expect(f[3]?.indexOf('F')).toBe(20);
   });
 });
 

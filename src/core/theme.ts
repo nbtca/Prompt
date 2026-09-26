@@ -73,8 +73,7 @@ export const glyph = {
   barEmpty: () => pickIcon('░', '-'),
 };
 
-/** Beyond this the app stops stretching; a terminal wider than this keeps the slack. */
-export const MAX_FRAME_COLS = 100;
+export const MAX_FRAME_COLS = 120;
 
 export const space = {
   indent: '   ',

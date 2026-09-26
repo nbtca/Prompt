@@ -1,4 +1,4 @@
-import { type, space, glyph, brandMark, MAX_FRAME_COLS } from '../core/theme.js';
+import { type, space, glyph, brandMark } from '../core/theme.js';
 import { pickIcon } from '../core/icons.js';
 import { t } from '../i18n/index.js';
 import type { ViewId } from './keys.js';
@@ -23,8 +23,7 @@ export function resolveChromeLayout(rows: number): ChromeLayout {
 }
 
 function renderRule(cols: number): string {
-  const terminal = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : 80;
-  const width = Math.min(terminal, MAX_FRAME_COLS);
+  const width = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : 80;
   const indent = visualWidth(space.indent) < width ? space.indent : '';
   const ruleWidth = Math.max(1, width - visualWidth(indent) * 2);
   return indent + type.hint(glyph.rule().repeat(ruleWidth));
@@ -199,9 +198,8 @@ function withPosition(
   cols: number,
 ): string {
   if (position === undefined) return hint;
-  const frame = Math.min(cols, MAX_FRAME_COLS);
-  const margin = visualWidth(space.indent) < frame ? space.indent : '';
-  const gap = frame - visualWidth(indent + hintText) - visualWidth(position) - visualWidth(margin);
+  const margin = visualWidth(space.indent) < cols ? space.indent : '';
+  const gap = cols - visualWidth(indent + hintText) - visualWidth(position) - visualWidth(margin);
   if (gap < 2) return hint;
   return hint + ' '.repeat(gap) + type.hint(position) + margin;
 }

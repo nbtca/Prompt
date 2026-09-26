@@ -1,4 +1,5 @@
 import { ansi } from '../core/canvas.js';
+import { MAX_FRAME_COLS } from '../core/theme.js';
 import { clipAnsiToVisualWidth, visualWidth } from '../core/text.js';
 
 export function clipToWidth(line: string, cols: number): string {
@@ -20,6 +21,10 @@ export function fitBody(lines: string[], height: number, scroll: number, cols: n
   return out;
 }
 
+export function frameWidth(cols: number): number {
+  return Math.min(cols, MAX_FRAME_COLS);
+}
+
 export function composeFrameLines(
   header: string[],
   body: string[],
@@ -28,11 +33,14 @@ export function composeFrameLines(
   cols: number,
   scroll: number,
 ): string[] {
-  const h = header.map((l) => fitLine(l, cols));
-  const f = footer.map((l) => fitLine(l, cols));
+  const width = frameWidth(cols);
+  const left = ' '.repeat(Math.floor((cols - width) / 2));
+  const right = ' '.repeat(cols - width - left.length);
+  const h = header.map((l) => fitLine(l, width));
+  const f = footer.map((l) => fitLine(l, width));
   const bodyH = Math.max(0, rows - h.length - f.length);
-  const b = fitBody(body, bodyH, scroll, cols);
-  return [...h, ...b, ...f].slice(0, rows);
+  const b = fitBody(body, bodyH, scroll, width);
+  return [...h, ...b, ...f].slice(0, rows).map((line) => left + line + right);
 }
 
 export function diffFrame(prev: readonly string[] | undefined, next: readonly string[]): string {
