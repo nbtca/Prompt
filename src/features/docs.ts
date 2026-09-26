@@ -723,14 +723,17 @@ export async function fetchDocMetadata(
   return results;
 }
 
-export function peekListedDocs(items: readonly DocItem[]): ListedDoc[] | undefined {
-  const listed: ListedDoc[] = [];
-  for (const item of items) {
+export function peekListedDocs<T extends DocItem>(
+  items: readonly T[],
+): { docs: (T | ListedDoc)[]; complete: boolean } {
+  let complete = true;
+  const docs = items.map((item) => {
     const metadata = peekDocMetadata(item);
-    if (!metadata) return undefined;
-    listed.push(listedDoc(item, metadata));
-  }
-  return listed;
+    if (metadata) return listedDoc(item, metadata);
+    complete = false;
+    return item;
+  });
+  return { docs, complete };
 }
 
 export async function fetchSectionMetadata(

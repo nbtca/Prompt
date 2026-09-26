@@ -41,7 +41,10 @@ const searchDocumentsMock = vi.fn().mockResolvedValue([]);
 const openDocsInBrowserMock = vi.fn().mockResolvedValue(true);
 const clearDocsCacheMock = vi.fn();
 const peekSectionsMock = vi.fn((): DocSection[] | null => null);
-const peekListedDocsMock = vi.fn((): ListedDoc[] | undefined => undefined);
+const peekListedDocsMock = vi.fn((items: readonly ListedDoc[]) => ({
+  docs: [...items],
+  complete: false,
+}));
 
 function deferred<T>(): {
   promise: Promise<T>;
@@ -523,22 +526,25 @@ describe('docsView native reader (no shell-out to less/glow)', () => {
   });
 
   it('shows stored document titles at once instead of filenames', async () => {
-    peekListedDocsMock.mockReturnValueOnce([
-      {
-        name: 'index.md',
-        path: 'tutorial/index.md',
-        type: 'file',
-        title: 'Guide landing page',
-        summary: '',
-      },
-      {
-        name: 'os-skills.md',
-        path: 'tutorial/manual/os-skills.md',
-        type: 'file',
-        title: 'Operating Systems Handbook',
-        summary: 'Practical workstation skills',
-      },
-    ]);
+    peekListedDocsMock.mockReturnValueOnce({
+      complete: true,
+      docs: [
+        {
+          name: 'index.md',
+          path: 'tutorial/index.md',
+          type: 'file',
+          title: 'Guide landing page',
+          summary: '',
+        },
+        {
+          name: 'os-skills.md',
+          path: 'tutorial/manual/os-skills.md',
+          type: 'file',
+          title: 'Operating Systems Handbook',
+          summary: 'Practical workstation skills',
+        },
+      ],
+    });
     const ctx = fakeCtx();
     await freshDocsView.load(ctx);
     freshDocsView.handleKey('\r', ctx);
@@ -549,7 +555,7 @@ describe('docsView native reader (no shell-out to less/glow)', () => {
     expect(fetchSectionMetadataMock).not.toHaveBeenCalled();
   });
 
-  it('shows a loading state rather than filenames until titles arrive', async () => {
+  it('shows filenames at once and swaps in titles when they arrive', async () => {
     let resolveMetadata!: (section: DocSection) => void;
     fetchSectionMetadataMock.mockImplementationOnce(
       () =>
@@ -559,10 +565,9 @@ describe('docsView native reader (no shell-out to less/glow)', () => {
     );
     const ctx = fakeCtx();
     await openTutorialFiles(ctx);
-    const loading = stripAnsi(freshDocsView.render(ctx).join('\n'));
-    expect(loading).toContain('Loading');
-    expect(loading).not.toContain('Os Skills');
-    expect(freshDocsView.isBusy()).toBe(true);
+    const early = stripAnsi(freshDocsView.render(ctx).join('\n'));
+    expect(early).toContain('Os Skills');
+    expect(freshDocsView.isBusy()).toBe(false);
     expect(freshDocsView.contextPath()).toEqual(['Docs', 'Guide']);
 
     resolveMetadata({
@@ -591,7 +596,6 @@ describe('docsView native reader (no shell-out to less/glow)', () => {
     const out = stripAnsi(freshDocsView.render(ctx).join('\n'));
     expect(out).toContain('Operating Systems Handbook');
     expect(out).toContain('Practical workstation skills');
-    expect(freshDocsView.isBusy()).toBe(false);
   });
 
   it('falls back to filename titles with an error when the titles cannot load', async () => {

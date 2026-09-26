@@ -333,20 +333,22 @@ describe('peekListedDocs', () => {
     const listed = peekListedDocs([
       stored('os-skills.md', 'a'.repeat(40), '# 操作系统技能\n\n装机与排障的基本功。\n'),
     ]);
-    expect(listed?.map(({ title, summary }) => ({ title, summary }))).toEqual([
-      { title: '操作系统技能', summary: '装机与排障的基本功。' },
-    ]);
+    expect(listed.complete).toBe(true);
+    expect(listed.docs).toMatchObject([{ title: '操作系统技能', summary: '装机与排障的基本功。' }]);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('gives up when any document is not stored yet', () => {
-    expect(
-      peekListedDocs([
-        stored('cached.md', 'b'.repeat(40), '# Cached\n'),
-        stored('missing.md', 'c'.repeat(40)),
-      ]),
-    ).toBeUndefined();
-    expect(peekListedDocs([{ name: 'x.md', path: 'guide/x.md', type: 'file' }])).toBeUndefined();
+  it('keeps unstored documents as they are and reports the list incomplete', () => {
+    const listed = peekListedDocs([
+      stored('cached.md', 'b'.repeat(40), '# Cached\n'),
+      stored('missing.md', 'c'.repeat(40)),
+    ]);
+    expect(listed.complete).toBe(false);
+    expect(listed.docs).toMatchObject([{ title: 'Cached' }, { name: 'missing.md' }]);
+    expect(listed.docs[1]).not.toHaveProperty('title');
+    expect(peekListedDocs([{ name: 'x.md', path: 'guide/x.md', type: 'file' }]).complete).toBe(
+      false,
+    );
   });
 });
 

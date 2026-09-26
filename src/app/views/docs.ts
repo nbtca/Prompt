@@ -310,13 +310,12 @@ async function openSectionFiles(ctx: AppContext, section: DocSection): Promise<v
   const requestId = ++metadataRequestId;
   currentSectionKey = section.key;
   const stored = peekListedDocs(section.files);
-  if (stored) {
-    const ready = { ...section, files: stored };
-    replaceSection(ready);
-    state = { mode: 'files', filesField: buildFilesField(ready, computeMaxVisible(ctx.bodyRows)) };
+  const known = { ...section, files: stored.docs };
+  state = { mode: 'files', filesField: buildFilesField(known, computeMaxVisible(ctx.bodyRows)) };
+  if (stored.complete) {
+    replaceSection(known);
     return;
   }
-  state = { mode: 'files' };
   ctx.rerender();
   try {
     const hydrated = await fetchSectionMetadata(section, ctx.signal);
@@ -364,19 +363,18 @@ async function openArchivedFiles(
   const requestId = ++metadataRequestId;
   currentArchivedGroupKey = groupKey;
   const stored = peekListedDocs(groupFiles);
-  if (stored) {
-    archivedGroups.set(groupKey, stored);
-    state = {
-      mode: 'archivedFiles',
-      archivedFilesField: buildArchivedFilesField(
-        groupKey,
-        stored,
-        computeMaxVisible(ctx.bodyRows),
-      ),
-    };
+  state = {
+    mode: 'archivedFiles',
+    archivedFilesField: buildArchivedFilesField(
+      groupKey,
+      stored.docs,
+      computeMaxVisible(ctx.bodyRows),
+    ),
+  };
+  if (stored.complete) {
+    archivedGroups.set(groupKey, stored.docs);
     return;
   }
-  state = { mode: 'archivedFiles' };
   ctx.rerender();
   try {
     const hydrated = await fetchDocMetadata(groupFiles, ctx.signal);
@@ -558,11 +556,7 @@ export const docsView = {
 
   isBusy(): boolean {
     return (
-      state.mode === 'loading' ||
-      state.mode === 'searchLoading' ||
-      state.mode === 'readerLoading' ||
-      (state.mode === 'files' && !state.filesField) ||
-      (state.mode === 'archivedFiles' && !state.archivedFilesField)
+      state.mode === 'loading' || state.mode === 'searchLoading' || state.mode === 'readerLoading'
     );
   },
 
