@@ -1,4 +1,6 @@
-import type { CalendarEvent } from '@nbtca/nbtcal';
+import type { Calendar, CalendarEvent } from '@nbtca/nbtcal';
+
+const UPCOMING_DAYS = 30;
 
 export function weekRange(now: Date): { start: Date; end: Date } {
   const start = new Date(now);
@@ -8,6 +10,26 @@ export function weekRange(now: Date): { start: Date; end: Date } {
   const end = new Date(start);
   end.setDate(end.getDate() + 7);
   return { start, end };
+}
+
+export function dayRange(now: Date): { start: Date; end: Date } {
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  return { start, end };
+}
+
+export function currentEvents(calendar: Pick<Calendar, 'inRange'>, now: Date): CalendarEvent[] {
+  const { start } = dayRange(now);
+  const end = new Date(now.getTime() + UPCOMING_DAYS * 86_400_000);
+  return calendar.inRange(start, end).filter((event) => {
+    if (event.start >= now) return true;
+    const eventEnd =
+      event.end ??
+      (event.isAllDay
+        ? new Date(event.start.getFullYear(), event.start.getMonth(), event.start.getDate() + 1)
+        : event.start);
+    return eventEnd > now;
+  });
 }
 
 export function monthRange(now: Date): { start: Date; end: Date } {

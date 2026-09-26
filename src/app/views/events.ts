@@ -7,12 +7,23 @@ import { renderEvents, type EventsViewState } from './events-render.js';
 import { setVimKeysActive } from '../../core/vim-keys.js';
 import { pickIcon } from '../../core/icons.js';
 import { t } from '../../i18n/index.js';
-import { loadCalendarOrThrow, toDisplayEvent, exportEventIcs } from '../../features/calendar.js';
-import { weekRange, monthRange, filterEvents } from '../../features/calendar-query.js';
+import {
+  exportEventIcs,
+  loadCalendarOrCache,
+  toDisplayEvent,
+  yearHeatmap,
+} from '../../features/calendar.js';
+import {
+  currentEvents,
+  filterEvents,
+  monthRange,
+  weekRange,
+} from '../../features/calendar-query.js';
 import { addLocalDays } from '../../core/calendar-day.js';
 
 let state: EventsViewState = { mode: 'loading' };
 let calendar: Calendar | null = null;
+let stale = false;
 let currentList: CalendarEvent[] = [];
 
 function backLabel(): string {
@@ -64,19 +75,15 @@ function showList(title: string, events: CalendarEvent[], ctx: AppContext): void
 const RECENT_ACTIVITY_FETCH_CAP = 15;
 
 function goToHub(): void {
-  const upcoming = calendar ? calendar.upcoming({ days: 30 }) : [];
-  const nextEvent = upcoming[0];
+  const now = new Date();
+  const upcoming = calendar ? currentEvents(calendar, now) : [];
+  const nextEvent = upcoming.find((event) => event.start >= now);
   state = {
     mode: 'hub',
     hubField: buildHubField(),
+    ...(stale ? { stale } : {}),
     ...(nextEvent === undefined ? {} : { nextEvent: toDisplayEvent(nextEvent) }),
-    heatmapBuckets: calendar
-      ? calendar.heatmap({
-          start: addLocalDays(new Date(), -365),
-          end: new Date(),
-          bucket: 'day',
-        })
-      : [],
+    heatmapBuckets: calendar ? yearHeatmap(calendar, now) : [],
     recentEvents: upcoming.slice(0, RECENT_ACTIVITY_FETCH_CAP).map(toDisplayEvent),
   };
 }
@@ -110,9 +117,10 @@ export const eventsView = {
     state = { mode: 'loading' };
     ctx.rerender();
     try {
-      const loadedCalendar = await loadCalendarOrThrow(ctx.signal);
+      const loaded = await loadCalendarOrCache(ctx.signal);
       if (ctx.signal?.aborted) return;
-      calendar = loadedCalendar;
+      calendar = loaded.calendar;
+      stale = loaded.stale;
       goToHub();
     } catch {
       if (ctx.signal?.aborted) return;
@@ -166,7 +174,7 @@ export const eventsView = {
         if (!result?.selected) return;
         const now = new Date();
         if (result.selected === 'upcoming') {
-          showList(t().menu.events, calendar.upcoming({ days: 30 }), ctx);
+          showList(t().menu.events, currentEvents(calendar, now), ctx);
           return;
         }
         if (result.selected === 'week') {

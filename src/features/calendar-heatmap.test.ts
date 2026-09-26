@@ -117,6 +117,22 @@ describe('renderHeatmap', () => {
     expect(visualWidth(stripAnsi(lines[2] ?? ''))).toBe(59);
   });
 
+  it('keeps Chinese month labels on their week columns', () => {
+    setLanguage('zh');
+    try {
+      const lines = renderHeatmap(buckets, today, { color: false, cols: 80 })
+        .split('\n')
+        .map(stripAnsi);
+      const monthRow = lines[2] ?? '';
+      const gridRow = lines[3] ?? '';
+      expect(visualWidth(monthRow)).toBeLessThanOrEqual(visualWidth(gridRow));
+      expect(monthRow).not.toMatch(/月\d/);
+      expect(monthRow).toContain('6月');
+    } finally {
+      setLanguage('en');
+    }
+  });
+
   it('reduces the visible week window to fit a 40-column terminal', () => {
     const lines = renderHeatmap(buckets, today, { color: false, cols: 40 }).split('\n');
     expect(lines.every((line) => visualWidth(stripAnsi(line)) <= 40)).toBe(true);

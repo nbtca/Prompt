@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import type { CalendarEvent } from '@nbtca/nbtcal';
+import { createCalendar, parseCalendar, type CalendarEvent } from '@nbtca/nbtcal';
 import {
+  currentEvents,
+  dayRange,
   weekRange,
   monthRange,
   filterEvents,
@@ -22,6 +24,45 @@ function ev(o: Partial<CalendarEvent>): CalendarEvent {
     ...o,
   };
 }
+
+describe('dayRange', () => {
+  it('spans the local day of the given instant', () => {
+    const r = dayRange(new Date(2026, 8, 26, 15, 55));
+    expect(r.start).toEqual(new Date(2026, 8, 26));
+    expect(r.end).toEqual(new Date(2026, 8, 27));
+  });
+});
+
+describe('currentEvents', () => {
+  const calendar = createCalendar(
+    parseCalendar(
+      [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        ...[
+          ['all-day', 'DTSTART;VALUE=DATE:20260926', 'DTEND;VALUE=DATE:20260927'],
+          ['all-day-no-end', 'DTSTART;VALUE=DATE:20260926'],
+          ['ended', 'DTSTART:20260926T080000', 'DTEND:20260926T090000'],
+          ['ongoing', 'DTSTART:20260926T150000', 'DTEND:20260926T170000'],
+          ['later', 'DTSTART:20260926T190000', 'DTEND:20260926T200000'],
+          ['yesterday', 'DTSTART;VALUE=DATE:20260925', 'DTEND;VALUE=DATE:20260926'],
+        ].flatMap(([uid, ...times]) => [
+          'BEGIN:VEVENT',
+          `UID:${uid}`,
+          `SUMMARY:${uid}`,
+          ...times,
+          'END:VEVENT',
+        ]),
+        'END:VCALENDAR',
+      ].join('\r\n'),
+    ),
+  );
+
+  it("keeps today's all-day and ongoing events and drops finished ones", () => {
+    const uids = currentEvents(calendar, new Date(2026, 8, 26, 15, 55)).map((e) => e.uid);
+    expect(uids.sort()).toEqual(['all-day', 'all-day-no-end', 'later', 'ongoing']);
+  });
+});
 
 describe('weekRange', () => {
   it('spans Monday 00:00 to the next Monday 00:00', () => {

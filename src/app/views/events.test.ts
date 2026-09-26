@@ -1,22 +1,25 @@
-import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, beforeAll, beforeEach, vi } from 'vitest';
 import type * as CalendarModule from '../../features/calendar.js';
 
-const calendarUpcoming = vi.fn().mockReturnValue([]);
+const calendarInRange = vi.fn().mockReturnValue([]);
 const calendarHeatmap = vi.fn().mockReturnValue([]);
 const exportEventIcsMock = vi.fn().mockReturnValue({ ok: true, path: '/tmp/event.ics' });
-const loadCalendarOrThrowMock = vi.fn().mockResolvedValue({
-  upcoming: calendarUpcoming,
-  past: vi.fn().mockReturnValue([]),
-  next: vi.fn().mockReturnValue([]),
-  inRange: vi.fn().mockReturnValue([]),
-  heatmap: calendarHeatmap,
+const loadCalendarOrCacheMock = vi.fn().mockResolvedValue({
+  calendar: {
+    upcoming: vi.fn().mockReturnValue([]),
+    past: vi.fn().mockReturnValue([]),
+    next: vi.fn().mockReturnValue([]),
+    inRange: calendarInRange,
+    heatmap: calendarHeatmap,
+  },
+  stale: false,
 });
 vi.mock('../../features/calendar.js', async (importOriginal) => {
   const actual = await importOriginal<typeof CalendarModule>();
   return {
     ...actual,
     exportEventIcs: exportEventIcsMock,
-    loadCalendarOrThrow: loadCalendarOrThrowMock,
+    loadCalendarOrCache: loadCalendarOrCacheMock,
   };
 });
 
@@ -33,10 +36,10 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
-  calendarUpcoming.mockReturnValue([]);
+  calendarInRange.mockReturnValue([]);
   calendarHeatmap.mockReturnValue([{ date: '2026-07-14', count: 1 }]);
   exportEventIcsMock.mockClear();
-  loadCalendarOrThrowMock.mockClear();
+  loadCalendarOrCacheMock.mockClear();
 });
 
 function fakeCtx() {
@@ -85,7 +88,7 @@ describe('eventsView', () => {
   });
 
   it('does not offer move or open actions on an error screen', async () => {
-    loadCalendarOrThrowMock.mockRejectedValueOnce(new Error('Broke'));
+    loadCalendarOrCacheMock.mockRejectedValueOnce(new Error('Broke'));
     await eventsView.load(fakeCtx());
     const hint = stripAnsi(eventsView.footerHint(5, 80) ?? '');
     expect(hint).toContain('1-5');
@@ -95,8 +98,17 @@ describe('eventsView', () => {
 });
 
 describe('eventsView detail screen', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-07-15T12:00:00'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('shows the event title exactly once, not once as the heading and again as the field title', async () => {
-    calendarUpcoming.mockReturnValue([
+    calendarInRange.mockReturnValue([
       {
         uid: '1',
         title: 'Hackathon kickoff',
@@ -140,7 +152,7 @@ describe('eventsView detail screen', () => {
       description: '',
       recurring: false,
     };
-    calendarUpcoming.mockReturnValue([first, second]);
+    calendarInRange.mockReturnValue([first, second]);
     const ctx = fakeCtx();
     await eventsView.load(ctx);
 

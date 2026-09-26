@@ -20,6 +20,7 @@ import type { View, AppContext } from '../view.js';
 import { passiveFooterHint } from '../chrome.js';
 import { campusDateTime, campusIsoDate } from '@nbtca/nbtcal/timetable';
 import { isoDayDifference, localDayDifference, parseLocalDate } from '../../core/calendar-day.js';
+import { currentEvents } from '../../features/calendar-query.js';
 import { loadingLines } from '../../core/components/spinner.js';
 import type { Calendar } from '@nbtca/nbtcal';
 const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const;
@@ -225,8 +226,7 @@ function calendarSnapshot(
   weekAheadInfo: WeekAheadInfo | null,
 ): Pick<HomeData, 'eventLines' | 'weekAhead'> {
   const now = new Date();
-  const eventLines = cal
-    .upcoming({ days: 30 })
+  const eventLines = currentEvents(cal, now)
     .slice(0, HOME_EVENT_FETCH_CAP)
     .map((event) => renderEventBrief(toDisplayEvent(event), now));
   if (!weekAheadInfo) return { eventLines };

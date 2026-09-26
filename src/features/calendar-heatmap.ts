@@ -3,6 +3,7 @@ import type { HeatmapBucket } from '@nbtca/nbtcal';
 import { pickIcon } from '../core/icons.js';
 import { space, type } from '../core/theme.js';
 import { t, getCurrentLanguage } from '../i18n/index.js';
+import { visualWidth } from '../core/text.js';
 
 function parseBucketDate(date: string): Date {
   const parts = date.split('-').map(Number);
@@ -93,7 +94,7 @@ export function renderHeatmap(
     timeZone: 'UTC',
   });
   const cellsWidth = numCols * cellWidth;
-  const monthChars = new Array<string>(cellsWidth).fill(' ');
+  let monthLine = '';
   let prevMonth = -1;
   for (let col = 0; col < numCols; col++) {
     let labelDate: Date | null = null;
@@ -108,14 +109,15 @@ export function renderHeatmap(
     const month = labelDate.getUTCMonth();
     if (month !== prevMonth) {
       prevMonth = month;
-      const label = monthFmt.format(labelDate); // e.g. "Jun"
+      const label = monthFmt.format(labelDate);
       const start = col * cellWidth;
-      for (let i = 0; i < label.length && start + i < cellsWidth; i++) {
-        monthChars[start + i] = label[i] ?? ' ';
+      const used = visualWidth(monthLine);
+      if (start >= used + (used > 0 ? 1 : 0) && start + visualWidth(label) <= cellsWidth) {
+        monthLine += ' '.repeat(start - used) + label;
       }
     }
   }
-  const monthLabelLine = space.indent + weekdayLabel + monthChars.join('');
+  const monthLabelLine = space.indent + weekdayLabel + monthLine;
 
   const weekdayNames = [
     trans.timetable.weekdayMon.slice(0, 2),

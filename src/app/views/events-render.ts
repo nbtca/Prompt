@@ -14,6 +14,7 @@ export interface EventsViewState {
   mode: EventsMode;
   errorMessage?: string;
   statusMessage?: string;
+  stale?: boolean;
   nextEvent?: Event;
   heatmapBuckets?: HeatmapBucket[];
   recentEvents?: Event[];
@@ -53,6 +54,7 @@ function renderHubBody(
   const rows = Number.isFinite(bodyRows)
     ? Math.max(0, Math.floor(bodyRows))
     : Number.POSITIVE_INFINITY;
+  if (state.stale) lines.push(...wrappedIndentedLines(trans.calendar.stale, cols, type.hint), '');
   const banner = renderCountdownBanner(state.nextEvent, now, cols);
   if (banner) lines.push(...banner.split('\n'), '');
   const buckets = state.heatmapBuckets;
