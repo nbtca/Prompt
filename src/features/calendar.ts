@@ -5,6 +5,7 @@ import {
   FeedFetchError,
   FeedParseError,
   eventToICS,
+  SCHOOL_FEED_URL,
 } from '@nbtca/nbtcal';
 import type { Calendar, CalendarEvent, FeedValidators, HeatmapBucket } from '@nbtca/nbtcal';
 import chalk from 'chalk';
@@ -73,56 +74,76 @@ function formatTime(date: Date): string {
 
 const MEMO_TTL_MS = 5 * 60 * 1000;
 
-let memo: { calendar: Calendar; validators: FeedValidators; fetchedAt: number } | undefined;
-let inFlight: Promise<Calendar> | undefined;
+function feedLoader(url: string | undefined, name: string) {
+  let memo: { calendar: Calendar; validators: FeedValidators; fetchedAt: number } | undefined;
+  let inFlight: Promise<Calendar> | undefined;
 
-function remember(text: string, validators: FeedValidators, fetchedAt: number): Calendar {
-  memo = { calendar: createCalendar(parseCalendar(text)), validators, fetchedAt };
-  return memo.calendar;
-}
-
-export function peekCalendar(): Calendar | undefined {
-  if (memo) return memo.calendar;
-  const cache = loadFeedCache();
-  if (cache === null) return undefined;
-  try {
-    return remember(cache.text, cache.validators, 0);
-  } catch {
-    return undefined;
-  }
-}
-
-async function refetchCalendar(signal?: AbortSignal): Promise<Calendar> {
-  try {
-    peekCalendar();
-    const result = await fetchFeedConditional(undefined, {
-      timeoutMs: 15000,
-      ...(signal === undefined ? {} : { signal }),
-      validators: memo?.validators ?? {},
-    });
-    if (result.status === 'modified') {
-      const calendar = remember(result.text, result.validators, Date.now());
-      saveFeedCache(result);
-      return calendar;
-    }
-    if (!memo) throw new FeedFetchError('Feed request failed: HTTP 304');
-    memo = { ...memo, validators: result.validators, fetchedAt: Date.now() };
-    touchFeedCache(result.validators);
+  function remember(text: string, validators: FeedValidators, fetchedAt: number): Calendar {
+    memo = { calendar: createCalendar(parseCalendar(text)), validators, fetchedAt };
     return memo.calendar;
-  } catch (err) {
-    const detail = sanitizeTerminalLine(
-      err instanceof FeedFetchError || err instanceof FeedParseError ? err.message : String(err),
-    );
-    throw new Error(`${t().calendar.error}: ${detail}`);
   }
+
+  function peek(): Calendar | undefined {
+    if (memo) return memo.calendar;
+    const cache = loadFeedCache(name);
+    if (cache === null) return undefined;
+    try {
+      return remember(cache.text, cache.validators, 0);
+    } catch {
+      return undefined;
+    }
+  }
+
+  async function refetch(signal?: AbortSignal): Promise<Calendar> {
+    try {
+      peek();
+      const result = await fetchFeedConditional(url, {
+        timeoutMs: 15000,
+        ...(signal === undefined ? {} : { signal }),
+        validators: memo?.validators ?? {},
+      });
+      if (result.status === 'modified') {
+        const calendar = remember(result.text, result.validators, Date.now());
+        saveFeedCache(name, result);
+        return calendar;
+      }
+      if (!memo) throw new FeedFetchError('Feed request failed: HTTP 304');
+      memo = { ...memo, validators: result.validators, fetchedAt: Date.now() };
+      touchFeedCache(name, result.validators);
+      return memo.calendar;
+    } catch (err) {
+      const detail = sanitizeTerminalLine(
+        err instanceof FeedFetchError || err instanceof FeedParseError ? err.message : String(err),
+      );
+      throw new Error(`${t().calendar.error}: ${detail}`);
+    }
+  }
+
+  async function load(signal?: AbortSignal): Promise<Calendar> {
+    if (memo && Date.now() - memo.fetchedAt < MEMO_TTL_MS) return memo.calendar;
+    inFlight ??= refetch(signal).finally(() => {
+      inFlight = undefined;
+    });
+    return inFlight;
+  }
+
+  return { peek, load };
 }
 
-export async function loadCalendarOrThrow(signal?: AbortSignal): Promise<Calendar> {
-  if (memo && Date.now() - memo.fetchedAt < MEMO_TTL_MS) return memo.calendar;
-  inFlight ??= refetchCalendar(signal).finally(() => {
-    inFlight = undefined;
-  });
-  return inFlight;
+const eventsFeed = feedLoader(undefined, 'calendar-feed');
+const schoolFeed = feedLoader(SCHOOL_FEED_URL, 'school-feed');
+
+export const peekCalendar = eventsFeed.peek;
+export const loadCalendarOrThrow = eventsFeed.load;
+
+export async function loadSchoolCalendar(signal?: AbortSignal): Promise<Calendar> {
+  try {
+    return await schoolFeed.load(signal);
+  } catch (err) {
+    const cached = schoolFeed.peek();
+    if (!cached) throw err;
+    return cached;
+  }
 }
 
 export function toDisplayEvent(e: CalendarEvent): Event {

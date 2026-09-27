@@ -18,14 +18,17 @@ function withDir(run: (dir: string) => void): void {
 describe('calendar-store', () => {
   it('round-trips the feed and its validators via an injected dir', () => {
     withDir((dir) => {
-      saveFeedCache({ text: 'BEGIN:VCALENDAR\nEND:VCALENDAR', validators }, dir);
-      expect(loadFeedCache(dir)).toEqual({ text: 'BEGIN:VCALENDAR\nEND:VCALENDAR', validators });
+      saveFeedCache('calendar-feed', { text: 'BEGIN:VCALENDAR\nEND:VCALENDAR', validators }, dir);
+      expect(loadFeedCache('calendar-feed', dir)).toEqual({
+        text: 'BEGIN:VCALENDAR\nEND:VCALENDAR',
+        validators,
+      });
     });
   });
 
   it.runIf(process.platform !== 'win32')('keeps both files private', () => {
     withDir((dir) => {
-      saveFeedCache({ text: 'x', validators }, dir);
+      saveFeedCache('calendar-feed', { text: 'x', validators }, dir);
       expect(statSync(join(dir, 'calendar-feed.ics')).mode & 0o777).toBe(0o600);
       expect(statSync(join(dir, 'calendar-feed.json')).mode & 0o777).toBe(0o600);
     });
@@ -33,7 +36,7 @@ describe('calendar-store', () => {
 
   it('reports a miss when nothing was cached', () => {
     withDir((dir) => {
-      expect(loadFeedCache(dir)).toBeNull();
+      expect(loadFeedCache('calendar-feed', dir)).toBeNull();
     });
   });
 
@@ -44,31 +47,31 @@ describe('calendar-store', () => {
     ['an unsafe header value', JSON.stringify({ etag: '"v1"\r\nX: y', lastModified: 42 })],
   ])('drops validators that are %s', (_label, content) => {
     withDir((dir) => {
-      saveFeedCache({ text: 'x', validators }, dir);
+      saveFeedCache('calendar-feed', { text: 'x', validators }, dir);
       const file = join(dir, 'calendar-feed.json');
       if (content === null) rmSync(file);
       else writeFileSync(file, content);
-      expect(loadFeedCache(dir)).toEqual({ text: 'x', validators: {} });
+      expect(loadFeedCache('calendar-feed', dir)).toEqual({ text: 'x', validators: {} });
     });
   });
 
   it('refuses a feed older than the max age', () => {
     withDir((dir) => {
-      saveFeedCache({ text: 'stale', validators: {} }, dir);
+      saveFeedCache('calendar-feed', { text: 'stale', validators: {} }, dir);
       const longAgo = new Date(Date.now() - 60 * 60 * 1000);
       utimesSync(join(dir, 'calendar-feed.ics'), longAgo, longAgo);
-      expect(loadFeedCache(dir, 30 * 60 * 1000)).toBeNull();
-      expect(loadFeedCache(dir, 2 * 60 * 60 * 1000)?.text).toBe('stale');
+      expect(loadFeedCache('calendar-feed', dir, 30 * 60 * 1000)).toBeNull();
+      expect(loadFeedCache('calendar-feed', dir, 2 * 60 * 60 * 1000)?.text).toBe('stale');
     });
   });
 
   it('renews the feed age and validators when the feed is unchanged', () => {
     withDir((dir) => {
-      saveFeedCache({ text: 'same', validators }, dir);
+      saveFeedCache('calendar-feed', { text: 'same', validators }, dir);
       const longAgo = new Date(Date.now() - 60 * 60 * 1000);
       utimesSync(join(dir, 'calendar-feed.ics'), longAgo, longAgo);
-      touchFeedCache({ etag: '"v2"' }, dir);
-      expect(loadFeedCache(dir, 30 * 60 * 1000)).toEqual({
+      touchFeedCache('calendar-feed', { etag: '"v2"' }, dir);
+      expect(loadFeedCache('calendar-feed', dir, 30 * 60 * 1000)).toEqual({
         text: 'same',
         validators: { etag: '"v2"' },
       });
@@ -78,8 +81,8 @@ describe('calendar-store', () => {
   it('stays quiet when the directory cannot be written', () => {
     const missing = join(tmpdir(), 'cal-missing', 'deeper');
     expect(() => {
-      saveFeedCache({ text: 'x', validators }, missing);
-      touchFeedCache(validators, missing);
+      saveFeedCache('calendar-feed', { text: 'x', validators }, missing);
+      touchFeedCache('calendar-feed', validators, missing);
     }).not.toThrow();
   });
 });
