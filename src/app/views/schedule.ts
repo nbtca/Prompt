@@ -42,7 +42,7 @@ import {
   loadTimetableCache,
   clearScheduleCache,
 } from '../../features/schedule-store.js';
-import { loadCalendarOrThrow } from '../../features/calendar.js';
+import { loadSchoolCalendar } from '../../features/calendar.js';
 import {
   currentAcademicWindow,
   inferWeekOneMonday,
@@ -175,7 +175,7 @@ async function goToPublic(ctx: AppContext, generation = lifecycleGeneration): Pr
   state = { mode: 'public', publicField: buildPublicField() };
   ctx.rerender();
   try {
-    const cal = await loadCalendarOrThrow(ctx.signal);
+    const cal = await loadSchoolCalendar(ctx.signal);
     if (!isLifecycleActive(ctx, generation)) return;
     const now = new Date();
     const windowEvents = cal.inRange(addLocalDays(now, -400), addLocalDays(now, 400));
@@ -190,7 +190,7 @@ async function goToPublic(ctx: AppContext, generation = lifecycleGeneration): Pr
 
 async function tryInferWeekOne(ctx: AppContext, generation: number): Promise<string | null> {
   try {
-    const cal = await loadCalendarOrThrow(ctx.signal);
+    const cal = await loadSchoolCalendar(ctx.signal);
     if (!isLifecycleActive(ctx, generation)) return null;
     const now = new Date();
     const events = cal.inRange(addLocalDays(now, -400), addLocalDays(now, 400));

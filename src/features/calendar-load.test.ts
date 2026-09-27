@@ -81,7 +81,7 @@ describe('loadCalendarOrThrow', () => {
 
     expect(uids(await loadCalendarOrThrow())).toEqual(['fresh']);
     expect(sentValidators()).toEqual({});
-    expect(saveFeedCache).toHaveBeenCalledWith(result);
+    expect(saveFeedCache).toHaveBeenCalledWith('calendar-feed', result);
   });
 
   it('reuses the peeked calendar on 304 without parsing it again', async () => {
@@ -97,7 +97,7 @@ describe('loadCalendarOrThrow', () => {
     expect(sentValidators()).toEqual({ etag: '"v1"' });
     expect(parseCalendar).toHaveBeenCalledTimes(1);
     expect(saveFeedCache).not.toHaveBeenCalled();
-    expect(touchFeedCache).toHaveBeenCalledWith({ etag: '"v1"' });
+    expect(touchFeedCache).toHaveBeenCalledWith('calendar-feed', { etag: '"v1"' });
 
     await loadCalendarOrThrow();
     expect(fetchFeedConditional).toHaveBeenCalledTimes(1);
@@ -133,7 +133,7 @@ describe('loadCalendarOrThrow', () => {
     const calendar = await loadCalendarOrThrow();
     expect(uids(calendar)).toEqual(['changed']);
     expect(peekCalendar()).toBe(calendar);
-    expect(saveFeedCache).toHaveBeenCalledWith(result);
+    expect(saveFeedCache).toHaveBeenCalledWith('calendar-feed', result);
     expect(touchFeedCache).not.toHaveBeenCalled();
   });
 
@@ -155,5 +155,31 @@ describe('loadCalendarOrThrow', () => {
     loadFeedCache.mockReturnValue(null);
     fetchFeedConditional.mockResolvedValue({ status: 'not-modified', validators: {} });
     await expect(loadCalendarOrThrow()).rejects.toThrow('HTTP 304');
+  });
+});
+
+describe('loadSchoolCalendar', () => {
+  it('fetches the school feed into its own cache', async () => {
+    const { loadSchoolCalendar, loadCalendarOrThrow } = await freshCalendar();
+    loadFeedCache.mockReturnValue(null);
+    const school = { status: 'modified', text: feed('school'), validators: {} };
+    fetchFeedConditional.mockResolvedValueOnce(school);
+    expect(uids(await loadSchoolCalendar())).toEqual(['school']);
+    expect(fetchFeedConditional.mock.calls[0]?.[0]).toBe('https://ical.nbtca.space/school.ics');
+    expect(saveFeedCache).toHaveBeenCalledWith('school-feed', school);
+    fetchFeedConditional.mockResolvedValueOnce({
+      status: 'modified',
+      text: feed('club'),
+      validators: {},
+    });
+    expect(uids(await loadCalendarOrThrow())).toEqual(['club']);
+  });
+
+  it('falls back to the cached school feed when the network fails', async () => {
+    const { loadSchoolCalendar } = await freshCalendar();
+    fetchFeedConditional.mockRejectedValue(new Error('offline'));
+    loadFeedCache.mockReturnValue(cached);
+    expect(uids(await loadSchoolCalendar())).toEqual(['cached']);
+    expect(loadFeedCache).toHaveBeenCalledWith('school-feed');
   });
 });

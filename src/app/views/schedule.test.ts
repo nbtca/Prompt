@@ -91,7 +91,7 @@ vi.mock('../../features/calendar.js', async (importOriginal) => {
   const actual = await importOriginal<typeof CalendarModule>();
   return {
     ...actual,
-    loadCalendarOrThrow: vi.fn().mockResolvedValue({
+    loadSchoolCalendar: vi.fn().mockResolvedValue({
       upcoming: calendarUpcoming,
       past: vi.fn().mockReturnValue([]),
       next: vi.fn().mockReturnValue([]),

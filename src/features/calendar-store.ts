@@ -3,8 +3,6 @@ import path from 'path';
 import type { FeedValidators } from '@nbtca/nbtcal';
 import { getStateDir, getWritableStateDir } from '../config/paths.js';
 
-const FEED_FILE = 'calendar-feed.ics';
-const VALIDATORS_FILE = 'calendar-feed.json';
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const HEADER_VALUE = /^[\x21-\x7e][\x20-\x7e]*$/;
 
@@ -17,9 +15,9 @@ function headerValue(value: unknown): string | undefined {
   return typeof value === 'string' && HEADER_VALUE.test(value) ? value : undefined;
 }
 
-function readValidators(dir: string): FeedValidators {
+function readValidators(name: string, dir: string): FeedValidators {
   try {
-    const data = JSON.parse(fs.readFileSync(path.join(dir, VALIDATORS_FILE), 'utf8')) as Record<
+    const data = JSON.parse(fs.readFileSync(path.join(dir, `${name}.json`), 'utf8')) as Record<
       string,
       unknown
     >;
@@ -32,22 +30,22 @@ function readValidators(dir: string): FeedValidators {
 }
 
 // Validators are written after the text and read before it, so they can never be newer than the text.
-export function saveFeedCache({ text, validators }: FeedCache, dir?: string): void {
+export function saveFeedCache(name: string, { text, validators }: FeedCache, dir?: string): void {
   try {
     const target = dir ?? getWritableStateDir();
-    fs.writeFileSync(path.join(target, FEED_FILE), text, { encoding: 'utf8', mode: 0o600 });
-    touchFeedCache(validators, target);
+    fs.writeFileSync(path.join(target, `${name}.ics`), text, { encoding: 'utf8', mode: 0o600 });
+    touchFeedCache(name, validators, target);
   } catch {
     /* best effort */
   }
 }
 
-export function touchFeedCache(validators: FeedValidators, dir?: string): void {
+export function touchFeedCache(name: string, validators: FeedValidators, dir?: string): void {
   try {
     const target = dir ?? getWritableStateDir();
     const now = new Date();
-    fs.utimesSync(path.join(target, FEED_FILE), now, now);
-    fs.writeFileSync(path.join(target, VALIDATORS_FILE), JSON.stringify(validators), {
+    fs.utimesSync(path.join(target, `${name}.ics`), now, now);
+    fs.writeFileSync(path.join(target, `${name}.json`), JSON.stringify(validators), {
       encoding: 'utf8',
       mode: 0o600,
     });
@@ -56,11 +54,11 @@ export function touchFeedCache(validators: FeedValidators, dir?: string): void {
   }
 }
 
-export function loadFeedCache(dir?: string, maxAgeMs = MAX_AGE_MS): FeedCache | null {
+export function loadFeedCache(name: string, dir?: string, maxAgeMs = MAX_AGE_MS): FeedCache | null {
   try {
     const source = dir ?? getStateDir();
-    const validators = readValidators(source);
-    const file = path.join(source, FEED_FILE);
+    const validators = readValidators(name, source);
+    const file = path.join(source, `${name}.ics`);
     if (Date.now() - fs.statSync(file).mtimeMs > maxAgeMs) return null;
     return { text: fs.readFileSync(file, 'utf8'), validators };
   } catch {
