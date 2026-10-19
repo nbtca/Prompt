@@ -1,3 +1,4 @@
+import { StudentRecordsError } from '@nbtca/nbtcal/academic';
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -22,8 +23,9 @@ import { clearScheduleCache, termKey } from './schedule-store.js';
 import { sanitizeTerminalLine } from '../core/text.js';
 import { fmt, t } from '../i18n/index.js';
 import { sanitizeAcademicTerm, sanitizeTimetable } from './timetable-sanitize.js';
+import { JWXT_ORIGIN } from '../config/campus.js';
 
-export const JWXT_ORIGIN = 'https://jwxt-443.webvpn.nbt.edu.cn';
+export { JWXT_ORIGIN };
 
 type StudentTimetableSubcommand = 'login' | 'logout' | 'status' | 'terms' | 'export';
 
@@ -58,7 +60,7 @@ export function relevantTerms(catalog: readonly AcademicTerm[]): AcademicTerm[] 
   });
 }
 
-function displaySemesterLabel(term: AcademicTerm): string {
+export function displaySemesterLabel(term: AcademicTerm): string {
   const aliases: Readonly<Record<string, string>> = { '3': '1', '12': '2', '16': '3' };
   const aliased = aliases[term.semester];
   if (aliased) return fmt(t().timetable.semesterNumber, { number: aliased });
@@ -103,7 +105,8 @@ class IcsWriteError extends Error {
 export function isSessionExpired(error: unknown): boolean {
   return (
     (error instanceof AuthError && error.code === 'SESSION_EXPIRED') ||
-    (error instanceof TimetableError && error.code === 'SESSION_EXPIRED')
+    (error instanceof TimetableError && error.code === 'SESSION_EXPIRED') ||
+    (error instanceof StudentRecordsError && error.code === 'SESSION_EXPIRED')
   );
 }
 
@@ -148,6 +151,22 @@ export function safeMessage(error: unknown): string {
         return trans.genericError;
     }
   }
+  if (error instanceof StudentRecordsError) {
+    switch (error.code) {
+      case 'SESSION_EXPIRED':
+        return trans.sessionExpired;
+      case 'HTTP_ERROR':
+        return trans.httpError;
+      case 'NETWORK_ERROR':
+        return trans.network;
+      case 'INVALID_RECORDS':
+        return trans.unexpectedResponse;
+      case 'TERM_MISMATCH':
+        return trans.termMismatch;
+      case 'UNPUBLISHED_EXAM_TIME':
+        return t().records.exportNeedsTime;
+    }
+  }
   if (error instanceof TimetableError) {
     switch (error.code) {
       case 'MISSING_CALENDAR_DATES':
@@ -184,7 +203,7 @@ export function safeMessage(error: unknown): string {
   return trans.genericError;
 }
 
-class PromptCancelledError extends Error {}
+export class PromptCancelledError extends Error {}
 
 function answered(value: string | null): string {
   if (value === null) throw new PromptCancelledError();

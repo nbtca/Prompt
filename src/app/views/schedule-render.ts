@@ -41,6 +41,7 @@ import { offlineNotice } from '../chrome.js';
 export type ScheduleMode =
   | 'loading'
   | 'public'
+  | 'records'
   | 'needsLoginId'
   | 'needsLoginPassword'
   | 'authenticating'
@@ -113,6 +114,8 @@ export function hubShortcuts(tt: Timetable): HubShortcut[] {
     { key: 't', label: trans.timetable.hubTermDensity },
     { key: 's', label: trans.timetable.hubSwitchTerm },
     { key: 'e', label: trans.timetable.hubExport },
+    { key: 'a', label: trans.records.exams },
+    { key: 'g', label: trans.records.grades },
   ];
   if (tt.unresolvedItems.length > 0) {
     shortcuts.push({
@@ -512,6 +515,8 @@ export function renderSchedule(
       return loadingLines(trans.common.loading, cols);
     case 'public':
       return renderPublicBody(state, now, bodyRows, cols);
+    case 'records':
+      return [];
     case 'needsLoginId':
       return [
         ...(state.errorMessage ? [...hintLines(state.errorMessage, cols), ''] : []),

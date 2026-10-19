@@ -212,6 +212,25 @@
     "watchJsonConflict": "--watch cannot be used with --json.",
     "intervalNeedsWatch": "--interval requires --watch."
   },
+  "records": {
+    "exams": "Exam schedule",
+    "grades": "Grades",
+    "noExams": "No exam arrangements have been published for this term.",
+    "noGrades": "No grades have been published for this term.",
+    "timeUnavailable": "Time not published",
+    "notPublished": "Not published",
+    "seat": "Seat: {value}",
+    "gradeValue": "Grade: {value}",
+    "credits": "Credits: {value}",
+    "gradePoint": "Grade points: {value}",
+    "voided": "The school has marked this grade as void.",
+    "memoryOnly": "Exam and grade query results are not cached.",
+    "refresh": "Refresh",
+    "switchTerm": "Switch term",
+    "exportNeedsTime": "Some exam times are unpublished. A complete exam calendar cannot be exported yet.",
+    "invalidExportOptions": "Use a nonempty --output path for exams without --json.",
+    "exported": "Exported the exam calendar to {file}."
+  },
   "timetable": {
     "menuTitle": "My Timetable",
     "actionExport": "Export ICS",

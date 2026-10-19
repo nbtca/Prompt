@@ -1,5 +1,6 @@
 import { createCookieJar, type CookieJar, type SerializedCookieJar } from './cookie-jar.js';
 import { AuthError, SessionExpiredError, type AuthStage } from './errors.js';
+import { JWXT_ORIGIN, STUDENT_RECORD_ROUTES } from '../config/campus.js';
 
 const MAX_REDIRECTS = 8;
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
@@ -13,7 +14,7 @@ const BODY_HEADERS = [
 
 const WEBVPN_HOST = 'webvpn.nbt.edu.cn';
 const AUTH_HOST = 'authserver-443.webvpn.nbt.edu.cn';
-export const JWXT_HOST = 'jwxt-443.webvpn.nbt.edu.cn';
+export const JWXT_HOST = new URL(JWXT_ORIGIN).hostname;
 
 const WEBVPN_PATHS = new Set([
   '/',
@@ -35,6 +36,7 @@ const JWXT_EXACT_PATHS = new Set([
   '/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html',
   '/jwglxt/kbcx/xskbcx_cxXsgrkb.html',
   '/jwglxt/kbcx/xskbcx_cxRjc.html',
+  ...Object.values(STUDENT_RECORD_ROUTES).flatMap((route) => [route.index, route.query]),
 ]);
 
 function isAllowedJwxtPath(pathname: string): boolean {
@@ -134,7 +136,18 @@ export function assertAllowedCampusUrl(url: URL): void {
     if (service) assertAllowedCasService(service);
     return;
   }
-  if (hostname === JWXT_HOST && isAllowedJwxtPath(url.pathname)) return;
+  if (hostname === JWXT_HOST && isAllowedJwxtPath(url.pathname)) {
+    const academicRoute = Object.values(STUDENT_RECORD_ROUTES).some(
+      (route) => route.index === url.pathname || route.query === url.pathname,
+    );
+    if (academicRoute && url.searchParams.getAll('doType').some((action) => action !== 'query'))
+      throw new AuthError(
+        'UNTRUSTED_URL',
+        'session',
+        'Only academic query operations are allowed.',
+      );
+    return;
+  }
   if (hostname === AUTH_HOST && url.pathname === PROFILE_GATE_PATH) {
     throw new AuthError(
       'PROFILE_INCOMPLETE',

@@ -22,6 +22,26 @@ function expectAuthError(run: () => unknown, code: AuthErrorCode): void {
 }
 
 describe('campus URL policy', () => {
+  it('allows academic queries but rejects mutation actions and unrelated endpoints', () => {
+    for (const path of [
+      '/jwglxt/kwgl/kscx_cxXsksxxIndex.html?doType=query&gnmkdm=N358105',
+      '/jwglxt/cjcx/cjcx_cxXsgrcj.html?doType=query&gnmkdm=N305005',
+      '/jwglxt/cjcx/cjcx_cxDgXscj.html?gnmkdm=N305005',
+    ])
+      expect(() => {
+        assertAllowedCampusUrl(new URL(path, 'https://jwxt-443.webvpn.nbt.edu.cn'));
+      }).not.toThrow();
+    for (const path of [
+      '/jwglxt/kwgl/kscx_cxXsksxxIndex.html?doType=save',
+      '/jwglxt/cjcx/cjcx_cxXsgrcj.html?doType=delete',
+      '/jwglxt/cjcx/cjcx_cxXsgrcj.html?doType=query&doType=delete',
+      '/jwglxt/cjcx/cjcx_bcXscj.html',
+    ])
+      expectAuthError(() => {
+        assertAllowedCampusUrl(new URL(path, 'https://jwxt-443.webvpn.nbt.edu.cn'));
+      }, 'UNTRUSTED_URL');
+  });
+
   it('allows only exact HTTPS campus hosts and routes', () => {
     expect(() => {
       assertAllowedCampusUrl(
