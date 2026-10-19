@@ -27,6 +27,7 @@ import { clearScreen, handleGracefulExit } from './core/ui.js';
 import { APP_INFO, URLS } from './config/data.js';
 import { runUpdateCheck } from './features/update.js';
 import { runStudentTimetableCommand } from './features/student-timetable.js';
+import { runStudentRecordsCommand } from './features/student-records.js';
 import { showAbout } from './features/about.js';
 import { openUrlInBrowser } from './features/links.js';
 
@@ -151,6 +152,12 @@ function getAllowedFlagsFor(command?: string): Set<string> {
 
   if (command === 'lang' || command === 'language') return allowed;
   if (command === 'theme') return allowed;
+  if (command === 'exams' || command === 'grades') {
+    allowed.add('--json');
+    allowed.add('--one-shot');
+    allowed.add('--no-save');
+    return allowed;
+  }
   if (command === 'schedule' || command === 'timetable') {
     allowed.add('--one-shot');
     allowed.add('--no-save');
@@ -187,6 +194,8 @@ function getAllowedFlagsFor(command?: string): Set<string> {
 
 function getAllowedFlagPrefixesFor(command?: string): string[] {
   if (!command) return [];
+  if (command === 'exams') return ['--term=', '--output='];
+  if (command === 'grades') return ['--term='];
   if (command === 'schedule' || command === 'timetable') {
     return ['--term=', '--output=', '--week-one='];
   }
@@ -245,6 +254,8 @@ function printHelp(): void {
   console.log(`  status         ${trans.menu.statusDesc}`);
   console.log('  schedule <login|logout|status|terms|export>');
   console.log(`                 ${c.cmdSchedule}`);
+  console.log(`  exams          ${trans.records.exams}`);
+  console.log(`  grades         ${trans.records.grades}`);
   console.log(`  website        ${c.cmdWebsite}`);
   console.log(`  github         ${c.cmdGithub}`);
   console.log(`  roadmap        ${c.cmdRoadmap}`);
@@ -521,6 +532,12 @@ async function runCommandMode(argv: string[]): Promise<void> {
   }
 
   validateFlags(command, flags);
+
+  if (command === 'exams' || command === 'grades') {
+    rejectUnexpectedArguments(command, args);
+    process.exitCode = await runStudentRecordsCommand(command, { flags });
+    return;
+  }
 
   if (!command) {
     if (!hasInteractiveTerminal()) {

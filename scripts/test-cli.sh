@@ -185,6 +185,16 @@ if [[ "$intranet_output" != *"Public services are healthy; intranet availability
   echo "intranet-only failure returned the wrong summary" >&2
   exit 1
 fi
+for records_command in exams grades; do
+  assert_fails_with "$records_command-no-session" 'No usable login session' node dist/index.js "$records_command" --json
+  assert_fails_with "$records_command-extra" 'Unexpected arguments' node dist/index.js "$records_command" extra
+  assert_fails_with "$records_command-flag" 'Unknown flag' node dist/index.js "$records_command" --export
+  assert_fails_with "$records_command-empty-term" 'Unknown term' node dist/index.js "$records_command" --term=
+done
+
+assert_fails_with exams-export-json 'Use a nonempty --output path' node dist/index.js exams --output=exams.ics --json
+assert_fails_with grades-export 'not valid for this command' node dist/index.js grades --output=grades.ics
+
 assert_fails_with non-tty 'Interactive mode requires a TTY terminal' node dist/index.js
 
 echo "CLI contract tests passed."

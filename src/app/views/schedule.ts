@@ -51,12 +51,16 @@ import {
 } from '@nbtca/nbtcal';
 import { sanitizeAcademicTerm, sanitizeTimetable } from '../../features/timetable-sanitize.js';
 import { addLocalDays, parseLocalMonday } from '../../core/calendar-day.js';
+import { StudentRecordsPanel } from './student-records.js';
+import type { StudentRecordsKind } from '../../features/student-records-client.js';
 
 let state: ScheduleViewState = { mode: 'loading' };
 let session: AuthenticatedNbtSession | null = null;
 let client: NbtTimetableClient | null = null;
 let catalog: AcademicTerm[] = [];
 let pendingId = '';
+let pendingRecordsKind: StudentRecordsKind | null = null;
+let recordsPanel: StudentRecordsPanel | null = null;
 let lifecycleGeneration = 0;
 const closingSessions = new WeakMap<AuthenticatedNbtSession, Promise<void>>();
 
@@ -109,6 +113,7 @@ async function releaseSession(target: AuthenticatedNbtSession | null = session):
   if (session === target) {
     session = null;
     client = null;
+    catalog = [];
   }
   await closeSession(target);
 }
@@ -165,7 +170,11 @@ function goToLoginId(errorMessage?: string): void {
 
 function buildPublicField(): ListField {
   return new ListField({
-    options: [{ value: 'login', label: t().timetable.publicLoginAction }],
+    options: [
+      { value: 'login', label: t().timetable.publicLoginAction },
+      { value: 'exams', label: t().records.exams },
+      { value: 'grades', label: t().records.grades },
+    ],
   });
 }
 
@@ -223,6 +232,12 @@ async function afterAuthenticated(
     ).map(sanitizeAcademicTerm);
     if (!isLifecycleActive(ctx, generation)) return;
     catalog = nextCatalog;
+    if (pendingRecordsKind) {
+      const kind = pendingRecordsKind;
+      pendingRecordsKind = null;
+      await openStudentRecords(ctx, kind, generation);
+      return;
+    }
     const term = resolveTerm(catalog);
     const key = termKey(term);
     let weekOne = loadWeekOne(key);
@@ -327,12 +342,100 @@ async function refreshFromNetwork(ctx: AppContext, generation: number): Promise<
   }
 }
 
+async function openStudentRecords(
+  ctx: AppContext,
+  kind: StudentRecordsKind,
+  generation = ++lifecycleGeneration,
+): Promise<void> {
+  if (!isLifecycleActive(ctx, generation)) return;
+  recordsPanel?.dispose();
+  recordsPanel = null;
+  pendingRecordsKind = kind;
+  try {
+    if (!session) {
+      const saved = createSessionStore().load();
+      if (!saved) {
+        goToLoginId();
+        ctx.rerender();
+        return;
+      }
+      state = { ...state, mode: 'loading' };
+      ctx.rerender();
+      const restored = await restoreNbtSession(saved);
+      await afterAuthenticated(ctx, restored, generation);
+      return;
+    }
+    if (catalog.length === 0) {
+      state = { ...state, mode: 'loading' };
+      ctx.rerender();
+      const nextCatalog = (
+        await createNbtTimetableClient(session.timetableTransport, {
+          baseUrl: JWXT_ORIGIN,
+        }).listTerms(ctx.signal === undefined ? {} : { signal: ctx.signal })
+      ).map(sanitizeAcademicTerm);
+      if (!isLifecycleActive(ctx, generation)) return;
+      catalog = nextCatalog;
+    }
+    const previousTerm = state.term ?? state.timetable?.term;
+    const selected =
+      catalog.find(
+        (term) =>
+          term.academicYear === previousTerm?.academicYear &&
+          term.semester === previousTerm.semester,
+      ) ?? resolveTerm(catalog);
+    pendingRecordsKind = null;
+    const panel: StudentRecordsPanel = new StudentRecordsPanel(
+      kind,
+      selected,
+      relevantTerms(catalog),
+      session.timetableTransport,
+      () => isLifecycleActive(ctx, generation) && recordsPanel === panel,
+      () => {
+        pendingRecordsKind = kind;
+        createSessionStore().clear();
+        recordsPanel?.dispose();
+        recordsPanel = null;
+        void releaseSession();
+        goToLoginId(t().timetable.expiredRelogin);
+        ctx.rerender();
+      },
+    );
+    recordsPanel = panel;
+    state = { ...state, mode: 'records' };
+    await panel.load(ctx);
+  } catch (error) {
+    if (!isLifecycleActive(ctx, generation)) return;
+    if (isSessionExpired(error)) {
+      createSessionStore().clear();
+      await releaseSession();
+      goToLoginId(t().timetable.expiredRelogin);
+    } else {
+      state = { ...state, mode: 'error', errorMessage: safeMessage(error) };
+    }
+    ctx.rerender();
+  }
+}
+
+function logout(ctx: AppContext): void {
+  const generation = ++lifecycleGeneration;
+  pendingRecordsKind = null;
+  recordsPanel?.dispose();
+  recordsPanel = null;
+  createSessionStore().clear();
+  clearScheduleCache();
+  void releaseSession();
+  void goToPublic(ctx, generation);
+}
+
 export const scheduleView = {
   id: 'schedule',
   title: t().timetable.menuEntry,
 
   async load(ctx: AppContext): Promise<void> {
     const generation = ++lifecycleGeneration;
+    pendingRecordsKind = null;
+    recordsPanel?.dispose();
+    recordsPanel = null;
     if (!isLifecycleActive(ctx, generation)) return;
     const ptr = loadCurrentPointer();
     const cached = readCachedTimetable(ptr ? loadTimetableCache(ptr.termKey) : null);
@@ -354,20 +457,30 @@ export const scheduleView = {
 
   async dispose(): Promise<void> {
     lifecycleGeneration += 1;
+    pendingRecordsKind = null;
+    recordsPanel?.dispose();
+    recordsPanel = null;
     setVimKeysActive(true);
     await releaseSession();
   },
 
   render(ctx: AppContext): string[] {
+    if (state.mode === 'records' && recordsPanel) return recordsPanel.render(ctx);
     state.termField?.setMaxVisible(computeMaxVisible(ctx.bodyRows));
     return renderSchedule(state, new Date(), ctx.bodyRows, ctx.size.cols);
   },
 
   isBusy(): boolean {
+    if (state.mode === 'records') return recordsPanel?.isBusy() ?? false;
     return state.mode === 'loading';
   },
 
+  scrollsBody(): boolean {
+    return state.mode === 'records' && !recordsPanel?.capturesPageKeys();
+  },
+
   shortcuts(): readonly { key: string; label: string }[] {
+    if (state.mode === 'records') return recordsPanel?.shortcuts() ?? [];
     if ((state.mode !== 'hub' && state.mode !== 'week') || !state.timetable) return [];
     const trans = t();
     const keys = gridKeys();
@@ -389,10 +502,12 @@ export const scheduleView = {
   },
 
   capturesPageKeys(): boolean {
+    if (state.mode === 'records') return recordsPanel?.capturesPageKeys() ?? false;
     return state.mode === 'public' || state.mode === 'termPicker';
   },
 
   footerHint(tabCount: number, cols = Number.POSITIVE_INFINITY): string | undefined {
+    if (state.mode === 'records') return passiveFooterHint(tabCount, cols);
     const capturing =
       state.mode === 'needsLoginId' ||
       state.mode === 'needsLoginPassword' ||
@@ -412,11 +527,23 @@ export const scheduleView = {
   },
 
   handleBack(ctx: AppContext): boolean {
+    if (state.mode === 'records') {
+      if (recordsPanel?.handleBack()) return true;
+      recordsPanel?.dispose();
+      recordsPanel = null;
+      if (!returnToHub()) void goToPublic(ctx);
+      return true;
+    }
     if (state.mode === 'needsLoginId') {
+      pendingRecordsKind = null;
       void goToPublic(ctx);
       return true;
     }
-    if (state.mode === 'needsLoginPassword' || state.mode === 'needsWeekOne') {
+    if (state.mode === 'needsWeekOne') {
+      void goToPublic(ctx);
+      return true;
+    }
+    if (state.mode === 'needsLoginPassword') {
       goToLoginId();
       return true;
     }
@@ -442,9 +569,19 @@ export const scheduleView = {
     switch (state.mode) {
       case 'public': {
         const result = state.publicField?.handleKey(key);
-        if (result?.selected === 'login') goToLoginId();
+        if (result?.selected === 'exams' || result?.selected === 'grades') {
+          void openStudentRecords(ctx, result.selected);
+        } else if (result?.selected === 'login') {
+          pendingRecordsKind = null;
+          if (session) void afterAuthenticated(ctx, session, lifecycleGeneration);
+          else goToLoginId();
+        }
         return;
       }
+      case 'records':
+        if (key === 'x' && !recordsPanel?.capturesPageKeys()) logout(ctx);
+        else recordsPanel?.handleKey(key, ctx);
+        return;
       case 'needsLoginId': {
         const result = state.idField?.handleKey(key);
         if (result?.cancelled) {
@@ -510,7 +647,7 @@ export const scheduleView = {
       case 'needsWeekOne': {
         const result = state.weekOneField?.handleKey(key);
         if (result?.cancelled) {
-          goToLoginId();
+          void goToPublic(ctx);
           return;
         }
         if (result?.submitted !== undefined) {
@@ -561,6 +698,10 @@ export const scheduleView = {
 
         const shortcut = hubShortcuts(tt).find((sc) => sc.key === key);
         if (!shortcut) return;
+        if (shortcut.key === 'a' || shortcut.key === 'g') {
+          void openStudentRecords(ctx, shortcut.key === 'a' ? 'exams' : 'grades');
+          return;
+        }
         if (shortcut.key === 'w') {
           state = { ...state, mode: 'week' };
           return;
@@ -617,13 +758,7 @@ export const scheduleView = {
           }
           return;
         }
-        if (shortcut.key === 'x') {
-          const generation = ++lifecycleGeneration;
-          createSessionStore().clear();
-          clearScheduleCache();
-          void releaseSession();
-          void goToPublic(ctx, generation);
-        }
+        if (shortcut.key === 'x') logout(ctx);
         return;
       }
       case 'week': {

@@ -212,6 +212,25 @@
     "watchJsonConflict": "--watch 不能和 --json 同时使用。",
     "intervalNeedsWatch": "--interval 需要配合 --watch 使用。"
   },
+  "records": {
+    "exams": "个人考试安排",
+    "grades": "成绩查询",
+    "noExams": "这个学期尚无已公布的个人考试安排。",
+    "noGrades": "这个学期尚无已公布的成绩。",
+    "timeUnavailable": "考试时间尚未公布",
+    "notPublished": "尚未公布",
+    "seat": "座位号：{value}",
+    "gradeValue": "成绩：{value}",
+    "credits": "学分：{value}",
+    "gradePoint": "绩点：{value}",
+    "voided": "教务系统已将这条成绩标记为作废。",
+    "memoryOnly": "考试和成绩查询结果不会写入本地缓存。",
+    "refresh": "刷新查询",
+    "switchTerm": "切换学期",
+    "exportNeedsTime": "部分考试尚未公布时间，暂时无法导出完整的考试日历。",
+    "invalidExportOptions": "请使用非空的 --output 路径导出考试日历，并且不要同时使用 --json。",
+    "exported": "考试日历已导出至 {file}。"
+  },
   "timetable": {
     "menuTitle": "我的课表",
     "actionExport": "导出 ICS",

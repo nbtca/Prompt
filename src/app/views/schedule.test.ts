@@ -840,3 +840,183 @@ describe('scheduleView lifecycle', () => {
     expect(rerender).toHaveBeenCalledTimes(rendersBeforeAbort);
   });
 });
+
+describe('scheduleView student records', () => {
+  const term: AcademicTerm = {
+    academicYear: '2026',
+    semester: '3',
+    academicYearLabel: '2026-2027',
+    semesterLabel: '1',
+    current: true,
+  };
+  const recordsTransport = vi.fn();
+
+  beforeEach(async () => {
+    await scheduleView.dispose();
+    vi.mocked(loadCurrentPointer).mockReturnValue(null);
+    vi.mocked(loadTimetableCache).mockReturnValue(null);
+    sessionStoreLoad.mockReturnValue(null);
+    loadWeekOneMock.mockReturnValue(null);
+    listTerms.mockResolvedValue([term]);
+    recordsTransport.mockReset().mockImplementation(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            items: [
+              {
+                xnm: '2026',
+                xqm: '3',
+                kcmc: 'Synthetic Algorithms',
+                kssj: '未放开不可查',
+                cj: '良好',
+              },
+            ],
+            currentPage: 1,
+            totalPage: 1,
+            totalResult: 1,
+          }),
+        ),
+      ),
+    );
+    loginWithStudentPasswordMock.mockImplementation(() =>
+      Promise.resolve({
+        timetableTransport: recordsTransport,
+        snapshot: vi.fn().mockResolvedValue({}),
+        close: sessionClose,
+      }),
+    );
+  });
+
+  afterEach(async () => {
+    await scheduleView.dispose();
+  });
+
+  function login(ctx: AppContext) {
+    scheduleView.handleKey('SYNTHETIC-ID', ctx);
+    scheduleView.handleKey('\r', ctx);
+    scheduleView.handleKey('synthetic-password', ctx);
+    scheduleView.handleKey('\r', ctx);
+  }
+
+  it.each(['exams', 'grades'] as const)(
+    'opens %s after login without fetching a timetable or asking for a first-week date',
+    async (kind) => {
+      const ctx = fakeCtx();
+      await scheduleView.load(ctx);
+      scheduleView.handleKey('\x1b[B', ctx);
+      if (kind === 'grades') scheduleView.handleKey('\x1b[B', ctx);
+      scheduleView.handleKey('\r', ctx);
+      expect(scheduleView.capturesInput()).toBe(true);
+      login(ctx);
+      await vi.waitFor(() => {
+        expect(recordsTransport).toHaveBeenCalledOnce();
+        expect(scheduleView.isBusy()).toBe(false);
+      });
+      expect(fetchTerm).not.toHaveBeenCalled();
+      expect(saveWeekOneMock).not.toHaveBeenCalled();
+      const rendered = stripAnsi(scheduleView.render(ctx).join('\n'));
+      expect(rendered).toContain('Synthetic Algorithms');
+      expect(rendered).toContain(t().records[kind]);
+      expect(rendered).not.toContain(t().timetable.weekOneAutoFailed);
+      expect(scheduleView.scrollsBody()).toBe(true);
+      expect(scheduleView.handleBack(ctx)).toBe(true);
+      expect(scheduleView.render(ctx).join('\n')).not.toContain('Synthetic Algorithms');
+    },
+  );
+
+  it('returns from the first-week prompt to records without asking for another login', async () => {
+    sessionStoreLoad.mockReturnValue({ jar: { cookies: [] } });
+    restoreNbtSessionMock.mockResolvedValue({
+      timetableTransport: recordsTransport,
+      snapshot: vi.fn(),
+      close: sessionClose,
+    });
+    const ctx = fakeCtx();
+    await scheduleView.load(ctx);
+    expect(stripAnsi(scheduleView.render(ctx).join('')).replace(/\s/g, '')).toContain(
+      t().timetable.weekOneAutoFailed.replace(/\s/g, ''),
+    );
+    expect(scheduleView.handleBack(ctx)).toBe(true);
+    expect(scheduleView.capturesInput()).toBe(false);
+    expect(scheduleView.render(ctx).join('\n')).toContain(t().timetable.publicLoginAction);
+    scheduleView.handleKey('\x1b[B', ctx);
+    scheduleView.handleKey('\r', ctx);
+    await vi.waitFor(() => {
+      expect(recordsTransport).toHaveBeenCalledOnce();
+      expect(scheduleView.isBusy()).toBe(false);
+    });
+    expect(loginWithStudentPasswordMock).not.toHaveBeenCalled();
+    expect(fetchTerm).not.toHaveBeenCalled();
+  });
+
+  it('keeps records open when a cached timetable refresh finishes later', async () => {
+    vi.mocked(loadCurrentPointer).mockReturnValue({
+      termKey: '2026-3',
+      weekOneMonday: '2026-09-07',
+    });
+    vi.mocked(loadTimetableCache).mockReturnValue({
+      term,
+      meetings: [],
+      periods: [],
+      calendarDays: [],
+      warnings: [],
+      unresolvedItems: [],
+      fetchedAt: new Date(),
+    });
+    sessionStoreLoad.mockReturnValue({ jar: { cookies: [] } });
+    restoreNbtSessionMock.mockResolvedValue({
+      timetableTransport: recordsTransport,
+      snapshot: vi.fn(),
+      close: sessionClose,
+    });
+    let finishRefresh: (terms: AcademicTerm[]) => void = () => undefined;
+    listTerms.mockImplementationOnce(
+      () =>
+        new Promise<AcademicTerm[]>((resolve) => {
+          finishRefresh = resolve;
+        }),
+    );
+    const ctx = fakeCtx();
+    const loading = scheduleView.load(ctx);
+    await vi.waitFor(() => {
+      expect(listTerms).toHaveBeenCalledOnce();
+    });
+    scheduleView.handleKey('g', ctx);
+    await vi.waitFor(() => {
+      expect(recordsTransport).toHaveBeenCalledOnce();
+      expect(scheduleView.isBusy()).toBe(false);
+    });
+    finishRefresh([term]);
+    await loading;
+    expect(scheduleView.render(ctx).join('\n')).toContain('Synthetic Algorithms');
+    expect(fetchTerm).not.toHaveBeenCalled();
+    expect(saveTimetableCacheMock).not.toHaveBeenCalled();
+  });
+
+  it('returns to login after expiry and resumes the selected query', async () => {
+    recordsTransport.mockResolvedValueOnce(new Response(null, { status: 401 }));
+    const ctx = fakeCtx();
+    await scheduleView.load(ctx);
+    scheduleView.handleKey('\x1b[B', ctx);
+    scheduleView.handleKey('\r', ctx);
+    login(ctx);
+    await vi.waitFor(() => {
+      expect(sessionStoreClear).toHaveBeenCalled();
+      expect(scheduleView.capturesInput()).toBe(true);
+    });
+    expect(scheduleView.render(ctx).join('\n')).not.toContain('Synthetic Algorithms');
+    login(ctx);
+    await vi.waitFor(() => {
+      expect(recordsTransport).toHaveBeenCalledTimes(2);
+      expect(scheduleView.isBusy()).toBe(false);
+    });
+    expect(scheduleView.render(ctx).join('\n')).toContain('Synthetic Algorithms');
+    expect(fetchTerm).not.toHaveBeenCalled();
+    scheduleView.handleKey('x', ctx);
+    expect(scheduleView.render(ctx).join('\n')).not.toContain('Synthetic Algorithms');
+    expect(sessionStoreClear).toHaveBeenCalledTimes(2);
+    await vi.waitFor(() => {
+      expect(sessionClose).toHaveBeenCalledTimes(2);
+    });
+  });
+});

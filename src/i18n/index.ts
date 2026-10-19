@@ -223,6 +223,7 @@ export interface Translations {
     watchJsonConflict: string;
     intervalNeedsWatch: string;
   };
+  records: typeof englishTranslationSchema.records;
   timetable: {
     menuTitle: string;
     actionExport: string;
