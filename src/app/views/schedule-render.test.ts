@@ -3,7 +3,7 @@ import chalk from 'chalk';
 import { renderSchedule, hubShortcuts, type ScheduleViewState } from './schedule-render.js';
 import { ListField } from '../fields/list-field.js';
 import { TextField } from '../fields/text-field.js';
-import { setLanguage } from '../../i18n/index.js';
+import { setLanguage, t } from '../../i18n/index.js';
 import { resetIconCache } from '../../core/icons.js';
 import { campusDateTime } from '@nbtca/nbtcal/timetable';
 import { stripAnsi, visualWidth } from '../../core/text.js';
@@ -930,6 +930,21 @@ describe('hubShortcuts', () => {
 });
 
 describe('renderSchedule — public mode', () => {
+  it('marks a cached school calendar when its refresh fails', () => {
+    const out = stripAnsi(
+      renderSchedule(
+        {
+          mode: 'public',
+          publicStale: true,
+          publicWindow: { status: 'onBreak', breakTitle: '暑假' },
+        },
+        new Date(),
+      ).join('\n'),
+    );
+    expect(out).toContain(t().common.offline);
+    expect(out).toContain('暑假');
+  });
+
   it.each([
     ['en', 'Academic calendar not available yet', 'Log in to export your timetable (.ics)'],
     ['zh', '校历数据暂不可用', '登录后可导出课表 (.ics)'],

@@ -12,6 +12,7 @@ import { renderHeatmap } from './features/calendar-heatmap.js';
 import { currentEvents, dayRange, monthRange, weekRange } from './features/calendar-query.js';
 import {
   checkServices,
+  DEFAULT_STATUS_TIMEOUT_MS,
   countServiceHealth,
   hasServiceFailures,
   renderServiceStatusTable,
@@ -360,7 +361,7 @@ async function runStatusCommand(flags: Set<string>): Promise<boolean> {
     : 10;
   const timeoutMs = timeoutFlag
     ? parseAsciiDecimalInteger(timeoutFlag.slice('--timeout='.length))
-    : 6000;
+    : DEFAULT_STATUS_TIMEOUT_MS;
   const retries = retriesFlag
     ? parseAsciiDecimalInteger(retriesFlag.slice('--retries='.length))
     : 1;
@@ -441,7 +442,7 @@ async function runStatusCommand(flags: Set<string>): Promise<boolean> {
         console.log(chalk.bold(`${trans.status.watchUpdated}: ${new Date().toLocaleString()}`));
         console.log(
           chalk.dim(
-            `${trans.status.up}: ${health.up} | ${trans.status.down}: ${health.down} | ${trans.status.watchHint}`,
+            `${trans.status.up}: ${health.up} | ${trans.status.down}: ${health.down} | ${trans.status.timeout}: ${health.timedOut} | ${trans.status.watchHint}`,
           ),
         );
         console.log();

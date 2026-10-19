@@ -55,13 +55,12 @@ describe('calendar-store', () => {
     });
   });
 
-  it('refuses a feed older than the max age', () => {
+  it('retains old feeds and validators for offline use and revalidation', () => {
     withDir((dir) => {
-      saveFeedCache('calendar-feed', { text: 'stale', validators: {} }, dir);
-      const longAgo = new Date(Date.now() - 60 * 60 * 1000);
+      saveFeedCache('calendar-feed', { text: 'stale', validators }, dir);
+      const longAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
       utimesSync(join(dir, 'calendar-feed.ics'), longAgo, longAgo);
-      expect(loadFeedCache('calendar-feed', dir, 30 * 60 * 1000)).toBeNull();
-      expect(loadFeedCache('calendar-feed', dir, 2 * 60 * 60 * 1000)?.text).toBe('stale');
+      expect(loadFeedCache('calendar-feed', dir)).toEqual({ text: 'stale', validators });
     });
   });
 
@@ -71,7 +70,8 @@ describe('calendar-store', () => {
       const longAgo = new Date(Date.now() - 60 * 60 * 1000);
       utimesSync(join(dir, 'calendar-feed.ics'), longAgo, longAgo);
       touchFeedCache('calendar-feed', { etag: '"v2"' }, dir);
-      expect(loadFeedCache('calendar-feed', dir, 30 * 60 * 1000)).toEqual({
+      expect(statSync(join(dir, 'calendar-feed.ics')).mtimeMs).toBeGreaterThan(longAgo.getTime());
+      expect(loadFeedCache('calendar-feed', dir)).toEqual({
         text: 'same',
         validators: { etag: '"v2"' },
       });

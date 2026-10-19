@@ -7,6 +7,8 @@ import { t } from '../i18n/index.js';
 
 type ServiceGroup = 'nbtca' | 'external' | 'intranet';
 
+export const DEFAULT_STATUS_TIMEOUT_MS = 15_000;
+
 interface ServiceTarget {
   name: string;
   url: string;
@@ -21,6 +23,7 @@ export interface ServiceStatus {
   statusCode?: number;
   latencyMs?: number;
   error?: string;
+  timedOut?: boolean;
   group?: ServiceGroup;
   intranet?: boolean;
   pending?: boolean;
@@ -119,13 +122,14 @@ async function checkService(
 ): Promise<Omit<ServiceStatus, 'group' | 'intranet'>> {
   const start = Date.now();
   const controller = new AbortController();
+  const timeoutReason = Symbol('timeout');
   const onAbort = () => {
     controller.abort(signal?.reason);
   };
   signal?.addEventListener('abort', onAbort, { once: true });
   if (signal?.aborted) onAbort();
   const timeout = setTimeout(() => {
-    controller.abort();
+    controller.abort(timeoutReason);
   }, timeoutMs);
   let response: Response | undefined;
   try {
@@ -145,14 +149,11 @@ async function checkService(
   } catch (err: unknown) {
     if (signal?.aborted) throw abortError(signal);
     const latencyMs = Date.now() - start;
+    const timedOut = controller.signal.reason === timeoutReason;
     const error = sanitizeTerminalLine(
-      err instanceof Error
-        ? err.name === 'AbortError'
-          ? 'Request timed out'
-          : err.message
-        : String(err),
+      timedOut ? 'Request timed out' : err instanceof Error ? err.message : String(err),
     );
-    return { name, url, ok: false, latencyMs, error };
+    return { name, url, ok: false, latencyMs, error, ...(timedOut ? { timedOut } : {}) };
   } finally {
     clearTimeout(timeout);
     signal?.removeEventListener('abort', onAbort);
@@ -187,7 +188,7 @@ async function checkServiceWithRetry(
 }
 
 export async function checkServices(options: StatusCheckOptions = {}): Promise<ServiceStatus[]> {
-  const timeoutMs = options.timeoutMs ?? 6000;
+  const timeoutMs = options.timeoutMs ?? DEFAULT_STATUS_TIMEOUT_MS;
   const retries = options.retries ?? 1;
   if (options.signal?.aborted) throw abortError(options.signal);
   return Promise.all(
@@ -207,6 +208,7 @@ export function serializeServiceStatus(items: ServiceStatus[]) {
     statusCode: item.statusCode ?? null,
     latencyMs: item.latencyMs ?? null,
     error: item.error ?? null,
+    timedOut: item.timedOut ?? false,
     group: item.group ?? null,
     intranet: item.intranet ?? false,
   }));
@@ -216,14 +218,20 @@ export function hasServiceFailures(items: ServiceStatus[]): boolean {
   return items.some((item) => !item.ok && !item.intranet);
 }
 
-export function countServiceHealth(items: ServiceStatus[]): { up: number; down: number } {
+export function countServiceHealth(items: ServiceStatus[]): {
+  up: number;
+  down: number;
+  timedOut: number;
+} {
   let up = 0;
   let down = 0;
+  let timedOut = 0;
   for (const item of items.filter((i) => !i.intranet)) {
     if (item.ok) up++;
+    else if (item.timedOut) timedOut++;
     else down++;
   }
-  return { up, down };
+  return { up, down, timedOut };
 }
 
 export function renderServiceStatusTable(
@@ -235,6 +243,7 @@ export function renderServiceStatusTable(
   const applyDim = useColor ? chalk.dim : id;
   const applyGreen = useColor ? chalk.green : id;
   const applyRed = useColor ? chalk.red : id;
+  const applyYellow = useColor ? chalk.yellow : id;
   const applyCyan = useColor ? chalk.cyan : id;
   const applyLatency = useColor ? c.latency : (ms: number) => `${ms}ms`;
 
@@ -243,7 +252,7 @@ export function renderServiceStatusTable(
     ...items.map((i) => visualWidth(i.name)),
     visualWidth(trans.status.service),
   );
-  const statusWidth = 10;
+  const statusWidth = Math.max(10, visualWidth(trans.status.timeout) + 2);
 
   const onIcon = pickIcon('●', '+');
   const offIcon = pickIcon('✕', '!');
@@ -285,6 +294,8 @@ export function renderServiceStatusTable(
       statusLabel = applyDim(pickIcon('…', '.'));
     } else if (item.ok) {
       statusLabel = applyGreen(`${onIcon} ${trans.status.up}`);
+    } else if (item.timedOut) {
+      statusLabel = (item.intranet ? applyDim : applyYellow)(`${offIcon} ${trans.status.timeout}`);
     } else if (item.intranet) {
       statusLabel = applyDim(`${lanIcon} ${trans.status.down}`);
     } else {

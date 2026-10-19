@@ -201,6 +201,7 @@ export interface Translations {
     url: string;
     up: string;
     down: string;
+    timeout: string;
     groupNbtca: string;
     groupExternal: string;
     groupIntranet: string;

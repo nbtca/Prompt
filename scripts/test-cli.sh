@@ -171,7 +171,7 @@ node -e '
   const statuses = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
   if (
     statuses.length !== 8 ||
-    statuses.some((item) => item.ok || item.error !== "Request timed out")
+    statuses.some((item) => item.ok || !item.timedOut || item.error !== "Request timed out")
   ) process.exit(1);
 ' "$ignored_status_file"
 if [[ -s "$cli_test_root/status-ignored-signal.stderr" ]]; then

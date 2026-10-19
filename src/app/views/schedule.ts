@@ -42,7 +42,7 @@ import {
   loadTimetableCache,
   clearScheduleCache,
 } from '../../features/schedule-store.js';
-import { loadSchoolCalendar } from '../../features/calendar.js';
+import { loadSchoolCalendarOrCache } from '../../features/calendar.js';
 import {
   currentAcademicWindow,
   inferWeekOneMonday,
@@ -175,12 +175,12 @@ async function goToPublic(ctx: AppContext, generation = lifecycleGeneration): Pr
   state = { mode: 'public', publicField: buildPublicField() };
   ctx.rerender();
   try {
-    const cal = await loadSchoolCalendar(ctx.signal);
+    const { calendar: cal, stale } = await loadSchoolCalendarOrCache(ctx.signal);
     if (!isLifecycleActive(ctx, generation)) return;
     const now = new Date();
     const windowEvents = cal.inRange(addLocalDays(now, -400), addLocalDays(now, 400));
     const publicWindow: AcademicWindow | OnBreak | null = currentAcademicWindow(windowEvents, now);
-    state = { ...state, publicWindow };
+    state = { ...state, publicWindow, publicStale: stale };
   } catch {
     if (!isLifecycleActive(ctx, generation)) return;
     state = { ...state, publicWindow: null };
@@ -190,7 +190,7 @@ async function goToPublic(ctx: AppContext, generation = lifecycleGeneration): Pr
 
 async function tryInferWeekOne(ctx: AppContext, generation: number): Promise<string | null> {
   try {
-    const cal = await loadSchoolCalendar(ctx.signal);
+    const { calendar: cal } = await loadSchoolCalendarOrCache(ctx.signal);
     if (!isLifecycleActive(ctx, generation)) return null;
     const now = new Date();
     const events = cal.inRange(addLocalDays(now, -400), addLocalDays(now, 400));
