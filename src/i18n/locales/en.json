@@ -9,7 +9,7 @@
     "current": "current",
     "moreAbove": "{count} more above",
     "moreBelow": "{count} more below",
-    "offline": "Offline, showing cached data"
+    "offline": "Refresh failed; showing cache"
   },
   "help": {
     "title": "Keys",
@@ -181,7 +181,7 @@
   "status": {
     "checking": "Checking service status...",
     "summaryOk": "All services are healthy",
-    "summaryFail": "Some services are unavailable",
+    "summaryFail": "Some checks failed. A timeout does not confirm an outage.",
     "summaryIntranet": "Public services are healthy; intranet availability depends on your network",
     "service": "Service",
     "health": "Health",
@@ -190,6 +190,7 @@
     "url": "URL",
     "up": "online",
     "down": "offline",
+    "timeout": "timed out",
     "groupNbtca": "NBTCA Services",
     "groupExternal": "External",
     "groupIntranet": "Intranet (LAN only)",

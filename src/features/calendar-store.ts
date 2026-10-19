@@ -3,7 +3,6 @@ import path from 'path';
 import type { FeedValidators } from '@nbtca/nbtcal';
 import { getStateDir, getWritableStateDir } from '../config/paths.js';
 
-const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const HEADER_VALUE = /^[\x21-\x7e][\x20-\x7e]*$/;
 
 export interface FeedCache {
@@ -54,12 +53,11 @@ export function touchFeedCache(name: string, validators: FeedValidators, dir?: s
   }
 }
 
-export function loadFeedCache(name: string, dir?: string, maxAgeMs = MAX_AGE_MS): FeedCache | null {
+export function loadFeedCache(name: string, dir?: string): FeedCache | null {
   try {
     const source = dir ?? getStateDir();
     const validators = readValidators(name, source);
     const file = path.join(source, `${name}.ics`);
-    if (Date.now() - fs.statSync(file).mtimeMs > maxAgeMs) return null;
     return { text: fs.readFileSync(file, 'utf8'), validators };
   } catch {
     return null;

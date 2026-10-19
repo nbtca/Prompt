@@ -9,7 +9,7 @@
     "current": "当前",
     "moreAbove": "上方还有 {count} 项",
     "moreBelow": "下方还有 {count} 项",
-    "offline": "当前离线，显示的是上次获取的内容"
+    "offline": "无法刷新，显示上次获取的内容"
   },
   "help": {
     "title": "快捷键",
@@ -181,7 +181,7 @@
   "status": {
     "checking": "正在检查服务状态...",
     "summaryOk": "所有服务运行正常",
-    "summaryFail": "部分服务不可用",
+    "summaryFail": "部分检查未通过，超时不代表服务已经停止运行。",
     "summaryIntranet": "公共服务运行正常；内网可用性取决于当前网络",
     "service": "服务",
     "health": "状态",
@@ -190,6 +190,7 @@
     "url": "URL",
     "up": "在线",
     "down": "离线",
+    "timeout": "超时",
     "groupNbtca": "NBTCA 服务",
     "groupExternal": "外部平台",
     "groupIntranet": "内网服务（仅校园网）",

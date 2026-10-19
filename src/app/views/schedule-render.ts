@@ -36,6 +36,7 @@ import {
 } from '../../core/text.js';
 import { isoDayDifference } from '../../core/calendar-day.js';
 import { loadingLines } from '../../core/components/spinner.js';
+import { offlineNotice } from '../chrome.js';
 
 export type ScheduleMode =
   | 'loading'
@@ -68,6 +69,7 @@ export interface ScheduleViewState {
   timetable?: Timetable;
   publicField?: ListField;
   publicWindow?: AcademicWindow | OnBreak | null;
+  publicStale?: boolean;
   gridCursor?: GridCursor;
   detailMeeting?: TimetableMeeting;
   detailFrom?: 'hub' | 'week';
@@ -447,7 +449,7 @@ function renderPublicBody(
   cols: number,
 ): string[] {
   const trans = t();
-  const lines: string[] = [];
+  const lines: string[] = state.publicStale ? offlineNotice(cols) : [];
   const w = state.publicWindow;
 
   if (w === undefined) {

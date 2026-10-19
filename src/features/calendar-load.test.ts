@@ -158,13 +158,15 @@ describe('loadCalendarOrThrow', () => {
   });
 });
 
-describe('loadSchoolCalendar', () => {
+describe('loadSchoolCalendarOrCache', () => {
   it('fetches the school feed into its own cache', async () => {
-    const { loadSchoolCalendar, loadCalendarOrThrow } = await freshCalendar();
+    const { loadSchoolCalendarOrCache, loadCalendarOrThrow } = await freshCalendar();
     loadFeedCache.mockReturnValue(null);
     const school = { status: 'modified', text: feed('school'), validators: {} };
     fetchFeedConditional.mockResolvedValueOnce(school);
-    expect(uids(await loadSchoolCalendar())).toEqual(['school']);
+    const loaded = await loadSchoolCalendarOrCache();
+    expect(uids(loaded.calendar)).toEqual(['school']);
+    expect(loaded.stale).toBe(false);
     expect(fetchFeedConditional.mock.calls[0]?.[0]).toBe('https://ical.nbtca.space/school.ics');
     expect(saveFeedCache).toHaveBeenCalledWith('school-feed', school);
     fetchFeedConditional.mockResolvedValueOnce({
@@ -176,10 +178,12 @@ describe('loadSchoolCalendar', () => {
   });
 
   it('falls back to the cached school feed when the network fails', async () => {
-    const { loadSchoolCalendar } = await freshCalendar();
+    const { loadSchoolCalendarOrCache } = await freshCalendar();
     fetchFeedConditional.mockRejectedValue(new Error('offline'));
     loadFeedCache.mockReturnValue(cached);
-    expect(uids(await loadSchoolCalendar())).toEqual(['cached']);
+    const loaded = await loadSchoolCalendarOrCache();
+    expect(uids(loaded.calendar)).toEqual(['cached']);
+    expect(loaded.stale).toBe(true);
     expect(loadFeedCache).toHaveBeenCalledWith('school-feed');
   });
 });

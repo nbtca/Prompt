@@ -1,5 +1,12 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { checkServices, renderServiceStatusTable, type ServiceStatus } from './status.js';
+import {
+  checkServices,
+  countServiceHealth,
+  hasServiceFailures,
+  renderServiceStatusTable,
+  serializeServiceStatus,
+  type ServiceStatus,
+} from './status.js';
 import { setLanguage } from '../i18n/index.js';
 import { resetIconCache } from '../core/icons.js';
 import { stripAnsi } from '../core/text.js';
@@ -53,6 +60,65 @@ describe('renderServiceStatusTable pending state', () => {
 });
 
 describe('checkServices', () => {
+  it('accepts an eight-second public response with the default timeout', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn<typeof fetch>(
+          () =>
+            new Promise((resolve) =>
+              setTimeout(() => {
+                resolve(new Response(null));
+              }, 8_000),
+            ),
+        ),
+      );
+      const request = checkServices({ retries: 0 });
+      await vi.advanceTimersByTimeAsync(8_000);
+      const result = await request;
+      expect(result.filter((item) => !item.intranet).every((item) => item.ok)).toBe(true);
+      expect(result.filter((item) => item.intranet).every((item) => item.timedOut)).toBe(true);
+      expect(hasServiceFailures(result)).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('distinguishes timeouts from HTTP failures in text and JSON', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>((input) =>
+        (input instanceof Request ? input.url : input.toString()).includes('docs.nbtca.space')
+          ? new Promise(() => undefined)
+          : Promise.resolve(new Response(null, { status: 503 })),
+      ),
+    );
+    const result = await checkServices({ timeoutMs: 5, retries: 0 });
+    const timedOut = result.find((item) => item.url.includes('docs.nbtca.space'));
+    const failed = result.find((item) => item.url === 'https://nbtca.space');
+    expect(timedOut).toMatchObject({ ok: false, timedOut: true });
+    expect(failed).toMatchObject({ ok: false, statusCode: 503 });
+    expect(failed?.timedOut).toBeUndefined();
+    const rows = stripAnsi(renderServiceStatusTable(result, { color: false })).split('\n');
+    expect(rows.find((row) => row.includes('Docs'))).toContain('timed out');
+    expect(rows.find((row) => row.includes('Homepage'))).toContain('offline');
+    expect(serializeServiceStatus(result).find((item) => item.name === 'Docs')?.timedOut).toBe(
+      true,
+    );
+    expect(serializeServiceStatus(result).find((item) => item.name === 'Homepage')?.timedOut).toBe(
+      false,
+    );
+    expect(hasServiceFailures(result)).toBe(true);
+    expect(countServiceHealth(result)).toEqual({ up: 0, down: 5, timedOut: 1 });
+  });
+
+  it('does not classify an unrelated abort error as a timeout', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new DOMException('Aborted', 'AbortError')));
+    const result = await checkServices({ timeoutMs: 100, retries: 0 });
+    expect(result.every((item) => !item.timedOut && item.error === 'Aborted')).toBe(true);
+  });
+
   it('cancels response bodies after reading status headers', async () => {
     const cancelSpies: ReturnType<typeof vi.spyOn>[] = [];
     vi.stubGlobal(

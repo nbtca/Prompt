@@ -33,6 +33,11 @@ Or try it without installing: `npx @nbtca/prompt`.
   unreachable.
 - **Settings**: language, icons, and colors.
 
+The first load needs a network connection. Cached events and school calendars
+remain available without an age limit; a failed refresh shows a cached-data notice.
+Docs are available offline after reading them or loading them through search,
+subject to the local cache's 4 MiB size limit.
+
 ## Commands
 
 ```text
@@ -47,6 +52,10 @@ nbtca update
 
 `nbtca --help` lists every command and flag. Add `--plain` for output without
 color.
+
+Service checks wait up to 15 seconds by default. Use `--timeout=<ms>` to change
+the limit. A timeout is shown separately from an offline result and appears as
+`timedOut: true` in JSON. Failed public checks still return a nonzero exit code.
 
 Prompt never stores your password. A saved campus session gets user-only file
 permissions. See [SECURITY.md](SECURITY.md).

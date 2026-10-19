@@ -82,7 +82,7 @@ describe('renderHeader', () => {
 describe('offlineNotice', () => {
   it('leads with a warning icon and leaves a blank line before the content', () => {
     const lines = offlineNotice(80);
-    expect(lines.map(stripAnsi)).toEqual(['   ! Offline, showing cached data', '']);
+    expect(lines.map(stripAnsi)).toEqual(['   ! Refresh failed; showing cache', '']);
   });
 
   it('keeps its indent on one line at forty columns in both languages', () => {

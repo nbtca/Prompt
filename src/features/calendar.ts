@@ -127,7 +127,19 @@ function feedLoader(url: string | undefined, name: string) {
     return inFlight;
   }
 
-  return { peek, load };
+  async function loadOrCache(
+    signal?: AbortSignal,
+  ): Promise<{ calendar: Calendar; stale: boolean }> {
+    try {
+      return { calendar: await load(signal), stale: false };
+    } catch (err) {
+      const cached = peek();
+      if (!cached) throw err;
+      return { calendar: cached, stale: true };
+    }
+  }
+
+  return { peek, load, loadOrCache };
 }
 
 const eventsFeed = feedLoader(undefined, 'calendar-feed');
@@ -135,16 +147,8 @@ const schoolFeed = feedLoader(SCHOOL_FEED_URL, 'school-feed');
 
 export const peekCalendar = eventsFeed.peek;
 export const loadCalendarOrThrow = eventsFeed.load;
-
-export async function loadSchoolCalendar(signal?: AbortSignal): Promise<Calendar> {
-  try {
-    return await schoolFeed.load(signal);
-  } catch (err) {
-    const cached = schoolFeed.peek();
-    if (!cached) throw err;
-    return cached;
-  }
-}
+export const loadCalendarOrCache = eventsFeed.loadOrCache;
+export const loadSchoolCalendarOrCache = schoolFeed.loadOrCache;
 
 export function toDisplayEvent(e: CalendarEvent): Event {
   const trans = t();
@@ -174,18 +178,6 @@ export function eventTimeRange(e: CalendarEvent): string {
   return endDate === startDate
     ? `${start}${dash}${formatTime(e.end)}`
     : `${start} ${dash} ${endDate} ${formatTime(e.end)}`;
-}
-
-export async function loadCalendarOrCache(
-  signal?: AbortSignal,
-): Promise<{ calendar: Calendar; stale: boolean }> {
-  try {
-    return { calendar: await loadCalendarOrThrow(signal), stale: false };
-  } catch (err) {
-    const cached = peekCalendar();
-    if (!cached) throw err;
-    return { calendar: cached, stale: true };
-  }
 }
 
 export function yearHeatmap(calendar: Calendar, now: Date): HeatmapBucket[] {
