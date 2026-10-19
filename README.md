@@ -28,8 +28,12 @@ Or try it without installing: `npx @nbtca/prompt`.
 - **Home**: today's classes and the next club events.
 - **Schedule**: the current term, week, and next break. Log in to the campus
   system to see your timetable and export it to any calendar app as `.ics`.
-  Press `a` for personal exam arrangements or `g` for grades. Both are also
-  available from the public Schedule menu before login.
+  Press `a` for personal exam arrangements or `c` for grades. Both are also
+  available from the public Schedule menu before login. Use `←` / `→` to switch
+  between exams and grades, `↑` / `↓` or `PgUp` / `PgDn` to select courses, and
+  `Enter` to read full details. Press `/` to search by course name or code, `f`
+  to filter upcoming exams or unpublished and void grades, and `s` to change
+  terms. Wide terminals show details beside the list.
 - **Events**: a countdown to the next event, plus week and month views, search,
   history, and a one-year activity heatmap.
 - **Docs**: read and search the knowledge base. It works even when GitHub is

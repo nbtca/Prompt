@@ -115,7 +115,7 @@ export function hubShortcuts(tt: Timetable): HubShortcut[] {
     { key: 's', label: trans.timetable.hubSwitchTerm },
     { key: 'e', label: trans.timetable.hubExport },
     { key: 'a', label: trans.records.exams },
-    { key: 'g', label: trans.records.grades },
+    { key: 'c', label: trans.records.grades },
   ];
   if (tt.unresolvedItems.length > 0) {
     shortcuts.push({

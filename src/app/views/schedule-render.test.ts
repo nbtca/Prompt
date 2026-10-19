@@ -556,7 +556,7 @@ describe('renderSchedule', () => {
       const shortcutLines = lines.filter((line) => /\[(?:w|t|s|e|x)\]/.test(stripAnsi(line)));
       expect(lines.length).toBeLessThanOrEqual(7);
       expect(shortcutLines.every((line) => visualWidth(line) <= 37)).toBe(true);
-      for (const key of ['w', 't', 's', 'e', 'a', 'g', 'u', 'x']) {
+      for (const key of ['w', 't', 's', 'e', 'a', 'c', 'u', 'x']) {
         expect(text).toContain(`[${key}]`);
       }
     });
@@ -925,7 +925,7 @@ describe('hubShortcuts', () => {
 
   it('always includes the full-grid, term-density, switch-term, export, and logout shortcuts', () => {
     const shortcuts = hubShortcuts({ ...baseTimetable, unresolvedItems: [] });
-    expect(shortcuts.map((s) => s.key)).toEqual(['w', 't', 's', 'e', 'a', 'g', 'x']);
+    expect(shortcuts.map((s) => s.key)).toEqual(['w', 't', 's', 'e', 'a', 'c', 'x']);
   });
 });
 

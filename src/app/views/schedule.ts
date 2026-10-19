@@ -391,7 +391,7 @@ async function openStudentRecords(
       session.timetableTransport,
       () => isLifecycleActive(ctx, generation) && recordsPanel === panel,
       () => {
-        pendingRecordsKind = kind;
+        pendingRecordsKind = panel.kind;
         createSessionStore().clear();
         recordsPanel?.dispose();
         recordsPanel = null;
@@ -479,6 +479,10 @@ export const scheduleView = {
     return state.mode === 'records' && !recordsPanel?.capturesPageKeys();
   },
 
+  contextPath(): readonly string[] | undefined {
+    return state.mode === 'records' ? recordsPanel?.contextPath() : undefined;
+  },
+
   shortcuts(): readonly { key: string; label: string }[] {
     if (state.mode === 'records') return recordsPanel?.shortcuts() ?? [];
     if ((state.mode !== 'hub' && state.mode !== 'week') || !state.timetable) return [];
@@ -494,6 +498,7 @@ export const scheduleView = {
   },
 
   capturesInput(): boolean {
+    if (state.mode === 'records') return recordsPanel?.capturesInput() ?? false;
     return (
       state.mode === 'needsLoginId' ||
       state.mode === 'needsLoginPassword' ||
@@ -507,7 +512,8 @@ export const scheduleView = {
   },
 
   footerHint(tabCount: number, cols = Number.POSITIVE_INFINITY): string | undefined {
-    if (state.mode === 'records') return passiveFooterHint(tabCount, cols);
+    if (state.mode === 'records')
+      return recordsPanel?.footerHint(tabCount, cols) ?? passiveFooterHint(tabCount, cols);
     const capturing =
       state.mode === 'needsLoginId' ||
       state.mode === 'needsLoginPassword' ||
@@ -579,7 +585,7 @@ export const scheduleView = {
         return;
       }
       case 'records':
-        if (key === 'x' && !recordsPanel?.capturesPageKeys()) logout(ctx);
+        if (key === 'x' && recordsPanel?.acceptsActions()) logout(ctx);
         else recordsPanel?.handleKey(key, ctx);
         return;
       case 'needsLoginId': {
@@ -698,7 +704,7 @@ export const scheduleView = {
 
         const shortcut = hubShortcuts(tt).find((sc) => sc.key === key);
         if (!shortcut) return;
-        if (shortcut.key === 'a' || shortcut.key === 'g') {
+        if (shortcut.key === 'a' || shortcut.key === 'c') {
           void openStudentRecords(ctx, shortcut.key === 'a' ? 'exams' : 'grades');
           return;
         }

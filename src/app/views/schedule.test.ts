@@ -918,7 +918,7 @@ describe('scheduleView student records', () => {
       expect(rendered).toContain('Synthetic Algorithms');
       expect(rendered).toContain(t().records[kind]);
       expect(rendered).not.toContain(t().timetable.weekOneAutoFailed);
-      expect(scheduleView.scrollsBody()).toBe(true);
+      expect(scheduleView.scrollsBody()).toBe(false);
       expect(scheduleView.handleBack(ctx)).toBe(true);
       expect(scheduleView.render(ctx).join('\n')).not.toContain('Synthetic Algorithms');
     },
@@ -981,7 +981,7 @@ describe('scheduleView student records', () => {
     await vi.waitFor(() => {
       expect(listTerms).toHaveBeenCalledOnce();
     });
-    scheduleView.handleKey('g', ctx);
+    scheduleView.handleKey('c', ctx);
     await vi.waitFor(() => {
       expect(recordsTransport).toHaveBeenCalledOnce();
       expect(scheduleView.isBusy()).toBe(false);
