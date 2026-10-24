@@ -165,6 +165,12 @@ describe('renderHome (schedule-first dashboard)', () => {
     expect(out).toContain('No upcoming events');
   });
 
+  it.each([2, 4])('keeps the empty status inside a %i-row home body', (bodyRows) => {
+    const lines = renderHome({ eventLines: [], loading: false }, noon, bodyRows, 80);
+    expect(lines.length).toBeLessThanOrEqual(bodyRows);
+    expect(lines.map(stripAnsi).join('\n')).toContain('No upcoming events');
+  });
+
   it('shows an error state when the events fetch failed, distinct from "no events"', () => {
     const out = stripAnsi(renderHome({ eventsLoadFailed: true, loading: false }, noon).join('\n'));
     expect(out).toContain('Failed to load event calendar');
@@ -388,12 +394,12 @@ describe('renderHome — week overview panel', () => {
     expect(titleIdx).toBeGreaterThanOrEqual(0);
     expect(lines[titleIdx + 2]).toContain('Classes');
     expect(lines[titleIdx + 3]).toContain('Events');
-    expect(lines[titleIdx + 4]).toContain('Busy');
-    expect(lines[titleIdx + 4]).toContain('Light');
-    expect(lines[titleIdx + 4]).toContain('None');
+    expect(lines[titleIdx + 4]).toContain('Scheduled');
+    expect(lines[titleIdx + 4]).toContain('Free');
+    expect(lines[titleIdx + 4]).not.toContain('Not loaded');
   });
 
-  it('shows weekend classes as busy and an empty weekend as none', () => {
+  it('shows weekend classes as scheduled and an empty weekend as free', () => {
     process.env['NBTCA_ICON_MODE'] = 'unicode';
     resetIconCache();
     try {
@@ -439,14 +445,14 @@ describe('renderHome — week overview panel', () => {
       const saturday = eventCells[5];
       const sunday = eventCells[6];
       expect(saturday).toBe('▓▓');
-      expect(sunday).toBe('░░');
+      expect(sunday).toBe('··');
     } finally {
       process.env['NBTCA_ICON_MODE'] = 'unicode';
       resetIconCache();
     }
   });
 
-  it('renders the event row with no glyphs at all when eventDays is not yet known', () => {
+  it('distinguishes unknown event days from a known empty week', () => {
     const lines = renderHome(
       {
         loading: false,
@@ -456,7 +462,21 @@ describe('renderHome — week overview panel', () => {
     ).map((l) => stripAnsi(l));
     const titleIdx = lines.findIndex((l) => l.includes('Week overview'));
     const eventLine = defined(lines[titleIdx + 3]);
-    expect(eventLine).not.toMatch(/[▓░]/);
+    expect(eventLine.match(/\?\?/g)).toHaveLength(7);
+    expect(lines[titleIdx + 4]).toContain('Not loaded');
+
+    const loaded = renderHome(
+      {
+        loading: false,
+        weekAhead: {
+          classDays: [true, false, false, false, false, false, false],
+          eventDays: [false, false, false, false, false, false, false],
+        },
+      },
+      noon,
+    ).map(stripAnsi);
+    expect(loaded[titleIdx + 3]).not.toContain('??');
+    expect(loaded[titleIdx + 4]).not.toContain('Not loaded');
   });
 
   it('never collapses the grid into one array entry', () => {
@@ -500,7 +520,6 @@ describe('renderHome — week overview panel', () => {
           trans.menu.events,
           trans.timetable.weekAheadBusy,
           trans.timetable.weekAheadFree,
-          trans.timetable.weekAheadNone,
         ]) {
           expect(text).toContain(label.replace(/\s/g, ''));
         }
@@ -686,8 +705,8 @@ describe('homeView.load()', () => {
       await homeView.load(ctx);
       const lines = stripAnsi(homeView.render(ctx).join('\n')).split('\n');
       const titleIdx = lines.findIndex((l) => l.includes('Week overview'));
-      const cells = defined(lines[titleIdx + 3]).match(/▓▓|░░/g);
-      expect(cells).toEqual(['▓▓', '░░', '░░', '░░', '░░', '░░', '▓▓']);
+      const cells = defined(lines[titleIdx + 3]).match(/▓▓|··/g);
+      expect(cells).toEqual(['▓▓', '··', '··', '··', '··', '··', '▓▓']);
     } finally {
       vi.useRealTimers();
       if (previousTimeZone === undefined) delete process.env.TZ;
@@ -707,6 +726,7 @@ describe('homeView.load()', () => {
     const titleIdx = lines.findIndex((l) => l.includes('Week overview'));
     expect(titleIdx).toBeGreaterThanOrEqual(0);
     const eventLine = defined(lines[titleIdx + 3]);
-    expect(eventLine).toMatch(/[▓░]/);
+    expect(eventLine.match(/▓▓|··/g)).toHaveLength(7);
+    expect(eventLine).not.toContain('??');
   });
 });

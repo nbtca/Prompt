@@ -23,6 +23,7 @@ import { campusDateTime, campusIsoDate } from '@nbtca/nbtcal/timetable';
 import { isoDayDifference, localDayDifference, parseLocalDate } from '../../core/calendar-day.js';
 import { currentEvents } from '../../features/calendar-query.js';
 import { loadingLines } from '../../core/components/spinner.js';
+import { emptyStateLines } from '../../core/components/empty-state.js';
 import type { Calendar } from '@nbtca/nbtcal';
 const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const;
 
@@ -89,19 +90,19 @@ function renderWeekAheadGrid(
 ): string {
   const trans = t();
   const hasClassChar = pickIcon('▓▓', '##');
-  const freeChar = pickIcon('░░', '..');
-  const weekendChar = pickIcon('··', '..');
-  const blankCell = '  ';
+  const freeChar = pickIcon('··', '..');
+  const unknownChar = '??';
 
   const rowLabelW =
     Math.max(visualWidth(trans.timetable.weekAheadClasses), visualWidth(trans.menu.events)) + 1;
 
   const days = [1, 2, 3, 4, 5, 6, 7];
-  const classCell = (wd: number): string =>
-    classDays[wd - 1] ? hasClassChar : wd >= 6 ? weekendChar : freeChar;
+  const classCell = (wd: number): string => (classDays[wd - 1] ? hasClassChar : freeChar);
   const eventCell = (wd: number): string =>
-    eventDays ? (eventDays[wd - 1] ? hasClassChar : freeChar) : blankCell;
-  const legendText = `${hasClassChar} ${trans.timetable.weekAheadBusy}  ${freeChar} ${trans.timetable.weekAheadFree}  ${weekendChar} ${trans.timetable.weekAheadNone}`;
+    eventDays ? (eventDays[wd - 1] ? hasClassChar : freeChar) : unknownChar;
+  const legendText =
+    `${hasClassChar} ${trans.timetable.weekAheadBusy}  ${freeChar} ${trans.timetable.weekAheadFree}` +
+    (eventDays ? '' : `  ${unknownChar} ${trans.timetable.weekAheadUnknown}`);
   const dayLabels = days.map((wd) => type.hint(weekdayShortLabel(wd))).join('  ');
   const headerLine = `${space.indent}${padEndV('', rowLabelW)}${dayLabels}`;
 
@@ -202,7 +203,9 @@ export function renderHome(data: HomeData, now: Date, bodyRows = 100, cols = 80)
   } else if (data.eventsLoadFailed) {
     lines.push(...wrappedIndentedLines(trans.calendar.error, cols, type.hint));
   } else {
-    lines.push(...wrappedIndentedLines(trans.calendar.noEvents, cols, type.hint));
+    lines.push(
+      ...emptyStateLines('calendar', trans.calendar.noEvents, cols, bodyRows - lines.length),
+    );
   }
 
   return lines;

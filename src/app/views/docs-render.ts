@@ -6,6 +6,7 @@ import type { TextField } from '../fields/text-field.js';
 import type { DocLink } from '../../features/docs.js';
 import { visualWidth, wrapAnsiWithIndent } from '../../core/text.js';
 import { loadingLines } from '../../core/components/spinner.js';
+import { emptyStateLines } from '../../core/components/empty-state.js';
 
 export type DocsMode =
   | 'loading'
@@ -78,6 +79,22 @@ export function renderDocs(
   bodyRows = Number.POSITIVE_INFINITY,
 ): string[] {
   const trans = t();
+  const errorContext = state.errorMessage ? [...hintLines(state.errorMessage, cols), ''] : [];
+  const emptyContext =
+    state.mode === 'searchResults' && state.searchResultsEmpty
+      ? [
+          ...emptyStateLines(
+            'search',
+            trans.docs.searchNoResults,
+            cols,
+            bodyRows -
+              errorContext.length -
+              (state.searchResultsField?.render(Number.POSITIVE_INFINITY, cols).length ?? 0) -
+              1,
+          ),
+          '',
+        ]
+      : [];
   let lines: string[];
   switch (state.mode) {
     case 'loading':
@@ -117,16 +134,7 @@ export function renderDocs(
       break;
     case 'searchResults':
       lines = state.searchResultsField
-        ? renderListFieldWithContext(
-            [
-              ...(state.searchResultsEmpty
-                ? [...hintLines(trans.docs.searchNoResults, cols), '']
-                : []),
-            ],
-            state.searchResultsField,
-            bodyRows,
-            cols,
-          )
+        ? renderListFieldWithContext(emptyContext, state.searchResultsField, bodyRows, cols)
         : [];
       break;
     case 'readerLoading':
@@ -153,12 +161,11 @@ export function renderDocs(
     }
   }
   if (!state.errorMessage) return lines;
-  const errorContext = [...hintLines(state.errorMessage, cols), ''];
   const listField = listFieldForState(state);
   if (!listField) return [...errorContext, ...lines];
   const context =
     state.mode === 'searchResults' && state.searchResultsEmpty
-      ? [...errorContext, ...hintLines(trans.docs.searchNoResults, cols), '']
+      ? [...errorContext, ...emptyContext]
       : errorContext;
   return renderListFieldWithContext(context, listField, bodyRows, cols);
 }

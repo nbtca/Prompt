@@ -6,7 +6,7 @@ import { useUnicodeIcons } from './icons.js';
 import { APP_INFO } from '../config/data.js';
 import { typeReveal, materializeBraille, sleep } from './motion.js';
 import { brandGradient as brand, c, frameLeft, space } from './theme.js';
-import { visualWidth } from './text.js';
+import { visualWidth, wrapAnsiWithIndent } from './text.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -27,43 +27,53 @@ const LOGO_TIERS = [
   { file: 'ca-dotmatrix-small.txt', minCols: 0, minRows: 0 },
 ] as const;
 
-function dotmatrixFile(): string {
-  const cols = process.stdout.columns;
-  const rows = process.stdout.rows;
-  const tier = LOGO_TIERS.find((t) => cols >= t.minCols && rows >= t.minRows);
-  return tier?.file ?? 'ca-dotmatrix-small.txt';
-}
-
 function paint(text: string, color: boolean): string {
   return color ? brand(text) : text;
 }
 
-function loadArt(): string {
-  const art = useUnicodeIcons() ? readArt(dotmatrixFile()) : readArt('ascii-logo.txt');
-  return art ?? 'NBTCA';
-}
-
-export function startupFitsTerminal(
-  rows: number | undefined,
-  cols: number | undefined,
-  art: string,
-): boolean {
-  const lines = art.split('\n');
-  const fitsRows = rows === undefined || rows >= lines.length + 5;
-  const fitsCols = cols === undefined || lines.every((line) => visualWidth(line) <= cols);
-  return fitsRows && fitsCols;
+function logoContent(): { art: string; metadata: string[] } | undefined {
+  const cols = Number.isFinite(process.stdout.columns) ? process.stdout.columns : undefined;
+  const rows = Number.isFinite(process.stdout.rows) ? process.stdout.rows : undefined;
+  const width =
+    cols === undefined ? Number.POSITIVE_INFINITY : Math.max(1, cols - startupOffset(cols, 0));
+  const color = !process.env['NO_COLOR'];
+  const metadata = [
+    ...wrapAnsiWithIndent(TAGLINE, width, '').map((line) => paint(line, color)),
+    ...wrapAnsiWithIndent(`@nbtca/prompt  v${APP_INFO.version}`, width, '').map((line) =>
+      chalk.dim(line),
+    ),
+  ];
+  const files = [
+    ...(useUnicodeIcons()
+      ? LOGO_TIERS.filter((tier) => (cols ?? 0) >= tier.minCols && (rows ?? 0) >= tier.minRows).map(
+          (tier) => tier.file,
+        )
+      : []),
+    'ascii-logo.txt',
+    undefined,
+  ];
+  for (const file of files) {
+    const art = file ? readArt(file) : 'NBTCA';
+    if (!art) continue;
+    const lines = art.split('\n');
+    if (
+      lines.every((line) => visualWidth(line) <= width) &&
+      (rows === undefined || lines.length + metadata.length + 3 <= rows)
+    ) {
+      return { art, metadata };
+    }
+  }
+  return undefined;
 }
 
 export function buildLogoLines(): string[] {
-  const color = !process.env['NO_COLOR'];
-  const paintedArt = paint(loadArt(), color).split('\n');
-
+  const content = logoContent();
+  if (!content) return [];
   return [
     '',
-    ...paintedArt,
+    ...paint(content.art, !process.env['NO_COLOR']).split('\n'),
     '',
-    color ? brand(TAGLINE) : TAGLINE,
-    chalk.dim(`@nbtca/prompt  v${APP_INFO.version}`),
+    ...content.metadata,
     '',
   ];
 }
@@ -106,26 +116,20 @@ function skipOnKeypress(): { signal: AbortSignal; release(): void } {
 
 export async function runStartup(): Promise<void> {
   if (!process.stdout.isTTY) return;
-  const art = loadArt();
-  if (!startupFitsTerminal(process.stdout.rows, process.stdout.columns, art)) return;
+  const content = logoContent();
+  if (!content) return;
   const cols = process.stdout.columns;
   const color = !process.env['NO_COLOR'];
   const skip = skipOnKeypress();
   process.stdout.write('\n');
   try {
-    await materializeBraille(art, (s) => indentBlock(paint(s, color), cols), {
+    await materializeBraille(content.art, (s) => indentBlock(paint(s, color), cols), {
       paintProgress: (s) => indentBlock(color ? c.brand(s) : s, cols),
       signal: skip.signal,
     });
-    await typeReveal(
-      [
-        '',
-        indentBlock(color ? brand(TAGLINE) : TAGLINE, cols),
-        indentBlock(chalk.dim(`@nbtca/prompt  v${APP_INFO.version}`), cols),
-        '',
-      ],
-      { signal: skip.signal },
-    );
+    await typeReveal(['', ...content.metadata.map((line) => indentBlock(line, cols)), ''], {
+      signal: skip.signal,
+    });
     await sleep(FINAL_FRAME_MS, skip.signal);
   } finally {
     skip.release();
