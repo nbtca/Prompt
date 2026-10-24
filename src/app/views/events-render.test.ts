@@ -290,6 +290,23 @@ describe('renderEvents', () => {
     expect(notice).toBeLessThan(lines.findIndex((line) => line.includes('Browse')));
   });
 
+  it.each([5, 12])('keeps the empty-hub status and browse action in a %i-row body', (bodyRows) => {
+    const hubField = new ListField({
+      title: 'Browse',
+      options: [{ value: 'upcoming', label: 'Next 30 Days' }],
+    });
+    const lines = renderEvents(
+      { mode: 'hub', hubField, recentEvents: [] },
+      new Date('2026-10-24'),
+      bodyRows,
+      80,
+    );
+    const text = lines.map(stripAnsi).join('\n');
+    expect(lines.length).toBeLessThanOrEqual(bodyRows);
+    expect(text).toContain('No upcoming events');
+    expect(text).toContain('Next 30 Days');
+  });
+
   it('hub mode windows the menu against actual content height instead of overflowing', () => {
     const manyOptions = Array.from({ length: 8 }, (_, i) => ({
       value: String(i),
