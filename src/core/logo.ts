@@ -5,7 +5,7 @@ import chalk from 'chalk';
 import { useUnicodeIcons } from './icons.js';
 import { APP_INFO } from '../config/data.js';
 import { typeReveal, materializeBraille, sleep } from './motion.js';
-import { brandGradient as brand, c, frameLeft, space } from './theme.js';
+import { brandGradient as brand, c } from './theme.js';
 import { visualWidth, wrapAnsiWithIndent } from './text.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -34,8 +34,7 @@ function paint(text: string, color: boolean): string {
 function logoContent(): { art: string; metadata: string[] } | undefined {
   const cols = Number.isFinite(process.stdout.columns) ? process.stdout.columns : undefined;
   const rows = Number.isFinite(process.stdout.rows) ? process.stdout.rows : undefined;
-  const width =
-    cols === undefined ? Number.POSITIVE_INFINITY : Math.max(1, cols - startupOffset(cols, 0));
+  const width = cols === undefined ? Number.POSITIVE_INFINITY : Math.max(1, cols);
   const color = !process.env['NO_COLOR'];
   const metadata = [
     ...wrapAnsiWithIndent(TAGLINE, width, '').map((line) => paint(line, color)),
@@ -78,17 +77,6 @@ export function buildLogoLines(): string[] {
   ];
 }
 
-export function startupOffset(cols: number | undefined, width: number): number {
-  if (cols === undefined) return 0;
-  return Math.max(0, Math.min(frameLeft(cols) + space.indent.length, cols - width));
-}
-
-function indentBlock(text: string, cols: number | undefined): string {
-  const lines = text.split('\n');
-  const pad = ' '.repeat(startupOffset(cols, Math.max(...lines.map(visualWidth))));
-  return lines.map((line) => pad + line).join('\n');
-}
-
 function skipOnKeypress(): { signal: AbortSignal; release(): void } {
   const controller = new AbortController();
   const stdin = process.stdin;
@@ -118,16 +106,15 @@ export async function runStartup(): Promise<void> {
   if (!process.stdout.isTTY) return;
   const content = logoContent();
   if (!content) return;
-  const cols = process.stdout.columns;
   const color = !process.env['NO_COLOR'];
   const skip = skipOnKeypress();
   process.stdout.write('\n');
   try {
-    await materializeBraille(content.art, (s) => indentBlock(paint(s, color), cols), {
-      paintProgress: (s) => indentBlock(color ? c.brand(s) : s, cols),
+    await materializeBraille(content.art, (s) => paint(s, color), {
+      paintProgress: (s) => (color ? c.brand(s) : s),
       signal: skip.signal,
     });
-    await typeReveal(['', ...content.metadata.map((line) => indentBlock(line, cols)), ''], {
+    await typeReveal(['', ...content.metadata, ''], {
       signal: skip.signal,
     });
     await sleep(FINAL_FRAME_MS, skip.signal);

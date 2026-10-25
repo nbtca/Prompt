@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { buildLogoLines, startupOffset } from './logo.js';
+import { buildLogoLines } from './logo.js';
 import { stripAnsi, visualWidth } from './text.js';
 import { resetIconCache } from './icons.js';
 
@@ -14,18 +14,6 @@ describe('buildLogoLines', () => {
     const text = buildLogoLines().map(stripAnsi).join('\n');
     expect(text).toContain('intersection of technology and liberal arts');
     expect(text).toMatch(/v\d+\.\d+\.\d+/);
-  });
-});
-
-describe('startupOffset', () => {
-  it('starts the logo where the app frame starts its content', () => {
-    expect(startupOffset(80, 52)).toBe(3);
-    expect(startupOffset(160, 52)).toBe(23);
-  });
-
-  it('gives up the offset before letting the art overflow', () => {
-    expect(startupOffset(54, 52)).toBe(2);
-    expect(startupOffset(undefined, 52)).toBe(0);
   });
 });
 
@@ -102,9 +90,7 @@ describe('buildLogoLines display capabilities', () => {
     expect(lines.length).toBeGreaterThan(0);
     expect(lines.length).toBeLessThanOrEqual(rows);
     expect(lines.every((line) => /^[\x20-\x7e]*$/.test(line))).toBe(true);
-    expect(
-      lines.every((line) => visualWidth(line) + startupOffset(cols, visualWidth(line)) <= cols),
-    ).toBe(true);
+    expect(lines.every((line) => visualWidth(line) <= cols)).toBe(true);
     expect(lines.join('').replace(/\s/g, '')).toContain('intersectionoftechnologyandliberalarts');
     expect(lines.join('')).toContain('@nbtca/prompt');
   });
