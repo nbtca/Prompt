@@ -102,7 +102,7 @@ export const type = {
   heading: (s: string) => chalk.bold(s),
   label: (s: string) => s,
   body: (s: string) => s,
-  hint: (s: string) => chalk.dim(s),
+  hint: (s: string) => s,
   active: (s: string) => chalk.bold(c.brand(s)),
   cursor: (s: string) => chalk.bgHex('#0ea5e9').black(s),
 };

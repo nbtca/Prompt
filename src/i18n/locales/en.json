@@ -397,6 +397,7 @@
     "termPickerNeedsLogin": "Log in to the school system to switch terms.",
     "termPickerLoginAction": "Log in",
     "homeLoginCta": "Open {tab} and choose “{action}” to see your classes here.",
+    "homeLoginCtaCompact": "Log in from {tab}.",
     "helpSwitchDay": "Switch day",
     "helpPickClass": "Pick a class",
     "helpOpenClass": "Class details",

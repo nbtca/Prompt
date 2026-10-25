@@ -397,6 +397,7 @@
     "termPickerNeedsLogin": "切换学期需要先登录教务系统。",
     "termPickerLoginAction": "登录教务系统",
     "homeLoginCta": "到{tab}页选择“{action}”，这里就会显示你的课程。",
+    "homeLoginCtaCompact": "到{tab}页登录查看课程。",
     "helpSwitchDay": "切换星期",
     "helpPickClass": "选择课程",
     "helpOpenClass": "查看课程详情",

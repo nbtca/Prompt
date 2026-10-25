@@ -32,5 +32,5 @@ export interface View {
   capturesInput?(): boolean;
   capturesPageKeys?(): boolean;
   handleBack?(ctx: AppContext): boolean;
-  footerHint?(tabCount: number, cols: number): string | undefined;
+  footerHint?(tabCount: number, cols: number, canScroll: boolean): string | undefined;
 }

@@ -68,19 +68,22 @@ describe('renderEvents', () => {
       '活动',
       ['活动列表', '本周活动', '本月活动', '搜索活动', '往期活动', '过去十二个月活动热力图'],
     ],
-  ])('fits every hub action within nine rows and twenty columns', (title, labels) => {
-    const hubField = new ListField({
-      title,
-      options: labels.map((label, index) => ({ value: String(index), label })),
-      initialIndex: labels.length - 1,
-    });
-    const lines = renderEvents({ mode: 'hub', hubField, heatmapBuckets: [] }, new Date(), 9, 20);
-    const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
+  ])('keeps every hub action reachable within nine rows and twenty columns', (title, labels) => {
+    for (const [initialIndex, label] of labels.entries()) {
+      const hubField = new ListField({
+        title,
+        options: labels.map((label, index) => ({ value: String(index), label })),
+        initialIndex,
+      });
+      const lines = renderEvents({ mode: 'hub', hubField, heatmapBuckets: [] }, new Date(), 9, 20);
+      const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
 
-    expect(lines.length).toBeLessThanOrEqual(9);
-    expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
-    for (const label of labels) expect(text).toContain(label.replace(/\s/g, ''));
-    expect(lines.filter((line) => /[→>]/u.test(stripAnsi(line)))).toHaveLength(1);
+      expect(lines.length).toBeLessThanOrEqual(9);
+      expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+      expect(text).toContain(label.replace(/\s/g, ''));
+      expect(text).toContain('Noupcomingevents');
+      expect(lines.filter((line) => /[→>]/u.test(stripAnsi(line)))).toHaveLength(1);
+    }
   });
 
   it.each([
@@ -306,6 +309,30 @@ describe('renderEvents', () => {
     expect(text).toContain('No upcoming events');
     expect(text).toContain('Next 30 Days');
   });
+
+  it.each([5, 7])(
+    'keeps the empty status with the full browse menu in a %i-row body',
+    (bodyRows) => {
+      const hubField = new ListField({
+        title: 'Browse',
+        options: Array.from({ length: 6 }, (_, index) => ({
+          value: String(index),
+          label: `Browse ${index + 1}`,
+        })),
+        initialIndex: 5,
+      });
+      const lines = renderEvents(
+        { mode: 'hub', hubField, recentEvents: [] },
+        new Date('2026-10-24'),
+        bodyRows,
+        40,
+      ).map(stripAnsi);
+      expect(lines.length).toBeLessThanOrEqual(bodyRows);
+      expect(lines.join('\n')).toContain('No upcoming events');
+      expect(lines.join('\n')).toContain('Browse 6');
+      expect(lines.every((line) => visualWidth(line) <= 40)).toBe(true);
+    },
+  );
 
   it('hub mode windows the menu against actual content height instead of overflowing', () => {
     const manyOptions = Array.from({ length: 8 }, (_, i) => ({

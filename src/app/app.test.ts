@@ -3,6 +3,8 @@ import { ansi } from '../core/canvas.js';
 
 const homeLoad = vi.hoisted(() => vi.fn());
 const dispose = vi.hoisted(() => vi.fn());
+const homeRender = vi.hoisted(() => vi.fn(() => ['Home']));
+const homeFooter = vi.hoisted(() => vi.fn(() => 'Footer'));
 
 vi.mock('./tabs.js', () => ({
   getAppTabs: () => [{ id: 'home', title: 'Home' }],
@@ -13,7 +15,9 @@ vi.mock('./views/home.js', () => ({
     id: 'home',
     title: 'Home',
     load: homeLoad,
-    render: () => ['Home'],
+    render: homeRender,
+    footerHint: homeFooter,
+    scrollsBody: () => true,
     dispose,
   },
 }));
@@ -49,6 +53,7 @@ describe('runApp terminal lifecycle', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    homeRender.mockReturnValue(['Home']);
     signal = undefined;
     Object.defineProperty(process.stdin, 'isTTY', { value: true, configurable: true });
     Object.defineProperty(process.stdout, 'isTTY', { value: true, configurable: true });
@@ -162,6 +167,30 @@ describe('runApp terminal lifecycle', () => {
       expect(afterScroll).toContain(t().help.quit);
       expect(afterScroll).toContain('100%');
       expect(signal?.aborted).toBe(true);
+    } finally {
+      if (rows) Object.defineProperty(process.stdout, 'rows', rows);
+      else Reflect.deleteProperty(process.stdout, 'rows');
+      if (columns) Object.defineProperty(process.stdout, 'columns', columns);
+      else Reflect.deleteProperty(process.stdout, 'columns');
+    }
+  });
+
+  it('shows overflow and scrolls the home body with arrow keys', async () => {
+    const rows = Object.getOwnPropertyDescriptor(process.stdout, 'rows');
+    const columns = Object.getOwnPropertyDescriptor(process.stdout, 'columns');
+    Object.defineProperty(process.stdout, 'rows', { value: 12, configurable: true });
+    Object.defineProperty(process.stdout, 'columns', { value: 40, configurable: true });
+    homeRender.mockReturnValue(Array.from({ length: 10 }, (_, index) => `Line ${index + 1}`));
+    try {
+      const running = runApp();
+      expect(homeFooter).toHaveBeenLastCalledWith(1, 40, true);
+      expect(writtenOutput()).toContain('0%');
+      const start = writtenOutput().length;
+      process.stdin.emit('data', Buffer.from('\x1b[B'));
+      expect(writtenOutput().slice(start)).toContain('Line 8');
+      expect(writtenOutput().slice(start)).toContain('33%');
+      process.stdin.emit('data', Buffer.from('q'));
+      await running;
     } finally {
       if (rows) Object.defineProperty(process.stdout, 'rows', rows);
       else Reflect.deleteProperty(process.stdout, 'rows');

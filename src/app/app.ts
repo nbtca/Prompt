@@ -110,7 +110,7 @@ export async function runApp(): Promise<void> {
       view,
       cols,
       tabs.length,
-      helpOpen ? t().help.close : active?.footerHint?.(tabs.length, cols),
+      helpOpen ? t().help.close : active?.footerHint?.(tabs.length, cols, body.length > height),
       chrome.footerLines,
       helpOpen || active?.scrollsBody?.() === true ? scrollPercent() : undefined,
     );

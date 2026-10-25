@@ -26,7 +26,7 @@ function renderRule(cols: number): string {
   const width = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : 80;
   const indent = visualWidth(space.indent) < width ? space.indent : '';
   const ruleWidth = Math.max(1, bodyEdge(width) - visualWidth(indent));
-  return indent + type.hint(glyph.rule().repeat(ruleWidth));
+  return indent + c.muted(glyph.rule().repeat(ruleWidth));
 }
 
 function renderTabs(views: { id: ViewId; title: string }[], active: ViewId, cols: number): string {
@@ -144,12 +144,24 @@ export function passiveFooterHint(
   tabCount: number,
   cols = Number.POSITIVE_INFINITY,
   canGoBack = true,
+  canScroll = false,
 ): string {
   const trans = t();
   const dot = glyph.sep();
   const compactTabs = tabCount > 1 ? `1-${tabCount}/Tab ${dot} ` : '';
   const back = canGoBack ? `Esc ${trans.menu.hintBack} ${dot} ` : '';
   const backKey = canGoBack ? `Esc ${dot} ` : '';
+  if (canScroll) {
+    const move = glyph.updown();
+    return fitFooterHint(
+      cols,
+      `${digitTabHint(tabCount)}${move} ${trans.help.scroll} ${dot} ${back}q ${trans.menu.hintQuit} ${dot} ${trans.help.hint}`,
+      `${compactTabs}${move} ${dot} ${backKey}q ${dot} ?`,
+      `${move} ${dot} ${backKey}q`,
+      `${move} q`,
+      'q',
+    );
+  }
   return fitFooterHint(
     cols,
     `${digitTabHint(tabCount)}${back}q ${trans.menu.hintQuit} ${dot} ${trans.help.hint}`,

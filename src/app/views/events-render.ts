@@ -109,7 +109,7 @@ function renderHubBody(
       ),
       '',
     ];
-    if (lines.length + notice.length + fieldRows <= rows) lines.push(...notice);
+    lines.push(...notice);
   }
   if (state.hubField) {
     return renderListFieldWithContext(lines, state.hubField, bodyRows, cols);

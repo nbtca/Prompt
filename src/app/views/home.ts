@@ -96,26 +96,32 @@ function renderWeekAheadGrid(
   const rowLabelW =
     Math.max(visualWidth(trans.timetable.weekAheadClasses), visualWidth(trans.menu.events)) + 1;
 
-  const days = [1, 2, 3, 4, 5, 6, 7];
+  const days = WEEKDAYS;
+  const labels = days.map(weekdayShortLabel);
+  const cellWidth = Math.max(2, ...labels.map(visualWidth));
+  const width = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : Number.POSITIVE_INFINITY;
+  const gap =
+    visualWidth(space.indent) + rowLabelW + days.length * cellWidth + (days.length - 1) * 2 <= width
+      ? '  '
+      : ' ';
   const classCell = (wd: number): string => (classDays[wd - 1] ? hasClassChar : freeChar);
   const eventCell = (wd: number): string =>
     eventDays ? (eventDays[wd - 1] ? hasClassChar : freeChar) : unknownChar;
   const legendText =
     `${hasClassChar} ${trans.timetable.weekAheadBusy}  ${freeChar} ${trans.timetable.weekAheadFree}` +
     (eventDays ? '' : `  ${unknownChar} ${trans.timetable.weekAheadUnknown}`);
-  const dayLabels = days.map((wd) => type.hint(weekdayShortLabel(wd))).join('  ');
+  const dayLabels = labels.map((label) => type.hint(padEndV(label, cellWidth))).join(gap);
   const headerLine = `${space.indent}${padEndV('', rowLabelW)}${dayLabels}`;
 
-  const classCells = days.map((wd) => type.body(classCell(wd))).join('  ');
+  const classCells = days.map((wd) => type.body(padEndV(classCell(wd), cellWidth))).join(gap);
   const classLine = `${space.indent}${type.hint(padEndV(trans.timetable.weekAheadClasses, rowLabelW))}${classCells}`;
 
-  const eventCells = days.map((wd) => type.body(eventCell(wd))).join('  ');
+  const eventCells = days.map((wd) => type.body(padEndV(eventCell(wd), cellWidth))).join(gap);
   const eventLine = `${space.indent}${type.hint(padEndV(trans.menu.events, rowLabelW))}${eventCells}`;
 
   const legend = `${space.indent}${type.hint(legendText)}`;
 
   const wideLines = [headerLine, classLine, eventLine, legend];
-  const width = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : Number.POSITIVE_INFINITY;
   if (wideLines.every((line) => visualWidth(line) <= width)) return wideLines.join('\n');
 
   const compactHeading = wrappedIndentedLines(
@@ -140,10 +146,15 @@ export function renderHome(data: HomeData, now: Date, bodyRows = 100, cols = 80)
     lines.push(...panelHeading(trans.timetable.menuTitle, cols));
     lines.push(
       ...wrappedIndentedLines(
-        fmt(trans.timetable.homeLoginCta, {
-          tab: trans.timetable.menuEntry,
-          action: trans.timetable.publicLoginAction,
-        }),
+        fmt(
+          cols < 40 || bodyRows < 10
+            ? trans.timetable.homeLoginCtaCompact
+            : trans.timetable.homeLoginCta,
+          {
+            tab: trans.timetable.menuEntry,
+            action: trans.timetable.publicLoginAction,
+          },
+        ),
         cols,
         type.hint,
       ),
@@ -250,8 +261,12 @@ export const homeView = {
   id: 'home',
   title: 'Home',
 
-  footerHint(tabCount: number, cols = Number.POSITIVE_INFINITY): string {
-    return passiveFooterHint(tabCount, cols, false);
+  footerHint(tabCount: number, cols = Number.POSITIVE_INFINITY, canScroll = false): string {
+    return passiveFooterHint(tabCount, cols, false, canScroll);
+  },
+
+  scrollsBody(): boolean {
+    return true;
   },
 
   async load(ctx: AppContext): Promise<void> {

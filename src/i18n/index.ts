@@ -349,6 +349,7 @@ export interface Translations {
     termPickerNeedsLogin: string;
     termPickerLoginAction: string;
     homeLoginCta: string;
+    homeLoginCtaCompact: string;
     helpSwitchDay: string;
     helpPickClass: string;
     helpOpenClass: string;

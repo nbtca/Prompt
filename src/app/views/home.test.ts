@@ -87,6 +87,16 @@ describe('homeView footer', () => {
   it('does not offer Esc to go back from the root tab', () => {
     expect(stripAnsi(homeView.footerHint(5, 80))).not.toContain('Esc');
   });
+
+  it('offers line scrolling when the home body overflows', () => {
+    expect(homeView.scrollsBody()).toBe(true);
+    for (const cols of [20, 40, 80]) {
+      const hint = homeView.footerHint(5, cols, true);
+      expect(hint).toContain('↑↓');
+      expect(hint).toContain('q');
+      expect(visualWidth(hint) + 3).toBeLessThanOrEqual(cols);
+    }
+  });
 });
 
 describe('renderHome (schedule-first dashboard)', () => {
@@ -131,6 +141,23 @@ describe('renderHome (schedule-first dashboard)', () => {
     expect(out).not.toContain('%');
     expect(out).toContain('Hackathon');
   });
+
+  it.each(['en', 'zh'] as const)(
+    'keeps the login prompt and event status visible at 20×12 in %s',
+    (language) => {
+      setLanguage(language);
+      try {
+        const lines = renderHome({ schedule: null, eventsLoadFailed: true }, noon, 7, 20).map(
+          stripAnsi,
+        );
+        expect(lines.length).toBeLessThanOrEqual(7);
+        expect(lines.join('').replace(/\s/g, '')).toContain(t().calendar.error.replace(/\s/g, ''));
+        expect(lines.every((line) => visualWidth(line) <= 20)).toBe(true);
+      } finally {
+        setLanguage('en');
+      }
+    },
+  );
 
   it('keeps the next-class countdown on one line at forty columns', () => {
     const lines = renderHome(
@@ -374,6 +401,41 @@ describe('renderHome day-progress bar', () => {
 });
 
 describe('renderHome — week overview panel', () => {
+  it.each([
+    ['en', 'unicode', 80],
+    ['en', 'unicode', 40],
+    ['en', 'ascii', 80],
+    ['zh', 'unicode', 80],
+    ['zh', 'ascii', 80],
+  ] as const)('aligns all seven weekday columns in %s/%s at %i columns', (language, mode, cols) => {
+    setLanguage(language);
+    process.env['NBTCA_ICON_MODE'] = mode;
+    resetIconCache();
+    try {
+      const lines = renderHome(
+        { weekAhead: { classDays: [true, false, true, false, false, false, false] } },
+        noon,
+        100,
+        cols,
+      ).map(stripAnsi);
+      const start = lines.findIndex((line) => line.includes(t().timetable.weekOverviewTitle));
+      const header = defined(lines[start + 1]);
+      const positions = (line: string, pattern: RegExp) =>
+        Array.from(line.matchAll(pattern), (match) => visualWidth(line.slice(0, match.index)));
+      const weekdays = positions(
+        header,
+        language === 'en' ? /Mon|Tue|Wed|Thu|Fri|Sat|Sun/g : /[一二三四五六日]/g,
+      );
+      expect(weekdays).toHaveLength(7);
+      expect(positions(defined(lines[start + 2]), /▓▓|··|##|\.\./g)).toEqual(weekdays);
+      expect(positions(defined(lines[start + 3]), /\?\?/g)).toEqual(weekdays);
+    } finally {
+      setLanguage('en');
+      process.env['NBTCA_ICON_MODE'] = 'unicode';
+      resetIconCache();
+    }
+  });
+
   it('does not show the week overview panel at all when weekAhead is absent', () => {
     const out = stripAnsi(renderHome({ loading: false }, noon).join('\n'));
     expect(out).not.toContain('Week overview');
