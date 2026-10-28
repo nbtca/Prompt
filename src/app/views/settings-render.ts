@@ -5,7 +5,7 @@ import { renderBitmap } from '../../core/pixel-art.js';
 import { scene } from '../../art/bitmaps.js';
 import { type ListField, renderListFieldWithContext } from '../fields/list-field.js';
 
-export type SettingsMode = 'menu' | 'language' | 'icon' | 'color' | 'reset' | 'about';
+export type SettingsMode = 'menu' | 'language' | 'icon' | 'color' | 'picture' | 'reset' | 'about';
 
 export interface SettingsViewState {
   mode: SettingsMode;
@@ -43,6 +43,7 @@ export function renderSettings(
     case 'language':
     case 'icon':
     case 'color':
+    case 'picture':
     case 'reset':
       return state.subField?.render(bodyRows, cols) ?? [];
     case 'about': {

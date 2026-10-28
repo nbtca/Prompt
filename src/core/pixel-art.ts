@@ -1,6 +1,8 @@
 import chalk from 'chalk';
 import { GLYPHS, GLYPH_COLS, GLYPH_ROWS } from '../art/glyphs.js';
 import { getCapabilities } from './capabilities.js';
+import { loadPreferences } from '../config/preferences.js';
+import { renderFine } from './pixel-art-fine.js';
 
 export interface Bitmap {
   /** Maps a row character to a #rrggbb colour; a space is transparent. */
@@ -12,7 +14,8 @@ export interface Bitmap {
   smooth?: boolean;
 }
 
-export type PictureMode = 'color' | 'tone';
+/** fine: Unicode blocks (opt-in); color: coloured ASCII; tone: plain ASCII. */
+export type PictureMode = 'fine' | 'color' | 'tone';
 
 const DEFAULT_DENSITY = { x: 1, y: 2 } as const;
 const SAMPLES = GLYPH_COLS * GLYPH_ROWS;
@@ -54,9 +57,12 @@ export function bitmapSize(bitmap: Bitmap): { cols: number; rows: number } {
   };
 }
 
-/** Colour when the terminal shows it; otherwise the same picture in plain characters. */
+/** The finest picture the terminal can show and the user allows, falling back to plain ASCII. */
 export function pictureMode(): PictureMode {
-  return getCapabilities().color && chalk.level > 0 ? 'color' : 'tone';
+  const caps = getCapabilities();
+  if (!caps.color || chalk.level === 0) return 'tone';
+  if (caps.unicode && chalk.level >= 3 && loadPreferences().pictureDetail === 'fine') return 'fine';
+  return 'color';
 }
 
 type Rgb = [number, number, number];
@@ -201,10 +207,10 @@ function colorCell(cell: Cell, gamma: number): string {
   const peak = Math.max(1, ...ink);
   const level = 0.4 + 0.6 * Math.pow(luma(...ink), 0.6);
   const fg = ink.map((value) => clamp((value / peak) * 255 * level));
+  const text = chalk.rgb(fg[0] ?? 0, fg[1] ?? 0, fg[2] ?? 0);
+  if (chalk.level < 3) return text(glyph.char);
   const bg = mean.map((value) => clamp(value * TINT));
-  return chalk.rgb(fg[0] ?? 0, fg[1] ?? 0, fg[2] ?? 0).bgRgb(bg[0] ?? 0, bg[1] ?? 0, bg[2] ?? 0)(
-    glyph.char,
-  );
+  return text.bgRgb(bg[0] ?? 0, bg[1] ?? 0, bg[2] ?? 0)(glyph.char);
 }
 
 /**
@@ -218,6 +224,7 @@ export function renderBitmap(
   gamma = 0.7,
 ): string[] {
   const { cols, rows } = bitmapSize(bitmap);
+  if (mode === 'fine') return renderFine(bitmap, cols, rows);
   return Array.from({ length: rows }, (_, row) => {
     let line = '';
     for (let col = 0; col < cols; col++) {

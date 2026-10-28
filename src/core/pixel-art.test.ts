@@ -35,6 +35,20 @@ describe('renderBitmap', () => {
     expect(stripAnsi(first ?? '')).toMatch(/^[\x20-\x7e]*$/);
   });
 
+  it('drops the background tint below truecolor', () => {
+    chalk.level = 2;
+    const [first] = renderBitmap(sample, 'color');
+    expect(first).toMatch(/\x1b\[38;5;\d+m/);
+    expect(first).not.toContain('\x1b[48;');
+  });
+
+  it('draws the fine tier with Unicode block characters', () => {
+    chalk.level = 3;
+    const lines = renderBitmap(sample, 'fine');
+    expect(lines).toHaveLength(2);
+    expect(stripAnsi(lines.join(''))).toMatch(/[\u2580-\u259f]/u);
+  });
+
   it('emits no escape sequences when colour is off', () => {
     chalk.level = 0;
     for (const mode of ['tone', 'color'] as const) {

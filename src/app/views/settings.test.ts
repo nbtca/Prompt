@@ -119,10 +119,10 @@ describe('settingsView', () => {
   it('asks before resetting and stays put when cancelled', async () => {
     const ctx = fakeCtx();
     await settingsView.load();
-    for (let step = 0; step < 3; step += 1) settingsView.handleKey('\x1b[B');
+    for (let step = 0; step < 4; step += 1) settingsView.handleKey('\x1b[B');
     settingsView.handleKey('\r');
     const confirm = stripAnsi(settingsView.render(ctx).join('\n'));
-    expect(confirm).toContain('Reset icon mode and color mode to their defaults?');
+    expect(confirm).toContain('Reset icon mode, color mode, and picture detail to their defaults?');
     expect(selectedLabel(ctx)).toBe('Cancel');
 
     settingsView.handleKey('\r');
@@ -138,6 +138,19 @@ describe('settingsView', () => {
     settingsView.handleKey('\r');
     expect(stripAnsi(settingsView.render(ctx).join('\n'))).toMatch(/Icon mode (updated|changed)/u);
     expect(selectedLabel(ctx)).toBe('Icon Mode');
+  });
+
+  it('offers fine pictures and names the setting that changed', async () => {
+    const ctx = fakeCtx();
+    await settingsView.load();
+    for (let step = 0; step < 3; step += 1) settingsView.handleKey('\x1b[B');
+    settingsView.handleKey('\r');
+    expect(stripAnsi(settingsView.render(ctx).join('\n'))).toContain('Fine (Unicode blocks)');
+    settingsView.handleKey('\r');
+    expect(stripAnsi(settingsView.render(ctx).join('\n'))).toMatch(
+      /Picture detail (updated|changed)/u,
+    );
+    expect(selectedLabel(ctx)).toBe('Picture Detail');
   });
 
   it('draws the scene beside the about text on a wide terminal and omits it on a short one', async () => {

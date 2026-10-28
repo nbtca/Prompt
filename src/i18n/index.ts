@@ -371,6 +371,10 @@ export interface Translations {
     backToMenu: string;
     iconMode: string;
     colorMode: string;
+    pictureDetail: string;
+    modeFine: string;
+    pictureUpdated: string;
+    pictureUpdatedSessionOnly: string;
     updated: string;
     updatedSessionOnly: string;
     reset: string;

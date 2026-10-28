@@ -1,5 +1,6 @@
 import { emblemLines } from '../core/logo.js';
 import { padEndV, visualWidth } from '../core/text.js';
+import chalk from 'chalk';
 import { pictureMode, renderBitmap, type Bitmap } from '../core/pixel-art.js';
 import { mountainScene, scaleBitmap, shelfScene, skyScene } from '../art/scene.js';
 import { space } from '../core/theme.js';
@@ -44,6 +45,7 @@ function scene(spec: AmbientSpec, cols: number, rows: number, now: Date): string
     minute,
     spec.kind === 'mountain' ? spec.progress.toFixed(3) : '',
     pictureMode(),
+    chalk.level,
   ].join('|');
   return remember(key, () => {
     const pixels = { width: width * FINE.x, height: rows * FINE.y };
