@@ -30,4 +30,18 @@ describe('emptyStateLines', () => {
       expect(lines.every((line) => visualWidth(line) <= cols)).toBe(true);
     },
   );
+
+  it.each(['calendar', 'search'] as const)(
+    'draws the larger %s picture when there are six rows to spare',
+    (kind) => {
+      const lines = emptyStateLines(kind, 'No upcoming events', 80, 8);
+      expect(lines).toHaveLength(6);
+      expect(lines.map(stripAnsi).join('\n')).toContain('No upcoming events');
+      expect(lines.every((line) => visualWidth(line) <= 80)).toBe(true);
+    },
+  );
+
+  it('falls back to the three-line sketch below six rows', () => {
+    expect(emptyStateLines('calendar', 'No upcoming events', 80, 5)).toHaveLength(3);
+  });
 });

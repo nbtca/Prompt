@@ -95,26 +95,36 @@ describe('buildLogoLines display capabilities', () => {
     expect(lines.join('')).toContain('@nbtca/prompt');
   });
 
-  it('draws the same emblem as the Unicode badge when an ASCII terminal has room', () => {
+  it.each([
+    [80, 24, 30],
+    [80, 34, 44],
+  ])('shades the emblem with ASCII at %i x %i, %i columns wide', (cols, rows, width) => {
     process.env['NBTCA_ICON_MODE'] = 'ascii';
-    process.stdout.columns = 80;
-    process.stdout.rows = 24;
+    process.stdout.columns = cols;
+    process.stdout.rows = rows;
     resetIconCache();
 
     const lines = buildLogoLines().map(stripAnsi);
-    expect(lines.join('\n')).toContain('(@)');
-    expect(lines.join('')).not.toContain('|\\  |');
+    const art = lines.filter((line) => /[@%#*]/.test(line) && !line.includes('prompt'));
+    expect(art.length).toBeGreaterThan(10);
+    expect(Math.max(...art.map(visualWidth))).toBeLessThanOrEqual(width);
+    expect(Math.max(...art.map(visualWidth))).toBeGreaterThan(width - 6);
+    expect(lines.every((line) => /^[\x20-\x7e]*$/.test(line))).toBe(true);
+    expect(lines.length).toBeLessThanOrEqual(rows);
   });
 
-  it('falls back from the ASCII emblem to the wordmark when the terminal is too short', () => {
+  it('draws the line emblem when the shaded ones do not fit, and the wordmark below that', () => {
     process.env['NBTCA_ICON_MODE'] = 'ascii';
     process.stdout.columns = 80;
+    process.stdout.rows = 17;
+    resetIconCache();
+    expect(buildLogoLines().map(stripAnsi).join('\n')).toContain('(@)');
+
     process.stdout.rows = 10;
     resetIconCache();
-
-    const lines = buildLogoLines().map(stripAnsi);
-    expect(lines.join('\n')).not.toContain('(@)');
-    expect(lines.join('\n')).toContain('|\\  |');
+    const lines = buildLogoLines().map(stripAnsi).join('\n');
+    expect(lines).not.toContain('(@)');
+    expect(lines).toContain('|\\  |');
   });
 
   it('uses a readable wordmark when the ASCII artwork is too wide', () => {

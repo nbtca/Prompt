@@ -139,4 +139,24 @@ describe('settingsView', () => {
     expect(stripAnsi(settingsView.render(ctx).join('\n'))).toMatch(/Icon mode (updated|changed)/u);
     expect(selectedLabel(ctx)).toBe('Icon Mode');
   });
+
+  it('draws the scene beside the about text on a wide terminal and omits it on a short one', async () => {
+    await settingsView.load();
+    settingsView.handleKey('\x1b[F');
+    settingsView.handleKey('\r');
+
+    const wide = { ...fakeCtx(), size: { rows: 30, cols: 120 }, bodyRows: 25 };
+    const lines = settingsView.render(wide).map(stripAnsi);
+    const projectLine = lines.find((line) => line.includes('Project')) ?? '';
+    expect(projectLine.slice(0, projectLine.indexOf('Project')).trim()).not.toBe('');
+    expect(lines.length).toBeLessThanOrEqual(wide.bodyRows);
+
+    const short = settingsView.render(fakeCtx()).map(stripAnsi);
+    expect(
+      short
+        .find((line) => line.includes('Project'))
+        ?.trim()
+        .startsWith('Project'),
+    ).toBe(true);
+  });
 });

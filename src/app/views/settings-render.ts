@@ -1,5 +1,8 @@
 import { space, type } from '../../core/theme.js';
 import { wrapAnsiWithIndent } from '../../core/text.js';
+import { pictureBeside } from '../../core/components/picture.js';
+import { renderBitmap } from '../../core/pixel-art.js';
+import { scene } from '../../art/bitmaps.js';
 import { type ListField, renderListFieldWithContext } from '../fields/list-field.js';
 
 export type SettingsMode = 'menu' | 'language' | 'icon' | 'color' | 'reset' | 'about';
@@ -43,12 +46,21 @@ export function renderSettings(
     case 'reset':
       return state.subField?.render(bodyRows, cols) ?? [];
     case 'about': {
-      const context = [
-        ...(state.aboutLines ?? []).flatMap((line) =>
+      const aboutLines = state.aboutLines ?? [];
+      const plain = [
+        ...aboutLines.flatMap((line) =>
           line ? wrappedIndentedLines(line, cols, (value) => value) : [''],
         ),
         '',
       ];
+      const picture = renderBitmap(scene);
+      const fieldRows = state.backField?.render(Number.POSITIVE_INFINITY, cols).length ?? 0;
+      const fits = (lines: readonly string[]) =>
+        !Number.isFinite(bodyRows) || lines.length + fieldRows <= bodyRows;
+      const beside = pictureBeside(picture, aboutLines, cols, 52);
+      const stacked = [...picture.map((line) => space.indent + line), '', ...plain];
+      const context =
+        beside && fits([...beside, '']) ? [...beside, ''] : fits(stacked) ? stacked : plain;
       if (!state.backField) return context;
       const fieldLines = state.backField.render(Number.POSITIVE_INFINITY, cols);
       if (!Number.isFinite(bodyRows) || context.length + fieldLines.length <= bodyRows) {
