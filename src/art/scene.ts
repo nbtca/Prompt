@@ -67,7 +67,36 @@ class Canvas {
       this.set(x0 + ((x1 - x0) * step) / steps, y0 + ((y1 - y0) * step) / steps, color);
     }
   }
+  /** Softens the staircase along high-contrast edges so silhouettes read as smooth curves. */
+  smoothEdges(): void {
+    const luminance = (hex: string): number => {
+      const [r, g, b] = hexToRgb(hex);
+      return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    };
+    const next = this.cells.map((row) => [...row]);
+    for (let y = 1; y < this.height - 1; y++) {
+      for (let x = 1; x < this.width - 1; x++) {
+        const self = this.cells[y]?.[x];
+        if (!self) continue;
+        const around = [
+          this.get(x - 1, y),
+          this.get(x + 1, y),
+          this.get(x, y - 1),
+          this.get(x, y + 1),
+        ];
+        const unlike = around.filter(
+          (color): color is string =>
+            color !== null && Math.abs(luminance(color) - luminance(self)) > 0.2,
+        );
+        const target = unlike[0];
+        const row = next[y];
+        if (unlike.length === 1 && target !== undefined && row) row[x] = mix(self, target, 0.35);
+      }
+    }
+    for (let y = 0; y < this.height; y++) this.cells[y] = next[y] ?? [];
+  }
   toBitmap(): Bitmap {
+    this.smoothEdges();
     const palette: Record<string, string> = {};
     const symbols = new Map<string, string>();
     const rows = this.cells.map((row) =>

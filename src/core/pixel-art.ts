@@ -100,8 +100,48 @@ function halfBlockCell(pixels: Pixels): string {
   return chalk.hex(hex(top)).bgHex(hex(bottom))('▀');
 }
 
-/** Splits the eight dots of a cell into two colours: the lit dots and the background behind them. */
-function brailleCell(pixels: Pixels): string {
+const QUADRANTS = [
+  ' ',
+  '▘',
+  '▝',
+  '▀',
+  '▖',
+  '▌',
+  '▞',
+  '▛',
+  '▗',
+  '▚',
+  '▐',
+  '▜',
+  '▄',
+  '▙',
+  '▟',
+  '█',
+] as const;
+// Cells whose two colours differ by less than this are drawn as one smooth colour.
+const FLAT_CONTRAST = 0.07;
+// A solid quadrant glyph is kept over Braille dots while its error stays within this factor of theirs.
+const QUADRANT_TOLERANCE = 1.8;
+
+function splitTwoColors(pixels: readonly Rgb[]): { light: Rgb; dark: Rgb; lit: boolean[] } {
+  let dark = pixels.reduce((best, pixel) => (luminance(pixel) < luminance(best) ? pixel : best));
+  let light = pixels.reduce((best, pixel) => (luminance(pixel) > luminance(best) ? pixel : best));
+  let lit = pixels.map(() => false);
+  for (let round = 0; round < 3; round++) {
+    lit = pixels.map((pixel) => distance(pixel, light) < distance(pixel, dark));
+    const lights = pixels.filter((_, index) => lit[index] === true);
+    const darks = pixels.filter((_, index) => lit[index] === false);
+    if (lights.length > 0) light = average(lights);
+    if (darks.length > 0) dark = average(darks);
+  }
+  return { light, dark, lit };
+}
+
+/**
+ * One cell of a fine bitmap. Flat areas become a single smooth colour, edges that follow the 2 × 2 grid
+ * become solid quadrant blocks, and everything else, such as thin lines and slopes, uses Braille dots.
+ */
+function fineCell(pixels: Pixels): string {
   const grid = BRAILLE_DOTS.map(([column, row]) => {
     const source =
       pixels[Math.min(pixels.length - 1, Math.floor((row * pixels.length) / BRAILLE_ROWS))];
@@ -109,23 +149,43 @@ function brailleCell(pixels: Pixels): string {
   });
   const present = solid(grid);
   if (present.length === 0) return ' ';
-
-  let dark = present.reduce((best, pixel) => (luminance(pixel) < luminance(best) ? pixel : best));
-  let light = present.reduce((best, pixel) => (luminance(pixel) > luminance(best) ? pixel : best));
-  let lit = grid.map(() => false);
-  for (let round = 0; round < 3; round++) {
-    lit = grid.map(
-      (pixel) => pixel !== undefined && distance(pixel, light) < distance(pixel, dark),
-    );
-    const lights = solid(grid.filter((_, index) => lit[index] === true));
-    const darks = solid(grid.filter((_, index) => lit[index] === false));
-    if (lights.length > 0) light = average(lights);
-    if (darks.length > 0) dark = average(darks);
+  const hasGap = present.length < grid.length;
+  const { light, dark } = splitTwoColors(present);
+  const lit = grid.map(
+    (pixel) => pixel !== undefined && distance(pixel, light) < distance(pixel, dark),
+  );
+  if (!hasGap && Math.abs(luminance(light) - luminance(dark)) < FLAT_CONTRAST) {
+    return chalk.hex(hex(average(present)))('█');
   }
+
+  if (!hasGap) {
+    const quadrantOf = (index: number) => {
+      const [column, row] = BRAILLE_DOTS[index] ?? [0, 0];
+      return (row >= 2 ? 2 : 0) + column;
+    };
+    const mask = grid.reduce((bits, pixel, index) => {
+      if (pixel === undefined) return bits;
+      const nearLight = distance(pixel, light) < distance(pixel, dark);
+      return nearLight ? bits | (1 << quadrantOf(index)) : bits;
+    }, 0);
+    const quadrantLit = (index: number) => ((mask >> quadrantOf(index)) & 1) === 1;
+    const error = (isLit: (index: number) => boolean) =>
+      grid.reduce(
+        (sum, pixel, index) =>
+          pixel === undefined ? sum : sum + distance(pixel, isLit(index) ? light : dark),
+        0,
+      );
+    if (error(quadrantLit) <= error((index) => lit[index] === true) * QUADRANT_TOLERANCE + 1) {
+      const glyph = QUADRANTS[mask] ?? '█';
+      if (mask === 0) return chalk.hex(hex(dark))('█');
+      if (mask === 15) return chalk.hex(hex(light))('█');
+      return chalk.hex(hex(light)).bgHex(hex(dark))(glyph);
+    }
+  }
+
   const mask = lit.reduce((bits, on, index) => (on ? bits | (1 << index) : bits), 0);
   const glyph = String.fromCodePoint(BRAILLE_BASE + mask);
   const hasDark = grid.some((pixel, index) => pixel !== undefined && !lit[index]);
-  const hasGap = grid.some((pixel) => pixel === undefined);
   if (!lit.some(Boolean)) return hasGap ? ' ' : chalk.hex(hex(dark))('█');
   if (!hasDark || hasGap) return chalk.hex(hex(light))(glyph);
   return chalk.hex(hex(light)).bgHex(hex(dark))(glyph);
@@ -166,7 +226,7 @@ export function renderBitmap(
     for (let col = 0; col < cols; col++) {
       const pixels = cellPixels(bitmap, col, row);
       if (mode === 'tone') line += toneCell(pixels, color, gamma);
-      else line += fine ? brailleCell(pixels) : halfBlockCell(pixels);
+      else line += fine ? fineCell(pixels) : halfBlockCell(pixels);
     }
     return mode === 'tone' ? line.replace(/\s+$/, '') : line;
   });
