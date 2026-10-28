@@ -277,7 +277,7 @@ const SOURCE_TAG = /^(\[[^\]]{1,16}\])(\s+)(?=\S)/;
 function styleTitle(title: string, style: (value: string) => string): string {
   const match = SOURCE_TAG.exec(title);
   if (!match?.[1] || !match[2]) return style(title);
-  return `${type.hint(match[1])}${match[2]}${style(title.slice(match[0].length))}`;
+  return `${c.muted(match[1])}${match[2]}${style(title.slice(match[0].length))}`;
 }
 
 const TIME_COLUMN = ' 00:00'.length;
@@ -315,7 +315,7 @@ export function renderEventBriefLines(
         ? c.brand
         : proximity === 'week'
           ? type.body
-          : type.hint;
+          : c.muted;
   const marker = proximity === 'today' ? type.active(pickIcon('●', '*')) : dateStyle(glyph.sep());
   const titleStyled = styleTitle(e.title, proximity === 'today' ? type.active : type.body);
   const content = `${dateStyle(eventWhen(e))}  ${type.hint(dot)}  ${titleStyled}${type.hint(recurringMark(e))}`;

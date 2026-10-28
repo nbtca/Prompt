@@ -12,6 +12,7 @@ import {
 import { renderHeatmap } from '../../features/calendar-heatmap.js';
 import { wrapAnsiWithIndent } from '../../core/text.js';
 import { loadingLines } from '../../core/components/spinner.js';
+import { emptyStateLines } from '../../core/components/empty-state.js';
 
 export type EventsMode = 'loading' | 'hub' | 'heatmap' | 'list' | 'detail' | 'search' | 'error';
 
@@ -98,9 +99,17 @@ function renderHubBody(
     }
     if (eventLines.length > 0) lines.push(...activityHeading, ...eventLines, '');
   } else if (!state.nextEvent) {
-    const notice = [...wrappedIndentedLines(trans.calendar.noEvents, cols, type.hint), ''];
     const fieldRows = state.hubField?.render(Number.POSITIVE_INFINITY, cols).length ?? 0;
-    if (lines.length + notice.length + fieldRows <= rows) lines.push(...notice);
+    const notice = [
+      ...emptyStateLines(
+        'calendar',
+        trans.calendar.noEvents,
+        cols,
+        rows - lines.length - fieldRows - 1,
+      ),
+      '',
+    ];
+    lines.push(...notice);
   }
   if (state.hubField) {
     return renderListFieldWithContext(lines, state.hubField, bodyRows, cols);
@@ -126,7 +135,7 @@ export function renderEvents(
         ...notice,
         ...(state.heatmapBuckets && state.heatmapBuckets.length > 0
           ? heatmapLines(state.heatmapBuckets, now, cols)
-          : wrappedIndentedLines(trans.calendar.noEvents, cols, type.hint)),
+          : emptyStateLines('calendar', trans.calendar.noEvents, cols, bodyRows - notice.length)),
       ];
     case 'list': {
       if (!state.listField) return [];
@@ -137,7 +146,16 @@ export function renderEvents(
               ...notice,
               ...wrappedIndentedLines(state.listTitle ?? '', cols, type.heading),
               '',
-              ...wrappedIndentedLines(state.listNotice, cols, type.hint),
+              ...emptyStateLines(
+                'calendar',
+                state.listNotice,
+                cols,
+                bodyRows -
+                  notice.length -
+                  wrappedIndentedLines(state.listTitle ?? '', cols, type.heading).length -
+                  state.listField.render(Number.POSITIVE_INFINITY, cols).length -
+                  2,
+              ),
               '',
             ];
       return renderListFieldWithContext(context, state.listField, bodyRows, cols);

@@ -119,6 +119,22 @@ describe('renderDocs', () => {
     expect(out).toContain('X Doc');
   });
 
+  it.each([5, 12])('keeps empty-search actions visible in a %i-row body', (bodyRows) => {
+    const searchResultsField = new ListField({
+      title: 'Results',
+      options: [{ value: 'search', label: 'Search again' }],
+    });
+    const lines = renderDocs(
+      { mode: 'searchResults', searchResultsField, searchResultsEmpty: true },
+      80,
+      bodyRows,
+    );
+    const text = lines.map(stripAnsi).join('\n');
+    expect(lines.length).toBeLessThanOrEqual(bodyRows);
+    expect(text).toContain('No documents match your search');
+    expect(text).toContain('Search again');
+  });
+
   it.each([
     ['en', 'Community governance and operations', 'Current', 'No documents match your search'],
     ['zh', '社区治理与组织协作运行机制', '当前', '未找到匹配的文档'],

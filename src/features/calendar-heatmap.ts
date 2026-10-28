@@ -31,7 +31,7 @@ function levelCell(count: number, useColor: boolean): string {
   const [unicode, ascii] = LEVEL_GLYPHS[level] ?? LEVEL_GLYPHS[0];
   const cell = pickIcon(unicode, ascii);
   if (!useColor) return cell;
-  return level === 0 ? type.hint(cell) : c.success(cell);
+  return level === 0 ? c.muted(cell) : c.success(cell);
 }
 
 interface MonthAnchor {

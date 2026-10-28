@@ -333,7 +333,7 @@ export interface Translations {
     weekAheadClasses: string;
     weekAheadBusy: string;
     weekAheadFree: string;
-    weekAheadNone: string;
+    weekAheadUnknown: string;
     termPreviewWeek: string;
     hubFullGrid: string;
     detailTime: string;
@@ -349,6 +349,7 @@ export interface Translations {
     termPickerNeedsLogin: string;
     termPickerLoginAction: string;
     homeLoginCta: string;
+    homeLoginCtaCompact: string;
     helpSwitchDay: string;
     helpPickClass: string;
     helpOpenClass: string;

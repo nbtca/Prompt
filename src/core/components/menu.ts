@@ -1,4 +1,4 @@
-import { glyph, type, space, bodyEdge } from '../theme.js';
+import { c, glyph, type, space, bodyEdge } from '../theme.js';
 import {
   visualWidth,
   padEndV,
@@ -179,7 +179,7 @@ export function renderMenuOption(
   const continuation = ' '.repeat(visualWidth(prefix));
   const contentWidth = Math.max(1, bodyEdge(width) - visualWidth(prefix));
   const cells = optionCells(option, columns, contentWidth);
-  const style = selected ? type.active : option.dim ? type.hint : type.body;
+  const style = selected ? type.active : option.dim ? c.muted : type.body;
   const hint = cells.hint ? `  ${type.hint(cells.hint)}` : '';
   const label = style(cells.label);
   return wrapAnsiToVisualWidth(`${label}${hint}`, contentWidth).map(

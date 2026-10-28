@@ -23,6 +23,7 @@ import { campusDateTime, campusIsoDate } from '@nbtca/nbtcal/timetable';
 import { isoDayDifference, localDayDifference, parseLocalDate } from '../../core/calendar-day.js';
 import { currentEvents } from '../../features/calendar-query.js';
 import { loadingLines } from '../../core/components/spinner.js';
+import { emptyStateLines } from '../../core/components/empty-state.js';
 import type { Calendar } from '@nbtca/nbtcal';
 const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const;
 
@@ -89,32 +90,38 @@ function renderWeekAheadGrid(
 ): string {
   const trans = t();
   const hasClassChar = pickIcon('▓▓', '##');
-  const freeChar = pickIcon('░░', '..');
-  const weekendChar = pickIcon('··', '..');
-  const blankCell = '  ';
+  const freeChar = pickIcon('··', '..');
+  const unknownChar = '??';
 
   const rowLabelW =
     Math.max(visualWidth(trans.timetable.weekAheadClasses), visualWidth(trans.menu.events)) + 1;
 
-  const days = [1, 2, 3, 4, 5, 6, 7];
-  const classCell = (wd: number): string =>
-    classDays[wd - 1] ? hasClassChar : wd >= 6 ? weekendChar : freeChar;
+  const days = WEEKDAYS;
+  const labels = days.map(weekdayShortLabel);
+  const cellWidth = Math.max(2, ...labels.map(visualWidth));
+  const width = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : Number.POSITIVE_INFINITY;
+  const gap =
+    visualWidth(space.indent) + rowLabelW + days.length * cellWidth + (days.length - 1) * 2 <= width
+      ? '  '
+      : ' ';
+  const classCell = (wd: number): string => (classDays[wd - 1] ? hasClassChar : freeChar);
   const eventCell = (wd: number): string =>
-    eventDays ? (eventDays[wd - 1] ? hasClassChar : freeChar) : blankCell;
-  const legendText = `${hasClassChar} ${trans.timetable.weekAheadBusy}  ${freeChar} ${trans.timetable.weekAheadFree}  ${weekendChar} ${trans.timetable.weekAheadNone}`;
-  const dayLabels = days.map((wd) => type.hint(weekdayShortLabel(wd))).join('  ');
+    eventDays ? (eventDays[wd - 1] ? hasClassChar : freeChar) : unknownChar;
+  const legendText =
+    `${hasClassChar} ${trans.timetable.weekAheadBusy}  ${freeChar} ${trans.timetable.weekAheadFree}` +
+    (eventDays ? '' : `  ${unknownChar} ${trans.timetable.weekAheadUnknown}`);
+  const dayLabels = labels.map((label) => type.hint(padEndV(label, cellWidth))).join(gap);
   const headerLine = `${space.indent}${padEndV('', rowLabelW)}${dayLabels}`;
 
-  const classCells = days.map((wd) => type.body(classCell(wd))).join('  ');
+  const classCells = days.map((wd) => type.body(padEndV(classCell(wd), cellWidth))).join(gap);
   const classLine = `${space.indent}${type.hint(padEndV(trans.timetable.weekAheadClasses, rowLabelW))}${classCells}`;
 
-  const eventCells = days.map((wd) => type.body(eventCell(wd))).join('  ');
+  const eventCells = days.map((wd) => type.body(padEndV(eventCell(wd), cellWidth))).join(gap);
   const eventLine = `${space.indent}${type.hint(padEndV(trans.menu.events, rowLabelW))}${eventCells}`;
 
   const legend = `${space.indent}${type.hint(legendText)}`;
 
   const wideLines = [headerLine, classLine, eventLine, legend];
-  const width = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : Number.POSITIVE_INFINITY;
   if (wideLines.every((line) => visualWidth(line) <= width)) return wideLines.join('\n');
 
   const compactHeading = wrappedIndentedLines(
@@ -139,10 +146,15 @@ export function renderHome(data: HomeData, now: Date, bodyRows = 100, cols = 80)
     lines.push(...panelHeading(trans.timetable.menuTitle, cols));
     lines.push(
       ...wrappedIndentedLines(
-        fmt(trans.timetable.homeLoginCta, {
-          tab: trans.timetable.menuEntry,
-          action: trans.timetable.publicLoginAction,
-        }),
+        fmt(
+          cols < 40 || bodyRows < 10
+            ? trans.timetable.homeLoginCtaCompact
+            : trans.timetable.homeLoginCta,
+          {
+            tab: trans.timetable.menuEntry,
+            action: trans.timetable.publicLoginAction,
+          },
+        ),
         cols,
         type.hint,
       ),
@@ -202,7 +214,9 @@ export function renderHome(data: HomeData, now: Date, bodyRows = 100, cols = 80)
   } else if (data.eventsLoadFailed) {
     lines.push(...wrappedIndentedLines(trans.calendar.error, cols, type.hint));
   } else {
-    lines.push(...wrappedIndentedLines(trans.calendar.noEvents, cols, type.hint));
+    lines.push(
+      ...emptyStateLines('calendar', trans.calendar.noEvents, cols, bodyRows - lines.length),
+    );
   }
 
   return lines;
@@ -247,8 +261,12 @@ export const homeView = {
   id: 'home',
   title: 'Home',
 
-  footerHint(tabCount: number, cols = Number.POSITIVE_INFINITY): string {
-    return passiveFooterHint(tabCount, cols, false);
+  footerHint(tabCount: number, cols = Number.POSITIVE_INFINITY, canScroll = false): string {
+    return passiveFooterHint(tabCount, cols, false, canScroll);
+  },
+
+  scrollsBody(): boolean {
+    return true;
   },
 
   async load(ctx: AppContext): Promise<void> {

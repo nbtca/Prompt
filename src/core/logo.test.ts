@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { buildLogoLines, startupFitsTerminal, startupOffset } from './logo.js';
-import { stripAnsi } from './text.js';
+import { buildLogoLines } from './logo.js';
+import { stripAnsi, visualWidth } from './text.js';
 import { resetIconCache } from './icons.js';
 
 describe('buildLogoLines', () => {
@@ -17,34 +17,11 @@ describe('buildLogoLines', () => {
   });
 });
 
-describe('startupFitsTerminal', () => {
-  it('skips startup art that would overflow either terminal dimension', () => {
-    expect(startupFitsTerminal(5, 20, 'one\ntwo\nthree')).toBe(false);
-    expect(startupFitsTerminal(8, 2, 'one\ntwo\nthree')).toBe(false);
-    expect(startupFitsTerminal(8, 5, 'one\ntwo\nthree')).toBe(true);
-    expect(startupFitsTerminal(undefined, undefined, 'one\ntwo\nthree')).toBe(true);
-  });
-});
-
-describe('startupOffset', () => {
-  it('starts the logo where the app frame starts its content', () => {
-    expect(startupOffset(80, 52)).toBe(3);
-    expect(startupOffset(160, 52)).toBe(23);
-  });
-
-  it('gives up the offset before letting the art overflow', () => {
-    expect(startupOffset(54, 52)).toBe(2);
-    expect(startupOffset(undefined, 52)).toBe(0);
-  });
-});
-
 describe('buildLogoLines dot-matrix tier selection', () => {
   const originalCols = process.stdout.columns;
   const originalRows = process.stdout.rows;
 
   beforeEach(() => {
-    // Tier selection only applies to the braille art path; force it on so
-    // these tests aren't at the mercy of the test runner's own TTY/locale.
     process.env['NBTCA_ICON_MODE'] = 'unicode';
     resetIconCache();
   });
@@ -56,16 +33,9 @@ describe('buildLogoLines dot-matrix tier selection', () => {
     resetIconCache();
   });
 
-  // Each tier's art block is a fixed, known line count (12/16/26 -- see
-  // src/logo/ca-dotmatrix-*.txt), so counting the art lines between the
-  // leading blank and the trailing blank+tagline+version block is enough to
-  // tell which tier rendered, without hardcoding file paths in the test.
   function artLineCount(): number {
     const lines = buildLogoLines().map(stripAnsi);
-    // lines = ['', ...art, '', tagline, version, ''] -- art sits between
-    // index 1 and the blank line preceding the tagline.
-    const taglineIdx = lines.findIndex((l) => l.includes('intersection of technology'));
-    return taglineIdx - 2; // minus the leading blank and the blank before tagline
+    return lines.indexOf('', 1) - 1;
   }
 
   it('picks the small tier on a narrow/short terminal', () => {
@@ -90,5 +60,63 @@ describe('buildLogoLines dot-matrix tier selection', () => {
     process.stdout.columns = 40;
     process.stdout.rows = 40;
     expect(artLineCount()).toBe(12);
+  });
+});
+
+describe('buildLogoLines display capabilities', () => {
+  const originalCols = process.stdout.columns;
+  const originalRows = process.stdout.rows;
+  const originalIconMode = process.env['NBTCA_ICON_MODE'];
+
+  afterEach(() => {
+    process.stdout.columns = originalCols;
+    process.stdout.rows = originalRows;
+    if (originalIconMode === undefined) delete process.env['NBTCA_ICON_MODE'];
+    else process.env['NBTCA_ICON_MODE'] = originalIconMode;
+    resetIconCache();
+  });
+
+  it.each([
+    [80, 24],
+    [40, 12],
+    [20, 12],
+  ])('fits the complete ASCII startup in %i columns and %i rows', (cols, rows) => {
+    process.env['NBTCA_ICON_MODE'] = 'ascii';
+    process.stdout.columns = cols;
+    process.stdout.rows = rows;
+    resetIconCache();
+
+    const lines = buildLogoLines().map(stripAnsi);
+    expect(lines.length).toBeGreaterThan(0);
+    expect(lines.length).toBeLessThanOrEqual(rows);
+    expect(lines.every((line) => /^[\x20-\x7e]*$/.test(line))).toBe(true);
+    expect(lines.every((line) => visualWidth(line) <= cols)).toBe(true);
+    expect(lines.join('').replace(/\s/g, '')).toContain('intersectionoftechnologyandliberalarts');
+    expect(lines.join('')).toContain('@nbtca/prompt');
+  });
+
+  it('uses a readable wordmark when the ASCII artwork is too wide', () => {
+    process.env['NBTCA_ICON_MODE'] = 'ascii';
+    process.stdout.columns = 20;
+    process.stdout.rows = 12;
+    resetIconCache();
+    expect(stripAnsi(buildLogoLines()[1] ?? '')).toBe('NBTCA');
+  });
+
+  it('uses compact artwork when a Unicode terminal is too short for the badge', () => {
+    process.env['NBTCA_ICON_MODE'] = 'unicode';
+    process.stdout.columns = 80;
+    process.stdout.rows = 12;
+    resetIconCache();
+    const lines = buildLogoLines().map(stripAnsi);
+    expect(lines.length).toBeGreaterThan(0);
+    expect(lines.length).toBeLessThanOrEqual(12);
+    expect(lines.join('')).not.toMatch(/[\u2800-\u28ff]/u);
+  });
+
+  it('skips startup when even the wordmark and metadata cannot fit', () => {
+    process.stdout.columns = 8;
+    process.stdout.rows = 3;
+    expect(buildLogoLines()).toEqual([]);
   });
 });
