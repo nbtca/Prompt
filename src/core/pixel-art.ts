@@ -155,8 +155,17 @@ const luma = (r: number, g: number, b: number): number =>
   (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
 const clamp = (value: number): number => Math.round(Math.min(255, Math.max(0, value)));
 
-/** The glyph whose ink best matches the brightness of each part of the cell. */
-function pickGlyph(cell: Cell, gamma: number): Glyph | undefined {
+interface Pick {
+  glyph: Glyph;
+  /** Brightness the glyph failed to deliver, as a share of the cell: what error diffusion passes on. */
+  error: number;
+}
+
+/**
+ * The glyph whose ink best matches the brightness of each part of the cell. `carry` is error diffused in from
+ * neighbouring cells; it shifts the target brightness, not the shape.
+ */
+function pickGlyph(cell: Cell, gamma: number, carry: number): Pick | undefined {
   const bright = new Float32Array(SAMPLES);
   let total = 0;
   for (let index = 0; index < SAMPLES; index++) {
@@ -166,34 +175,42 @@ function pickGlyph(cell: Cell, gamma: number): Glyph | undefined {
     total += value;
   }
   if (total / SAMPLES < 0.004) return undefined;
-  const mean = total / SAMPLES;
+  const mean = Math.max(0, total / SAMPLES + carry);
+  const shift = mean - total / SAMPLES;
   let best: Glyph | undefined;
   let bestCost = Number.POSITIVE_INFINITY;
   for (const glyph of GLYPH_TABLE) {
     const glyphMean = glyph.ink / SAMPLES;
     let cost = TONE_WEIGHT * SAMPLES * (mean - glyphMean) ** 2;
     for (let index = 0; index < SAMPLES; index++)
-      cost += ((bright[index] ?? 0) - mean - ((glyph.cover[index] ?? 0) - glyphMean)) ** 2;
+      cost += ((bright[index] ?? 0) + shift - mean - ((glyph.cover[index] ?? 0) - glyphMean)) ** 2;
     if (cost < bestCost) {
       bestCost = cost;
       best = glyph;
     }
   }
-  return best;
+  return best && { glyph: best, error: mean - best.ink / SAMPLES };
+}
+
+interface Drawn {
+  text: string;
+  error: number;
 }
 
 /** Plain characters only. */
-function toneCell(cell: Cell, gamma: number): string {
-  return pickGlyph(cell, gamma)?.char ?? ' ';
+function toneCell(cell: Cell, gamma: number, carry: number): Drawn {
+  const pick = pickGlyph(cell, gamma, carry);
+  return { text: pick?.glyph.char ?? ' ', error: pick?.error ?? 0 };
 }
 
 /**
  * Characters follow the brightness and shape of the picture; the colour lives in the characters themselves, on
  * the terminal's own dark background with only a faint tint.
  */
-function colorCell(cell: Cell, gamma: number): string {
-  const glyph = pickGlyph(cell, gamma);
-  if (!glyph || glyph.char === ' ') return ' ';
+function colorCell(cell: Cell, gamma: number, carry: number): Drawn {
+  const pick = pickGlyph(cell, gamma, carry);
+  if (!pick || pick.glyph.char === ' ') return { text: ' ', error: pick?.error ?? 0 };
+  const { glyph, error } = pick;
   const mean: Rgb = [0, 0, 0];
   const ink: Rgb = [0, 0, 0];
   for (let index = 0; index < SAMPLES; index++) {
@@ -208,14 +225,27 @@ function colorCell(cell: Cell, gamma: number): string {
   const level = 0.4 + 0.6 * Math.pow(luma(...ink), 0.6);
   const fg = ink.map((value) => clamp((value / peak) * 255 * level));
   const text = chalk.rgb(fg[0] ?? 0, fg[1] ?? 0, fg[2] ?? 0);
-  if (chalk.level < 3) return text(glyph.char);
+  if (chalk.level < 3) return { text: text(glyph.char), error };
   const bg = mean.map((value) => clamp(value * TINT));
-  return text.bgRgb(bg[0] ?? 0, bg[1] ?? 0, bg[2] ?? 0)(glyph.char);
+  return { text: text.bgRgb(bg[0] ?? 0, bg[1] ?? 0, bg[2] ?? 0)(glyph.char), error };
 }
+
+// Floyd–Steinberg weights for the cell to the right, and below-behind, below, below-ahead. Passing on only
+// part of the error, as Atkinson dithering does, keeps flat areas calm.
+const DIFFUSION = 0.8;
+const DIFFUSE = [7 / 16, 3 / 16, 5 / 16, 1 / 16].map((weight) => weight * DIFFUSION) as [
+  number,
+  number,
+  number,
+  number,
+];
+const MAX_CARRY = 0.12;
 
 /**
  * Draws a bitmap as ASCII art, one character per terminal cell. With colour the characters carry the picture's
  * hue on a tinted background; without it they carry only brightness, like a classic density ramp.
+ * Brightness error is diffused to neighbouring cells in serpentine order, as libcaca and AAlib do, so gradients
+ * mix the two nearest densities instead of stepping.
  */
 export function renderBitmap(
   bitmap: Bitmap,
@@ -225,13 +255,28 @@ export function renderBitmap(
 ): string[] {
   const { cols, rows } = bitmapSize(bitmap);
   if (mode === 'fine') return renderFine(bitmap, cols, rows);
+  let carry = new Float32Array(cols + 2);
+  let ahead = new Float32Array(cols + 2);
   return Array.from({ length: rows }, (_, row) => {
-    let line = '';
-    for (let col = 0; col < cols; col++) {
+    const forward = row % 2 === 0;
+    const direction = forward ? 1 : -1;
+    const cells = Array.from({ length: cols }, () => ' ');
+    for (let step = 0; step < cols; step++) {
+      const col = forward ? step : cols - 1 - step;
       const cell = sampleCell(bitmap, col, row);
-      if (cell.filled === 0) line += ' ';
-      else line += mode === 'color' ? colorCell(cell, gamma) : toneCell(cell, gamma);
+      if (cell.filled === 0) continue;
+      const carried = Math.max(-MAX_CARRY, Math.min(MAX_CARRY, carry[col + 1] ?? 0));
+      const drawn =
+        mode === 'color' ? colorCell(cell, gamma, carried) : toneCell(cell, gamma, carried);
+      cells[col] = drawn.text;
+      const error = drawn.error;
+      carry[col + 1 + direction] = (carry[col + 1 + direction] ?? 0) + error * DIFFUSE[0];
+      ahead[col + 1 - direction] = (ahead[col + 1 - direction] ?? 0) + error * DIFFUSE[1];
+      ahead[col + 1] = (ahead[col + 1] ?? 0) + error * DIFFUSE[2];
+      ahead[col + 1 + direction] = (ahead[col + 1 + direction] ?? 0) + error * DIFFUSE[3];
     }
+    [carry, ahead] = [ahead, new Float32Array(cols + 2)];
+    const line = cells.join('');
     return mode === 'tone' ? line.replace(/\s+$/, '') : line;
   });
 }

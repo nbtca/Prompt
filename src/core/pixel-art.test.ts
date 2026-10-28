@@ -49,6 +49,17 @@ describe('renderBitmap', () => {
     expect(stripAnsi(lines.join(''))).toMatch(/[\u2580-\u259f]/u);
   });
 
+  it('mixes neighbouring densities across a flat tone instead of stepping', () => {
+    const grey: Bitmap = {
+      palette: { g: '#6b6b6b' },
+      rows: Array.from({ length: 16 }, () => 'g'.repeat(40)),
+    };
+    const lines = renderBitmap(grey, 'tone');
+    const used = new Set(lines.join('').replace(/ /g, ''));
+    expect(used.size).toBeGreaterThanOrEqual(2);
+    expect(lines.join('')).toBe(renderBitmap(grey, 'tone').join(''));
+  });
+
   it('emits no escape sequences when colour is off', () => {
     chalk.level = 0;
     for (const mode of ['tone', 'color'] as const) {
