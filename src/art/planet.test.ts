@@ -54,8 +54,8 @@ describe('planets', () => {
   });
 
   it('declines when there is no room', () => {
-    expect(gasGiantLines(8)).toBeUndefined();
-    expect(moonLines(8, fullMoon)).toBeUndefined();
+    expect(gasGiantLines(6)).toBeUndefined();
+    expect(moonLines(6, fullMoon)).toBeUndefined();
     expect(planetSize(100, 5)).toBe(10);
   });
 });

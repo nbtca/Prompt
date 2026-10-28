@@ -6,7 +6,11 @@ import type { TextField } from '../fields/text-field.js';
 import type { DocLink } from '../../features/docs.js';
 import { visualWidth, wrapAnsiWithIndent } from '../../core/text.js';
 import { loadingLines } from '../../core/components/spinner.js';
-import { emptyStateLines } from '../../core/components/empty-state.js';
+import {
+  emptyStateLines,
+  loadingStateLines,
+  offlineContext,
+} from '../../core/components/empty-state.js';
 
 export type DocsMode =
   | 'loading'
@@ -98,7 +102,7 @@ export function renderDocs(
   let lines: string[];
   switch (state.mode) {
     case 'loading':
-      lines = loadingLines(trans.common.loading, cols);
+      lines = loadingStateLines(trans.common.loading, cols, bodyRows);
       break;
     case 'sections': {
       const context = state.stale ? offlineNotice(cols) : [];
@@ -111,7 +115,9 @@ export function renderDocs(
       break;
     }
     case 'files':
-      lines = state.filesField?.render(bodyRows, cols) ?? loadingLines(trans.common.loading, cols);
+      lines =
+        state.filesField?.render(bodyRows, cols) ??
+        loadingStateLines(trans.common.loading, cols, bodyRows);
       break;
     case 'archivedGroups':
       lines = state.archivedGroupsField?.render(bodyRows, cols) ?? [];
@@ -119,7 +125,7 @@ export function renderDocs(
     case 'archivedFiles':
       lines =
         state.archivedFilesField?.render(bodyRows, cols) ??
-        loadingLines(trans.common.loading, cols);
+        loadingStateLines(trans.common.loading, cols, bodyRows);
       break;
     case 'search':
       lines = state.searchField?.render(cols) ?? [];
@@ -146,15 +152,11 @@ export function renderDocs(
         : renderReader(state.readerRender ?? (() => []), cols);
       break;
     case 'error': {
-      const context = [
-        ...wrapAnsiWithIndent(
-          type.body(state.errorMessage ?? trans.docs.loadError),
-          cols,
-          space.indent,
-        ),
-        ...hintLines(trans.docs.offlineHint, cols),
-        '',
-      ];
+      const message = type.body(state.errorMessage ?? trans.docs.loadError);
+      const hint = hintLines(trans.docs.offlineHint, cols);
+      const plain = [...wrapAnsiWithIndent(message, cols, space.indent), ...hint, ''];
+      const fieldRows = state.errorField?.render(Number.POSITIVE_INFINITY, cols).length ?? 0;
+      const context = offlineContext(message, hint, plain, cols, bodyRows - fieldRows);
       return state.errorField
         ? renderListFieldWithContext(context, state.errorField, bodyRows, cols)
         : context;

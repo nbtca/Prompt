@@ -1,5 +1,5 @@
 import chalk from 'chalk';
-import { moonLines, tint } from './planet.js';
+import { gasGiantLines, moonLines, tint } from './planet.js';
 import { pictureMode, type PictureMode } from '../core/pixel-art.js';
 
 type Vec = readonly [number, number, number];
@@ -102,4 +102,80 @@ export function magnifier(mode: PictureMode = pictureMode()): string[] {
     }
     return line.replace(/\s+$/, '');
   });
+}
+
+const ANSI = /(?:\x1b\[[0-9;]*m)*[^\x1b](?:\x1b\[[0-9;]*m)*/gu;
+const ORBIT = { cols: 22, centre: { x: 11, y: 3 }, radiusX: 10, radiusY: 2.3, period: 3200 };
+const MOON_ON_ORBIT: Vec = [226, 232, 240];
+const ORBIT_TRAIL: Vec = [71, 85, 105];
+
+/** A small planet with a moon circling it; the moon moves one step per frame. */
+export function orbit(at: number, mode: PictureMode = pictureMode()): string[] {
+  const grid = Array.from({ length: ROWS }, () => Array.from({ length: ORBIT.cols }, () => ' '));
+  const place = (x: number, y: number, cell: string) => {
+    const row = grid[y];
+    if (row && x >= 0 && x < ORBIT.cols) row[x] = cell;
+  };
+  const dot = (angle: number, cell: string) => {
+    place(
+      Math.round(ORBIT.centre.x + ORBIT.radiusX * Math.cos(angle)),
+      Math.round(ORBIT.centre.y - 0.5 + ORBIT.radiusY * Math.sin(angle)),
+      cell,
+    );
+  };
+  const trail = plain(mode) ? '.' : chalk.rgb(...ORBIT_TRAIL)('.');
+  for (let step = 0; step < 24; step++) dot((step / 24) * 2 * Math.PI, trail);
+
+  const planet = gasGiantLines(8, mode === 'fine' ? 'color' : mode) ?? [];
+  planet.forEach((line, index) => {
+    (line.match(ANSI) ?? []).forEach((cell, col) => {
+      if (cell.replace(/\x1b\[[0-9;]*m/g, '') !== ' ') place(7 + col, 1 + index, cell);
+    });
+  });
+
+  const angle = ((at % ORBIT.period) / ORBIT.period) * 2 * Math.PI;
+  const x = Math.round(ORBIT.centre.x + ORBIT.radiusX * Math.cos(angle));
+  const y = Math.round(ORBIT.centre.y - 0.5 + ORBIT.radiusY * Math.sin(angle));
+  const behind = Math.sin(angle) < 0 && grid[y]?.[x] !== ' ' && x > 6 && x < 15 && y > 0 && y < 5;
+  if (!behind) place(x, y, plain(mode) ? 'o' : chalk.rgb(...MOON_ON_ORBIT)('o'));
+  return grid.map((row) => row.join('').replace(/\s+$/, ''));
+}
+
+const STEEL: Vec = [148, 163, 184];
+const WAVE: Vec = [71, 85, 105];
+const LOST: Vec = [248, 113, 113];
+const TOWER: readonly (readonly [string, Vec | undefined])[][] = [
+  [['        x', LOST]],
+  [
+    ['   .  (  ', WAVE],
+    ['|', STEEL],
+    ['  )  .', WAVE],
+  ],
+  [
+    ['  . ( ( ', WAVE],
+    ['/|\\', STEEL],
+    [' ) ) .', WAVE],
+  ],
+  [
+    ['        ', undefined],
+    ['/|\\', STEEL],
+  ],
+  [
+    ['       ', undefined],
+    ['/ | \\', STEEL],
+  ],
+  [
+    ['      ', undefined],
+    ['/__|__\\', STEEL],
+  ],
+];
+
+/** A transmitter whose signal has dropped: dim waves and a red cross above the mast. */
+export function signalLost(mode: PictureMode = pictureMode()): string[] {
+  return TOWER.map((parts) =>
+    parts
+      .map(([text, color]) => (plain(mode) || !color ? text : chalk.rgb(...color)(text)))
+      .join('')
+      .replace(/\s+$/, ''),
+  );
 }

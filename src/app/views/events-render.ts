@@ -15,8 +15,11 @@ import { wrapAnsiWithIndent } from '../../core/text.js';
 import { pictureBeside } from '../../core/components/picture.js';
 import { renderBitmap } from '../../core/pixel-art.js';
 import { eventIcon } from '../../features/event-art.js';
-import { loadingLines } from '../../core/components/spinner.js';
-import { emptyStateLines } from '../../core/components/empty-state.js';
+import {
+  emptyStateLines,
+  loadingStateLines,
+  offlineContext,
+} from '../../core/components/empty-state.js';
 
 export type EventsMode = 'loading' | 'hub' | 'heatmap' | 'list' | 'detail' | 'search' | 'error';
 
@@ -163,7 +166,7 @@ export function renderEvents(
   const notice = state.stale ? offlineNotice(cols ?? Number.POSITIVE_INFINITY) : [];
   switch (state.mode) {
     case 'loading':
-      return loadingLines(trans.calendar.loading, cols);
+      return loadingStateLines(trans.calendar.loading, cols, bodyRows);
     case 'hub':
       return renderHubBody(state, now, bodyRows, cols);
     case 'heatmap':
@@ -236,11 +239,11 @@ export function renderEvents(
     case 'search':
       return [...notice, ...(state.searchField?.render(cols) ?? [])];
     case 'error': {
-      const context = [
-        ...wrappedIndentedLines(state.errorMessage ?? trans.calendar.error, cols, type.body),
-        ...wrappedIndentedLines(trans.calendar.errorHint, cols, type.hint),
-        '',
-      ];
+      const message = state.errorMessage ?? trans.calendar.error;
+      const hint = wrappedIndentedLines(trans.calendar.errorHint, cols, type.hint);
+      const plain = [...wrappedIndentedLines(message, cols, type.body), ...hint, ''];
+      const fieldRows = state.errorField?.render(Number.POSITIVE_INFINITY, cols).length ?? 0;
+      const context = offlineContext(type.body(message), hint, plain, cols, bodyRows - fieldRows);
       if (state.errorField) {
         return renderListFieldWithContext(context, state.errorField, bodyRows, cols);
       }

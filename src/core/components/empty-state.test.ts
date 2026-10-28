@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { emptyStateLines } from './empty-state.js';
+import { emptyStateLines, loadingStateLines, offlineContext } from './empty-state.js';
 import { stripAnsi, visualWidth } from '../text.js';
 
 describe('emptyStateLines', () => {
@@ -43,5 +43,25 @@ describe('emptyStateLines', () => {
 
   it('falls back to the three-line sketch below six rows', () => {
     expect(emptyStateLines('calendar', 'No upcoming events', 80, 5)).toHaveLength(3);
+  });
+
+  it('animates the loading picture and falls back to the spinner line when cramped', () => {
+    const first = loadingStateLines('Loading...', 80, 8, 0);
+    const later = loadingStateLines('Loading...', 80, 8, 1600);
+    expect(first).toHaveLength(6);
+    expect(first.map(stripAnsi).join('\n')).toContain('Loading...');
+    expect(first).not.toEqual(later);
+    expect(loadingStateLines('Loading...', 80, 3, 0)).toHaveLength(1);
+    expect(loadingStateLines('Loading...', 30, 20, 0)).toHaveLength(1);
+  });
+
+  it('keeps the hint, and any URL in it, whole beneath the offline picture', () => {
+    const hint = ['   Try again later, or read them at https://docs.nbtca.space'];
+    const lines = offlineContext('Could not load.', hint, ['plain'], 80, 12);
+    const text = lines.map(stripAnsi);
+    expect(text.some((line) => line.includes('Could not load.'))).toBe(true);
+    expect(text).toContain(hint[0]);
+    expect(lines.every((line) => visualWidth(line) <= 80)).toBe(true);
+    expect(offlineContext('Could not load.', hint, ['plain'], 80, 6)).toEqual(['plain']);
   });
 });

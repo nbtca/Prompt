@@ -25,8 +25,7 @@ import { offlineNotice, passiveFooterHint } from '../chrome.js';
 import { campusDateTime, campusIsoDate } from '@nbtca/nbtcal/timetable';
 import { isoDayDifference, localDayDifference, parseLocalDate } from '../../core/calendar-day.js';
 import { currentEvents } from '../../features/calendar-query.js';
-import { loadingLines } from '../../core/components/spinner.js';
-import { emptyStateLines } from '../../core/components/empty-state.js';
+import { emptyStateLines, loadingStateLines } from '../../core/components/empty-state.js';
 import type { Calendar } from '@nbtca/nbtcal';
 const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const;
 
@@ -238,7 +237,7 @@ export function renderHome(data: HomeData, now: Date, bodyRows = 100, cols = 80)
     if (shown === 0) shown = 1;
     lines.push(...rendered.slice(0, shown).flat(), ...moreLine(shown));
   } else if (data.loading) {
-    lines.push(...loadingLines(trans.common.loading, cols));
+    lines.push(...loadingStateLines(trans.common.loading, cols, bodyRows - lines.length));
   } else if (data.eventsLoadFailed) {
     lines.push(...wrappedIndentedLines(trans.calendar.error, cols, type.hint));
   } else {

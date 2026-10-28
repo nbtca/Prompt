@@ -6,7 +6,7 @@ type Vec = readonly [number, number, number];
 
 // Light to dark ink, as in classic tone-shaded ASCII spheres.
 const RAMP = '.-:=+*xo#%&@';
-const MIN_COLS = 12;
+const MIN_COLS = 8;
 const MAX_COLS = 44;
 
 interface Sphere {

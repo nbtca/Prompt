@@ -36,6 +36,7 @@ import {
 } from '../../core/text.js';
 import { isoDayDifference } from '../../core/calendar-day.js';
 import { loadingLines } from '../../core/components/spinner.js';
+import { loadingStateLines } from '../../core/components/empty-state.js';
 import { offlineNotice } from '../chrome.js';
 
 export type ScheduleMode =
@@ -464,7 +465,7 @@ function renderPublicBody(
   const w = state.publicWindow;
 
   if (w === undefined) {
-    lines.push(...loadingLines(trans.common.loading, cols));
+    lines.push(...loadingStateLines(trans.common.loading, cols, bodyRows - lines.length));
   } else if (w === null) {
     lines.push(...hintLines(trans.timetable.publicUnavailable, cols));
   } else if (w.status === 'onBreak') {
@@ -520,7 +521,7 @@ export function renderSchedule(
   const trans = t();
   switch (state.mode) {
     case 'loading':
-      return loadingLines(trans.common.loading, cols);
+      return loadingStateLines(trans.common.loading, cols, bodyRows);
     case 'public':
       return renderPublicBody(state, now, bodyRows, cols);
     case 'records':
