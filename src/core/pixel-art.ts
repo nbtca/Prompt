@@ -37,6 +37,11 @@ interface Glyph {
 // Punctuation and shapes only: letters and digits read as noise inside a picture.
 const ART_CHARS = ' .,:;-_~=+*^"|/\\()[]{}<>?#%&@$';
 
+// Glyphs that differ mainly in density: flat areas switch between these without looking noisy.
+const RAMP_CHARS = ' .:-=+*#%@';
+// Brightness variance below which a cell counts as flat.
+const FLAT_VARIANCE = 0.0004;
+
 const GLYPH_TABLE: readonly Glyph[] = GLYPHS.map((hex, index) => {
   const cover = Float32Array.from(
     { length: SAMPLES },
@@ -48,6 +53,8 @@ const GLYPH_TABLE: readonly Glyph[] = GLYPHS.map((hex, index) => {
     ink: cover.reduce((sum, value) => sum + value, 0),
   };
 }).filter((glyph) => ART_CHARS.includes(glyph.char));
+
+const RAMP_TABLE: readonly Glyph[] = GLYPH_TABLE.filter((glyph) => RAMP_CHARS.includes(glyph.char));
 
 export function bitmapSize(bitmap: Bitmap): { cols: number; rows: number } {
   const { x, y } = bitmap.density ?? DEFAULT_DENSITY;
@@ -177,9 +184,13 @@ function pickGlyph(cell: Cell, gamma: number, carry: number): Pick | undefined {
   if (total / SAMPLES < 0.004) return undefined;
   const mean = Math.max(0, total / SAMPLES + carry);
   const shift = mean - total / SAMPLES;
+  let variance = 0;
+  for (let index = 0; index < SAMPLES; index++)
+    variance += ((bright[index] ?? 0) - total / SAMPLES) ** 2 / SAMPLES;
+  const candidates = variance < FLAT_VARIANCE ? RAMP_TABLE : GLYPH_TABLE;
   let best: Glyph | undefined;
   let bestCost = Number.POSITIVE_INFINITY;
-  for (const glyph of GLYPH_TABLE) {
+  for (const glyph of candidates) {
     const glyphMean = glyph.ink / SAMPLES;
     let cost = TONE_WEIGHT * SAMPLES * (mean - glyphMean) ** 2;
     for (let index = 0; index < SAMPLES; index++)
