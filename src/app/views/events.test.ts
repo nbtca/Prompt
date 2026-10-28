@@ -402,6 +402,21 @@ describe('eventsView navigation', () => {
     expect(selectedLine(ctx)).toContain('Second');
   });
 
+  it('draws a picture beside the title of an event detail when there is room, and drops it when there is not', async () => {
+    calendarInRange.mockReturnValue([event('Git 工作坊', '2026-07-16T10:00:00')]);
+    const roomy = { ...fakeCtx(), size: { rows: 34, cols: 100 }, bodyRows: 28 };
+    await eventsView.load(roomy);
+    press(roomy, DOWN, '\r', '\r');
+
+    const titleRow = screen(roomy).findIndex((line) => line.includes('Git 工作坊'));
+    const withPicture = screen(roomy)[titleRow] ?? '';
+    expect(withPicture.slice(0, withPicture.indexOf('Git')).trim()).not.toBe('');
+
+    const tight = { ...roomy, size: { rows: 12, cols: 100 }, bodyRows: 7 };
+    const plain = screen(tight).find((line) => line.includes('Git 工作坊')) ?? '';
+    expect(plain.slice(0, plain.indexOf('Git')).trim()).toBe('');
+  });
+
   it('keeps the selected hub item after Esc from a list', async () => {
     const ctx = fakeCtx();
     await eventsView.load(ctx);

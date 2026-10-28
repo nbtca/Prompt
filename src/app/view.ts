@@ -1,4 +1,5 @@
 import type { ViewId } from './keys.js';
+import type { AmbientSpec } from './ambient.js';
 
 export interface AppSize {
   rows: number;
@@ -26,6 +27,8 @@ export interface View {
   contextPath?(): readonly string[] | undefined;
   /** Keys this view adds on top of the global ones, for the help overlay. */
   shortcuts?(): readonly { key: string; label: string }[];
+  /** A picture for the space the page's content leaves empty; omitted while the page is busy with a form or a list. */
+  ambient?(): AmbientSpec | undefined;
   isBusy?(): boolean;
   /** The body is a plain scrollable document right now, with no cursor of its own. */
   scrollsBody?(): boolean;

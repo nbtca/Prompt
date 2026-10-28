@@ -12,8 +12,14 @@ import {
 } from '../../features/calendar.js';
 import { renderHeatmap } from '../../features/calendar-heatmap.js';
 import { wrapAnsiWithIndent } from '../../core/text.js';
-import { loadingLines } from '../../core/components/spinner.js';
-import { emptyStateLines } from '../../core/components/empty-state.js';
+import { pictureBeside } from '../../core/components/picture.js';
+import { renderBitmap } from '../../core/pixel-art.js';
+import { eventIcon } from '../../features/event-art.js';
+import {
+  emptyStateLines,
+  loadingStateLines,
+  offlineContext,
+} from '../../core/components/empty-state.js';
 
 export type EventsMode = 'loading' | 'hub' | 'heatmap' | 'list' | 'detail' | 'search' | 'error';
 
@@ -160,7 +166,7 @@ export function renderEvents(
   const notice = state.stale ? offlineNotice(cols ?? Number.POSITIVE_INFINITY) : [];
   switch (state.mode) {
     case 'loading':
-      return loadingLines(trans.calendar.loading, cols);
+      return loadingStateLines(trans.calendar.loading, cols, bodyRows);
     case 'hub':
       return renderHubBody(state, now, bodyRows, cols);
     case 'heatmap':
@@ -197,10 +203,11 @@ export function renderEvents(
       return renderListFieldWithContext(context, state.listField, bodyRows, cols);
     }
     case 'detail': {
-      const context = [
-        ...notice,
-        ...wrappedIndentedLines(state.detailTitle ?? '', cols, type.heading),
-        ...wrappedIndentedLines(state.detailMeta ?? '', cols, type.hint),
+      const headerText = [type.heading(state.detailTitle ?? ''), type.hint(state.detailMeta ?? '')];
+      const plainHeader = headerText.flatMap((line) =>
+        wrappedIndentedLines(line, cols, (value) => value),
+      );
+      const body = [
         '',
         ...(state.detailDescription
           ? state.detailDescription
@@ -212,6 +219,17 @@ export function renderEvents(
           ? [...wrappedIndentedLines(state.statusMessage, cols, type.hint), '']
           : []),
       ];
+      const fieldRows = state.detailField?.render(Number.POSITIVE_INFINITY, cols ?? 80).length ?? 0;
+      const picture = pictureBeside(
+        renderBitmap(eventIcon(state.detailTitle ?? '', state.detailDescription ?? '')),
+        headerText,
+        cols ?? Number.POSITIVE_INFINITY,
+      );
+      const withPicture =
+        picture !== undefined &&
+        (!Number.isFinite(bodyRows) ||
+          notice.length + picture.length + body.length + fieldRows <= bodyRows);
+      const context = [...notice, ...(withPicture ? picture : plainHeader), ...body];
       return state.detailField
         ? renderListFieldWithContext(context, state.detailField, bodyRows, cols)
         : Number.isFinite(bodyRows)
@@ -221,11 +239,11 @@ export function renderEvents(
     case 'search':
       return [...notice, ...(state.searchField?.render(cols) ?? [])];
     case 'error': {
-      const context = [
-        ...wrappedIndentedLines(state.errorMessage ?? trans.calendar.error, cols, type.body),
-        ...wrappedIndentedLines(trans.calendar.errorHint, cols, type.hint),
-        '',
-      ];
+      const message = state.errorMessage ?? trans.calendar.error;
+      const hint = wrappedIndentedLines(trans.calendar.errorHint, cols, type.hint);
+      const plain = [...wrappedIndentedLines(message, cols, type.body), ...hint, ''];
+      const fieldRows = state.errorField?.render(Number.POSITIVE_INFINITY, cols).length ?? 0;
+      const context = offlineContext(type.body(message), hint, plain, cols, bodyRows - fieldRows);
       if (state.errorField) {
         return renderListFieldWithContext(context, state.errorField, bodyRows, cols);
       }

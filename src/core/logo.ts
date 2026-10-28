@@ -48,7 +48,9 @@ function logoContent(): { art: string; metadata: string[] } | undefined {
           (tier) => tier.file,
         )
       : []),
-    ...(useUnicodeIcons() ? [] : ['ascii-emblem.txt']),
+    ...(useUnicodeIcons()
+      ? []
+      : ['ascii-emblem-large.txt', 'ascii-emblem-medium.txt', 'ascii-emblem.txt']),
     'ascii-logo.txt',
     undefined,
   ];
@@ -122,4 +124,23 @@ export async function runStartup(): Promise<void> {
   } finally {
     skip.release();
   }
+}
+
+const EMBLEM_FILES = {
+  unicode: ['ca-dotmatrix-large.txt', 'ca-dotmatrix.txt', 'ca-dotmatrix-small.txt'],
+  ascii: ['ascii-emblem-large.txt', 'ascii-emblem-medium.txt', 'ascii-emblem.txt'],
+} as const;
+
+/** The largest emblem that fits the box, painted with the brand gradient; undefined when none fits. */
+export function emblemLines(maxCols: number, maxRows: number): string[] | undefined {
+  const files = EMBLEM_FILES[useUnicodeIcons() ? 'unicode' : 'ascii'];
+  for (const file of files) {
+    const art = readArt(file);
+    if (!art) continue;
+    const lines = art.split('\n');
+    if (lines.length <= maxRows && lines.every((line) => visualWidth(line) <= maxCols)) {
+      return paint(art, !process.env['NO_COLOR']).split('\n');
+    }
+  }
+  return undefined;
 }

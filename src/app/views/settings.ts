@@ -1,4 +1,5 @@
 import type { AppContext, View } from '../view.js';
+import type { AmbientSpec } from '../ambient.js';
 import { ListField } from '../fields/list-field.js';
 import { renderSettings, type SettingsViewState } from './settings-render.js';
 import {
@@ -6,8 +7,10 @@ import {
   loadPreferences,
   resetPreferences,
   setColorMode,
+  setPictureDetail,
   setIconMode,
   type ColorMode,
+  type PictureDetail,
   type IconMode,
 } from '../../config/preferences.js';
 import { resetIconCache } from '../../core/icons.js';
@@ -29,7 +32,7 @@ function currentHint(current: boolean, hint: string): { hint?: string } {
   return current ? { hint } : {};
 }
 
-function modeLabel(mode: IconMode | ColorMode): string {
+function modeLabel(mode: IconMode | ColorMode | PictureDetail): string {
   const theme = t().theme;
   return {
     auto: theme.modeAuto,
@@ -37,10 +40,14 @@ function modeLabel(mode: IconMode | ColorMode): string {
     unicode: theme.modeUnicode,
     on: theme.modeOn,
     off: theme.modeOff,
+    fine: theme.modeFine,
   }[mode];
 }
 
-function modeOptions<T extends IconMode | ColorMode>(modes: readonly T[], current: T) {
+function modeOptions<T extends IconMode | ColorMode | PictureDetail>(
+  modes: readonly T[],
+  current: T,
+) {
   return modes.map((mode) => ({
     value: mode,
     label: modeLabel(mode),
@@ -60,6 +67,7 @@ function buildMenuField(statusMessage?: string, focus?: string): SettingsViewSta
     },
     { value: 'icon', label: trans.theme.iconMode, hint: modeLabel(prefs.iconMode) },
     { value: 'color', label: trans.theme.colorMode, hint: modeLabel(prefs.colorMode) },
+    { value: 'picture', label: trans.theme.pictureDetail, hint: modeLabel(prefs.pictureDetail) },
     { value: 'reset', label: trans.theme.resetLabel },
     { value: 'about', label: trans.about.title },
   ];
@@ -91,6 +99,10 @@ export const settingsView = {
 
   render(ctx: AppContext): string[] {
     return renderSettings(state, ctx.bodyRows, ctx.size.cols);
+  },
+
+  ambient(): AmbientSpec | undefined {
+    return state.mode === 'menu' ? { kind: 'emblem' } : undefined;
   },
 
   capturesInput(): boolean {
@@ -173,6 +185,22 @@ export const settingsView = {
           };
           return;
         }
+        if (result.selected === 'picture') {
+          const prefs = loadPreferences();
+          const options = modeOptions(['ascii', 'fine'] as const, prefs.pictureDetail);
+          state = {
+            mode: 'picture',
+            subField: new ListField({
+              title: trans.theme.pictureDetail,
+              options,
+              initialIndex: Math.max(
+                0,
+                options.findIndex((o) => o.value === prefs.pictureDetail),
+              ),
+            }),
+          };
+          return;
+        }
         if (result.selected === 'reset') {
           state = {
             mode: 'reset',
@@ -243,6 +271,13 @@ export const settingsView = {
         applyColorModePreference(false);
         resetCapabilities();
         goToMenu(saved ? trans.theme.colorUpdated : trans.theme.colorUpdatedSessionOnly);
+        return;
+      }
+      case 'picture': {
+        const result = state.subField?.handleKey(key);
+        if (!result?.selected) return;
+        const saved = setPictureDetail(result.selected as PictureDetail);
+        goToMenu(saved ? trans.theme.pictureUpdated : trans.theme.pictureUpdatedSessionOnly);
         return;
       }
       case 'reset': {

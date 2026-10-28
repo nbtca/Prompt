@@ -75,6 +75,12 @@ function defined<T>(value: T | undefined): T {
   return value;
 }
 
+describe('homeView ambient picture', () => {
+  it('asks for the sky, which follows the hour', () => {
+    expect(homeView.ambient()).toEqual({ kind: 'sky' });
+  });
+});
+
 describe('homeView footer', () => {
   it('offers tab switching and quitting without move or open actions', () => {
     const hint = stripAnsi(homeView.footerHint(5, 80));

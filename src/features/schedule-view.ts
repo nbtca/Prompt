@@ -79,6 +79,16 @@ export function todayLines(
   }
 }
 
+/** True when the saved timetable has no class today; false on any other answer, including a broken cache. */
+export function isRestDay(cached: CachedSchedule, now: Date = new Date()): boolean {
+  try {
+    const schedule = scheduleOf(cached);
+    return schedule.meetingsOnDay(schedule.weekAt(now), schedule.weekdayAt(now)).length === 0;
+  } catch {
+    return false;
+  }
+}
+
 export interface WeekAheadInfo {
   weekStart: string;
   classDays: boolean[];

@@ -1183,3 +1183,23 @@ describe('renderSchedule — public mode', () => {
     }
   });
 });
+
+describe('termProgress', () => {
+  it('is the share of the term already gone, and undefined without a known end', async () => {
+    const { termProgress } = await import('./schedule-render.js');
+    const window = {
+      status: 'inTerm',
+      academicYear: '2026-2027',
+      semester: '1',
+      weekOneMonday: '2026-09-07',
+      currentWeek: 5,
+      nextBreakStart: '2026-12-21',
+    } as unknown as Parameters<typeof termProgress>[0];
+    const term = termProgress(window);
+    expect(term?.progress).toBeGreaterThan(0.2);
+    expect(term?.progress).toBeLessThan(0.5);
+    expect(term?.weeks).toBe(15);
+    expect(termProgress(null)).toBeUndefined();
+    expect(termProgress({ status: 'onBreak', breakTitle: 'Winter' })).toBeUndefined();
+  });
+});

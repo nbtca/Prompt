@@ -1,5 +1,8 @@
 import type { Calendar, CalendarEvent } from '@nbtca/nbtcal';
 import type { AppContext, View } from '../view.js';
+import type { AmbientSpec } from '../ambient.js';
+import { eventIcon } from '../../features/event-art.js';
+import { eventIconDefault } from '../../art/bitmaps.js';
 import { captureFooterHint, passiveFooterHint } from '../chrome.js';
 import { ListField, computeMaxVisible } from '../fields/list-field.js';
 import { TextField } from '../fields/text-field.js';
@@ -216,6 +219,15 @@ export const eventsView = {
       ctx.bodyRows,
       ctx.size.cols,
     );
+  },
+
+  ambient(): AmbientSpec | undefined {
+    if (state.mode !== 'hub') return undefined;
+    const next = state.nextEvent;
+    return {
+      kind: 'icon',
+      icon: next ? eventIcon(next.title, next.description) : eventIconDefault,
+    };
   },
 
   isBusy(): boolean {

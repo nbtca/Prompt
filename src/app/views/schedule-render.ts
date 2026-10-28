@@ -36,6 +36,7 @@ import {
 } from '../../core/text.js';
 import { isoDayDifference } from '../../core/calendar-day.js';
 import { loadingLines } from '../../core/components/spinner.js';
+import { loadingStateLines } from '../../core/components/empty-state.js';
 import { offlineNotice } from '../chrome.js';
 
 export type ScheduleMode =
@@ -412,6 +413,14 @@ function renderHubBody(
   return withGrid.grid ? withGrid.lines : layoutHub(state, now, bodyRows, cols, shortcuts).lines;
 }
 
+export function termProgress(
+  w: AcademicWindow | OnBreak | null | undefined,
+): { progress: number; weeks: number } | undefined {
+  if (!w || !('currentWeek' in w) || !w.nextBreakStart) return undefined;
+  const weeks = Math.max(1, Math.round(isoDayDifference(w.weekOneMonday, w.nextBreakStart) / 7));
+  return { progress: Math.min(1, Math.max(0, w.currentWeek / weeks)), weeks };
+}
+
 const TERM_PROGRESS_WIDTH = 20;
 
 function renderTermProgressBar(w: AcademicWindow, cols: number): string[] | null {
@@ -456,7 +465,7 @@ function renderPublicBody(
   const w = state.publicWindow;
 
   if (w === undefined) {
-    lines.push(...loadingLines(trans.common.loading, cols));
+    lines.push(...loadingStateLines(trans.common.loading, cols, bodyRows - lines.length));
   } else if (w === null) {
     lines.push(...hintLines(trans.timetable.publicUnavailable, cols));
   } else if (w.status === 'onBreak') {
@@ -512,7 +521,7 @@ export function renderSchedule(
   const trans = t();
   switch (state.mode) {
     case 'loading':
-      return loadingLines(trans.common.loading, cols);
+      return loadingStateLines(trans.common.loading, cols, bodyRows);
     case 'public':
       return renderPublicBody(state, now, bodyRows, cols);
     case 'records':

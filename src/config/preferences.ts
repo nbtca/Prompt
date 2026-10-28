@@ -5,15 +5,18 @@ import { getConfigDir, getWritableConfigDir } from './paths.js';
 
 export type IconMode = 'auto' | 'ascii' | 'unicode';
 export type ColorMode = 'auto' | 'on' | 'off';
+export type PictureDetail = 'ascii' | 'fine';
 
 export interface Preferences {
   iconMode: IconMode;
   colorMode: ColorMode;
+  pictureDetail: PictureDetail;
 }
 
 const DEFAULT_PREFERENCES: Preferences = {
   iconMode: 'auto',
   colorMode: 'auto',
+  pictureDetail: 'ascii',
 };
 const detectedColorLevel = chalk.level;
 const inheritedNoColor = process.env['NO_COLOR'];
@@ -39,7 +42,9 @@ export function loadPreferences(): Preferences {
       raw.colorMode === 'on' || raw.colorMode === 'off' || raw.colorMode === 'auto'
         ? raw.colorMode
         : DEFAULT_PREFERENCES.colorMode;
-    return { iconMode, colorMode };
+    const pictureDetail: PictureDetail =
+      raw.pictureDetail === 'fine' ? 'fine' : DEFAULT_PREFERENCES.pictureDetail;
+    return { iconMode, colorMode, pictureDetail };
   } catch {
     return { ...DEFAULT_PREFERENCES };
   }
@@ -63,6 +68,12 @@ export function setIconMode(mode: IconMode): boolean {
 export function setColorMode(mode: ColorMode): boolean {
   const prefs = loadPreferences();
   prefs.colorMode = mode;
+  return savePreferences(prefs);
+}
+
+export function setPictureDetail(detail: PictureDetail): boolean {
+  const prefs = loadPreferences();
+  prefs.pictureDetail = detail;
   return savePreferences(prefs);
 }
 

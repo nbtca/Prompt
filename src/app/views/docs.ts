@@ -1,4 +1,5 @@
 import type { AppContext, View } from '../view.js';
+import type { AmbientSpec } from '../ambient.js';
 import { captureFooterHint, digitTabHint, fitFooterHint, passiveFooterHint } from '../chrome.js';
 import { ListField, computeMaxVisible } from '../fields/list-field.js';
 import { TextField } from '../fields/text-field.js';
@@ -602,6 +603,10 @@ export const docsView = {
     state.searchResultsField?.setMaxVisible(maxVisible);
     state.readerLinksField?.setMaxVisible(maxVisible);
     return renderDocs(state, ctx.size.cols, ctx.bodyRows);
+  },
+
+  ambient(): AmbientSpec | undefined {
+    return state.mode === 'sections' ? { kind: 'shelf' } : undefined;
   },
 
   isBusy(): boolean {
