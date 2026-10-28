@@ -3,6 +3,7 @@ import { padEndV, visualWidth } from '../core/text.js';
 import chalk from 'chalk';
 import { pictureMode, renderBitmap, type Bitmap } from '../core/pixel-art.js';
 import { mountainScene, scaleBitmap, shelfScene, skyScene } from '../art/scene.js';
+import { gasGiantLines, moonLines, planetSize } from '../art/planet.js';
 import { space } from '../core/theme.js';
 
 /** What a page draws in the space its content leaves empty. */
@@ -11,6 +12,7 @@ export type AmbientSpec =
   | { kind: 'shelf' }
   | { kind: 'mountain'; progress: number; weeks: number }
   | { kind: 'emblem' }
+  | { kind: 'planet'; style: 'moon' | 'gas' }
   | { kind: 'icon'; icon: Bitmap };
 
 const GAP = 4;
@@ -59,8 +61,14 @@ function scene(spec: AmbientSpec, cols: number, rows: number, now: Date): string
   });
 }
 
-function compact(spec: AmbientSpec, cols: number, rows: number): string[] | undefined {
+function compact(spec: AmbientSpec, cols: number, rows: number, now: Date): string[] | undefined {
   if (spec.kind === 'emblem') return emblemLines(cols, rows);
+  if (spec.kind === 'sky')
+    return cols < MIN_COLS ? undefined : moonLines(planetSize(cols, rows), now);
+  if (spec.kind === 'planet') {
+    const size = planetSize(cols, rows);
+    return spec.style === 'moon' ? moonLines(size, now) : gasGiantLines(size);
+  }
   if (spec.kind !== 'icon') return undefined;
   const factor = Math.min(
     Math.floor(cols / (spec.icon.rows[0]?.length ?? 1)),
@@ -94,7 +102,7 @@ export function withAmbient(
   const contentWidth = Math.max(0, ...body.map(visualWidth));
   const width = cols - contentWidth - GAP - indent;
   const side = Math.min(rows - 1, Math.round(Math.min(width, MAX_COLS) * 0.55));
-  const art = scene(spec, width, side, now) ?? compact(spec, width, rows - 1);
+  const art = scene(spec, width, side, now) ?? compact(spec, width, rows - 1, now);
   if (!art) return [...body];
 
   return Array.from({ length: Math.max(body.length, art.length) }, (_, index) => {

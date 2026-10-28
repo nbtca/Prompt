@@ -1,9 +1,10 @@
 import { space, type } from '../../core/theme.js';
 import { wrapAnsiWithIndent } from '../../core/text.js';
 import { pictureBeside } from '../../core/components/picture.js';
-import { renderBitmap } from '../../core/pixel-art.js';
-import { scene } from '../../art/bitmaps.js';
+import { gasGiantLines } from '../../art/planet.js';
 import { type ListField, renderListFieldWithContext } from '../fields/list-field.js';
+
+const ABOUT_PLANET_COLS = 28;
 
 export type SettingsMode = 'menu' | 'language' | 'icon' | 'color' | 'picture' | 'reset' | 'about';
 
@@ -54,7 +55,7 @@ export function renderSettings(
         ),
         '',
       ];
-      const picture = renderBitmap(scene);
+      const picture = gasGiantLines(ABOUT_PLANET_COLS) ?? [];
       const fieldRows = state.backField?.render(Number.POSITIVE_INFINITY, cols).length ?? 0;
       const fits = (lines: readonly string[]) =>
         !Number.isFinite(bodyRows) || lines.length + fieldRows <= bodyRows;
