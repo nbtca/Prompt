@@ -53,6 +53,22 @@ describe('planets', () => {
     chalk.level = level;
   });
 
+  it('turns the surface texture but not the light', () => {
+    chalk.level = 0;
+    const before = gasGiantLines(30, 'tone', 0) ?? [];
+    const after = gasGiantLines(30, 'tone', 1.4) ?? [];
+    expect(after).not.toEqual(before);
+    expect(after).toHaveLength(before.length);
+    chalk.level = level;
+  });
+
+  it('gives the moon relief that the light picks out', () => {
+    chalk.level = 0;
+    const lit = (turn: number) => (moonLines(30, fullMoon, 'tone', turn) ?? []).join('\n');
+    expect(lit(0.3)).not.toEqual(lit(1.9));
+    chalk.level = level;
+  });
+
   it('declines when there is no room', () => {
     expect(gasGiantLines(6)).toBeUndefined();
     expect(moonLines(6, fullMoon)).toBeUndefined();

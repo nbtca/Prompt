@@ -1,4 +1,5 @@
 import chalk from 'chalk';
+import { fbm3, worley3 } from './noise.js';
 import { moonPhase } from './scene.js';
 import { pictureMode, type PictureMode } from '../core/pixel-art.js';
 
@@ -9,12 +10,19 @@ const RAMP = '.-:=+*xo#%&@';
 const MIN_COLS = 8;
 const MAX_COLS = 44;
 
+interface Surface {
+  /** Brightness multiplier of the surface material. */
+  albedo: number;
+  /** Colour of fully lit surface. */
+  color: Vec;
+  /** Perturbed normal, when the surface has relief. */
+  normal?: Vec;
+}
+
 interface Sphere {
   light: Vec;
-  /** Brightness multiplier at a point on the surface, in -1..1 sphere coordinates. */
-  surface: (x: number, y: number) => number;
-  /** Colour of fully lit surface at that point. */
-  color: (x: number, y: number) => Vec;
+  /** The surface at a point of the unit sphere. */
+  sample: (point: Vec) => Surface;
 }
 
 interface Shade {
@@ -31,11 +39,10 @@ function shadeAt(sphere: Sphere, x: number, y: number): Shade | undefined {
   const radius = x * x + y * y;
   if (radius > 1) return undefined;
   const z = Math.sqrt(1 - radius);
-  const lit = Math.max(0, x * sphere.light[0] + y * sphere.light[1] + z * sphere.light[2]);
-  return {
-    level: Math.min(1, lit * sphere.surface(x, y) * (0.55 + 0.45 * z)),
-    color: sphere.color(x, y),
-  };
+  const surface = sphere.sample([x, y, z]);
+  const [nx, ny, nz] = surface.normal ?? [x, y, z];
+  const lit = Math.max(0, nx * sphere.light[0] + ny * sphere.light[1] + nz * sphere.light[2]);
+  return { level: Math.min(1, lit * surface.albedo * (0.55 + 0.45 * z)), color: surface.color };
 }
 
 const NIGHT: Vec = [48, 54, 70];
@@ -117,47 +124,111 @@ function drawFineSphere(cols: number, sphere: Sphere): string[] {
   });
 }
 
-const MARIA: readonly (readonly [number, number, number])[] = [
-  [-0.3, -0.25, 0.28],
-  [0.25, -0.1, 0.22],
-  [-0.05, 0.4, 0.2],
-  [0.45, 0.35, 0.12],
-];
+const smoothstep = (low: number, high: number, value: number): number => {
+  const t = Math.min(1, Math.max(0, (value - low) / (high - low)));
+  return t * t * (3 - 2 * t);
+};
+
+/** The point as the texture sees it: turned about the vertical axis. */
+function turned([x, y, z]: Vec, angle: number): Vec {
+  const [cos, sin] = [Math.cos(angle), Math.sin(angle)];
+  return [x * cos + z * sin, y, -x * sin + z * cos];
+}
+
+const EPSILON = 0.03;
+const RELIEF = 0.9;
+
+/**
+ * Bumps a unit sphere's normal by the slope of a height field, as bump mapping does: the field's gradient,
+ * with its component along the normal removed, tilts the normal away from rising ground.
+ */
+function bumped(point: Vec, height: (p: Vec) => number): Vec {
+  const base = height(point);
+  const gradient: Vec = [
+    (height([point[0] + EPSILON, point[1], point[2]]) - base) / EPSILON,
+    (height([point[0], point[1] + EPSILON, point[2]]) - base) / EPSILON,
+    (height([point[0], point[1], point[2] + EPSILON]) - base) / EPSILON,
+  ];
+  const along = gradient[0] * point[0] + gradient[1] * point[1] + gradient[2] * point[2];
+  return normalize([
+    point[0] - RELIEF * (gradient[0] - along * point[0]),
+    point[1] - RELIEF * (gradient[1] - along * point[1]),
+    point[2] - RELIEF * (gradient[2] - along * point[2]),
+  ]);
+}
+
+const CRATER = 0.34;
+
+/** Crater bowls with raised rims over rolling highlands. */
+function lunarHeight(p: Vec, turn: number): number {
+  const q = turned(p, turn);
+  const scaled: Vec = [q[0] * 1.7, q[1] * 1.7, q[2] * 1.7];
+  const d = worley3(scaled, 7);
+  const bowl = -Math.pow(Math.max(0, 1 - d / CRATER), 0.7) * 0.38;
+  const rim = Math.exp(-(((d - CRATER) / 0.06) ** 2)) * 0.2;
+  return bowl + rim + fbm3([q[0] * 3, q[1] * 3, q[2] * 3], 3, 3) * 0.12;
+}
 
 /** The moon at today's phase, lit from the side the real moon is lit from. */
-export function moonLines(cols: number, now: Date, mode = pictureMode()): string[] | undefined {
+export function moonLines(
+  cols: number,
+  now: Date,
+  mode = pictureMode(),
+  turn = 0.9,
+): string[] | undefined {
   if (cols < MIN_COLS) return undefined;
   const angle = 2 * Math.PI * moonPhase(now);
-  const light = normalize([Math.sin(angle), -0.12, -Math.cos(angle)]);
   return drawSphere(
     Math.min(cols, MAX_COLS),
     {
-      light,
-      surface: (x, y) => {
-        const dark = MARIA.reduce(
-          (sum, [mx, my, size]) =>
-            sum + Math.max(0, 1 - Math.hypot(x - mx, (y - my) * 1.1) / size) * 0.3,
-          0,
-        );
-        return 1 - Math.min(0.35, dark);
+      light: normalize([Math.sin(angle), -0.12, -Math.cos(angle)]),
+      sample: (point) => {
+        const q = turned(point, turn);
+        const maria = smoothstep(0.42, 0.6, fbm3([q[0] * 1.3, q[1] * 1.3, q[2] * 1.3], 3, 11));
+        return {
+          albedo: 1 - 0.38 * maria,
+          color: [236, 238, 246],
+          normal: bumped(point, (p) => lunarHeight(p, turn)),
+        };
       },
-      color: () => [236, 238, 246],
     },
     mode,
   );
 }
 
-/** A banded gas giant lit from the upper left. */
-export function gasGiantLines(cols: number, mode = pictureMode()): string[] | undefined {
+const STORM = { lon: 0.55, lat: 0.34, width: 0.5, height: 0.15 };
+
+/** A banded gas giant lit from the upper left, with turbulent bands and a storm that turns with it. */
+export function gasGiantLines(
+  cols: number,
+  mode = pictureMode(),
+  turn = 0.9,
+): string[] | undefined {
   if (cols < MIN_COLS) return undefined;
   return drawSphere(
     Math.min(cols, MAX_COLS),
     {
       light: normalize([-0.6, -0.45, 0.66]),
-      surface: (x, y) => 0.88 + 0.12 * Math.sin(y * 11 + Math.sin(x * 3 + y * 2) * 0.9),
-      color: (_, y) => {
-        const band = 0.5 + 0.5 * Math.sin(y * 7 + 1);
-        return [236 - 40 * band, 176 - 30 * band, 120 + 40 * band];
+      sample: (point) => {
+        const q = turned(point, turn);
+        const turbulence = fbm3([q[0] * 2.4, q[1] * 9, q[2] * 2.4], 3, 5);
+        const band = 0.5 + 0.5 * Math.sin(q[1] * 11 + turbulence * 3.2);
+        const lon = Math.atan2(q[0], q[2]);
+        const spread = Math.cos(Math.asin(Math.max(-1, Math.min(1, q[1]))));
+        const dLon = ((lon - STORM.lon + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+        const storm = Math.exp(
+          -(((dLon * spread) / STORM.width) ** 2) - ((q[1] - STORM.lat) / STORM.height) ** 2,
+        );
+        const base: Vec = [236 - 40 * band, 176 - 30 * band, 120 + 40 * band];
+        const spot: Vec = [214, 92, 66];
+        return {
+          albedo: 0.82 + 0.18 * band + 0.1 * storm,
+          color: [
+            base[0] + (spot[0] - base[0]) * storm,
+            base[1] + (spot[1] - base[1]) * storm,
+            base[2] + (spot[2] - base[2]) * storm,
+          ],
+        };
       },
     },
     mode,

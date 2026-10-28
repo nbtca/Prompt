@@ -105,7 +105,14 @@ export function magnifier(mode: PictureMode = pictureMode()): string[] {
 }
 
 const ANSI = /(?:\x1b\[[0-9;]*m)*[^\x1b](?:\x1b\[[0-9;]*m)*/gu;
-const ORBIT = { cols: 22, centre: { x: 11, y: 3 }, radiusX: 10, radiusY: 2.3, period: 3200 };
+const ORBIT = {
+  cols: 22,
+  centre: { x: 11, y: 3 },
+  radiusX: 10,
+  radiusY: 2.3,
+  period: 3200,
+  spin: 6400,
+};
 const MOON_ON_ORBIT: Vec = [226, 232, 240];
 const ORBIT_TRAIL: Vec = [71, 85, 105];
 
@@ -126,7 +133,8 @@ export function orbit(at: number, mode: PictureMode = pictureMode()): string[] {
   const trail = plain(mode) ? '.' : chalk.rgb(...ORBIT_TRAIL)('.');
   for (let step = 0; step < 24; step++) dot((step / 24) * 2 * Math.PI, trail);
 
-  const planet = gasGiantLines(8, mode === 'fine' ? 'color' : mode) ?? [];
+  const turn = (at / ORBIT.spin) * 2 * Math.PI;
+  const planet = gasGiantLines(8, mode === 'fine' ? 'color' : mode, turn) ?? [];
   planet.forEach((line, index) => {
     (line.match(ANSI) ?? []).forEach((cell, col) => {
       if (cell.replace(/\x1b\[[0-9;]*m/g, '') !== ' ') place(7 + col, 1 + index, cell);
