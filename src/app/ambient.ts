@@ -17,7 +17,7 @@ const MIN_COLS = 30;
 const MIN_ROWS = 7;
 const MIN_PANORAMA_ROWS = 8;
 const MAX_COLS = 130;
-const SCENE_GAMMA = 1.8;
+const SCENE_GAMMA = 0.8;
 const FINE = { x: 2, y: 4 } as const;
 
 const cache = new Map<string, string[]>();

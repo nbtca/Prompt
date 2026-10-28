@@ -18,10 +18,12 @@ const DEFAULT_DENSITY = { x: 1, y: 2 } as const;
 const SAMPLES = GLYPH_COLS * GLYPH_ROWS;
 // Terminals are mostly dark; transparent pixels count as this colour when a cell is only partly covered.
 const BACKDROP = [20, 22, 28] as const;
-// How strongly the character density follows the brightness of a smooth area.
-const TONE_WEIGHT = 0.02;
-// Smallest difference between a cell's text and background colours, so the character stays visible.
-const MIN_CONTRAST = 30;
+// Weight of matching a cell's average brightness against matching its shape.
+const TONE_WEIGHT = 8;
+// The densest glyph covers about this much of its cell, so full brightness maps to it.
+const MAX_INK = 0.32;
+// Share of a cell's average colour kept as its background tint.
+const TINT = 0.3;
 
 interface Glyph {
   char: string;
@@ -30,7 +32,7 @@ interface Glyph {
 }
 
 // Punctuation and shapes only: letters and digits read as noise inside a picture.
-const ART_CHARS = ' .,\'`:;-_~=+*^"|/\\()[]{}<>!?#%&@$oxOX';
+const ART_CHARS = ' .,:;-_~=+*^"|/\\()[]{}<>?#%&@$';
 
 const GLYPH_TABLE: readonly Glyph[] = GLYPHS.map((hex, index) => {
   const cover = Float32Array.from(
@@ -147,101 +149,62 @@ const luma = (r: number, g: number, b: number): number =>
   (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
 const clamp = (value: number): number => Math.round(Math.min(255, Math.max(0, value)));
 
-/**
- * Picks the character, text colour, and background colour that best reproduce the cell: edges pick characters
- * that follow them, smooth areas pick a density that follows their brightness, and the colours carry the hue.
- */
-function colorCell(cell: Cell): string {
-  const { r, g, b } = cell;
-  let sr = 0;
-  let sg = 0;
-  let sb = 0;
-  let squares = 0;
-  for (let index = 0; index < SAMPLES; index++) {
-    const pr = r[index] ?? 0;
-    const pg = g[index] ?? 0;
-    const pb = b[index] ?? 0;
-    sr += pr;
-    sg += pg;
-    sb += pb;
-    squares += pr * pr + pg * pg + pb * pb;
-  }
-  const meanSquare = (sr * sr + sg * sg + sb * sb) / SAMPLES;
-  const target = 0.015 + 0.2 * luma(sr / SAMPLES, sg / SAMPLES, sb / SAMPLES);
-
-  let best: Glyph | undefined;
-  let bestCost = Number.POSITIVE_INFINITY;
-  let bestInk: Rgb = [0, 0, 0];
-  for (const glyph of GLYPH_TABLE) {
-    const { cover, ink } = glyph;
-    let dr = 0;
-    let dg = 0;
-    let db = 0;
-    for (let index = 0; index < SAMPLES; index++) {
-      const weight = cover[index] ?? 0;
-      dr += weight * (r[index] ?? 0);
-      dg += weight * (g[index] ?? 0);
-      db += weight * (b[index] ?? 0);
-    }
-    const rest = SAMPLES - ink;
-    let cost = squares - meanSquare;
-    if (ink > 1e-6 && rest > 1e-6) {
-      cost -=
-        (dr * dr + dg * dg + db * db) / ink +
-        ((sr - dr) ** 2 + (sg - dg) ** 2 + (sb - db) ** 2) / rest -
-        meanSquare;
-    }
-    cost += TONE_WEIGHT * SAMPLES * 3 * (255 * (ink / SAMPLES - target)) ** 2;
-    if (cost < bestCost) {
-      bestCost = cost;
-      best = glyph;
-      bestInk = [dr, dg, db];
-    }
-  }
-  if (!best) return ' ';
-
-  const coverage = best.ink / SAMPLES;
-  const rest = SAMPLES - best.ink;
-  const sums: Rgb = [sr, sg, sb];
-  const text = bestInk.map((value, channel) =>
-    best.ink > 1e-6 ? value / best.ink : (sums[channel] ?? 0) / SAMPLES,
-  );
-  const back = sums.map((value, channel) =>
-    rest > 1e-6 ? (value - (bestInk[channel] ?? 0)) / rest : value / SAMPLES,
-  );
-  const gap =
-    luma(text[0] ?? 0, text[1] ?? 0, text[2] ?? 0) - luma(back[0] ?? 0, back[1] ?? 0, back[2] ?? 0);
-  const lift = Math.max(0, MIN_CONTRAST - Math.abs(gap) * 255) * (gap >= 0 ? 1 : -1);
-  const fg = text.map((value) => clamp(value + lift * (1 - coverage)));
-  const bg = back.map((value) => clamp(value - lift * coverage));
-  const style = chalk
-    .rgb(fg[0] ?? 0, fg[1] ?? 0, fg[2] ?? 0)
-    .bgRgb(bg[0] ?? 0, bg[1] ?? 0, bg[2] ?? 0);
-  return style(best.char);
-}
-
-/** Plain characters only: the glyph whose ink best matches the brightness of each part of the cell. */
-function toneCell(cell: Cell, gamma: number): string {
+/** The glyph whose ink best matches the brightness of each part of the cell. */
+function pickGlyph(cell: Cell, gamma: number): Glyph | undefined {
   const bright = new Float32Array(SAMPLES);
   let total = 0;
   for (let index = 0; index < SAMPLES; index++) {
-    const value = Math.pow(luma(cell.r[index] ?? 0, cell.g[index] ?? 0, cell.b[index] ?? 0), gamma);
+    const value =
+      MAX_INK * Math.pow(luma(cell.r[index] ?? 0, cell.g[index] ?? 0, cell.b[index] ?? 0), gamma);
     bright[index] = value;
     total += value;
   }
-  if (total / SAMPLES < 0.02) return ' ';
-  let best = ' ';
+  if (total / SAMPLES < 0.004) return undefined;
+  const mean = total / SAMPLES;
+  let best: Glyph | undefined;
   let bestCost = Number.POSITIVE_INFINITY;
   for (const glyph of GLYPH_TABLE) {
-    let cost = 0;
+    const glyphMean = glyph.ink / SAMPLES;
+    let cost = TONE_WEIGHT * SAMPLES * (mean - glyphMean) ** 2;
     for (let index = 0; index < SAMPLES; index++)
-      cost += ((bright[index] ?? 0) - (glyph.cover[index] ?? 0)) ** 2;
+      cost += ((bright[index] ?? 0) - mean - ((glyph.cover[index] ?? 0) - glyphMean)) ** 2;
     if (cost < bestCost) {
       bestCost = cost;
-      best = glyph.char;
+      best = glyph;
     }
   }
   return best;
+}
+
+/** Plain characters only. */
+function toneCell(cell: Cell, gamma: number): string {
+  return pickGlyph(cell, gamma)?.char ?? ' ';
+}
+
+/**
+ * Characters follow the brightness and shape of the picture; the colour lives in the characters themselves, on
+ * the terminal's own dark background with only a faint tint.
+ */
+function colorCell(cell: Cell, gamma: number): string {
+  const glyph = pickGlyph(cell, gamma);
+  if (!glyph || glyph.char === ' ') return ' ';
+  const mean: Rgb = [0, 0, 0];
+  const ink: Rgb = [0, 0, 0];
+  for (let index = 0; index < SAMPLES; index++) {
+    const weight = glyph.cover[index] ?? 0;
+    const pixel: Rgb = [cell.r[index] ?? 0, cell.g[index] ?? 0, cell.b[index] ?? 0];
+    for (let channel = 0; channel < 3; channel++) {
+      mean[channel] = (mean[channel] ?? 0) + (pixel[channel] ?? 0) / SAMPLES;
+      ink[channel] = (ink[channel] ?? 0) + (weight * (pixel[channel] ?? 0)) / glyph.ink;
+    }
+  }
+  const peak = Math.max(1, ...ink);
+  const level = 0.4 + 0.6 * Math.pow(luma(...ink), 0.6);
+  const fg = ink.map((value) => clamp((value / peak) * 255 * level));
+  const bg = mean.map((value) => clamp(value * TINT));
+  return chalk.rgb(fg[0] ?? 0, fg[1] ?? 0, fg[2] ?? 0).bgRgb(bg[0] ?? 0, bg[1] ?? 0, bg[2] ?? 0)(
+    glyph.char,
+  );
 }
 
 /**
@@ -260,7 +223,7 @@ export function renderBitmap(
     for (let col = 0; col < cols; col++) {
       const cell = sampleCell(bitmap, col, row);
       if (cell.filled === 0) line += ' ';
-      else line += mode === 'color' ? colorCell(cell) : toneCell(cell, gamma);
+      else line += mode === 'color' ? colorCell(cell, gamma) : toneCell(cell, gamma);
     }
     return mode === 'tone' ? line.replace(/\s+$/, '') : line;
   });
