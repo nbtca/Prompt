@@ -1,4 +1,5 @@
 import type { AppContext, View } from '../view.js';
+import type { AmbientSpec } from '../ambient.js';
 import { ListField } from '../fields/list-field.js';
 import { renderSettings, type SettingsViewState } from './settings-render.js';
 import {
@@ -91,6 +92,10 @@ export const settingsView = {
 
   render(ctx: AppContext): string[] {
     return renderSettings(state, ctx.bodyRows, ctx.size.cols);
+  },
+
+  ambient(): AmbientSpec | undefined {
+    return state.mode === 'menu' ? { kind: 'emblem' } : undefined;
   },
 
   capturesInput(): boolean {

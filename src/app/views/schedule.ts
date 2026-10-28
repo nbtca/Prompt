@@ -8,10 +8,16 @@ import {
   type Timetable,
 } from '@nbtca/nbtcal/timetable';
 import type { AppContext, View } from '../view.js';
+import type { AmbientSpec } from '../ambient.js';
 import { captureFooterHint, digitTabHint, fitFooterHint, passiveFooterHint } from '../chrome.js';
 import { ListField, computeMaxVisible } from '../fields/list-field.js';
 import { TextField } from '../fields/text-field.js';
-import { renderSchedule, hubShortcuts, type ScheduleViewState } from './schedule-render.js';
+import {
+  renderSchedule,
+  hubShortcuts,
+  termProgress,
+  type ScheduleViewState,
+} from './schedule-render.js';
 import { handleGridKey, todayGridCursor } from './schedule-grid-cursor.js';
 import { setVimKeysActive } from '../../core/vim-keys.js';
 import { t } from '../../i18n/index.js';
@@ -468,6 +474,12 @@ export const scheduleView = {
     if (state.mode === 'records' && recordsPanel) return recordsPanel.render(ctx);
     state.termField?.setMaxVisible(computeMaxVisible(ctx.bodyRows));
     return renderSchedule(state, new Date(), ctx.bodyRows, ctx.size.cols);
+  },
+
+  ambient(): AmbientSpec | undefined {
+    if (state.mode !== 'public' && state.mode !== 'hub') return undefined;
+    const progress = termProgress(state.publicWindow);
+    return progress === undefined ? undefined : { kind: 'mountain', progress };
   },
 
   isBusy(): boolean {

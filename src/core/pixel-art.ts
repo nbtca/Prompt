@@ -50,10 +50,15 @@ function halfBlockCell(top: string | undefined, bottom: string | undefined): str
   return chalk.hex(top).bgHex(bottom)('▀');
 }
 
-function toneCell(top: string | undefined, bottom: string | undefined, color: boolean): string {
+function toneCell(
+  top: string | undefined,
+  bottom: string | undefined,
+  color: boolean,
+  gamma: number,
+): string {
   const colors = [top, bottom].filter((value): value is string => value !== undefined);
   if (colors.length === 0) return ' ';
-  const average = Math.pow(colors.reduce((sum, value) => sum + luminance(value), 0) / 2, 0.7);
+  const average = Math.pow(colors.reduce((sum, value) => sum + luminance(value), 0) / 2, gamma);
   const char =
     TONE_RAMP[Math.min(TONE_RAMP.length - 1, Math.round(average * (TONE_RAMP.length - 1)))] ?? ' ';
   if (!color || char === ' ') return char;
@@ -64,7 +69,12 @@ function toneCell(top: string | undefined, bottom: string | undefined, color: bo
 }
 
 /** Two pixel rows share one terminal row, matching the 1:2 shape of a cell. */
-export function renderBitmap(bitmap: Bitmap, mode: PictureMode = pictureMode()): string[] {
+export function renderBitmap(
+  bitmap: Bitmap,
+  mode: PictureMode = pictureMode(),
+  /** Below 1 lifts dark pixels so small icons stay visible; above 1 leaves broad backgrounds empty. */
+  gamma = 0.7,
+): string[] {
   const { cols, rows } = bitmapSize(bitmap);
   const color = getCapabilities().color && chalk.level > 0;
   return Array.from({ length: rows }, (_, row) => {
@@ -72,7 +82,7 @@ export function renderBitmap(bitmap: Bitmap, mode: PictureMode = pictureMode()):
     for (let x = 0; x < cols; x++) {
       const top = pixel(bitmap, x, row * 2);
       const bottom = pixel(bitmap, x, row * 2 + 1);
-      line += mode === 'color' ? halfBlockCell(top, bottom) : toneCell(top, bottom, color);
+      line += mode === 'color' ? halfBlockCell(top, bottom) : toneCell(top, bottom, color, gamma);
     }
     return mode === 'tone' ? line.replace(/\s+$/, '') : line;
   });

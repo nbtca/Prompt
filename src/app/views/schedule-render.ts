@@ -412,6 +412,15 @@ function renderHubBody(
   return withGrid.grid ? withGrid.lines : layoutHub(state, now, bodyRows, cols, shortcuts).lines;
 }
 
+export function termProgress(w: AcademicWindow | OnBreak | null | undefined): number | undefined {
+  if (!w || !('currentWeek' in w) || !w.nextBreakStart) return undefined;
+  const totalWeeks = Math.max(
+    1,
+    Math.round(isoDayDifference(w.weekOneMonday, w.nextBreakStart) / 7),
+  );
+  return Math.min(1, Math.max(0, w.currentWeek / totalWeeks));
+}
+
 const TERM_PROGRESS_WIDTH = 20;
 
 function renderTermProgressBar(w: AcademicWindow, cols: number): string[] | null {

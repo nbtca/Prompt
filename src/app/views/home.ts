@@ -20,6 +20,7 @@ import {
 } from '../../features/calendar.js';
 import { weekdayShortLabel } from '../../features/schedule-render.js';
 import type { View, AppContext } from '../view.js';
+import type { AmbientSpec } from '../ambient.js';
 import { offlineNotice, passiveFooterHint } from '../chrome.js';
 import { campusDateTime, campusIsoDate } from '@nbtca/nbtcal/timetable';
 import { isoDayDifference, localDayDifference, parseLocalDate } from '../../core/calendar-day.js';
@@ -327,6 +328,10 @@ export const homeView = {
         ctx.rerender();
       }
     }
+  },
+
+  ambient(): AmbientSpec {
+    return { kind: 'sky' };
   },
 
   isBusy(): boolean {

@@ -11,6 +11,7 @@ import {
 import { renderHeader, renderFooter, resolveChromeLayout } from './chrome.js';
 import type { AppContext, AppSize, View } from './view.js';
 import { homeView } from './views/home.js';
+import { withAmbient } from './ambient.js';
 import { scheduleView } from './views/schedule.js';
 import { docsView } from './views/docs.js';
 import { eventsView } from './views/events.js';
@@ -102,7 +103,7 @@ export async function runApp(): Promise<void> {
     const activeTab = tabs.find((tab) => tab.id === view);
     const body = helpOpen
       ? renderHelp(activeTab?.title ?? '', active?.shortcuts?.() ?? [], tabs.length, cols)
-      : (active?.render(ctx) ?? []);
+      : withAmbient(active?.render(ctx) ?? [], active?.ambient?.(), cols, ctx.bodyRows);
     const bodyScroll = !helpOpen && active?.capturesInput?.() ? Number.MAX_SAFE_INTEGER : scroll;
     const height = computeBodyRows(rows, chrome.headerLines, chrome.footerLines);
     lastBody = { length: body.length, height };

@@ -159,4 +159,12 @@ describe('settingsView', () => {
         .startsWith('Project'),
     ).toBe(true);
   });
+
+  it('offers the emblem on the menu and nothing inside a sub-page', async () => {
+    await settingsView.load();
+    expect(settingsView.ambient()).toEqual({ kind: 'emblem' });
+    settingsView.handleKey('\r');
+    expect(settingsView.ambient()).toBeUndefined();
+    await settingsView.load();
+  });
 });
