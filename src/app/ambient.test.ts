@@ -78,4 +78,14 @@ describe('withAmbient', () => {
     const lines = withAmbient(body, { kind: 'sky' }, 120, 38, noon).map(stripAnsi);
     expect(lines.join('')).toMatch(/^[\x20-\x7e]*$/);
   });
+
+  it('puts a cup of tea where the moon would go on a rest day', () => {
+    const narrow = (spec: AmbientSpec) =>
+      withAmbient(body, spec, 84, 12, noon).map(stripAnsi).join('\n');
+    expect(narrow({ kind: 'sky', rest: true })).toContain(',---------.');
+    expect(narrow({ kind: 'sky' })).not.toContain(',---------.');
+    expect(withAmbient(body, { kind: 'sky', rest: true }, 120, 38, noon).length).toBeGreaterThan(
+      body.length + 8,
+    );
+  });
 });

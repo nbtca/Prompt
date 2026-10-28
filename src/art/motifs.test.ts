@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import { describe, expect, it } from 'vitest';
-import { magnifier, moonSky } from './motifs.js';
+import { magnifier, moonSky, orbit, signalLost, teaCup } from './motifs.js';
 import { stripAnsi, visualWidth } from '../core/text.js';
 
 describe('motifs', () => {
@@ -28,5 +28,16 @@ describe('motifs', () => {
 
   it('keeps the ASCII picture in the fine tier', () => {
     expect(stripAnsi(magnifier('fine').join(''))).toMatch(/^[\x20-\x7e]*$/);
+  });
+
+  it('draws the tea cup, the orbit, and the dropped signal in plain ASCII too', () => {
+    for (const lines of [teaCup(0, 'tone'), orbit(0, 'tone'), signalLost('tone')]) {
+      expect(lines).toHaveLength(6);
+      expect(lines.join('')).toMatch(/^[\x20-\x7e]*$/);
+    }
+  });
+
+  it('moves the moon along its orbit from frame to frame', () => {
+    expect(orbit(0, 'tone')).not.toEqual(orbit(800, 'tone'));
   });
 });

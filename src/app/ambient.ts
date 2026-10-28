@@ -3,12 +3,13 @@ import { padEndV, visualWidth } from '../core/text.js';
 import chalk from 'chalk';
 import { pictureMode, renderBitmap, type Bitmap } from '../core/pixel-art.js';
 import { mountainScene, scaleBitmap, shelfScene, skyScene } from '../art/scene.js';
+import { teaCup } from '../art/motifs.js';
 import { gasGiantLines, moonLines, planetSize } from '../art/planet.js';
 import { space } from '../core/theme.js';
 
 /** What a page draws in the space its content leaves empty. */
 export type AmbientSpec =
-  | { kind: 'sky' }
+  | { kind: 'sky'; rest?: boolean }
   | { kind: 'shelf' }
   | { kind: 'mountain'; progress: number; weeks: number }
   | { kind: 'emblem' }
@@ -20,6 +21,8 @@ const MIN_COLS = 30;
 const MIN_ROWS = 7;
 const MIN_PANORAMA_ROWS = 8;
 const MAX_COLS = 130;
+const TEA_COLS = 16;
+const TEA_ROWS = 6;
 const SCENE_GAMMA = 0.8;
 const FINE = { x: 2, y: 4 } as const;
 
@@ -63,8 +66,10 @@ function scene(spec: AmbientSpec, cols: number, rows: number, now: Date): string
 
 function compact(spec: AmbientSpec, cols: number, rows: number, now: Date): string[] | undefined {
   if (spec.kind === 'emblem') return emblemLines(cols, rows);
-  if (spec.kind === 'sky')
+  if (spec.kind === 'sky') {
+    if (spec.rest) return cols < TEA_COLS || rows < TEA_ROWS ? undefined : teaCup(now.getTime());
     return cols < MIN_COLS ? undefined : moonLines(planetSize(cols, rows), now);
+  }
   if (spec.kind === 'planet') {
     const size = planetSize(cols, rows);
     return spec.style === 'moon' ? moonLines(size, now) : gasGiantLines(size);

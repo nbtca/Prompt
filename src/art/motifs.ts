@@ -1,5 +1,6 @@
 import chalk from 'chalk';
 import { gasGiantLines, moonLines, tint } from './planet.js';
+import { getCapabilities } from '../core/capabilities.js';
 import { pictureMode, type PictureMode } from '../core/pixel-art.js';
 
 type Vec = readonly [number, number, number];
@@ -186,4 +187,40 @@ export function signalLost(mode: PictureMode = pictureMode()): string[] {
       .join('')
       .replace(/\s+$/, ''),
   );
+}
+
+const PORCELAIN: Vec = [226, 232, 240];
+const TEA: Vec = [217, 119, 6];
+const STEAM: Vec = [148, 163, 184];
+const STEAM_FRAMES: readonly (readonly [string, string])[] = [
+  ['   )  (   ) ', '  (  )  (   '],
+  ['  (  )   (  ', '   )  (  )  '],
+  ['   (  )  (  ', '  )  (   )  '],
+  ['  )   (  )  ', '   (  )  (  '],
+];
+const STEAM_MS = 500;
+const CUP: readonly (readonly [string, Vec])[][] = [
+  [[' ,---------.', PORCELAIN]],
+  [
+    [' |', PORCELAIN],
+    ['~~~~~~~~~', TEA],
+    ['|', PORCELAIN],
+    ['-.', PORCELAIN],
+  ],
+  [[' |         | |', PORCELAIN]],
+  [["  \\_______/-'", PORCELAIN]],
+];
+
+/** A cup of tea with drifting steam: a day without classes. */
+export function teaCup(at: number, mode: PictureMode = pictureMode()): string[] {
+  const frame = getCapabilities().reducedMotion
+    ? 0
+    : Math.floor(at / STEAM_MS) % STEAM_FRAMES.length;
+  const steam = (STEAM_FRAMES[frame] ?? STEAM_FRAMES[0] ?? ['', '']).map((line) =>
+    plain(mode) ? line : chalk.rgb(...STEAM)(line),
+  );
+  const cup = CUP.map((parts) =>
+    parts.map(([text, color]) => (plain(mode) ? text : chalk.rgb(...color)(text))).join(''),
+  );
+  return [...steam, ...cup].map((line) => line.replace(/\s+$/, ''));
 }

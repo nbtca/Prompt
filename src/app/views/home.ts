@@ -6,6 +6,7 @@ import {
   nextClassLine,
   peekSchedule,
   todayLines,
+  isRestDay,
   weekAheadInfo,
   type CachedSchedule,
   type WeekAheadInfo,
@@ -330,7 +331,9 @@ export const homeView = {
   },
 
   ambient(): AmbientSpec {
-    return { kind: 'sky' };
+    return data.schedule && isRestDay(data.schedule)
+      ? { kind: 'sky', rest: true }
+      : { kind: 'sky' };
   },
 
   isBusy(): boolean {
