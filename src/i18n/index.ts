@@ -89,6 +89,9 @@ export interface Translations {
       title: string;
       legendLess: string;
       legendMore: string;
+      inspect: string;
+      dayCount: string;
+      dayEmpty: string;
     };
     pastLoading: string;
     pastEvents: string;
@@ -97,6 +100,7 @@ export interface Translations {
     viewPastDetail: string;
     next: string;
     recentActivity: string;
+    moreEvents: string;
     browse: string;
     next30Days: string;
     startingNow: string;

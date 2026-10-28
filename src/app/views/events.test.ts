@@ -173,48 +173,102 @@ describe('eventsView detail screen', () => {
 });
 
 describe('eventsView heatmap navigation', () => {
-  it('selecting the heatmap hub option shows the grid, and any key (or Esc) returns to the hub', async () => {
+  const UP = '\x1b[A';
+  const DOWN = '\x1b[B';
+  const LEFT = '\x1b[D';
+
+  async function openHeatmap() {
     const ctx = fakeCtx();
     await eventsView.load(ctx);
-
-    for (let i = 0; i < 5; i++) eventsView.handleKey('\x1b[B', ctx);
+    for (let i = 0; i < 5; i++) eventsView.handleKey(DOWN, ctx);
     eventsView.handleKey('\r', ctx);
+    return ctx;
+  }
 
+  function dayOf(date: Date): string {
+    const pad = (value: number) => String(value).padStart(2, '0');
+    return `${String(date.getFullYear())}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  }
+
+  function daysAgo(days: number): Date {
+    const date = new Date();
+    date.setDate(date.getDate() - days);
+    return date;
+  }
+
+  function dayEvent(title: string, date: Date) {
+    const start = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 10);
+    return {
+      uid: title,
+      title,
+      start,
+      end: new Date(start.getTime() + 3_600_000),
+      isAllDay: false,
+    };
+  }
+
+  it('shows the grid with today selected, and Esc returns to the hub', async () => {
+    const ctx = await openHeatmap();
     let out = stripAnsi(eventsView.render(ctx).join('\n'));
     expect(out).toContain(t().calendar.heatmap.title);
     expect(out).toContain(t().calendar.heatmap.legendLess);
+    expect(out).toContain(dayOf(new Date()));
+    expect(out).toContain(t().calendar.heatmap.dayEmpty);
 
-    expect(out).not.toContain(t().calendar.search);
-
-    eventsView.handleKey('x', ctx);
+    expect(eventsView.handleBack()).toBe(true);
     out = stripAnsi(eventsView.render(ctx).join('\n'));
     expect(out).toContain(t().calendar.search);
     expect(out).not.toContain(t().calendar.heatmap.legendLess);
   });
 
-  it('handleBack() (Esc) also returns from heatmap mode to the hub', async () => {
-    const ctx = fakeCtx();
-    await eventsView.load(ctx);
-    for (let i = 0; i < 5; i++) eventsView.handleKey('\x1b[B', ctx);
-    eventsView.handleKey('\r', ctx);
+  it("moves one day with up and one week with left, and lists that day's events", async () => {
+    const ctx = await openHeatmap();
+    calendarInRange.mockImplementation((start: Date) =>
+      dayOf(start) === dayOf(daysAgo(8)) ? [dayEvent('Retro', daysAgo(8))] : [],
+    );
 
-    expect(eventsView.handleBack()).toBe(true);
+    eventsView.handleKey(LEFT, ctx);
+    eventsView.handleKey(UP, ctx);
     const out = stripAnsi(eventsView.render(ctx).join('\n'));
-    expect(out).toContain(t().calendar.search);
+
+    expect(out).toContain(dayOf(daysAgo(8)));
+    expect(out).toContain('1 events');
+    expect(out).toContain('Retro');
   });
 
-  it('footerHint drops move/open in heatmap mode (any key returns to the hub, there is no field)', async () => {
-    const ctx = fakeCtx();
-    await eventsView.load(ctx);
-    for (let i = 0; i < 5; i++) eventsView.handleKey('\x1b[B', ctx);
+  it('does not move past today or off the oldest visible week', async () => {
+    const ctx = await openHeatmap();
+    eventsView.handleKey(DOWN, ctx);
+    expect(stripAnsi(eventsView.render(ctx).join('\n'))).toContain(dayOf(new Date()));
+
+    for (let i = 0; i < 80; i++) eventsView.handleKey(LEFT, ctx);
+    const first = /\d{4}-\d{2}-\d{2}/.exec(stripAnsi(eventsView.render(ctx).join('\n')))?.[0];
+    eventsView.handleKey(LEFT, ctx);
+    const second = /\d{4}-\d{2}-\d{2}/.exec(stripAnsi(eventsView.render(ctx).join('\n')))?.[0];
+
+    expect(second).toBe(first);
+  });
+
+  it('opens the selected day as a list with Enter, only when it has events', async () => {
+    const ctx = await openHeatmap();
+    eventsView.handleKey('\r', ctx);
+    expect(stripAnsi(eventsView.render(ctx).join('\n'))).toContain(t().calendar.heatmap.legendLess);
+
+    calendarInRange.mockImplementation((start: Date) =>
+      dayOf(start) === dayOf(new Date()) ? [dayEvent('Today meeting', new Date())] : [],
+    );
+    eventsView.handleKey(UP, ctx);
+    eventsView.handleKey(DOWN, ctx);
     eventsView.handleKey('\r', ctx);
 
-    const hint = eventsView.footerHint(5, 80);
-    expect(hint).toBeDefined();
-    expect(hint).not.toContain(t().menu.hintMove);
-    expect(hint).not.toContain(t().menu.hintOpen);
-    expect(hint).toContain('1-5');
-    expect(hint).toContain(t().menu.hintQuit);
+    const out = stripAnsi(eventsView.render(ctx).join('\n'));
+    expect(out).toContain('Today meeting');
+    expect(out).not.toContain(t().calendar.heatmap.legendLess);
+  });
+
+  it('offers move and open in the footer while the heatmap is selectable', async () => {
+    await openHeatmap();
+    expect(eventsView.footerHint(5, 120)).toBeUndefined();
   });
 });
 
@@ -318,7 +372,7 @@ describe('eventsView navigation', () => {
     expect(screen(ctx).join('\n')).toContain(t().common.offline);
   });
 
-  it('offers the activity item only when the hub has no room for the heatmap', async () => {
+  it('replaces the activity item with a day-by-day entry when the hub already shows the heatmap', async () => {
     const ctx = fakeCtx();
     await eventsView.load(ctx);
     expect(screen(ctx).join('\n')).toContain(t().calendar.heatmap.title);

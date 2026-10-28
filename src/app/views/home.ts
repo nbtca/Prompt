@@ -15,6 +15,8 @@ import {
   peekCalendar,
   toDisplayEvent,
   renderEventBrief,
+  renderCountdownBanner,
+  type Event,
 } from '../../features/calendar.js';
 import { weekdayShortLabel } from '../../features/schedule-render.js';
 import type { View, AppContext } from '../view.js';
@@ -31,6 +33,7 @@ export interface HomeData {
   loading?: boolean;
   schedule?: CachedSchedule | null;
   eventLines?: string[];
+  nextEvent?: Event;
   eventsLoadFailed?: boolean;
   weekAhead?: { classDays: boolean[]; eventDays?: boolean[] };
 }
@@ -194,21 +197,45 @@ export function renderHome(data: HomeData, now: Date, bodyRows = 100, cols = 80)
     lines.push('');
   }
 
-  lines.push(...panelHeading(trans.menu.events, cols));
+  const eventsHeading = panelHeading(trans.menu.events, cols);
+  const firstEventRows = wrappedRenderedLines(data.eventLines?.[0] ?? '', cols).length;
+  const banner =
+    !data.schedule && data.nextEvent
+      ? [...renderCountdownBanner(data.nextEvent, now, cols).split('\n'), '']
+      : [];
+  // Only spend rows on the countdown when the first event still fits below it
+  if (
+    banner.length > 0 &&
+    lines.length + banner.length + eventsHeading.length + firstEventRows <= bodyRows
+  ) {
+    lines.push(...banner);
+  }
+
+  lines.push(...eventsHeading);
   if (data.eventLines && data.eventLines.length > 0) {
     const remaining = Number.isFinite(bodyRows)
       ? Math.max(0, Math.floor(bodyRows) - lines.length)
       : Number.POSITIVE_INFINITY;
-    let usedRows = 0;
-    for (const line of data.eventLines) {
-      const wrapped = wrappedRenderedLines(line, cols);
-      if (usedRows + wrapped.length > remaining) {
-        if (usedRows === 0 && remaining === 0) lines.push(...wrapped);
-        break;
-      }
-      lines.push(...wrapped);
-      usedRows += wrapped.length;
+    const rendered = data.eventLines.map((line) => wrappedRenderedLines(line, cols));
+    const moreLine = (shown: number): string[] =>
+      shown < rendered.length
+        ? wrappedIndentedLines(
+            fmt(trans.calendar.moreEvents, { count: rendered.length - shown }),
+            cols,
+            type.hint,
+          )
+        : [];
+    let shown = 0;
+    let used = 0;
+    while (shown < rendered.length) {
+      const next = rendered[shown] ?? [];
+      const reserve = shown + 1 < rendered.length ? moreLine(shown + 1).length : 0;
+      if (used + next.length + reserve > remaining) break;
+      used += next.length;
+      shown += 1;
     }
+    if (shown === 0) shown = 1;
+    lines.push(...rendered.slice(0, shown).flat(), ...moreLine(shown));
   } else if (data.loading) {
     lines.push(...loadingLines(trans.common.loading, cols));
   } else if (data.eventsLoadFailed) {
@@ -227,12 +254,15 @@ const HOME_EVENT_FETCH_CAP = 15;
 function calendarSnapshot(
   cal: Calendar,
   weekAhead: WeekAheadInfo | null,
-): Pick<HomeData, 'eventLines' | 'weekAhead'> {
+): Pick<HomeData, 'eventLines' | 'nextEvent' | 'weekAhead'> {
   const now = new Date();
-  const eventLines = currentEvents(cal, now)
+  const current = currentEvents(cal, now);
+  const eventLines = current
     .slice(0, HOME_EVENT_FETCH_CAP)
     .map((event) => renderEventBrief(toDisplayEvent(event), now));
-  if (!weekAhead) return { eventLines };
+  const upcoming = current.find((event) => event.start >= now);
+  const nextEvent = upcoming ? { nextEvent: toDisplayEvent(upcoming) } : {};
+  if (!weekAhead) return { eventLines, ...nextEvent };
   const { weekStart } = weekAhead;
   const monday = campusDateTime(weekStart, '00:00');
   const daySet = new Set(
@@ -248,6 +278,7 @@ function calendarSnapshot(
   );
   return {
     eventLines,
+    ...nextEvent,
     weekAhead: {
       classDays: weekAhead.classDays,
       eventDays: WEEKDAYS.map((weekday) => daySet.has(weekday)),

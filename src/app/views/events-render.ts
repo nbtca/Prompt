@@ -1,12 +1,13 @@
 import type { CalendarEvent, HeatmapBucket } from '@nbtca/nbtcal';
-import { type, space } from '../../core/theme.js';
-import { t } from '../../i18n/index.js';
+import { glyph, type, space } from '../../core/theme.js';
+import { fmt, t } from '../../i18n/index.js';
 import { type ListField, renderListFieldWithContext } from '../fields/list-field.js';
 import { offlineNotice } from '../chrome.js';
 import type { TextField } from '../fields/text-field.js';
 import {
   renderCountdownBanner,
   renderEventBriefLines,
+  eventWhen,
   type Event,
 } from '../../features/calendar.js';
 import { renderHeatmap } from '../../features/calendar-heatmap.js';
@@ -24,6 +25,8 @@ export interface EventsViewState {
   stale?: boolean;
   nextEvent?: Event;
   heatmapBuckets?: HeatmapBucket[];
+  heatmapCursor?: string;
+  heatmapDay?: Event[];
   recentEvents?: Event[];
   hubField?: ListField;
   listField?: ListField;
@@ -51,11 +54,41 @@ export function hubShowsHeatmap(bodyRows: number, buckets: readonly HeatmapBucke
   return bodyRows >= EXPANDED_HUB_MIN_BODY_ROWS && buckets.length > 0;
 }
 
-function heatmapLines(buckets: HeatmapBucket[], now: Date, cols?: number): string[] {
+function heatmapLines(
+  buckets: HeatmapBucket[],
+  now: Date,
+  cols?: number,
+  cursor?: string,
+): string[] {
   return renderHeatmap(buckets, now, {
     color: true,
     ...(cols === undefined ? {} : { cols }),
+    ...(cursor === undefined ? {} : { cursor }),
   }).split('\n');
+}
+
+function heatmapDayLines(state: EventsViewState, cols?: number): string[] {
+  if (state.heatmapCursor === undefined) return [];
+  const trans = t();
+  const events = state.heatmapDay ?? [];
+  const heading = fmt(trans.calendar.heatmap.dayCount, {
+    date: state.heatmapCursor,
+    count: events.length,
+    sep: glyph.sep(),
+  });
+  return [
+    '',
+    ...wrappedIndentedLines(heading, cols, type.heading),
+    ...(events.length === 0
+      ? wrappedIndentedLines(trans.calendar.heatmap.dayEmpty, cols, type.hint)
+      : events.flatMap((event) =>
+          wrappedIndentedLines(
+            `${eventWhen(event)}  ${glyph.sep()}  ${event.title}`,
+            cols,
+            type.body,
+          ),
+        )),
+  ];
 }
 
 function renderHubBody(
@@ -134,7 +167,10 @@ export function renderEvents(
       return [
         ...notice,
         ...(state.heatmapBuckets && state.heatmapBuckets.length > 0
-          ? heatmapLines(state.heatmapBuckets, now, cols)
+          ? [
+              ...heatmapLines(state.heatmapBuckets, now, cols, state.heatmapCursor),
+              ...heatmapDayLines(state, cols),
+            ]
           : emptyStateLines('calendar', trans.calendar.noEvents, cols, bodyRows - notice.length)),
       ];
     case 'list': {

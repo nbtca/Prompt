@@ -18,6 +18,7 @@ import {
   toDisplayEvent,
   yearHeatmap,
 } from '../../features/calendar.js';
+import { heatmapRange, shiftHeatmapDay } from '../../features/calendar-heatmap.js';
 import {
   currentEvents,
   hasEnded,
@@ -34,12 +35,13 @@ let currentList: CalendarEvent[] = [];
 let listState: EventsViewState | undefined;
 let hubField: ListField | undefined;
 let hubValues: string[] = [];
+let hubHeatmapInline = false;
 
 function backLabel(): string {
   return t().common.back;
 }
 
-function buildHubField(selected: string | undefined, withHeatmap: boolean): ListField {
+function buildHubField(selected: string | undefined, heatmapInline: boolean): ListField {
   const trans = t();
   const options = [
     { value: 'upcoming', label: trans.calendar.next30Days },
@@ -47,9 +49,13 @@ function buildHubField(selected: string | undefined, withHeatmap: boolean): List
     { value: 'month', label: trans.calendar.thisMonth },
     { value: 'search', label: trans.calendar.search },
     { value: 'past', label: trans.calendar.pastEvents },
-    ...(withHeatmap ? [{ value: 'heatmap', label: trans.calendar.heatmap.title }] : []),
+    {
+      value: 'heatmap',
+      label: heatmapInline ? trans.calendar.heatmap.inspect : trans.calendar.heatmap.title,
+    },
   ];
   hubValues = options.map((option) => option.value);
+  hubHeatmapInline = heatmapInline;
   const initialIndex = Math.max(0, selected === undefined ? 0 : hubValues.indexOf(selected));
   return new ListField({ title: trans.calendar.browse, options, initialIndex });
 }
@@ -60,9 +66,9 @@ function selectedHubValue(): string | undefined {
 
 function syncHubField(bodyRows: number): void {
   if (state.mode !== 'hub') return;
-  const withHeatmap = !hubShowsHeatmap(bodyRows, state.heatmapBuckets);
-  if (hubValues.includes('heatmap') === withHeatmap) return;
-  hubField = buildHubField(selectedHubValue(), withHeatmap);
+  const heatmapInline = hubShowsHeatmap(bodyRows, state.heatmapBuckets);
+  if (hubHeatmapInline === heatmapInline) return;
+  hubField = buildHubField(selectedHubValue(), heatmapInline);
   state = { ...state, hubField };
 }
 
@@ -106,12 +112,42 @@ function showList(
 
 const RECENT_EVENTS_CAP = 5;
 
+function eventsOnDay(date: string): CalendarEvent[] {
+  if (!calendar) return [];
+  const [year = 0, month = 1, day = 1] = date.split('-').map(Number);
+  return calendar.inRange(new Date(year, month - 1, day), new Date(year, month - 1, day + 1));
+}
+
+function selectHeatmapDay(date: string): void {
+  state = {
+    ...state,
+    heatmapCursor: date,
+    heatmapDay: eventsOnDay(date).map(toDisplayEvent),
+  };
+}
+
+const HEATMAP_STEPS: Record<string, number> = {
+  '\x1b[A': -1,
+  '\x1b[B': 1,
+  '\x1b[D': -7,
+  '\x1b[C': 7,
+};
+
+function moveHeatmapCursor(key: string, cols: number): void {
+  const step = HEATMAP_STEPS[key];
+  const now = new Date();
+  const { start, end } = heatmapRange(now, cols);
+  const current = state.heatmapCursor ?? end;
+  if (step === undefined) return;
+  const next = shiftHeatmapDay(current, step);
+  selectHeatmapDay(next < start ? start : next > end ? end : next);
+}
+
 function goToHub(): void {
   const now = new Date();
   const upcoming = calendar ? currentEvents(calendar, now) : [];
   const nextEvent = upcoming.find((event) => event.start >= now);
-  const withHeatmap = hubValues.length === 0 || hubValues.includes('heatmap');
-  hubField = buildHubField(selectedHubValue(), withHeatmap);
+  hubField = buildHubField(selectedHubValue(), hubHeatmapInline);
   state = {
     mode: 'hub',
     hubField,
@@ -201,7 +237,7 @@ export const eventsView = {
 
   footerHint(tabCount: number, cols = Number.POSITIVE_INFINITY): string | undefined {
     if (state.mode === 'search') return captureFooterHint(cols);
-    const passive = state.mode === 'loading' || state.mode === 'heatmap';
+    const passive = state.mode === 'loading';
     return passive ? passiveFooterHint(tabCount, cols) : undefined;
   },
 
@@ -268,6 +304,7 @@ export const eventsView = {
         }
         if (result.selected === 'heatmap') {
           state = { ...state, mode: 'heatmap' };
+          selectHeatmapDay(heatmapRange(now, ctx.size.cols).end);
           return;
         }
         if (result.selected === 'search') {
@@ -284,7 +321,13 @@ export const eventsView = {
         return;
       }
       case 'heatmap': {
-        goToHub();
+        if (key === '\r' && state.heatmapCursor !== undefined) {
+          const date = state.heatmapCursor;
+          const events = eventsOnDay(date);
+          if (events.length > 0) showList(ctx, date, events, t().calendar.noEvents);
+          return;
+        }
+        moveHeatmapCursor(key, ctx.size.cols);
         return;
       }
       case 'list': {

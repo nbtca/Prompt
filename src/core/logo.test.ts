@@ -95,6 +95,28 @@ describe('buildLogoLines display capabilities', () => {
     expect(lines.join('')).toContain('@nbtca/prompt');
   });
 
+  it('draws the same emblem as the Unicode badge when an ASCII terminal has room', () => {
+    process.env['NBTCA_ICON_MODE'] = 'ascii';
+    process.stdout.columns = 80;
+    process.stdout.rows = 24;
+    resetIconCache();
+
+    const lines = buildLogoLines().map(stripAnsi);
+    expect(lines.join('\n')).toContain('( @@ )');
+    expect(lines.join('')).not.toContain('|\\  |');
+  });
+
+  it('falls back from the ASCII emblem to the wordmark when the terminal is too short', () => {
+    process.env['NBTCA_ICON_MODE'] = 'ascii';
+    process.stdout.columns = 80;
+    process.stdout.rows = 10;
+    resetIconCache();
+
+    const lines = buildLogoLines().map(stripAnsi);
+    expect(lines.join('\n')).not.toContain('( @@ )');
+    expect(lines.join('\n')).toContain('|\\  |');
+  });
+
   it('uses a readable wordmark when the ASCII artwork is too wide', () => {
     process.env['NBTCA_ICON_MODE'] = 'ascii';
     process.stdout.columns = 20;

@@ -48,6 +48,7 @@ function logoContent(): { art: string; metadata: string[] } | undefined {
           (tier) => tier.file,
         )
       : []),
+    ...(useUnicodeIcons() ? [] : ['ascii-emblem.txt']),
     'ascii-logo.txt',
     undefined,
   ];
