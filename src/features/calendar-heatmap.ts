@@ -1,6 +1,7 @@
 import type { HeatmapBucket } from '@nbtca/nbtcal';
+import chalk from 'chalk';
 import { pickIcon } from '../core/icons.js';
-import { bodyWidth, c, space, type } from '../core/theme.js';
+import { bodyWidth, c, glyph, space, type } from '../core/theme.js';
 import { t, getCurrentLanguage } from '../i18n/index.js';
 import { visualWidth } from '../core/text.js';
 
@@ -61,29 +62,57 @@ function placeMonthLabels(
   return line;
 }
 
+const DAY_MS = 86_400_000;
+
+function isoDate(ms: number): string {
+  const d = new Date(ms);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+}
+
+function gridGeometry(today: Date, cols: number) {
+  const cellWidth = cols < GRID_PREFIX_WIDTH + MAX_WEEK_COLUMNS * 2 ? 1 : 2;
+  const availableColumns = Math.floor((cols - GRID_PREFIX_WIDTH) / cellWidth);
+  const numCols = Math.max(1, Math.min(MAX_WEEK_COLUMNS, availableColumns));
+  const todayMs = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+  const gridEndMs = todayMs + (6 - utcDayToMonIndex(new Date(todayMs).getUTCDay())) * DAY_MS;
+  return { cellWidth, numCols, todayMs, gridStartMs: gridEndMs - (numCols * 7 - 1) * DAY_MS };
+}
+
+/** First and last selectable day of the grid drawn at this width; days after today are not selectable. */
+export function heatmapRange(
+  today: Date,
+  cols = Number.POSITIVE_INFINITY,
+): { start: string; end: string } {
+  const { gridStartMs, todayMs } = gridGeometry(today, bodyWidth(cols));
+  return { start: isoDate(gridStartMs), end: isoDate(todayMs) };
+}
+
+export function shiftHeatmapDay(date: string, days: number): string {
+  return isoDate(parseBucketDate(date).getTime() + days * DAY_MS);
+}
+
+function cursorCell(count: number, useColor: boolean): string {
+  if (!useColor || chalk.level === 0) return glyph.dot();
+  const level = Math.max(0, Math.min(count, LEVEL_GLYPHS.length - 1));
+  const [unicode, ascii] = LEVEL_GLYPHS[level] ?? LEVEL_GLYPHS[0];
+  return type.cursor(pickIcon(unicode, ascii));
+}
+
 export function renderHeatmap(
   buckets: HeatmapBucket[],
   today: Date,
-  options?: { color?: boolean; cols?: number },
+  options?: { color?: boolean; cols?: number; cursor?: string },
 ): string {
   const useColor = options?.color === true;
   const trans = t();
   const cols = bodyWidth(options?.cols ?? Number.POSITIVE_INFINITY);
-  const cellWidth = cols < GRID_PREFIX_WIDTH + MAX_WEEK_COLUMNS * 2 ? 1 : 2;
-  const availableColumns = Math.floor((cols - GRID_PREFIX_WIDTH) / cellWidth);
-  const numCols = Math.max(1, Math.min(MAX_WEEK_COLUMNS, availableColumns));
+  const { cellWidth, numCols, gridStartMs } = gridGeometry(today, cols);
 
   const countByDate = new Map<string, number>();
   for (const b of buckets) {
     countByDate.set(b.date, b.count);
   }
 
-  const todayProxy = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
-
-  const todayMonIndex = utcDayToMonIndex(todayProxy.getUTCDay());
-  const gridEndMs = todayProxy.getTime() + (6 - todayMonIndex) * 86400000; // Sunday of today's week
-
-  const gridStartMs = gridEndMs - (numCols * 7 - 1) * 86400000;
   const gridStart = new Date(gridStartMs);
 
   type Cell = { date: string; count: number } | null;
@@ -156,7 +185,9 @@ export function renderHeatmap(
     const cells = columns.map((col) => {
       const cell = col[row];
       if (cell === null || cell === undefined) return ' ';
-      return levelCell(cell.count, useColor);
+      return cell.date === options?.cursor
+        ? cursorCell(cell.count, useColor)
+        : levelCell(cell.count, useColor);
     });
     lines.push(`${space.indent}${wdLabel} ${cells.join(cellWidth === 2 ? ' ' : '')}`);
   }

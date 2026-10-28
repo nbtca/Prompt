@@ -75,7 +75,10 @@
     "heatmap": {
       "title": "Activity (Last 12 Months)",
       "legendLess": "Less",
-      "legendMore": "More"
+      "legendMore": "More",
+      "inspect": "Inspect activity by day",
+      "dayCount": "{date} {sep} {count} events",
+      "dayEmpty": "No events that day"
     },
     "pastLoading": "Loading past events...",
     "pastEvents": "Past Events",
@@ -84,6 +87,7 @@
     "viewPastDetail": "Select an event for details:",
     "next": "Next",
     "recentActivity": "Coming up",
+    "moreEvents": "{count} more",
     "browse": "Browse",
     "next30Days": "Next 30 Days",
     "inPrefix": "in",

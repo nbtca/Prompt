@@ -359,6 +359,115 @@ describe('renderHome adaptive event count', () => {
   });
 });
 
+describe('renderHome omitted events', () => {
+  const eventLines = Array.from(
+    { length: 4 },
+    (_, i) => `   07-${String(17 + i)}  Event ${String(i)}`,
+  );
+
+  it('says how many events are not shown', () => {
+    const lines = renderHome(
+      { schedule: scheduleWith(), eventLines, loading: false },
+      noon,
+      10,
+      80,
+    );
+    const text = lines.map(stripAnsi).join('\n');
+    const shown = eventLines.filter((line) => text.includes(line.trim())).length;
+
+    expect(shown).toBeLessThan(eventLines.length);
+    expect(text).toContain(`${String(eventLines.length - shown)} more`);
+    expect(lines.length).toBeLessThanOrEqual(10);
+  });
+
+  it('does not mention omitted events when all of them fit', () => {
+    const text = renderHome({ schedule: scheduleWith(), eventLines, loading: false }, noon, 60, 80)
+      .map(stripAnsi)
+      .join('\n');
+
+    expect(text).not.toContain('more');
+  });
+
+  it('keeps the first event reachable when a single wrapped event does not fit the remaining rows', () => {
+    const lines = renderHome(
+      { eventLines: [`   08-03 Community planning workshop`, ...eventLines], loading: false },
+      noon,
+      6,
+      20,
+    );
+    const text = lines.map(stripAnsi).join('').replace(/\s/g, '');
+
+    expect(text).toContain('Communityplanningworkshop');
+    expect(text).toContain('2more');
+  });
+});
+
+describe('renderHome next event without a timetable', () => {
+  const event: CalendarModule.Event = {
+    title: 'Weekly meeting',
+    date: '07-16',
+    time: '19:00',
+    location: 'Room 1',
+    description: '',
+    startDate: campusDateTime('2026-07-16', '19:00'),
+    recurring: false,
+    uid: 'weekly',
+  };
+
+  it('shows the countdown above the events when there is room', () => {
+    const text = renderHome(
+      {
+        schedule: null,
+        nextEvent: event,
+        eventLines: ['   07-16  Weekly meeting'],
+        loading: false,
+      },
+      noon,
+      24,
+      80,
+    )
+      .map(stripAnsi)
+      .join('\n');
+
+    expect(text).toContain('Weekly meeting');
+    expect(text).toMatch(/Next.*in 1d 7h/);
+  });
+
+  it('drops the countdown before it can push the first event out of view', () => {
+    const lines = renderHome(
+      {
+        schedule: null,
+        nextEvent: event,
+        eventLines: ['   07-16  Weekly meeting'],
+        loading: false,
+      },
+      noon,
+      6,
+      80,
+    ).map(stripAnsi);
+
+    expect(lines.filter((line) => line.includes('Weekly meeting'))).toHaveLength(1);
+  });
+
+  it('does not repeat the countdown when a timetable is present', () => {
+    const text = renderHome(
+      {
+        schedule: scheduleWith(),
+        nextEvent: event,
+        eventLines: ['   07-16  Weekly meeting'],
+        loading: false,
+      },
+      noon,
+      40,
+      80,
+    )
+      .map(stripAnsi)
+      .join('\n');
+
+    expect(text).not.toMatch(/Next\s+·\s+Weekly meeting/);
+  });
+});
+
 describe('renderHome day-progress bar', () => {
   it('shows a half-filled bar and 50% at noon', () => {
     process.env['NBTCA_ICON_MODE'] = 'ascii';
