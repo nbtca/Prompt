@@ -1,14 +1,13 @@
 import { c, space, type } from '../theme.js';
 import { padEndV, visualWidth, wrapAnsiWithIndent } from '../text.js';
-import { emptyCalendar, emptySearch } from '../../art/bitmaps.js';
-import { renderBitmap } from '../pixel-art.js';
+import { magnifier, moonSky } from '../../art/motifs.js';
 
 const ART = {
   calendar: [' .-.-. ', ' |   | ', " '---' "],
   search: [' .--.  ', '(    ) ', " '--'\\_"],
 } as const;
 
-const PICTURE = { calendar: emptyCalendar, search: emptySearch } as const;
+const PICTURE = { calendar: moonSky, search: magnifier } as const;
 
 export function emptyStateLines(
   kind: keyof typeof ART,
@@ -17,7 +16,7 @@ export function emptyStateLines(
   rows = Number.POSITIVE_INFINITY,
 ): string[] {
   const text = wrapAnsiWithIndent(type.hint(label), cols, space.indent);
-  const picture = renderBitmap(PICTURE[kind]);
+  const picture = PICTURE[kind]();
   const lines =
     cols >= 44 && rows >= picture.length ? beside(picture, label, cols, false) : undefined;
   if (lines) return lines;

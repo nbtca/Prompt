@@ -44,6 +44,15 @@ describe('planets', () => {
     chalk.level = level;
   });
 
+  it('draws the fine tier as smoothly shaded half blocks', () => {
+    chalk.level = 3;
+    const lines = moonLines(30, fullMoon, 'fine') ?? [];
+    expect(lines).toHaveLength(15);
+    expect(stripAnsi(lines.join(''))).toMatch(/^[\u2580\u2584 ]*$/u);
+    expect(lines.join('')).toContain('\x1b[48;2;');
+    chalk.level = level;
+  });
+
   it('declines when there is no room', () => {
     expect(gasGiantLines(8)).toBeUndefined();
     expect(moonLines(8, fullMoon)).toBeUndefined();

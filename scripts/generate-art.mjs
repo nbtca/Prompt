@@ -233,27 +233,6 @@ function icons() {
   };
 }
 
-function emptyArt() {
-  const calendar = new Canvas(14, 12);
-  calendarPage(calendar, 1, 0, 12, 11, null);
-  calendar.rect(5, 6, 8, 7, '#e2e8f0');
-  const search = new Canvas(14, 12);
-  search.circle(
-    5.5,
-    5,
-    4.6,
-    (x, y, d) => (d < 3.2 ? (x + y < 9 ? '#e0f2fe' : '#7dd3fc') : ICON.cyan),
-    0,
-  );
-  search.circle(5.5, 5, 4.6, ICON.cyan, 3.2);
-  search.line(9, 8, 12, 11, ICON.amber);
-  search.line(10, 8, 13, 11, ICON.amber);
-  search.set(3, 3, ICON.white);
-  search.set(4, 3, ICON.white);
-  search.set(3, 4, ICON.white);
-  return { calendar: calendar.toBitmap(), search: search.toBitmap() };
-}
-
 function emitBitmap(name, bitmap) {
   const palette = JSON.stringify(bitmap.palette)
     .replace(/"/g, "'")
@@ -271,9 +250,6 @@ const bitmaps = [
 const iconSet = icons();
 for (const [name, bitmap] of Object.entries(iconSet))
   bitmaps.push(emitBitmap(`eventIcon${name[0].toUpperCase()}${name.slice(1)}`, bitmap));
-const empty = emptyArt();
-for (const [name, bitmap] of Object.entries(empty))
-  bitmaps.push(emitBitmap(`empty${name[0].toUpperCase()}${name.slice(1)}`, bitmap));
 writeFileSync('src/art/bitmaps.ts', bitmaps.join('\n'));
 
 const large = 'src/logo/ca-dotmatrix-large.txt';

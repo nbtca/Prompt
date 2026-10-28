@@ -17,39 +17,101 @@ interface Sphere {
   color: (x: number, y: number) => Vec;
 }
 
+interface Shade {
+  level: number;
+  color: Vec;
+}
+
 const normalize = (v: Vec): Vec => {
   const length = Math.hypot(...v);
   return [v[0] / length, v[1] / length, v[2] / length];
 };
 
+function shadeAt(sphere: Sphere, x: number, y: number): Shade | undefined {
+  const radius = x * x + y * y;
+  if (radius > 1) return undefined;
+  const z = Math.sqrt(1 - radius);
+  const lit = Math.max(0, x * sphere.light[0] + y * sphere.light[1] + z * sphere.light[2]);
+  return {
+    level: Math.min(1, lit * sphere.surface(x, y) * (0.55 + 0.45 * z)),
+    color: sphere.color(x, y),
+  };
+}
+
+const NIGHT: Vec = [48, 54, 70];
+
+export function tint(color: Vec, level: number, char: string): string {
+  const gain = 0.62 + 0.38 * level;
+  return chalk.rgb(
+    Math.round(color[0] * gain),
+    Math.round(color[1] * gain),
+    Math.round(color[2] * gain),
+  )(char);
+}
+
 function drawSphere(cols: number, sphere: Sphere, mode: PictureMode): string[] {
+  if (mode === 'fine') return drawFineSphere(cols, sphere);
   const rows = Math.round(cols / 2);
   const colour = mode !== 'tone';
   return Array.from({ length: rows }, (_, row) => {
     let line = '';
     for (let col = 0; col < cols; col++) {
-      const x = ((col + 0.5) / cols) * 2 - 1;
-      const y = ((row + 0.5) / rows) * 2 - 1;
-      const radius = x * x + y * y;
-      if (radius > 1) {
+      const shade = shadeAt(sphere, ((col + 0.5) / cols) * 2 - 1, ((row + 0.5) / rows) * 2 - 1);
+      if (!shade) {
         line += ' ';
         continue;
       }
-      const z = Math.sqrt(1 - radius);
-      const lit = Math.max(0, x * sphere.light[0] + y * sphere.light[1] + z * sphere.light[2]);
-      const level = Math.min(1, lit * sphere.surface(x, y) * (0.55 + 0.45 * z));
-      if (level < 0.02) {
-        line += colour ? chalk.rgb(48, 54, 70)('.') : ' ';
+      if (shade.level < 0.02) {
+        line += colour ? chalk.rgb(...NIGHT)('.') : ' ';
         continue;
       }
-      const char = RAMP[Math.min(RAMP.length - 1, Math.floor(level * RAMP.length))] ?? ' ';
-      if (!colour) {
-        line += char;
-        continue;
-      }
-      const [r, g, b] = sphere.color(x, y);
-      const gain = 0.62 + 0.38 * level;
-      line += chalk.rgb(Math.round(r * gain), Math.round(g * gain), Math.round(b * gain))(char);
+      const char = RAMP[Math.min(RAMP.length - 1, Math.floor(shade.level * RAMP.length))] ?? ' ';
+      line += colour ? tint(shade.color, shade.level, char) : char;
+    }
+    return line.replace(/\s+$/, '');
+  });
+}
+
+const SUPERSAMPLE = 3;
+const EDGE_COVERAGE = 0.4;
+
+/** One truecolor pixel of the sphere, antialiased at the rim; undefined outside it. */
+function fineColor(sphere: Sphere, cols: number, px: number, py: number): Vec | undefined {
+  const size = cols;
+  let covered = 0;
+  const sum: [number, number, number] = [0, 0, 0];
+  for (let i = 0; i < SUPERSAMPLE; i++) {
+    for (let j = 0; j < SUPERSAMPLE; j++) {
+      const x = ((px + (i + 0.5) / SUPERSAMPLE) / size) * 2 - 1;
+      const y = ((py + (j + 0.5) / SUPERSAMPLE) / size) * 2 - 1;
+      const shade = shadeAt(sphere, x, y);
+      if (!shade) continue;
+      covered++;
+      const bright = Math.pow(shade.level, 0.75);
+      for (let channel = 0; channel < 3; channel++)
+        sum[channel] =
+          (sum[channel] ?? 0) +
+          (NIGHT[channel] ?? 0) * 0.6 * (1 - bright) +
+          (shade.color[channel] ?? 0) * bright;
+    }
+  }
+  if (covered < EDGE_COVERAGE * SUPERSAMPLE ** 2) return undefined;
+  return [sum[0] / covered, sum[1] / covered, sum[2] / covered];
+}
+
+/** Half blocks with a smoothly shaded colour on each half: twice the character resolution, no dithering. */
+function drawFineSphere(cols: number, sphere: Sphere): string[] {
+  const rows = Math.round(cols / 2);
+  return Array.from({ length: rows }, (_, row) => {
+    let line = '';
+    for (let col = 0; col < cols; col++) {
+      const top = fineColor(sphere, cols, col, row * 2);
+      const bottom = fineColor(sphere, cols, col, row * 2 + 1);
+      const rgb = (v: Vec) => [Math.round(v[0]), Math.round(v[1]), Math.round(v[2])] as const;
+      if (top && bottom) line += chalk.rgb(...rgb(top)).bgRgb(...rgb(bottom))('▀');
+      else if (top) line += chalk.rgb(...rgb(top))('▀');
+      else if (bottom) line += chalk.rgb(...rgb(bottom))('▄');
+      else line += ' ';
     }
     return line.replace(/\s+$/, '');
   });
