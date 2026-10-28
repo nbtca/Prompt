@@ -1,6 +1,6 @@
 import { emblemLines } from '../core/logo.js';
 import { padEndV, visualWidth } from '../core/text.js';
-import { renderBitmap, type Bitmap } from '../core/pixel-art.js';
+import { pictureMode, renderBitmap, type Bitmap } from '../core/pixel-art.js';
 import { mountainScene, scaleBitmap, shelfScene, skyScene } from '../art/scene.js';
 import { space } from '../core/theme.js';
 
@@ -8,56 +8,70 @@ import { space } from '../core/theme.js';
 export type AmbientSpec =
   | { kind: 'sky' }
   | { kind: 'shelf' }
-  | { kind: 'mountain'; progress: number }
+  | { kind: 'mountain'; progress: number; weeks: number }
   | { kind: 'emblem' }
   | { kind: 'icon'; icon: Bitmap };
 
 const GAP = 4;
-const MIN_WIDTH = 30;
+const MIN_COLS = 30;
 const MIN_ROWS = 7;
-const MAX_SCENE_WIDTH = 104;
+const MIN_PANORAMA_ROWS = 8;
+const MAX_COLS = 130;
 const SCENE_GAMMA = 1.8;
+const FINE = { x: 2, y: 4 } as const;
 
-function hourOf(now: Date): number {
-  return now.getHours() + now.getMinutes() / 60;
+const cache = new Map<string, string[]>();
+
+function remember(key: string, build: () => string[]): string[] {
+  const hit = cache.get(key);
+  if (hit) return hit;
+  const lines = build();
+  if (cache.size >= 8) cache.delete(cache.keys().next().value ?? '');
+  cache.set(key, lines);
+  return lines;
 }
 
-function picture(spec: AmbientSpec, width: number, rows: number, now: Date): string[] | undefined {
-  switch (spec.kind) {
-    case 'sky':
-    case 'mountain': {
-      const cols = Math.min(width, MAX_SCENE_WIDTH);
-      const height = Math.min(rows, Math.round(cols * 0.55));
-      if (cols < MIN_WIDTH || height < MIN_ROWS) return undefined;
-      return renderBitmap(
-        spec.kind === 'sky'
-          ? skyScene(cols, height * 2, hourOf(now))
-          : mountainScene(cols, height * 2, spec.progress, hourOf(now)),
-        undefined,
-        SCENE_GAMMA,
-      );
-    }
-    case 'shelf': {
-      const cols = Math.min(width, 64);
-      const height = Math.min(rows, Math.round(cols * 0.5));
-      return cols < MIN_WIDTH || height < MIN_ROWS
-        ? undefined
-        : renderBitmap(shelfScene(cols, height * 2), undefined, SCENE_GAMMA);
-    }
-    case 'emblem':
-      return emblemLines(width, rows);
-    case 'icon': {
-      const factor = Math.min(
-        Math.floor(width / (spec.icon.rows[0]?.length ?? 1)),
-        Math.floor((rows * 2) / spec.icon.rows.length),
-        3,
-      );
-      return factor >= 2 ? renderBitmap(scaleBitmap(spec.icon, factor)) : undefined;
-    }
-  }
+/** A landscape that fills the given box of cells with Braille-fine pixels, or undefined when the box is too small. */
+function scene(spec: AmbientSpec, cols: number, rows: number, now: Date): string[] | undefined {
+  if (spec.kind !== 'sky' && spec.kind !== 'mountain' && spec.kind !== 'shelf') return undefined;
+  const width = Math.min(cols, MAX_COLS);
+  if (width < MIN_COLS || rows < MIN_ROWS) return undefined;
+  const minute = Math.floor(now.getTime() / 300_000);
+  const key = [
+    spec.kind,
+    width,
+    rows,
+    minute,
+    spec.kind === 'mountain' ? spec.progress.toFixed(3) : '',
+    pictureMode(),
+  ].join('|');
+  return remember(key, () => {
+    const pixels = { width: width * FINE.x, height: rows * FINE.y };
+    const bitmap =
+      spec.kind === 'sky'
+        ? skyScene(pixels.width, pixels.height, now)
+        : spec.kind === 'mountain'
+          ? mountainScene(pixels.width, pixels.height, spec.progress, spec.weeks, now)
+          : shelfScene(pixels.width, pixels.height);
+    return renderBitmap(bitmap, undefined, SCENE_GAMMA);
+  });
 }
 
-/** Puts a picture to the right of the page, as large as the leftover space allows. */
+function compact(spec: AmbientSpec, cols: number, rows: number): string[] | undefined {
+  if (spec.kind === 'emblem') return emblemLines(cols, rows);
+  if (spec.kind !== 'icon') return undefined;
+  const factor = Math.min(
+    Math.floor(cols / (spec.icon.rows[0]?.length ?? 1)),
+    Math.floor((rows * 2) / spec.icon.rows.length),
+    3,
+  );
+  return factor >= 2 ? renderBitmap(scaleBitmap(spec.icon, factor)) : undefined;
+}
+
+/**
+ * Fills the empty space of a page: a full-width panorama underneath when enough rows are free,
+ * otherwise a picture to the right of the content, as large as the leftover space allows.
+ */
 export function withAmbient(
   body: readonly string[],
   spec: AmbientSpec | undefined,
@@ -66,13 +80,22 @@ export function withAmbient(
   now = new Date(),
 ): string[] {
   if (!spec || !Number.isFinite(cols) || !Number.isFinite(bodyRows)) return [...body];
+  const indent = visualWidth(space.indent);
+  const rows = Math.floor(bodyRows);
+
+  const below = rows - body.length - 1;
+  const panorama = scene(spec, cols - indent * 2, below, now);
+  if (panorama && below >= MIN_PANORAMA_ROWS) {
+    return [...body, '', ...panorama.map((line) => space.indent + line)];
+  }
+
   const contentWidth = Math.max(0, ...body.map(visualWidth));
-  const width = cols - contentWidth - GAP - visualWidth(space.indent);
-  const art = picture(spec, width, Math.max(0, Math.floor(bodyRows) - 1), now);
+  const width = cols - contentWidth - GAP - indent;
+  const side = Math.min(rows - 1, Math.round(Math.min(width, MAX_COLS) * 0.55));
+  const art = scene(spec, width, side, now) ?? compact(spec, width, rows - 1);
   if (!art) return [...body];
 
-  const rows = Math.max(body.length, art.length);
-  return Array.from({ length: rows }, (_, index) => {
+  return Array.from({ length: Math.max(body.length, art.length) }, (_, index) => {
     const left = body[index] ?? '';
     const right = art[index];
     return right === undefined ? left : `${padEndV(left, contentWidth + GAP)}${right}`;

@@ -11,24 +11,56 @@ const noon = new Date('2026-10-28T12:00:00');
 
 const specs: [string, AmbientSpec][] = [
   ['sky', { kind: 'sky' }],
-  ['mountain', { kind: 'mountain', progress: 0.4 }],
+  ['mountain', { kind: 'mountain', progress: 0.4, weeks: 17 }],
   ['shelf', { kind: 'shelf' }],
   ['emblem', { kind: 'emblem' }],
   ['icon', { kind: 'icon', icon: eventIconConference }],
 ];
 
 describe('withAmbient', () => {
-  it.each(specs)('draws the %s beside the page in a big window', (_name, spec) => {
+  it.each(specs)('draws the %s in a big window without disturbing the content', (_name, spec) => {
     const lines = withAmbient(body, spec, 120, 38, noon);
     expect(lines.length).toBeGreaterThan(body.length);
     expect(lines.length).toBeLessThanOrEqual(38);
     expect(lines.every((line) => visualWidth(line) <= 120)).toBe(true);
-    expect(stripAnsi(lines[0] ?? '')).toContain('line 0 of the page content');
-    expect(visualWidth(lines[0] ?? '')).toBeGreaterThan(visualWidth(body[0] ?? ''));
+    expect(lines.map((line) => stripAnsi(line).trimEnd()).join('\n')).toContain(
+      'line 5 of the page content',
+    );
   });
 
-  it.each(specs)('leaves the %s out of an ordinary 80 x 24 window', (_name, spec) => {
-    expect(withAmbient(body, spec, 80, 19, noon)).toEqual(body);
+  it.each(specs)(
+    'leaves the %s out when the content fills an ordinary 80 x 24 window',
+    (_name, spec) => {
+      const full = Array.from(
+        { length: 17 },
+        (_, index) => `   line ${String(index)} ${'.'.repeat(50)}`,
+      );
+      expect(withAmbient(full, spec, 80, 19, noon)).toEqual(full);
+    },
+  );
+
+  it('lays a scene under the content as a panorama when enough rows are free', () => {
+    const lines = withAmbient(body, { kind: 'sky' }, 120, 38, noon);
+    expect(lines.slice(0, body.length)).toEqual(body);
+    expect(lines[body.length]).toBe('');
+    expect(lines.length).toBe(38);
+    expect(Math.max(...lines.slice(body.length + 1).map(visualWidth))).toBeGreaterThan(100);
+  });
+
+  it('puts a scene beside the content when too few rows remain below it', () => {
+    const tall = Array.from(
+      { length: 24 },
+      (_, index) => `   row ${String(index)} ${'.'.repeat(40)}`,
+    );
+    const lines = withAmbient(tall, { kind: 'sky' }, 120, 30, noon);
+    expect(lines.length).toBeLessThanOrEqual(30);
+    expect(visualWidth(lines[0] ?? '')).toBeGreaterThan(visualWidth(tall[0] ?? ''));
+  });
+
+  it('reuses the picture for the same window and minute', () => {
+    const first = withAmbient(body, { kind: 'sky' }, 120, 38, noon);
+    const second = withAmbient(body, { kind: 'sky' }, 120, 38, new Date(noon.getTime() + 20_000));
+    expect(second).toEqual(first);
   });
 
   it('grows the picture with the space', () => {

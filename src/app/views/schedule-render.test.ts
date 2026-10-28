@@ -1195,9 +1195,10 @@ describe('termProgress', () => {
       currentWeek: 5,
       nextBreakStart: '2026-12-21',
     } as unknown as Parameters<typeof termProgress>[0];
-    const progress = termProgress(window);
-    expect(progress).toBeGreaterThan(0.2);
-    expect(progress).toBeLessThan(0.5);
+    const term = termProgress(window);
+    expect(term?.progress).toBeGreaterThan(0.2);
+    expect(term?.progress).toBeLessThan(0.5);
+    expect(term?.weeks).toBe(15);
     expect(termProgress(null)).toBeUndefined();
     expect(termProgress({ status: 'onBreak', breakTitle: 'Winter' })).toBeUndefined();
   });

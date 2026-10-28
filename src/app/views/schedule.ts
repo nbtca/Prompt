@@ -478,8 +478,8 @@ export const scheduleView = {
 
   ambient(): AmbientSpec | undefined {
     if (state.mode !== 'public' && state.mode !== 'hub') return undefined;
-    const progress = termProgress(state.publicWindow);
-    return progress === undefined ? undefined : { kind: 'mountain', progress };
+    const term = termProgress(state.publicWindow);
+    return term === undefined ? undefined : { kind: 'mountain', ...term };
   },
 
   isBusy(): boolean {

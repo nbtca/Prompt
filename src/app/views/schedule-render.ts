@@ -412,13 +412,12 @@ function renderHubBody(
   return withGrid.grid ? withGrid.lines : layoutHub(state, now, bodyRows, cols, shortcuts).lines;
 }
 
-export function termProgress(w: AcademicWindow | OnBreak | null | undefined): number | undefined {
+export function termProgress(
+  w: AcademicWindow | OnBreak | null | undefined,
+): { progress: number; weeks: number } | undefined {
   if (!w || !('currentWeek' in w) || !w.nextBreakStart) return undefined;
-  const totalWeeks = Math.max(
-    1,
-    Math.round(isoDayDifference(w.weekOneMonday, w.nextBreakStart) / 7),
-  );
-  return Math.min(1, Math.max(0, w.currentWeek / totalWeeks));
+  const weeks = Math.max(1, Math.round(isoDayDifference(w.weekOneMonday, w.nextBreakStart) / 7));
+  return { progress: Math.min(1, Math.max(0, w.currentWeek / weeks)), weeks };
 }
 
 const TERM_PROGRESS_WIDTH = 20;
