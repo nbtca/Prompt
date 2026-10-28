@@ -102,7 +102,7 @@ describe('buildLogoLines display capabilities', () => {
     resetIconCache();
 
     const lines = buildLogoLines().map(stripAnsi);
-    expect(lines.join('\n')).toContain('( @@ )');
+    expect(lines.join('\n')).toContain('(@)');
     expect(lines.join('')).not.toContain('|\\  |');
   });
 
@@ -113,7 +113,7 @@ describe('buildLogoLines display capabilities', () => {
     resetIconCache();
 
     const lines = buildLogoLines().map(stripAnsi);
-    expect(lines.join('\n')).not.toContain('( @@ )');
+    expect(lines.join('\n')).not.toContain('(@)');
     expect(lines.join('\n')).toContain('|\\  |');
   });
 
