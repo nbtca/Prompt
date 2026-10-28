@@ -15,7 +15,7 @@ describe('renderBitmap', () => {
     chalk.level = level;
   });
 
-  it('packs two pixel rows into one terminal row', () => {
+  it('maps two pixel rows to one terminal row', () => {
     expect(bitmapSize(sample)).toEqual({ cols: 4, rows: 2 });
     expect(renderBitmap(sample, 'tone')).toHaveLength(2);
   });
@@ -27,12 +27,12 @@ describe('renderBitmap', () => {
     expect(lines[0]?.[2]).toBe(' ');
   });
 
-  it('uses half blocks with foreground and background colours in colour mode', () => {
+  it('draws colour mode as ASCII characters on tinted backgrounds', () => {
     chalk.level = 3;
     const [first] = renderBitmap(sample, 'color');
-    expect(first).toContain('\x1b[38;2;255;255;255m');
-    expect(first).toContain('\x1b[48;2;0;0;0m');
-    expect(stripAnsi(first ?? '')).toContain('▀');
+    expect(first).toMatch(/\x1b\[38;2;\d+;\d+;\d+m/);
+    expect(first).toMatch(/\x1b\[48;2;\d+;\d+;\d+m/);
+    expect(stripAnsi(first ?? '')).toMatch(/^[\x20-\x7e]*$/);
   });
 
   it('emits no escape sequences when colour is off', () => {

@@ -115,7 +115,7 @@ class Canvas {
         })
         .join(''),
     );
-    return { palette, rows, density: FINE };
+    return { palette, rows, density: FINE, smooth: true };
   }
 }
 
