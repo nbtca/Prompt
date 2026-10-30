@@ -23,16 +23,35 @@ const FACE_WEIGHT = 3;
 const RASTER = 1664;
 const CENTER = RASTER / 2;
 const RING_RADII = { outer: 406.97 * 2, inner: 328.05 * 2 };
+const BAND_RADIUS = ((406.97 + 328.05) / 2) * 2;
 const PUPIL_RADIUS = 26;
 const FACE_STROKE_WIDTH = 24;
 const FACE_REACH = 30;
 
 const TIERS = [
-  { file: 'src/logo/ascii-emblem-large.txt', cols: 56, rows: 26, rings: ['outer', 'inner'] },
+  {
+    file: 'src/logo/ascii-emblem-large.txt',
+    cols: 56,
+    rows: 26,
+    rings: ['outer', 'inner'],
+    band: {
+      top: 'Computer Association of NBT',
+      bottom: 'To be at the intersection of technology and liberal arts.',
+    },
+  },
   { file: 'src/logo/ascii-emblem-medium.txt', cols: 40, rows: 19, rings: ['outer', 'inner'] },
   { file: 'src/logo/ascii-emblem-small.txt', cols: 26, rows: 12, rings: ['outer'] },
   { file: 'src/logo/ascii-emblem-tiny.txt', cols: 20, rows: 9, rings: ['outer'] },
 ];
+
+const LETTERS = [
+  ...new Set(
+    TIERS.flatMap((tier) => (tier.band ? Object.values(tier.band) : []))
+      .join('')
+      .replace(/ /g, ''),
+  ),
+];
+const ALL = [...CHARS, ...LETTERS];
 
 const browser = await chromium.launch();
 const page = await browser.newPage();
@@ -74,7 +93,7 @@ const { mask, glyphs } = await page.evaluate(
   {
     svg,
     size: RASTER,
-    chars: [...CHARS],
+    chars: ALL,
     cell: { width: CELL_WIDTH, height: CELL_HEIGHT },
     fontSize: FONT_SIZE,
     baseline: BASELINE,
@@ -246,20 +265,57 @@ function lineArt({ cols, rows, rings }) {
   return { target: place(art), faceMask: place(weight), width, height };
 }
 
+/** Cells along the band between the rings, from the centre of `facing` outwards until there are `count` of them. */
+function bandCells(tier, facing, count) {
+  const { cols, rows } = tier;
+  const radius = (BAND_RADIUS * cols * CELL_WIDTH) / RASTER;
+  const cx = (cols * CELL_WIDTH) / 2;
+  const cy = (rows * CELL_HEIGHT) / 2;
+  const direction = facing === 'top' ? 1 : -1;
+  const centre = facing === 'top' ? -Math.PI / 2 : Math.PI / 2;
+  for (let half = 0.05; half < Math.PI; half += 0.01) {
+    const cells = [];
+    for (let step = -half; step <= half; step += 0.002) {
+      const angle = centre + direction * step;
+      const col = Math.floor((cx + radius * Math.cos(angle)) / CELL_WIDTH);
+      const row = Math.floor((cy + radius * Math.sin(angle)) / CELL_HEIGHT);
+      const last = cells[cells.length - 1];
+      if (!last || last[0] !== col || last[1] !== row) cells.push([col, row]);
+    }
+    if (cells.length >= count) {
+      const start = Math.floor((cells.length - count) / 2);
+      return cells.slice(start, start + count);
+    }
+  }
+  return [];
+}
+
+function bandPlacements(tier) {
+  return ['top', 'bottom'].flatMap((facing) => {
+    const text = [...tier.band[facing]];
+    const cells = bandCells(tier, facing, text.length);
+    return text.flatMap((char, index) =>
+      char === ' ' || !cells[index] ? [] : [[...cells[index], char]],
+    );
+  });
+}
+
 function fit(tier) {
   const { target, faceMask, width, height } = lineArt(tier);
   const { cols, rows } = tier;
   const margin = Math.ceil(3 * SIGMA);
   const paddedWidth = width + 2 * margin;
-  const pad = (image) => {
-    const out = new Float32Array(paddedWidth * (height + 2 * margin));
+  const pad = (image, fill = 0) => {
+    const out = new Float32Array(paddedWidth * (height + 2 * margin)).fill(fill);
     for (let y = 0; y < height; y++)
       out.set(image.subarray(y * width, (y + 1) * width), (y + margin) * paddedWidth + margin);
     return out;
   };
   const blurred = pad(blur(target, width, height, SIGMA));
-  const weights = pad(faceMask.map((value) => 1 + (FACE_WEIGHT - 1) * value));
-  weights.fill(1, 0, margin * paddedWidth);
+  const weights = pad(
+    faceMask.map((value) => 1 + (FACE_WEIGHT - 1) * value),
+    1,
+  );
   const windowWidth = CELL_WIDTH + 2 * margin;
   const windowHeight = CELL_HEIGHT + 2 * margin;
   const windows = glyphs.map((glyph) => {
@@ -272,6 +328,7 @@ function fit(tier) {
   });
   const squares = windows.map((window) => window.map((value) => value * value));
   const solid = [...CHARS].map((char) => SOLID.has(char));
+  const candidates = solid.length;
   const density = Array.from({ length: rows }, (_, row) =>
     Array.from({ length: cols }, (_, col) => {
       let sum = 0;
@@ -285,10 +342,26 @@ function fit(tier) {
   const composite = new Float32Array(blurred.length);
   const chosen = Array.from({ length: rows }, () => new Array(cols).fill(0));
   const offsetOf = (row, col) => row * CELL_HEIGHT * paddedWidth + col * CELL_WIDTH;
+  // The lettered band is fixed first; the rings are then fitted around it.
+  const fixed = new Set();
+  for (const [col, row, char] of tier.band ? bandPlacements(tier) : []) {
+    const index = ALL.indexOf(char);
+    fixed.add(row * cols + col);
+    chosen[row][col] = index;
+    const origin = offsetOf(row, col);
+    for (let y = 0; y < windowHeight; y++) {
+      for (let x = 0; x < windowWidth; x++) {
+        const value = windows[index][y * windowWidth + x];
+        composite[origin + y * paddedWidth + x] += value;
+        blurred[origin + y * paddedWidth + x] += value;
+      }
+    }
+  }
   const sweep = (first) => {
     let changed = 0;
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
+        if (fixed.has(row * cols + col)) continue;
         const origin = offsetOf(row, col);
         const old = chosen[row][col];
         if (!first) {
@@ -308,7 +381,7 @@ function fit(tier) {
         }
         let best = 0;
         let bestError = Infinity;
-        windows.forEach((window, index) => {
+        windows.slice(0, candidates).forEach((window, index) => {
           if (solid[index] && density[row][col] < SOLID_DENSITY) return;
           let error = 0;
           for (let i = 0; i < window.length; i++)
@@ -332,7 +405,7 @@ function fit(tier) {
   for (let pass = 1; pass < SWEEPS && sweep(false) > 0; pass++);
   const lines = chosen.map((row) =>
     row
-      .map((index) => CHARS[index])
+      .map((index) => ALL[index])
       .join('')
       .replace(/\s+$/, ''),
   );
