@@ -265,39 +265,77 @@ function lineArt({ cols, rows, rings }) {
   return { target: place(art), faceMask: place(weight), width, height };
 }
 
-/** Cells along the band between the rings, from the centre of `facing` outwards until there are `count` of them. */
-function bandCells(tier, facing, count) {
+// A word is a straight run of upright letters, so it stays readable; the arc is approximated by runs that step from row to row.
+const WORD_PITCH = 20;
+const RUNS = [
+  { step: [1, 0], penalty: 0 },
+  { step: [1, 1], penalty: 40 },
+  { step: [1, -1], penalty: 40 },
+  { step: [0, 1], penalty: 80 },
+];
+
+function bandPlacements(tier) {
   const { cols, rows } = tier;
   const radius = (BAND_RADIUS * cols * CELL_WIDTH) / RASTER;
   const cx = (cols * CELL_WIDTH) / 2;
   const cy = (rows * CELL_HEIGHT) / 2;
-  const direction = facing === 'top' ? 1 : -1;
-  const centre = facing === 'top' ? -Math.PI / 2 : Math.PI / 2;
-  for (let half = 0.05; half < Math.PI; half += 0.01) {
-    const cells = [];
-    for (let step = -half; step <= half; step += 0.002) {
-      const angle = centre + direction * step;
-      const col = Math.floor((cx + radius * Math.cos(angle)) / CELL_WIDTH);
-      const row = Math.floor((cy + radius * Math.sin(angle)) / CELL_HEIGHT);
-      const last = cells[cells.length - 1];
-      if (!last || last[0] !== col || last[1] !== row) cells.push([col, row]);
+  const used = new Set();
+  const key = (col, row) => `${col},${row}`;
+  const crowded = (col, row) => {
+    for (let dc = -1; dc <= 1; dc++) {
+      for (let dr = -1; dr <= 1; dr++) if (used.has(key(col + dc, row + dr))) return true;
     }
-    if (cells.length >= count) {
-      const start = Math.floor((cells.length - count) / 2);
-      return cells.slice(start, start + count);
+    return false;
+  };
+  const placements = [];
+  for (const facing of ['top', 'bottom']) {
+    const words = tier.band[facing].split(' ');
+    const units = words.reduce((total, word) => total + word.length, 0) + words.length - 1;
+    const direction = facing === 'top' ? 1 : -1;
+    const centre = facing === 'top' ? -Math.PI / 2 : Math.PI / 2;
+    let cursor = -(units * WORD_PITCH) / (2 * radius);
+    for (const word of words) {
+      const angle = centre + direction * (cursor + (word.length * WORD_PITCH) / (2 * radius));
+      cursor += ((word.length + 1) * WORD_PITCH) / radius;
+      const middleCol = (cx + radius * Math.cos(angle)) / CELL_WIDTH - 0.5;
+      const middleRow = (cy + radius * Math.sin(angle)) / CELL_HEIGHT - 0.5;
+      let best;
+      let bestCost = Infinity;
+      for (const { step, penalty } of RUNS) {
+        for (let shiftCol = -1; shiftCol <= 1; shiftCol++) {
+          for (let shiftRow = -1; shiftRow <= 1; shiftRow++) {
+            const cells = [...word].map((_, index) => {
+              const offset = index - (word.length - 1) / 2;
+              return [
+                Math.round(middleCol + offset * step[0]) + shiftCol,
+                Math.round(middleRow + offset * step[1]) + shiftRow,
+              ];
+            });
+            const tangent = [-Math.sin(angle) * direction, Math.cos(angle) * direction];
+            const run = [step[0] * CELL_WIDTH, step[1] * CELL_HEIGHT];
+            const alignment = (tangent[0] * run[0] + tangent[1] * run[1]) / Math.hypot(...run);
+            let cost = penalty + 80 * (1 - alignment);
+            for (const [col, row] of cells) {
+              const drift =
+                Math.hypot((col + 0.5) * CELL_WIDTH - cx, (row + 0.5) * CELL_HEIGHT - cy) - radius;
+              cost += Math.abs(drift);
+              if (col < 0 || col >= cols || row < 0 || row >= rows || crowded(col, row))
+                cost += 1e6;
+            }
+            if (cost < bestCost) {
+              bestCost = cost;
+              best = cells;
+            }
+          }
+        }
+      }
+      best.forEach(([col, row], index) => {
+        used.add(key(col, row));
+        placements.push([col, row, word[index]]);
+      });
     }
   }
-  return [];
-}
-
-function bandPlacements(tier) {
-  return ['top', 'bottom'].flatMap((facing) => {
-    const text = [...tier.band[facing]];
-    const cells = bandCells(tier, facing, text.length);
-    return text.flatMap((char, index) =>
-      char === ' ' || !cells[index] ? [] : [[...cells[index], char]],
-    );
-  });
+  return placements;
 }
 
 function fit(tier) {
