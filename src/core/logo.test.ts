@@ -96,38 +96,31 @@ describe('buildLogoLines display capabilities', () => {
   });
 
   it.each([
-    [80, 24, 30],
-    [80, 34, 44],
-  ])('shades the emblem with ASCII at %i x %i, %i columns wide', (cols, rows, width) => {
+    [80, 31, 26],
+    [80, 24, 19],
+    [80, 17, 12],
+    [80, 14, 9],
+  ])('draws the ASCII emblem at %i x %i with %i rows', (cols, rows, artRows) => {
     process.env['NBTCA_ICON_MODE'] = 'ascii';
     process.stdout.columns = cols;
     process.stdout.rows = rows;
     resetIconCache();
 
     const lines = buildLogoLines().map(stripAnsi);
-    const art = lines.filter((line) => /[@%#*]/.test(line) && !line.includes('prompt'));
-    expect(art.length).toBeGreaterThan(10);
-    expect(Math.max(...art.map(visualWidth))).toBeLessThanOrEqual(width);
-    expect(Math.max(...art.map(visualWidth))).toBeGreaterThan(width - 6);
+    expect(lines.indexOf('', 1) - 1).toBe(artRows);
     expect(lines.every((line) => /^[\x20-\x7e]*$/.test(line))).toBe(true);
     expect(lines.length).toBeLessThanOrEqual(rows);
   });
 
-  it('draws the line emblem when the shaded ones do not fit, and the wordmark below that', () => {
+  it('writes NBTCA when no emblem fits', () => {
     process.env['NBTCA_ICON_MODE'] = 'ascii';
     process.stdout.columns = 80;
-    process.stdout.rows = 17;
-    resetIconCache();
-    expect(buildLogoLines().map(stripAnsi).join('\n')).toContain('(@)');
-
     process.stdout.rows = 10;
     resetIconCache();
-    const lines = buildLogoLines().map(stripAnsi).join('\n');
-    expect(lines).not.toContain('(@)');
-    expect(lines).toContain('|\\  |');
+    expect(stripAnsi(buildLogoLines()[1] ?? '')).toBe('NBTCA');
   });
 
-  it('uses a readable wordmark when the ASCII artwork is too wide', () => {
+  it('writes NBTCA when the ASCII artwork is too wide', () => {
     process.env['NBTCA_ICON_MODE'] = 'ascii';
     process.stdout.columns = 20;
     process.stdout.rows = 12;
