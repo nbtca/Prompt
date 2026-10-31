@@ -1,6 +1,6 @@
 {
   "name": "@nbtca/prompt",
-  "version": "1.5.23",
+  "version": "1.5.24",
   "type": "module",
   "main": "dist/index.js",
   "exports": {
