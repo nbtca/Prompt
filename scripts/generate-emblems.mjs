@@ -1,35 +1,48 @@
 /* global document, Image */
-// Regenerates src/logo/ascii-emblem*.txt by fitting ASCII characters to the club logo.
+// Regenerates src/logo/ascii-emblem*.txt from the club logo, drawn the way line-ASCII artists do:
+// every stroke becomes the plain character that follows its direction, the face is shrunk a little so
+// the smile does not merge into the inner ring, and the eyes of the smaller emblems are drawn by hand.
 // Needs Playwright with a Chromium, which is not a dependency of this package:
 //   PLAYWRIGHT=/path/to/playwright/index.mjs node scripts/generate-emblems.mjs
-//
-// The logo is thinned to line art, then every cell gets the glyph that makes the blurred
-// rendering of the whole grid closest to the blurred line art, so strokes continue across cells.
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const { chromium } = await import(process.env.PLAYWRIGHT ?? 'playwright');
 
 const CELL_WIDTH = 16;
 const CELL_HEIGHT = 34;
-const FONT_SIZE = 26.7;
-const BASELINE = 27;
-// A few plain strokes, as the Amiga logo artists used, keep the rings consistent.
-const CHARS = " .'`-_|/\\()@";
-const SOLID = new Set(['@']);
-const SOLID_DENSITY = 0.35;
-const SIGMA = 2.5;
-const SWEEPS = 4;
 const STROKE = 4;
-const FACE_WEIGHT = 3;
+const MIN_INK = 14;
 const RASTER = 1664;
 const CENTER = RASTER / 2;
+const LOGO_WIDTH = 831.94;
 const RING_RADII = { outer: 406.97 * 2, inner: 328.05 * 2 };
 const BAND_RADIUS = ((406.97 + 328.05) / 2) * 2;
 const PUPIL_RADIUS = 26;
 const FACE_STROKE_WIDTH = 24;
-const FACE_REACH = 30;
 // The face is drawn smaller than in the logo, so the smile does not merge into the inner ring.
 const FACE_SCALE = 0.9;
+// Row in the 1664-pixel raster between the eyes and the smile.
+const EYE_SMILE_GAP = 840;
+// Pupil centres in the 832-pixel logo, and the distance between the two eyes.
+const PUPILS = [
+  [120, 325],
+  [452, 325],
+];
+const EYE_DISTANCE = 332;
+const MIRRORED = { '/': '\\', '\\': '/', '(': ')', ')': '(', '`': "'", "'": '`' };
+const UPRIGHT = '|()/\\';
+
+// Each eye is a lid over a pupil looking sideways: its lines, then the pupil's row and column.
+const EYES = {
+  large: {
+    lines: ["  .--''''''''--.", ' (@@@@@----------. `\\', "  '@@@@'       `'----'"],
+    row: 1,
+    col: 3,
+  },
+  medium: { lines: ["  .-'''''-.", ' (@@@----. `\\', "  '@@'   `'--'"], row: 1, col: 2 },
+  small: { lines: [" .-''''-.", '(@@@---._`\\'], row: 1, col: 2 },
+  tiny: { lines: [" .-'''.", '(@@---`\\'], row: 1, col: 2 },
+};
 
 const TIERS = [
   {
@@ -37,31 +50,28 @@ const TIERS = [
     cols: 56,
     rows: 26,
     rings: ['outer', 'inner'],
+    eyes: 'large',
     band: {
       top: 'Computer Association of NBT',
       bottom: 'To be at the intersection of technology and liberal arts.',
     },
   },
-  { file: 'src/logo/ascii-emblem-medium.txt', cols: 40, rows: 19, rings: ['outer', 'inner'] },
-  { file: 'src/logo/ascii-emblem-small.txt', cols: 26, rows: 12, rings: ['outer'] },
-  { file: 'src/logo/ascii-emblem-tiny.txt', cols: 20, rows: 9, rings: ['outer'] },
+  {
+    file: 'src/logo/ascii-emblem-medium.txt',
+    cols: 40,
+    rows: 19,
+    rings: ['outer', 'inner'],
+    eyes: 'medium',
+  },
+  { file: 'src/logo/ascii-emblem-small.txt', cols: 26, rows: 12, rings: ['outer'], eyes: 'small' },
+  { file: 'src/logo/ascii-emblem-tiny.txt', cols: 20, rows: 9, rings: ['outer'], eyes: 'tiny' },
 ];
-
-const LETTERS = [
-  ...new Set(
-    TIERS.flatMap((tier) => (tier.band ? Object.values(tier.band) : []))
-      .join('')
-      .replace(/ /g, ''),
-  ),
-];
-const ALL = [...CHARS, ...LETTERS];
 
 const browser = await chromium.launch();
 const page = await browser.newPage();
 const svg = readFileSync('scripts/emblem-face.svg', 'utf8');
-const { mask, glyphs } = await page.evaluate(
-  async ({ svg, size, chars, cell, fontSize, baseline }) => {
-    await document.fonts.load('200px "JetBrainsMono NFM"');
+const mask = await page.evaluate(
+  async ({ svg, size }) => {
     const image = new Image();
     image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
     await image.decode();
@@ -74,33 +84,9 @@ const { mask, glyphs } = await page.evaluate(
     let bits = '';
     for (let index = 0; index < size * size; index++)
       bits += pixels[index * 4 + 3] > 127 ? '1' : '0';
-
-    const glyphCanvas = document.createElement('canvas');
-    glyphCanvas.width = cell.width;
-    glyphCanvas.height = cell.height;
-    const glyphContext = glyphCanvas.getContext('2d', { willReadFrequently: true });
-    const out = [];
-    for (const char of chars) {
-      glyphContext.clearRect(0, 0, cell.width, cell.height);
-      glyphContext.fillStyle = '#000';
-      glyphContext.font = `${fontSize}px "JetBrainsMono NFM"`;
-      glyphContext.textBaseline = 'alphabetic';
-      glyphContext.fillText(char, 0, baseline);
-      const data = glyphContext.getImageData(0, 0, cell.width, cell.height).data;
-      out.push(
-        Array.from({ length: cell.width * cell.height }, (_, index) => data[index * 4 + 3] / 255),
-      );
-    }
-    return { mask: bits, glyphs: out };
+    return bits;
   },
-  {
-    svg,
-    size: RASTER,
-    chars: ALL,
-    cell: { width: CELL_WIDTH, height: CELL_HEIGHT },
-    fontSize: FONT_SIZE,
-    baseline: BASELINE,
-  },
+  { svg, size: RASTER },
 );
 await browser.close();
 
@@ -114,20 +100,17 @@ function distanceTo(sources, size) {
   const v = new Int32Array(size);
   const z = new Float64Array(size + 1);
   const transform = (get, set) => {
+    for (let q = 0; q < size; q++) f[q] = get(q);
     let k = 0;
     v[0] = 0;
     z[0] = -INF;
     z[1] = INF;
     for (let q = 1; q < size; q++) {
-      f[q] = get(q);
-      let s;
-      for (;;) {
-        const p = v[k];
-        s = (f[q] + q * q - (f[p] + p * p)) / (2 * q - 2 * p);
-        if (s > z[k] || k === 0) break;
+      let s = (f[q] + q * q - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
+      while (s <= z[k]) {
         k--;
+        s = (f[q] + q * q - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
       }
-      if (s <= z[k]) s = z[k] + 1e-9;
       k++;
       v[k] = q;
       z[k] = s;
@@ -139,9 +122,7 @@ function distanceTo(sources, size) {
       set(q, (q - v[k]) ** 2 + f[v[k]]);
     }
   };
-  f[0] = 0;
   for (let x = 0; x < size; x++) {
-    f[0] = grid[x];
     transform(
       (y) => grid[y * size + x],
       (y, value) => {
@@ -167,13 +148,12 @@ const within = (bits, radius) => {
 };
 const insideDepth = (bits) => distanceTo(inverse(bits), RASTER);
 
-// Eyes' pupils are the blobs wider than a stroke; everything else in the face is a stroke to thin.
+// The pupils are the blobs wider than a stroke; everything else in the face is a stroke to thin.
 const eroded = Uint8Array.from(insideDepth(face), (depth) => (depth > PUPIL_RADIUS ? 1 : 0));
 const pupils = Uint8Array.from(within(eroded, PUPIL_RADIUS), (bit, index) => bit & face[index]);
 const nearPupils = within(pupils, 3);
 const strokes = Uint8Array.from(face, (bit, index) => bit & (1 - nearPupils[index]));
 const strokeDepth = insideDepth(strokes);
-const faceReach = within(face, FACE_REACH);
 
 function resample(source, size, outSize) {
   const scale = size / outSize;
@@ -204,33 +184,7 @@ function resample(source, size, outSize) {
   return out;
 }
 
-/** Zero-padded Gaussian blur of a width x height image. */
-function blur(image, width, height, sigma) {
-  const radius = Math.ceil(3 * sigma);
-  const kernel = Array.from({ length: radius * 2 + 1 }, (_, i) =>
-    Math.exp(-((i - radius) ** 2) / (2 * sigma * sigma)),
-  );
-  const total = kernel.reduce((a, b) => a + b, 0);
-  const normalized = kernel.map((value) => value / total);
-  const pass = (input, w, h, horizontal) => {
-    const out = new Float32Array(w * h);
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        let sum = 0;
-        for (let k = -radius; k <= radius; k++) {
-          const xx = horizontal ? x + k : x;
-          const yy = horizontal ? y : y + k;
-          if (xx >= 0 && xx < w && yy >= 0 && yy < h)
-            sum += input[yy * w + xx] * normalized[k + radius];
-        }
-        out[y * w + x] = sum;
-      }
-    }
-    return out;
-  };
-  return pass(pass(image, width, height, true), width, height, false);
-}
-
+/** The raster scaled by FACE_SCALE around its centre. */
 function shrink(source) {
   const out = new Float32Array(RASTER * RASTER);
   const at = (x, y) =>
@@ -253,6 +207,7 @@ function shrink(source) {
   return out;
 }
 
+/** The rings with the smile, and the left eye, as rasters as wide as the emblem. */
 function lineArt({ cols, rows, rings }) {
   const width = cols * CELL_WIDTH;
   const height = rows * CELL_HEIGHT;
@@ -276,8 +231,7 @@ function lineArt({ cols, rows, rings }) {
     }
   }
   const scaledFace = shrink(faceArt);
-  const art = ringArt.map((value, index) => Math.max(value, scaledFace[index]));
-  const weight = shrink(Float32Array.from(faceReach));
+  const gap = Math.floor(CENTER + (EYE_SMILE_GAP - CENTER) * FACE_SCALE) * RASTER;
   const place = (square) => {
     const scaled = resample(square, RASTER, width);
     const out = new Float32Array(width * height);
@@ -289,11 +243,84 @@ function lineArt({ cols, rows, rings }) {
     }
     return out;
   };
-  return { target: place(art), faceMask: place(weight), width, height };
+  return {
+    width,
+    lines: place(
+      ringArt.map((value, index) => Math.max(value, index >= gap ? scaledFace[index] : 0)),
+    ),
+    leftEye: place(
+      scaledFace.map((value, index) => (index < gap && index % RASTER < CENTER ? value : 0)),
+    ),
+  };
+}
+
+/** The plain character that follows the strokes in one cell, from their direction and position. */
+function glyphFor(points, cover) {
+  if (cover > 0.5) return '@';
+  const meanX = points.reduce((sum, [x]) => sum + x, 0) / points.length;
+  const meanY = points.reduce((sum, [, y]) => sum + y, 0) / points.length;
+  let sxx = 0;
+  let syy = 0;
+  let sxy = 0;
+  for (const [x, y] of points) {
+    sxx += (x - meanX) ** 2;
+    syy += (y - meanY) ** 2;
+    sxy += (x - meanX) * (y - meanY);
+  }
+  const rising = ((((-0.5 * Math.atan2(2 * sxy, sxx - syy) * 180) / Math.PI) % 180) + 180) % 180;
+  const angle = Math.min(rising, 180 - rising);
+  const height = meanY / CELL_HEIGHT;
+  if (angle < 52) {
+    if (height < 0.3) return angle < 30 || rising >= 90 ? "'" : '`';
+    if (height < 0.62) return '-';
+    return angle < 14 ? '_' : '.';
+  }
+  if (angle < 68) return rising < 90 ? '/' : '\\';
+  if (angle < 82) return meanX < CELL_WIDTH / 2 ? '(' : ')';
+  return '|';
+}
+
+/** A character in each cell that holds strokes, and only the strongest of a row's upright neighbours. */
+function strokeCells(raster, width, cols, rows) {
+  const grid = Array.from({ length: rows }, (_, row) =>
+    Array.from({ length: cols }, (_, col) => {
+      const points = [];
+      for (let y = 0; y < CELL_HEIGHT; y++) {
+        for (let x = 0; x < CELL_WIDTH; x++) {
+          if (raster[(row * CELL_HEIGHT + y) * width + col * CELL_WIDTH + x] > 0.4) {
+            points.push([x, y]);
+          }
+        }
+      }
+      if (points.length < MIN_INK) return { char: ' ', ink: 0 };
+      return {
+        char: glyphFor(points, points.length / (CELL_WIDTH * CELL_HEIGHT)),
+        ink: points.length,
+      };
+    }),
+  );
+  for (const row of grid) {
+    for (let col = 0; col < cols; col++) {
+      if (!UPRIGHT.includes(row[col].char)) continue;
+      let end = col;
+      while (end + 1 < cols && UPRIGHT.includes(row[end + 1].char)) end++;
+      let best = col;
+      for (let index = col; index <= end; index++) {
+        if (row[index].ink > row[best].ink) best = index;
+      }
+      for (let index = col; index <= end; index++) {
+        if (index !== best) row[index] = { char: ' ', ink: 0 };
+      }
+      col = end;
+    }
+  }
+  return grid.map((row) => row.map((cell) => cell.char));
 }
 
 // A word is a straight run of upright letters, so it stays readable; the arc is approximated by runs that step from row to row.
 const WORD_PITCH = 20;
+// A letter may replace a ring character, but only if the band has no free cell nearby.
+const OVERWRITE = 25;
 const RUNS = [
   { step: [1, 0], penalty: 0 },
   { step: [1, 1], penalty: 40 },
@@ -301,19 +328,15 @@ const RUNS = [
   { step: [0, 1], penalty: 80 },
 ];
 
-function bandPlacements(tier) {
+function bandPlacements(tier, grid) {
   const { cols, rows } = tier;
   const radius = (BAND_RADIUS * cols * CELL_WIDTH) / RASTER;
   const cx = (cols * CELL_WIDTH) / 2;
   const cy = (rows * CELL_HEIGHT) / 2;
   const used = new Set();
   const key = (col, row) => `${col},${row}`;
-  const crowded = (col, row) => {
-    for (let dc = -1; dc <= 1; dc++) {
-      for (let dr = -1; dr <= 1; dr++) if (used.has(key(col + dc, row + dr))) return true;
-    }
-    return false;
-  };
+  const crowded = (col, row) =>
+    used.has(key(col, row)) || used.has(key(col - 1, row)) || used.has(key(col + 1, row));
   const placements = [];
   for (const facing of ['top', 'bottom']) {
     const words = tier.band[facing].split(' ');
@@ -329,8 +352,8 @@ function bandPlacements(tier) {
       let best;
       let bestCost = Infinity;
       for (const { step, penalty } of RUNS) {
-        for (let shiftCol = -1; shiftCol <= 1; shiftCol++) {
-          for (let shiftRow = -1; shiftRow <= 1; shiftRow++) {
+        for (let shiftCol = -2; shiftCol <= 2; shiftCol++) {
+          for (let shiftRow = -2; shiftRow <= 2; shiftRow++) {
             const cells = [...word].map((_, index) => {
               const offset = index - (word.length - 1) / 2;
               return [
@@ -346,8 +369,11 @@ function bandPlacements(tier) {
               const drift =
                 Math.hypot((col + 0.5) * CELL_WIDTH - cx, (row + 0.5) * CELL_HEIGHT - cy) - radius;
               cost += Math.abs(drift);
-              if (col < 0 || col >= cols || row < 0 || row >= rows || crowded(col, row))
+              if (col < 0 || col >= cols || row < 0 || row >= rows || crowded(col, row)) {
                 cost += 1e6;
+              } else if (grid[row][col] !== ' ') {
+                cost += OVERWRITE;
+              }
             }
             if (cost < bestCost) {
               bestCost = cost;
@@ -356,6 +382,7 @@ function bandPlacements(tier) {
           }
         }
       }
+      if (bestCost >= 1e6) console.warn(`no room for "${word}"`);
       best.forEach(([col, row], index) => {
         used.add(key(col, row));
         placements.push([col, row, word[index]]);
@@ -365,121 +392,50 @@ function bandPlacements(tier) {
   return placements;
 }
 
-function fit(tier) {
-  const { target, faceMask, width, height } = lineArt(tier);
+function design(tier) {
   const { cols, rows } = tier;
-  const margin = Math.ceil(3 * SIGMA);
-  const paddedWidth = width + 2 * margin;
-  const pad = (image, fill = 0) => {
-    const out = new Float32Array(paddedWidth * (height + 2 * margin)).fill(fill);
-    for (let y = 0; y < height; y++)
-      out.set(image.subarray(y * width, (y + 1) * width), (y + margin) * paddedWidth + margin);
-    return out;
-  };
-  const blurred = pad(blur(target, width, height, SIGMA));
-  const weights = pad(
-    faceMask.map((value) => 1 + (FACE_WEIGHT - 1) * value),
-    1,
-  );
-  const windowWidth = CELL_WIDTH + 2 * margin;
-  const windowHeight = CELL_HEIGHT + 2 * margin;
-  const windows = glyphs.map((glyph) => {
-    const canvas = new Float32Array(windowWidth * windowHeight);
-    for (let y = 0; y < CELL_HEIGHT; y++) {
-      for (let x = 0; x < CELL_WIDTH; x++)
-        canvas[(y + margin) * windowWidth + x + margin] = glyph[y * CELL_WIDTH + x];
-    }
-    return blur(canvas, windowWidth, windowHeight, SIGMA);
-  });
-  const squares = windows.map((window) => window.map((value) => value * value));
-  const solid = [...CHARS].map((char) => SOLID.has(char));
-  const candidates = solid.length;
-  const density = Array.from({ length: rows }, (_, row) =>
-    Array.from({ length: cols }, (_, col) => {
-      let sum = 0;
-      for (let y = 0; y < CELL_HEIGHT; y++) {
-        for (let x = 0; x < CELL_WIDTH; x++)
-          sum += target[(row * CELL_HEIGHT + y) * width + col * CELL_WIDTH + x];
-      }
-      return sum / (CELL_WIDTH * CELL_HEIGHT);
-    }),
-  );
-  const composite = new Float32Array(blurred.length);
-  const chosen = Array.from({ length: rows }, () => new Array(cols).fill(0));
-  const offsetOf = (row, col) => row * CELL_HEIGHT * paddedWidth + col * CELL_WIDTH;
-  // The lettered band is fixed first; the rings are then fitted around it.
-  const fixed = new Set();
-  for (const [col, row, char] of tier.band ? bandPlacements(tier) : []) {
-    const index = ALL.indexOf(char);
-    fixed.add(row * cols + col);
-    chosen[row][col] = index;
-    const origin = offsetOf(row, col);
-    for (let y = 0; y < windowHeight; y++) {
-      for (let x = 0; x < windowWidth; x++) {
-        const value = windows[index][y * windowWidth + x];
-        composite[origin + y * paddedWidth + x] += value;
-        blurred[origin + y * paddedWidth + x] += value;
-      }
+  const { lines, leftEye, width } = lineArt(tier);
+  const scale = width / LOGO_WIDTH;
+  const grid = strokeCells(lines, width, cols, rows);
+  for (const row of grid) {
+    for (let col = 0; col < Math.floor(cols / 2); col++) {
+      row[cols - 1 - col] = MIRRORED[row[col]] ?? row[col];
     }
   }
-  const sweep = (first) => {
-    let changed = 0;
-    for (let row = 0; row < rows; row++) {
-      for (let col = 0; col < cols; col++) {
-        if (fixed.has(row * cols + col)) continue;
-        const origin = offsetOf(row, col);
-        const old = chosen[row][col];
-        if (!first) {
-          for (let y = 0; y < windowHeight; y++) {
-            for (let x = 0; x < windowWidth; x++)
-              composite[origin + y * paddedWidth + x] -= windows[old][y * windowWidth + x];
-          }
-        }
-        const residual = new Float32Array(windowWidth * windowHeight);
-        const local = new Float32Array(windowWidth * windowHeight);
-        for (let y = 0; y < windowHeight; y++) {
-          for (let x = 0; x < windowWidth; x++) {
-            const source = origin + y * paddedWidth + x;
-            residual[y * windowWidth + x] = blurred[source] - composite[source];
-            local[y * windowWidth + x] = weights[source];
-          }
-        }
-        let best = 0;
-        let bestError = Infinity;
-        windows.slice(0, candidates).forEach((window, index) => {
-          if (solid[index] && density[row][col] < SOLID_DENSITY) return;
-          let error = 0;
-          for (let i = 0; i < window.length; i++)
-            error += local[i] * (squares[index][i] - 2 * window[i] * residual[i]);
-          if (error < bestError) {
-            bestError = error;
-            best = index;
-          }
+  if (tier.eyes) {
+    const { lines: eye, row: pupilRow, col: pupilCol } = EYES[tier.eyes];
+    for (const [px, py] of PUPILS) {
+      const col =
+        (((px - LOGO_WIDTH / 2) * FACE_SCALE + LOGO_WIDTH / 2) * scale) / CELL_WIDTH - 0.5;
+      const row =
+        ((rows * CELL_HEIGHT) / 2 + (py - LOGO_WIDTH / 2) * FACE_SCALE * scale) / CELL_HEIGHT - 0.5;
+      eye.forEach((line, y) => {
+        [...line].forEach((char, x) => {
+          const target = grid[Math.round(row - pupilRow) + y];
+          if (char !== ' ' && target) target[Math.round(col - pupilCol) + x] = char;
         });
-        if (!first && best !== old) changed++;
-        chosen[row][col] = best;
-        for (let y = 0; y < windowHeight; y++) {
-          for (let x = 0; x < windowWidth; x++)
-            composite[origin + y * paddedWidth + x] += windows[best][y * windowWidth + x];
-        }
-      }
+      });
     }
-    return changed;
-  };
-  sweep(true);
-  for (let pass = 1; pass < SWEEPS && sweep(false) > 0; pass++);
-  const lines = chosen.map((row) =>
-    row
-      .map((index) => ALL[index])
-      .join('')
-      .replace(/\s+$/, ''),
-  );
-  while (lines.length && !lines[0]) lines.shift();
-  while (lines.length && !lines[lines.length - 1]) lines.pop();
-  return lines.join('\n') + '\n';
+  } else {
+    const shift = Math.round((EYE_DISTANCE * FACE_SCALE * scale) / CELL_WIDTH);
+    strokeCells(leftEye, width, cols, rows).forEach((row, y) => {
+      row.forEach((char, x) => {
+        if (char === ' ') return;
+        grid[y][x] = char;
+        if (x + shift < cols) grid[y][x + shift] = char;
+      });
+    });
+  }
+  if (tier.band) {
+    for (const [col, row, char] of bandPlacements(tier, grid)) grid[row][col] = char;
+  }
+  const out = grid.map((row) => row.join('').replace(/\s+$/, ''));
+  while (out.length && !out[0]) out.shift();
+  while (out.length && !out[out.length - 1]) out.pop();
+  return out.join('\n') + '\n';
 }
 
 for (const tier of TIERS) {
-  writeFileSync(tier.file, fit(tier));
+  writeFileSync(tier.file, design(tier));
   console.log(tier.file);
 }
