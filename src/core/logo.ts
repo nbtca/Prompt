@@ -27,6 +27,13 @@ const LOGO_TIERS = [
   { file: 'ca-dotmatrix-small.txt', minCols: 0, minRows: 0 },
 ] as const;
 
+const ASCII_EMBLEMS = [
+  'ascii-emblem-large.txt',
+  'ascii-emblem-medium.txt',
+  'ascii-emblem-small.txt',
+  'ascii-emblem-tiny.txt',
+] as const;
+
 function paint(text: string, color: boolean): string {
   return color ? brand(text) : text;
 }
@@ -48,10 +55,7 @@ function logoContent(): { art: string; metadata: string[] } | undefined {
           (tier) => tier.file,
         )
       : []),
-    ...(useUnicodeIcons()
-      ? []
-      : ['ascii-emblem-large.txt', 'ascii-emblem-medium.txt', 'ascii-emblem.txt']),
-    'ascii-logo.txt',
+    ...ASCII_EMBLEMS,
     undefined,
   ];
   for (const file of files) {
@@ -128,7 +132,7 @@ export async function runStartup(): Promise<void> {
 
 const EMBLEM_FILES = {
   unicode: ['ca-dotmatrix-large.txt', 'ca-dotmatrix.txt', 'ca-dotmatrix-small.txt'],
-  ascii: ['ascii-emblem-large.txt', 'ascii-emblem-medium.txt', 'ascii-emblem.txt'],
+  ascii: ASCII_EMBLEMS,
 } as const;
 
 /** The largest emblem that fits the box, painted with the brand gradient; undefined when none fits. */

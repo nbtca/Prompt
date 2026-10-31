@@ -1,88 +1,5 @@
-// Regenerates src/logo/ascii-emblem-*.txt and src/art/bitmaps.ts. Run: node scripts/generate-art.mjs
-import { readFileSync, writeFileSync } from 'node:fs';
-
-const TONE_RAMP = ' .:-=+*#%@';
-
-function brailleDots(path) {
-  const lines = readFileSync(path, 'utf8').replace(/\s+$/, '').split('\n');
-  const width = Math.max(...lines.map((line) => [...line].length)) * 2;
-  const height = lines.length * 4;
-  const dots = Array.from({ length: height }, () => new Float32Array(width));
-  const offsets = [
-    [0, 0],
-    [0, 1],
-    [0, 2],
-    [1, 0],
-    [1, 1],
-    [1, 2],
-    [0, 3],
-    [1, 3],
-  ];
-  lines.forEach((line, row) => {
-    [...line].forEach((char, col) => {
-      const mask = char.codePointAt(0) - 0x2800;
-      if (mask <= 0 || mask >= 256) return;
-      offsets.forEach(([dx, dy], bit) => {
-        if ((mask >> bit) & 1) dots[row * 4 + dy][col * 2 + dx] = 1;
-      });
-    });
-  });
-  return { dots, width, height };
-}
-
-function boxBlur(grid, width, height, radius) {
-  return grid.map((_, y) => {
-    const out = new Float32Array(width);
-    for (let x = 0; x < width; x++) {
-      let sum = 0;
-      let count = 0;
-      for (let dy = -radius; dy <= radius; dy++) {
-        for (let dx = -radius; dx <= radius; dx++) {
-          const yy = y + dy;
-          const xx = x + dx;
-          if (yy >= 0 && yy < height && xx >= 0 && xx < width) {
-            sum += grid[yy][xx];
-            count++;
-          }
-        }
-      }
-      out[x] = sum / count;
-    }
-    return out;
-  });
-}
-
-function shadedEmblem(path, outWidth) {
-  const { dots, width, height } = brailleDots(path);
-  const blurred = boxBlur(boxBlur(dots, width, height, 1), width, height, 1);
-  const scaleX = width / outWidth;
-  const scaleY = height / outWidth;
-  const pixels = Array.from({ length: outWidth }, (_, y) =>
-    Array.from({ length: outWidth }, (_, x) => {
-      let sum = 0;
-      let count = 0;
-      for (let yy = Math.floor(y * scaleY); yy < Math.floor((y + 1) * scaleY); yy++) {
-        for (let xx = Math.floor(x * scaleX); xx < Math.floor((x + 1) * scaleX); xx++) {
-          sum += blurred[yy][xx];
-          count++;
-        }
-      }
-      return sum / count;
-    }),
-  );
-  const peak = Math.max(...pixels.flat());
-  const rows = [];
-  for (let y = 0; y < outWidth; y += 2) {
-    let line = '';
-    for (let x = 0; x < outWidth; x++) {
-      const value = (pixels[y][x] + (pixels[y + 1]?.[x] ?? 0)) / 2 / peak;
-      const level = Math.round(Math.pow(value, 0.5) * (TONE_RAMP.length - 1));
-      line += TONE_RAMP[Math.min(TONE_RAMP.length - 1, level)];
-    }
-    rows.push(line.replace(/\s+$/, ''));
-  }
-  return rows.join('\n') + '\n';
-}
+// Regenerates src/art/bitmaps.ts. Run: node scripts/generate-art.mjs
+import { writeFileSync } from 'node:fs';
 
 class Canvas {
   constructor(width, height) {
@@ -252,7 +169,4 @@ for (const [name, bitmap] of Object.entries(iconSet))
   bitmaps.push(emitBitmap(`eventIcon${name[0].toUpperCase()}${name.slice(1)}`, bitmap));
 writeFileSync('src/art/bitmaps.ts', bitmaps.join('\n'));
 
-const large = 'src/logo/ca-dotmatrix-large.txt';
-writeFileSync('src/logo/ascii-emblem-large.txt', shadedEmblem(large, 44));
-writeFileSync('src/logo/ascii-emblem-medium.txt', shadedEmblem(large, 30));
 console.log('art generated');
