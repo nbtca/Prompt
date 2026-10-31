@@ -13,7 +13,8 @@ const CELL_WIDTH = 16;
 const CELL_HEIGHT = 34;
 const FONT_SIZE = 26.7;
 const BASELINE = 27;
-const CHARS = ' .,:;\'`"^_~-=+*|/\\<>()@';
+// A few plain strokes, as the Amiga logo artists used, keep the rings consistent.
+const CHARS = " .'`-_|/\\()@";
 const SOLID = new Set(['@']);
 const SOLID_DENSITY = 0.35;
 const SIGMA = 2.5;
@@ -27,6 +28,8 @@ const BAND_RADIUS = ((406.97 + 328.05) / 2) * 2;
 const PUPIL_RADIUS = 26;
 const FACE_STROKE_WIDTH = 24;
 const FACE_REACH = 30;
+// The face is drawn smaller than in the logo, so the smile does not merge into the inner ring.
+const FACE_SCALE = 0.9;
 
 const TIERS = [
   {
@@ -228,12 +231,34 @@ function blur(image, width, height, sigma) {
   return pass(pass(image, width, height, true), width, height, false);
 }
 
+function shrink(source) {
+  const out = new Float32Array(RASTER * RASTER);
+  const at = (x, y) =>
+    x < 0 || y < 0 || x >= RASTER - 1 || y >= RASTER - 1 ? 0 : source[y * RASTER + x];
+  for (let y = 0; y < RASTER; y++) {
+    for (let x = 0; x < RASTER; x++) {
+      const sx = CENTER + (x - CENTER) / FACE_SCALE;
+      const sy = CENTER + (y - CENTER) / FACE_SCALE;
+      const x0 = Math.floor(sx);
+      const y0 = Math.floor(sy);
+      const fx = sx - x0;
+      const fy = sy - y0;
+      out[y * RASTER + x] =
+        at(x0, y0) * (1 - fx) * (1 - fy) +
+        at(x0 + 1, y0) * fx * (1 - fy) +
+        at(x0, y0 + 1) * (1 - fx) * fy +
+        at(x0 + 1, y0 + 1) * fx * fy;
+    }
+  }
+  return out;
+}
+
 function lineArt({ cols, rows, rings }) {
   const width = cols * CELL_WIDTH;
   const height = rows * CELL_HEIGHT;
   const stroke = STROKE * (RASTER / width);
-  const art = new Float32Array(RASTER * RASTER);
-  const weight = new Float32Array(RASTER * RASTER);
+  const ringArt = new Float32Array(RASTER * RASTER);
+  const faceArt = new Float32Array(RASTER * RASTER);
   for (let y = 0; y < RASTER; y++) {
     for (let x = 0; x < RASTER; x++) {
       const index = y * RASTER + x;
@@ -245,12 +270,14 @@ function lineArt({ cols, rows, rings }) {
           Math.min(1, Math.max(0, stroke / 2 + 0.5 - Math.abs(radius - RING_RADII[name]))),
         );
       }
-      if (strokeDepth[index] > (FACE_STROKE_WIDTH - stroke) / 2) value = 1;
-      if (pupils[index]) value = 1;
-      art[index] = value;
-      weight[index] = faceReach[index];
+      ringArt[index] = value;
+      faceArt[index] =
+        strokeDepth[index] > (FACE_STROKE_WIDTH - stroke) / 2 || pupils[index] ? 1 : 0;
     }
   }
+  const scaledFace = shrink(faceArt);
+  const art = ringArt.map((value, index) => Math.max(value, scaledFace[index]));
+  const weight = shrink(Float32Array.from(faceReach));
   const place = (square) => {
     const scaled = resample(square, RASTER, width);
     const out = new Float32Array(width * height);
