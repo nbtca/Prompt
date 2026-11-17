@@ -134,6 +134,19 @@ describe('renderHome (schedule-first dashboard)', () => {
     expect(out).toContain('No upcoming classes');
   });
 
+  it('names the solar term or festival in the Today heading', () => {
+    const at = (iso: string) =>
+      stripAnsi(
+        renderHome(
+          { schedule: scheduleWith(), eventLines: [], loading: false },
+          new Date(`${iso}T12:00:00`),
+        ).join('\n'),
+      );
+    expect(at('2026-11-22')).toContain('Minor Snow');
+    expect(at('2026-09-25')).toContain('Mid-Autumn Festival');
+    expect(at('2026-11-23')).not.toContain('Snow');
+  });
+
   it('asks to log in instead of showing empty class panels when there is no timetable', () => {
     const trans = t();
     const lines = renderHome(

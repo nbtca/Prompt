@@ -1,5 +1,6 @@
 import type { Bitmap } from '../core/pixel-art.js';
 import { solarHour } from './sun.js';
+import { occasion, type Weather } from './almanac.js';
 
 type Rgb = [number, number, number];
 
@@ -338,6 +339,79 @@ function drawShore(c: Canvas, horizon: number, hour: number, rand: () => number)
   c.rect(0, c.height - 3, c.width - 1, c.height - 1, shade);
 }
 
+const BURST_COLORS = ['#ff6b6b', '#ffd166', '#7bdff2', '#f7a1ff', '#b8f2a6'] as const;
+
+function drawWeather(
+  c: Canvas,
+  horizon: number,
+  hour: number,
+  weather: Weather,
+  rand: () => number,
+): void {
+  if (weather === 'rain' || weather === 'snow') {
+    const [cloud, amount] = weather === 'rain' ? ['#5b6577', 0.4] : ['#9aa6b8', 0.45];
+    for (let y = 0; y < c.height; y++) {
+      for (let x = 0; x < c.width; x++) {
+        const cell = c.get(x, y);
+        if (cell !== null) c.set(x, y, mix(cell, cloud, amount * (y < horizon ? 1 : 0.6)));
+      }
+    }
+  }
+  if (weather === 'rain') {
+    const drops = Math.round(c.width * c.height * 0.006);
+    for (let index = 0; index < drops; index++) {
+      const x = rand() * c.width;
+      const y = rand() * c.height;
+      c.line(x, y, x - 1, y + 3, mix(c.get(x, y) ?? '#5b6577', '#c9d4e6', 0.45));
+    }
+    return;
+  }
+  if (weather === 'snow') {
+    const flakes = Math.round(c.width * c.height * 0.004);
+    for (let index = 0; index < flakes; index++) {
+      const x = rand() * c.width;
+      const y = rand() * (c.height - 3);
+      c.set(x, y, rand() > 0.3 ? '#f4f7ff' : '#c7d4ef');
+      if (rand() > 0.85) c.set(x + 1, y, '#dfe8ff');
+    }
+    return;
+  }
+  if (!isDark(hour)) return;
+  if (weather === 'fireworks') {
+    const bursts = Math.max(2, Math.round(c.width / 70));
+    for (let index = 0; index < bursts; index++) {
+      const cx = c.width * (0.12 + 0.76 * rand());
+      const cy = horizon * (0.18 + 0.35 * rand());
+      const radius = Math.max(4, horizon * (0.12 + 0.08 * rand()));
+      const color = BURST_COLORS[index % BURST_COLORS.length] ?? '#ffd166';
+      const spokes = 14;
+      for (let spoke = 0; spoke < spokes; spoke++) {
+        const angle = (2 * Math.PI * spoke) / spokes + rand() * 0.2;
+        for (let step = radius * 0.3; step <= radius; step += 1) {
+          const x = cx + Math.cos(angle) * step;
+          const y = cy + Math.sin(angle) * step * 0.9;
+          const cell = c.get(x, y);
+          if (cell !== null) c.set(x, y, mix(cell, color, 0.25 + 0.75 * (step / radius) ** 2));
+        }
+      }
+      c.line(cx, cy + radius * 0.4, cx + rand() * 2 - 1, horizon - 1, mix(color, '#0b1a3a', 0.6));
+    }
+    return;
+  }
+  const lanterns = Math.max(3, Math.round(c.width / 30));
+  for (let index = 0; index < lanterns; index++) {
+    const x = c.width * (0.08 + 0.84 * rand());
+    const y = horizon * (0.25 + 0.6 * rand());
+    const size = Math.max(1.5, c.height * 0.018 * (0.6 + rand()));
+    c.blob(x, y, size * 3, size * 3, (px, py, edge) =>
+      mix(c.get(px, py) ?? '#0b1a3a', '#ff9f43', 0.35 * (1 - edge) ** 2),
+    );
+    c.blob(x, y, size, size * 1.3, (_px, _py, edge) => mix('#ffe08a', '#ff7a1a', edge));
+    const glint = horizon + (horizon - y) * 0.25;
+    if (glint < c.height - 3) c.rect(x - 1, glint, x + 1, glint, '#ffb35c');
+  }
+}
+
 /** A seascape whose sky, sun or moon (with its real phase), stars, city, and lighthouse follow the campus sun. */
 export function skyScene(width: number, height: number, now: Date): Bitmap {
   const hour = solarHour(now);
@@ -348,6 +422,8 @@ export function skyScene(width: number, height: number, now: Date): Bitmap {
   const body = drawBody(c, horizon, hour, now);
   drawSea(c, horizon, hour, rand, body);
   drawShore(c, horizon, hour, rand);
+  const weather = occasion(now)?.weather;
+  if (weather) drawWeather(c, horizon, hour, weather, random(29));
   return c.toBitmap();
 }
 
