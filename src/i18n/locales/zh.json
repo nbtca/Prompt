@@ -42,6 +42,10 @@
     "lanternFestival": "元宵节",
     "midAutumn": "中秋节"
   },
+  "greeting": {
+    "lateNight": "夜深了，早点休息。",
+    "anniversary": "本月是 NBTCA 创立 {years} 周年。"
+  },
   "help": {
     "title": "快捷键",
     "sectionGlobal": "全局",

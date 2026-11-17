@@ -1,5 +1,7 @@
 import { c, type, space, glyph } from '../../core/theme.js';
 import { occasion } from '../../art/almanac.js';
+import { isOwlHour } from '../../art/scene.js';
+import { FOUNDED } from '../../config/data.js';
 import { t, fmt } from '../../i18n/index.js';
 import { pickIcon } from '../../core/icons.js';
 import { padEndV, visualWidth, wrapAnsiWithIndent } from '../../core/text.js';
@@ -148,6 +150,17 @@ export function renderHome(data: HomeData, now: Date, bodyRows = 100, cols = 80)
   const trans = t();
   const eventsStale = data.eventsLoadFailed === true && (data.eventLines?.length ?? 0) > 0;
   const lines: string[] = eventsStale ? offlineNotice(cols) : [];
+  const greetings = [
+    isOwlHour(now) ? trans.greeting.lateNight : undefined,
+    now.getMonth() + 1 === FOUNDED.month
+      ? fmt(trans.greeting.anniversary, { years: now.getFullYear() - FOUNDED.year })
+      : undefined,
+  ].filter((line) => line !== undefined);
+  for (const greeting of greetings) {
+    const line = `${type.active(glyph.dot())} ${type.body(greeting)}`;
+    lines.push(...wrappedIndentedLines(line, cols, (value) => value));
+  }
+  if (greetings.length > 0) lines.push('');
 
   if (data.schedule === null) {
     lines.push(...panelHeading(trans.timetable.menuTitle, cols));

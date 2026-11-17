@@ -412,6 +412,39 @@ function drawWeather(
   }
 }
 
+const OWL = [' 1   1 ', '1111111', '1211121', '1113111', '1111111', ' 11111 ', '  4 4  '];
+const OWL_COLORS: Readonly<Record<string, string>> = {
+  '1': '#3a3550',
+  '2': '#ffd166',
+  '3': '#c08a3a',
+  '4': '#8a6a3a',
+};
+
+/** Between 01:00 and 05:00 on the viewer's clock, when anyone still at the terminal should be asleep. */
+export function isOwlHour(now: Date): boolean {
+  const hour = now.getHours();
+  return hour >= 1 && hour < 5;
+}
+
+function drawOwl(c: Canvas, horizon: number): void {
+  const scale = Math.max(1, Math.round(c.height / 56));
+  const left = Math.round(c.width * 0.1) - Math.floor((OWL[0]?.length ?? 0) * scale * 0.5);
+  const top = horizon - Math.round(horizon * 0.3) - OWL.length * scale + 1;
+  OWL.forEach((row, y) => {
+    for (let x = 0; x < row.length; x++) {
+      const color = OWL_COLORS[row.charAt(x)];
+      if (color)
+        c.rect(
+          left + x * scale,
+          top + y * scale,
+          left + (x + 1) * scale - 1,
+          top + (y + 1) * scale - 1,
+          color,
+        );
+    }
+  });
+}
+
 /** A seascape whose sky, sun or moon (with its real phase), stars, city, and lighthouse follow the campus sun. */
 export function skyScene(width: number, height: number, now: Date): Bitmap {
   const hour = solarHour(now);
@@ -424,6 +457,7 @@ export function skyScene(width: number, height: number, now: Date): Bitmap {
   drawShore(c, horizon, hour, rand);
   const weather = occasion(now)?.weather;
   if (weather) drawWeather(c, horizon, hour, weather, random(29));
+  if (isOwlHour(now)) drawOwl(c, horizon);
   return c.toBitmap();
 }
 

@@ -56,6 +56,10 @@ export interface Translations {
     author: string;
   };
   almanac: Record<OccasionName, string>;
+  greeting: {
+    lateNight: string;
+    anniversary: string;
+  };
   help: {
     title: string;
     sectionGlobal: string;

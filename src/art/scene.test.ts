@@ -102,4 +102,9 @@ describe('scenes', () => {
     expect(colors('2026-09-25', 22).has('#ffe08a')).toBe(true);
     expect(colors('2026-09-25', 12).has('#ffe08a')).toBe(false);
   });
+
+  it('perches an owl on the hill only in the small hours', () => {
+    expect(colorsOf(skyScene(200, 80, at(2.5))).has('#3a3550')).toBe(true);
+    expect(colorsOf(skyScene(200, 80, at(22))).has('#3a3550')).toBe(false);
+  });
 });

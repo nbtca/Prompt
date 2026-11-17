@@ -934,3 +934,20 @@ describe('renderHome occasions', () => {
     expect(at('2026-11-23')).not.toContain('Snow');
   });
 });
+
+describe('renderHome greetings', () => {
+  const at = (date: Date) =>
+    stripAnsi(
+      renderHome({ schedule: scheduleWith(), eventLines: [], loading: false }, date).join('\n'),
+    );
+
+  it('tells a late-night visitor to rest', () => {
+    expect(at(new Date(2026, 10, 17, 2, 30))).toContain("It's late. Get some sleep.");
+    expect(at(new Date(2026, 10, 17, 5, 0))).not.toContain("It's late");
+  });
+
+  it('marks the club anniversary through March', () => {
+    expect(at(new Date(2027, 2, 18, 12))).toContain('NBTCA turns 25 this month.');
+    expect(at(new Date(2027, 3, 1, 12))).not.toContain('NBTCA turns');
+  });
+});
