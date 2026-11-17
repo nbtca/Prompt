@@ -28,6 +28,7 @@ import { isoDayDifference, localDayDifference, parseLocalDate } from '../../core
 import { currentEvents } from '../../features/calendar-query.js';
 import { emptyStateLines, loadingStateLines } from '../../core/components/empty-state.js';
 import type { Calendar } from '@nbtca/nbtcal';
+import { occasion } from '../../art/almanac.js';
 const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const;
 
 export interface HomeData {
@@ -172,7 +173,11 @@ export function renderHome(data: HomeData, now: Date, bodyRows = 100, cols = 80)
     );
     lines.push('');
 
-    lines.push(...panelHeading(trans.timetable.hubToday, cols));
+    const today = occasion(now);
+    const todayHeading = today
+      ? `${trans.timetable.hubToday} ${glyph.sep()} ${trans.almanac[today.name]}`
+      : trans.timetable.hubToday;
+    lines.push(...panelHeading(todayHeading, cols));
     lines.push(renderDayProgress(now, cols));
     lines.push(...todayLines(data.schedule, now, cols));
     lines.push('');
