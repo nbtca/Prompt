@@ -1,4 +1,5 @@
 import { c, type, space, glyph } from '../../core/theme.js';
+import { occasion } from '../../art/almanac.js';
 import { t, fmt } from '../../i18n/index.js';
 import { pickIcon } from '../../core/icons.js';
 import { padEndV, visualWidth, wrapAnsiWithIndent } from '../../core/text.js';
@@ -174,7 +175,11 @@ export function renderHome(data: HomeData, now: Date, bodyRows = 100, cols = 80)
     );
     lines.push('');
 
-    lines.push(...panelHeading(trans.timetable.hubToday, cols));
+    const today = occasion(now);
+    const todayHeading = today
+      ? `${trans.timetable.hubToday} ${glyph.sep()} ${trans.almanac[today.name]}`
+      : trans.timetable.hubToday;
+    lines.push(...panelHeading(todayHeading, cols));
     lines.push(renderDayProgress(now, cols));
     lines.push(...todayLines(data.schedule, now, cols));
     lines.push('');

@@ -94,4 +94,12 @@ describe('scenes', () => {
     const scaled = scaleBitmap({ palette: { a: '#ffffff' }, rows: ['a ', ' a'] }, 3);
     expect(scaled.rows).toEqual(['aaa   ', 'aaa   ', 'aaa   ', '   aaa', '   aaa', '   aaa']);
   });
+
+  it('draws the weather of the day', () => {
+    const colors = (day: string, hour: number) => colorsOf(skyScene(200, 80, at(hour, day)));
+    expect(colors('2026-11-22', 14).has('#f4f7ff')).toBe(true);
+    expect(colors('2026-11-21', 14).has('#f4f7ff')).toBe(false);
+    expect(colors('2026-09-25', 22).has('#ffe08a')).toBe(true);
+    expect(colors('2026-09-25', 12).has('#ffe08a')).toBe(false);
+  });
 });

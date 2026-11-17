@@ -3,6 +3,7 @@ import path, { dirname } from 'path';
 import { fileURLToPath } from 'url';
 import type englishTranslationSchema from './locales/en.json';
 import { getConfigDir, getWritableConfigDir } from '../config/paths.js';
+import type { OccasionName } from '../art/almanac.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -54,6 +55,7 @@ export interface Translations {
     license: string;
     author: string;
   };
+  almanac: Record<OccasionName, string>;
   help: {
     title: string;
     sectionGlobal: string;
