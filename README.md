@@ -75,6 +75,11 @@ the school's original numeric or textual result; Prompt does not calculate an
 overall GPA. Records stay in memory and are not cached. `--json` writes them to
 standard output, so keep redirected output private.
 
+In the interactive client, a grade published since your last look stays hidden
+as `▒▒▒ new` until you open it with `Enter`. To know which grades are new,
+Prompt keeps a salted fingerprint of each course whose result it has seen,
+never the result itself. Logging out removes the fingerprints.
+
 Use `nbtca exams --output=exams.ics` to export a private calendar for a calendar
 app. Export requires a published time for every exam; it fails before writing if
 any time is unavailable. Authentication stays in Prompt. The `nbtcal/academic`

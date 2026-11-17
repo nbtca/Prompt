@@ -15,6 +15,7 @@ import {
   wrapAnsiToVisualWidth,
 } from '../../core/text.js';
 import { spinnerFrame } from '../../core/components/spinner.js';
+import { pickIcon } from '../../core/icons.js';
 import { isoDayDifference } from '../../core/calendar-day.js';
 import { displaySemesterLabel } from '../../features/student-timetable.js';
 import { fmt, getCurrentLanguage, t } from '../../i18n/index.js';
@@ -29,6 +30,28 @@ export interface StudentRecordsDisplay {
   query: string;
   attention: boolean;
   searching: boolean;
+  sealed?: ReadonlySet<number>;
+}
+
+export interface GradeSeal {
+  sealed: boolean;
+  /** 0 to 1 while a sealed result is being revealed; the frame number keeps the scramble moving. */
+  reveal?: { progress: number; frame: number };
+}
+
+const SCRAMBLE = '0123456789ABCDF';
+
+function sealMark(): string {
+  return pickIcon('▒▒▒', '###');
+}
+
+function scramble(text: string, progress: number, frame: number): string {
+  if (progress >= 1) return text;
+  const chars = Array.from(text);
+  const settled = Math.floor(Math.max(0, (progress - 0.4) / 0.6) * chars.length);
+  return chars
+    .map((ch, i) => (i < settled ? ch : (SCRAMBLE[(frame * 7 + i * 13) % SCRAMBLE.length] ?? ch)))
+    .join('');
 }
 
 const formatters = new Map<string, Intl.DateTimeFormat>();
@@ -111,22 +134,35 @@ function resultText(grade: StudentGrade): string {
   return grade.voided ? `${value} ${t().records.voidTag}` : value;
 }
 
-function gradeRow(grade: StudentGrade, width: number, selected: boolean, table: boolean): string[] {
+function gradeRow(
+  grade: StudentGrade,
+  width: number,
+  selected: boolean,
+  table: boolean,
+  sealed: boolean,
+): string[] {
   const marker = selected ? `${glyph.cursor()} ` : '  ';
+  const result = sealed ? `${sealMark()} ${t().records.newTag}` : resultText(grade);
+  const gradePoint = sealed ? null : grade.gradePoint;
   if (!table) {
     return [
-      pair(marker + grade.courseName, resultText(grade), width),
-      `  ${[grade.credits === null ? '' : fmt(t().records.credits, { value: grade.credits }), grade.gradePoint === null ? '' : fmt(t().records.gradePoint, { value: grade.gradePoint })].filter(Boolean).join(' · ')}`,
+      pair(marker + grade.courseName, result, width),
+      `  ${[grade.credits === null ? '' : fmt(t().records.credits, { value: grade.credits }), gradePoint === null ? '' : fmt(t().records.gradePoint, { value: gradePoint })].filter(Boolean).join(' · ')}`,
     ];
   }
   const courseWidth = width - 31;
-  const value = padEndV(truncate(resultText(grade), 10, '…'), 10);
+  const value = padEndV(truncate(result, 10, '…'), 10);
   const credits = String(grade.credits ?? '—');
-  const point = String(grade.gradePoint ?? '—');
+  const point = sealed ? sealMark().slice(0, 1) : String(grade.gradePoint ?? '—');
   const plain = `${marker}${padEndV(truncate(grade.courseName, courseWidth, '…'), courseWidth)}  ${value}  ${padEndV(credits, 7)}  ${padEndV(point, 6)}`;
   if (selected) return [type.cursor(padEndV(plain, width))];
+  const styled = sealed
+    ? type.active(value)
+    : grade.voided || grade.grade === null
+      ? c.warn(value)
+      : type.heading(value);
   return [
-    `${marker}${padEndV(truncate(grade.courseName, courseWidth, '…'), courseWidth)}  ${grade.voided || grade.grade === null ? c.warn(value) : type.heading(value)}  ${type.hint(padEndV(credits, 7))}  ${type.hint(padEndV(point, 6))}`,
+    `${marker}${padEndV(truncate(grade.courseName, courseWidth, '…'), courseWidth)}  ${styled}  ${type.hint(padEndV(credits, 7))}  ${type.hint(padEndV(point, 6))}`,
   ];
 }
 
@@ -158,6 +194,7 @@ export function renderStudentRecordDetail(
   index: number,
   cols: number,
   now: Date,
+  seal: GradeSeal = { sealed: false },
 ): string[] {
   const item = data.items[index];
   if (!item) return [];
@@ -171,14 +208,19 @@ export function renderStudentRecordDetail(
   lines.push('');
   if (data.kind === 'grades') {
     const grade = item as StudentGrade;
-    add(
-      fmt(trans.gradeValue, { value: grade.grade ?? trans.notPublished }),
-      grade.voided ? c.warn : type.active,
-    );
-    if (grade.voided) add(trans.voided, c.warn);
+    const hidden = seal.sealed || (seal.reveal !== undefined && seal.reveal.progress < 1);
+    const value = seal.sealed
+      ? sealMark()
+      : seal.reveal
+        ? scramble(grade.grade ?? trans.notPublished, seal.reveal.progress, seal.reveal.frame)
+        : (grade.grade ?? trans.notPublished);
+    add(fmt(trans.gradeValue, { value }), grade.voided && !hidden ? c.warn : type.active);
+    if (seal.sealed) add(trans.revealHint, type.hint);
+    if (grade.voided && !hidden) add(trans.voided, c.warn);
     lines.push('');
     if (grade.credits !== null) add(fmt(trans.credits, { value: grade.credits }));
-    if (grade.gradePoint !== null) add(fmt(trans.gradePoint, { value: grade.gradePoint }));
+    if (grade.gradePoint !== null && !hidden)
+      add(fmt(trans.gradePoint, { value: grade.gradePoint }));
     if (grade.courseNature) add(`${trans.courseNature}  ${grade.courseNature}`);
     if (grade.examNature) add(`${trans.examNature}  ${grade.examNature}`);
     if (grade.remark) {
@@ -199,11 +241,12 @@ export function renderStudentRecordDetail(
   return lines;
 }
 
-function summary(data: StudentRecords, attention: boolean): string {
+function summary(data: StudentRecords, attention: boolean, fresh: number): string {
   const trans = t().records;
   if (data.kind === 'grades') {
     const published = data.items.filter((grade) => grade.grade !== null).length;
-    return `${fmt(trans.gradeSummary, { published, total: data.items.length })}${attention ? ` · ${trans.needsAttention}` : ''}`;
+    const news = fresh > 0 ? ` · ${fmt(trans.newSummary, { count: fresh })}` : '';
+    return `${fmt(trans.gradeSummary, { published, total: data.items.length })}${news}${attention ? ` · ${trans.needsAttention}` : ''}`;
   }
   const pending = data.items.filter((exam) => !exam.start).length;
   return `${fmt(trans.examSummary, { total: data.items.length, pending })}${attention ? ` · ${trans.upcomingOnly}` : ''}`;
@@ -237,7 +280,11 @@ export function renderStudentRecordsPanel(
     lines.push(type.hint(pair(term, updated, width)));
   }
   if (rows >= 10 && state.data)
-    lines.push(type.hint(truncate(summary(state.data, state.attention), width, '…')));
+    lines.push(
+      type.hint(
+        truncate(summary(state.data, state.attention, state.sealed?.size ?? 0), width, '…'),
+      ),
+    );
   if (state.query || state.searching)
     lines.push(
       type.active(
@@ -307,7 +354,13 @@ export function renderStudentRecordsPanel(
       if (!item) continue;
       const record =
         state.kind === 'grades'
-          ? gradeRow(item as StudentGrade, listWidth, offset === selected, table)
+          ? gradeRow(
+              item as StudentGrade,
+              listWidth,
+              offset === selected,
+              table,
+              state.sealed?.has(index ?? -1) === true,
+            )
           : examRow(item as StudentExam, listWidth, offset === selected, now);
       list.push(
         ...record
@@ -320,7 +373,9 @@ export function renderStudentRecordsPanel(
   }
   const detail =
     split && state.data && indices[selected] !== undefined
-      ? renderStudentRecordDetail(state.data, indices[selected], width - listWidth - 3, now)
+      ? renderStudentRecordDetail(state.data, indices[selected], width - listWidth - 3, now, {
+          sealed: state.sealed?.has(indices[selected]) === true,
+        })
       : [];
   for (let row = 0; row < available; row += 1) {
     const left = clipAnsiToVisualWidth(list[row] ?? '', listWidth);

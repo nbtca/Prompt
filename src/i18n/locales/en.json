@@ -274,7 +274,10 @@
     "searchFooter": "Enter apply · Esc cancel",
     "upcomingFilter": "Upcoming exams",
     "attentionFilter": "Unpublished / void grades",
-    "filtered": "Filtered"
+    "filtered": "Filtered",
+    "newTag": "new",
+    "revealHint": "Press Enter to reveal",
+    "newSummary": "{count} new"
   },
   "timetable": {
     "menuTitle": "My Timetable",
