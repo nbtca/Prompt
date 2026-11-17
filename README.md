@@ -38,7 +38,9 @@ Or try it without installing: `npx @nbtca/prompt`.
   fullest day, the course and room you saw most, and club events held in the
   same weeks. Near the end of term, Home tells you the recap is ready.
 - **Events**: a countdown to the next event, plus week and month views, search,
-  history, and a one-year activity heatmap.
+  history, and a one-year activity heatmap. Tall terminals also draw the past
+  year as a star map: one star per event, colored by kind, with nearby events
+  of a kind joined into constellations.
 - **Docs**: read and search the knowledge base. It works even when GitHub is
   unreachable.
 - **Settings**: language, icons, and colors.

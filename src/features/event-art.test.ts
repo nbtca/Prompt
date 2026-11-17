@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { eventIcon } from './event-art.js';
+import { eventIcon, eventKind } from './event-art.js';
 import {
   eventIconConference,
   eventIconDefault,
@@ -23,5 +23,14 @@ describe('eventIcon', () => {
   it('reads the description only when the title says nothing', () => {
     expect(eventIcon('周六活动', '现场维修笔记本')).toBe(eventIconRepair);
     expect(eventIcon('Git 工作坊', '会后有例会')).toBe(eventIconWorkshop);
+  });
+});
+
+describe('eventKind', () => {
+  it('reads the title before the description', () => {
+    expect(eventKind('电脑义诊', 'workshop')).toBe('repair');
+    expect(eventKind('新生交流', 'Weekly meeting')).toBe('meeting');
+    expect(eventKind('🎉陈正浩的生日')).toBe('birthday');
+    expect(eventKind('新生交流')).toBe('other');
   });
 });

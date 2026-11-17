@@ -14,7 +14,7 @@ function rgbToHex(rgb: Rgb): string {
   return `#${rgb.map((value) => Math.round(value).toString(16).padStart(2, '0')).join('')}`;
 }
 
-function mix(from: string, to: string, amount: number): string {
+export function mix(from: string, to: string, amount: number): string {
   const a = hexToRgb(from);
   const b = hexToRgb(to);
   const t = Math.min(1, Math.max(0, amount));
@@ -23,7 +23,7 @@ function mix(from: string, to: string, amount: number): string {
   );
 }
 
-class Canvas {
+export class Canvas {
   readonly cells: (string | null)[][];
   constructor(
     readonly width: number,
@@ -120,7 +120,7 @@ class Canvas {
   }
 }
 
-function random(seed: number): () => number {
+export function random(seed: number): () => number {
   let state = seed;
   return () => (state = (state * 16807) % 2147483647) / 2147483647;
 }

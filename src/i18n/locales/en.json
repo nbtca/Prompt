@@ -80,6 +80,15 @@
       "dayCount": "{date} {sep} {count} events",
       "dayEmpty": "No events that day"
     },
+    "stars": {
+      "title": "The past year of events",
+      "repair": "repair",
+      "workshop": "workshop",
+      "conference": "conference",
+      "meeting": "meeting",
+      "birthday": "birthday",
+      "other": "other"
+    },
     "pastLoading": "Loading past events...",
     "pastEvents": "Past Events",
     "pastEventsDesc": "Recent activity history",
