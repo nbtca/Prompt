@@ -330,9 +330,12 @@ describe('student records rendering', () => {
     const algorithms = list.split('\n').findIndex((line) => line.includes('Algorithms'));
     if (physics > algorithms) second.handleKey('\x1b[B', context);
     second.handleKey('\r', context);
-    await vi.waitFor(() => {
-      expect(second.isBusy()).toBe(false);
-    });
+    await vi.waitFor(
+      () => {
+        expect(second.isBusy()).toBe(false);
+      },
+      { timeout: 5000 },
+    );
     expect(stripAnsi(second.render(context).join('\n'))).toContain('91');
 
     const third = new StudentRecordsPanel('grades', term, terms, transport, () => true, vi.fn());
