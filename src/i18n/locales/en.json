@@ -42,6 +42,10 @@
     "lanternFestival": "Lantern Festival",
     "midAutumn": "Mid-Autumn Festival"
   },
+  "greeting": {
+    "lateNight": "It's late. Get some sleep.",
+    "anniversary": "NBTCA turns {years} this month."
+  },
   "help": {
     "title": "Keys",
     "sectionGlobal": "Anywhere",

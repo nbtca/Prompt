@@ -29,6 +29,9 @@ export const URLS = {
   mirror: 'https://i.nbtca.space',
 } as const;
 
+// From https://docs.nbtca.space/about/what-is-nbtca.html, which gives the month but no day.
+export const FOUNDED = { year: 2002, month: 3 } as const;
+
 export const APP_INFO = {
   name: 'Prompt',
   version: readPackageVersion(),
