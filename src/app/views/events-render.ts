@@ -1,4 +1,4 @@
-import type { EventStar } from '../../art/scene.js';
+import type { EventStar } from '../../art/star-map.js';
 import type { CalendarEvent, HeatmapBucket } from '@nbtca/nbtcal';
 import { glyph, type, space } from '../../core/theme.js';
 import { fmt, t } from '../../i18n/index.js';

@@ -2,7 +2,7 @@ import type { Calendar, CalendarEvent } from '@nbtca/nbtcal';
 import type { AppContext, View } from '../view.js';
 import type { AmbientSpec } from '../ambient.js';
 import { eventIcon, eventKind } from '../../features/event-art.js';
-import { STAR_COLORS, type EventStar } from '../../art/scene.js';
+import { STAR_COLORS, type EventStar } from '../../art/star-map.js';
 import chalk from 'chalk';
 import { eventIconDefault } from '../../art/bitmaps.js';
 import { captureFooterHint, passiveFooterHint } from '../chrome.js';

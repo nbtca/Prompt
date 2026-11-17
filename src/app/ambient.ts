@@ -2,14 +2,8 @@ import { emblemLines } from '../core/logo.js';
 import { padEndV, visualWidth } from '../core/text.js';
 import chalk from 'chalk';
 import { pictureMode, renderBitmap, type Bitmap } from '../core/pixel-art.js';
-import {
-  mountainScene,
-  scaleBitmap,
-  shelfScene,
-  skyScene,
-  starMapScene,
-  type EventStar,
-} from '../art/scene.js';
+import { mountainScene, scaleBitmap, shelfScene, skyScene } from '../art/scene.js';
+import { starMapScene, type EventStar } from '../art/star-map.js';
 import { teaCup } from '../art/motifs.js';
 import { gasGiantLines, moonLines, planetSize } from '../art/planet.js';
 import { space } from '../core/theme.js';
