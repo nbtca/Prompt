@@ -34,6 +34,9 @@ Or try it without installing: `npx @nbtca/prompt`.
   `Enter` to read full details. Press `/` to search by course name or code, `f`
   to filter upcoming exams or unpublished and void grades, and `s` to change
   terms. Wide terminals show details beside the list.
+  Press `r` for a term recap: how many classes you had, early starts, your
+  fullest day, the course and room you saw most, and club events held in the
+  same weeks. Near the end of term, Home tells you the recap is ready.
 - **Events**: a countdown to the next event, plus week and month views, search,
   history, and a one-year activity heatmap.
 - **Docs**: read and search the knowledge base. It works even when GitHub is

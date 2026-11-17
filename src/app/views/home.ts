@@ -28,6 +28,7 @@ import { isoDayDifference, localDayDifference, parseLocalDate } from '../../core
 import { currentEvents } from '../../features/calendar-query.js';
 import { emptyStateLines, loadingStateLines } from '../../core/components/empty-state.js';
 import type { Calendar } from '@nbtca/nbtcal';
+import { termRecap } from '../../features/term-recap.js';
 const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const;
 
 export interface HomeData {
@@ -37,6 +38,7 @@ export interface HomeData {
   nextEvent?: Event;
   eventsLoadFailed?: boolean;
   weekAhead?: { classDays: boolean[]; eventDays?: boolean[] };
+  recapReady?: boolean;
 }
 
 function wrappedIndentedLines(
@@ -178,6 +180,11 @@ export function renderHome(data: HomeData, now: Date, bodyRows = 100, cols = 80)
     lines.push('');
   }
 
+  if (data.recapReady) {
+    const ready = `${type.active(glyph.dot())} ${type.body(trans.recap.homeReady)}`;
+    lines.push(...wrappedIndentedLines(ready, cols, (value) => value), '');
+  }
+
   if (data.weekAhead) {
     lines.push(...panelHeading(trans.timetable.weekOverviewTitle, cols));
     lines.push(
@@ -251,6 +258,7 @@ export function renderHome(data: HomeData, now: Date, bodyRows = 100, cols = 80)
 }
 
 const HOME_EVENT_FETCH_CAP = 15;
+const RECAP_READY_PROGRESS = 0.9;
 
 function calendarSnapshot(
   cal: Calendar,
@@ -305,9 +313,11 @@ export const homeView = {
     if (ctx.signal?.aborted) return;
     const schedule = peekSchedule();
     const weekAhead = schedule ? weekAheadInfo(schedule) : null;
+    const recap = schedule && termRecap(schedule.timetable, schedule.weekOneMonday, new Date());
     data = {
       loading: true,
       schedule,
+      ...(recap && recap.progress >= RECAP_READY_PROGRESS ? { recapReady: true } : {}),
       ...(weekAhead ? { weekAhead: { classDays: weekAhead.classDays } } : {}),
     };
     const cached = peekCalendar();
