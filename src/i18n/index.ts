@@ -55,6 +55,7 @@ export interface Translations {
     license: string;
     author: string;
   };
+  almanac: Record<OccasionName, string>;
   help: {
     title: string;
     sectionGlobal: string;
@@ -389,7 +390,6 @@ export interface Translations {
     usage: string;
     invalidValue: string;
   };
-  almanac: Record<OccasionName, string>;
   language: {
     selectLanguage: string;
     zh: string;

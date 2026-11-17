@@ -1,4 +1,5 @@
 import { c, type, space, glyph } from '../../core/theme.js';
+import { occasion } from '../../art/almanac.js';
 import { t, fmt } from '../../i18n/index.js';
 import { pickIcon } from '../../core/icons.js';
 import { padEndV, visualWidth, wrapAnsiWithIndent } from '../../core/text.js';
@@ -28,7 +29,6 @@ import { isoDayDifference, localDayDifference, parseLocalDate } from '../../core
 import { currentEvents } from '../../features/calendar-query.js';
 import { emptyStateLines, loadingStateLines } from '../../core/components/empty-state.js';
 import type { Calendar } from '@nbtca/nbtcal';
-import { occasion } from '../../art/almanac.js';
 const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const;
 
 export interface HomeData {
