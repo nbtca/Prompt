@@ -27,6 +27,9 @@ import {
 } from '../../features/schedule-render.js';
 import type { AcademicWindow, OnBreak } from '@nbtca/nbtcal';
 import type { GridCursor } from './schedule-grid-cursor.js';
+import { renderRecapCard, type RecapCard } from './term-recap-render.js';
+import type { TermRecap } from '../../features/term-recap.js';
+import { getCapabilities } from '../../core/capabilities.js';
 import {
   sanitizeTerminalLine,
   truncate,
@@ -53,6 +56,7 @@ export type ScheduleMode =
   | 'termPicker'
   | 'unresolved'
   | 'meetingDetail'
+  | 'recap'
   | 'error';
 
 export interface ScheduleViewState {
@@ -75,6 +79,7 @@ export interface ScheduleViewState {
   gridCursor?: GridCursor;
   detailMeeting?: TimetableMeeting;
   detailFrom?: 'hub' | 'week';
+  recap?: { recap: TermRecap; cards: RecapCard[]; index: number; shownAt: number };
 }
 
 function heading(label: string): string {
@@ -113,6 +118,7 @@ export function hubShortcuts(tt: Timetable): HubShortcut[] {
   const shortcuts: HubShortcut[] = [
     { key: 'w', label: trans.timetable.hubFullGrid },
     { key: 't', label: trans.timetable.hubTermDensity },
+    { key: 'r', label: trans.recap.title },
     { key: 's', label: trans.timetable.hubSwitchTerm },
     { key: 'e', label: trans.timetable.hubExport },
     { key: 'a', label: trans.records.exams },
@@ -583,6 +589,13 @@ export function renderSchedule(
         '',
         ...renderUnresolvedItems(state.timetable?.unresolvedItems ?? [], cols).split('\n'),
       ];
+    case 'recap': {
+      if (!state.recap) return [hint(trans.timetable.genericError)];
+      const { recap, cards, index, shownAt } = state.recap;
+      const title = recap.finished ? trans.recap.title : trans.recap.titleSoFar;
+      const elapsed = getCapabilities().reducedMotion ? Infinity : now.getTime() - shownAt;
+      return renderRecapCard(cards, index, title, elapsed, cols);
+    }
     case 'meetingDetail':
       return state.detailMeeting && state.timetable
         ? renderMeetingDetail(state.detailMeeting, state.timetable.periods, cols).split('\n')

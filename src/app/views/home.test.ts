@@ -134,6 +134,18 @@ describe('renderHome (schedule-first dashboard)', () => {
     expect(out).toContain('No upcoming classes');
   });
 
+  it('points to the term recap once it is ready', () => {
+    const render = (recapReady: boolean) =>
+      stripAnsi(
+        renderHome(
+          { schedule: scheduleWith(), eventLines: [], loading: false, recapReady },
+          noon,
+        ).join('\n'),
+      );
+    expect(render(true)).toContain('Your term recap is ready');
+    expect(render(false)).not.toContain('term recap');
+  });
+
   it('asks to log in instead of showing empty class panels when there is no timetable', () => {
     const trans = t();
     const lines = renderHome(

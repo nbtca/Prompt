@@ -923,9 +923,9 @@ describe('hubShortcuts', () => {
     expect(unresolved?.showKey).toBe(false);
   });
 
-  it('always includes the full-grid, term-density, switch-term, export, and logout shortcuts', () => {
+  it('always includes the full-grid, term-density, recap, switch-term, export, and logout shortcuts', () => {
     const shortcuts = hubShortcuts({ ...baseTimetable, unresolvedItems: [] });
-    expect(shortcuts.map((s) => s.key)).toEqual(['w', 't', 's', 'e', 'a', 'c', 'x']);
+    expect(shortcuts.map((s) => s.key)).toEqual(['w', 't', 'r', 's', 'e', 'a', 'c', 'x']);
   });
 });
 

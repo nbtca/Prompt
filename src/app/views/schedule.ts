@@ -18,7 +18,14 @@ import {
   termProgress,
   type ScheduleViewState,
 } from './schedule-render.js';
-import { handleGridKey, todayGridCursor } from './schedule-grid-cursor.js';
+import {
+  handleGridKey,
+  todayGridCursor,
+  KEY_ARROW_LEFT,
+  KEY_ARROW_RIGHT,
+  KEY_ENTER_CR,
+  KEY_ENTER_LF,
+} from './schedule-grid-cursor.js';
 import { setVimKeysActive } from '../../core/vim-keys.js';
 import { t } from '../../i18n/index.js';
 import { pickIcon } from '../../core/icons.js';
@@ -48,7 +55,7 @@ import {
   loadTimetableCache,
   clearScheduleCache,
 } from '../../features/schedule-store.js';
-import { loadSchoolCalendarOrCache } from '../../features/calendar.js';
+import { loadSchoolCalendarOrCache, peekCalendar } from '../../features/calendar.js';
 import {
   currentAcademicWindow,
   inferWeekOneMonday,
@@ -58,6 +65,9 @@ import {
 import { sanitizeAcademicTerm, sanitizeTimetable } from '../../features/timetable-sanitize.js';
 import { addLocalDays, parseLocalMonday } from '../../core/calendar-day.js';
 import { StudentRecordsPanel } from './student-records.js';
+import { termRecap } from '../../features/term-recap.js';
+import { COUNT_UP_MS, recapCards } from './term-recap-render.js';
+import { getCapabilities } from '../../core/capabilities.js';
 import type { StudentRecordsKind } from '../../features/student-records-client.js';
 
 let state: ScheduleViewState = { mode: 'loading' };
@@ -96,6 +106,27 @@ function gridFooterHint(tabCount: number, cols: number): string {
     local,
     `Esc ${dot} q`,
     'q',
+  );
+}
+
+const RECAP_STEPS: Readonly<Record<string, number>> = {
+  [KEY_ARROW_RIGHT]: 1,
+  [KEY_ENTER_CR]: 1,
+  [KEY_ENTER_LF]: 1,
+  l: 1,
+  [KEY_ARROW_LEFT]: -1,
+  h: -1,
+};
+
+function recapFooterHint(cols: number): string {
+  const trans = t();
+  const dot = glyph.sep();
+  const page = `${pickIcon('← →', 'left/right')} ${trans.recap.footerPage}`;
+  return fitFooterHint(
+    cols,
+    `${page} ${dot} Esc ${trans.menu.hintBack} ${dot} q ${trans.menu.hintQuit}`,
+    `${page} ${dot} Esc ${dot} q`,
+    page,
   );
 }
 
@@ -477,6 +508,12 @@ export const scheduleView = {
   },
 
   ambient(): AmbientSpec | undefined {
+    if (state.mode === 'recap' && state.recap) {
+      const { recap, cards, index } = state.recap;
+      return index === cards.length - 1
+        ? { kind: 'mountain', progress: recap.progress, weeks: recap.weeks }
+        : undefined;
+    }
     if (state.mode !== 'public' && state.mode !== 'hub') return undefined;
     const term = termProgress(state.publicWindow);
     return term === undefined ? undefined : { kind: 'mountain', ...term };
@@ -484,6 +521,9 @@ export const scheduleView = {
 
   isBusy(): boolean {
     if (state.mode === 'records') return recordsPanel?.isBusy() ?? false;
+    if (state.mode === 'recap' && state.recap && !getCapabilities().reducedMotion) {
+      return Date.now() - state.recap.shownAt < COUNT_UP_MS;
+    }
     return state.mode === 'loading';
   },
 
@@ -539,6 +579,7 @@ export const scheduleView = {
       state.mode === 'unresolved' ||
       state.mode === 'termDensity';
     if (passive) return passiveFooterHint(tabCount, cols);
+    if (state.mode === 'recap') return recapFooterHint(cols);
     return state.mode === 'hub' || state.mode === 'week'
       ? gridFooterHint(tabCount, cols)
       : undefined;
@@ -574,6 +615,7 @@ export const scheduleView = {
     }
     if (
       state.mode === 'week' ||
+      state.mode === 'recap' ||
       state.mode === 'unresolved' ||
       state.mode === 'termPicker' ||
       state.mode === 'termDensity'
@@ -728,6 +770,26 @@ export const scheduleView = {
           state = { ...state, mode: 'termDensity' };
           return;
         }
+        if (shortcut.key === 'r') {
+          const calendar = peekCalendar();
+          const recap = termRecap(
+            tt,
+            hubWeekOne,
+            new Date(),
+            calendar && ((start, end) => calendar.inRange(start, end).length),
+          );
+          if (!recap) {
+            state = { ...state, statusMessage: t().recap.empty };
+            delete state.exportedPath;
+            return;
+          }
+          state = {
+            ...state,
+            mode: 'recap',
+            recap: { recap, cards: recapCards(recap), index: 0, shownAt: Date.now() },
+          };
+          return;
+        }
         if (shortcut.key === 'u') {
           state = { ...state, mode: 'unresolved' };
           return;
@@ -819,6 +881,22 @@ export const scheduleView = {
       case 'unresolved':
       case 'termDensity': {
         returnToHub();
+        return;
+      }
+      case 'recap': {
+        if (!state.recap) {
+          returnToHub();
+          return;
+        }
+        const step = RECAP_STEPS[key];
+        if (step === undefined) return;
+        const index = state.recap.index + step;
+        if (index >= state.recap.cards.length) {
+          returnToHub();
+          return;
+        }
+        if (index < 0) return;
+        state = { ...state, recap: { ...state.recap, index, shownAt: Date.now() } };
         return;
       }
       case 'termPicker': {

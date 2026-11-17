@@ -388,6 +388,34 @@ export interface Translations {
     usage: string;
     invalidValue: string;
   };
+  recap: {
+    title: string;
+    titleSoFar: string;
+    classesLead: string;
+    classesLeadSoFar: string;
+    classesUnit: string;
+    classesDetail: string;
+    earlyLead: string;
+    earlyUnit: string;
+    earlyDetail: string;
+    earlyNone: string;
+    busiestLead: string;
+    busiestDetail: string;
+    topLead: string;
+    topDetail: string;
+    hoursUnit: string;
+    roomLead: string;
+    roomDetail: string;
+    roomUnit: string;
+    eventsLead: string;
+    eventsUnit: string;
+    eventsDetail: string;
+    outro: string;
+    outroSoFar: string;
+    empty: string;
+    footerPage: string;
+    homeReady: string;
+  };
   language: {
     selectLanguage: string;
     zh: string;
