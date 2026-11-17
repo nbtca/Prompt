@@ -63,6 +63,7 @@ function wrappedRenderedLines(line: string, cols: number): string[] {
 
 const DAY_MS = 86_400_000;
 const DAY_PROGRESS_WIDTH = 20;
+const GREETING_MIN_ROWS = 20;
 
 function renderDayProgress(now: Date, cols: number): string {
   const midnight = campusDateTime(campusIsoDate(now), '00:00');
@@ -150,9 +151,10 @@ export function renderHome(data: HomeData, now: Date, bodyRows = 100, cols = 80)
   const trans = t();
   const eventsStale = data.eventsLoadFailed === true && (data.eventLines?.length ?? 0) > 0;
   const lines: string[] = eventsStale ? offlineNotice(cols) : [];
+  const roomy = bodyRows >= GREETING_MIN_ROWS;
   const greetings = [
-    isOwlHour(now) ? trans.greeting.lateNight : undefined,
-    now.getMonth() + 1 === FOUNDED.month
+    roomy && isOwlHour(now) ? trans.greeting.lateNight : undefined,
+    roomy && now.getMonth() + 1 === FOUNDED.month
       ? fmt(trans.greeting.anniversary, { years: now.getFullYear() - FOUNDED.year })
       : undefined,
   ].filter((line) => line !== undefined);
