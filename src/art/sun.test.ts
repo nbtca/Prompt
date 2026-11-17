@@ -2,17 +2,17 @@ import { describe, it, expect } from 'vitest';
 import { solarHour, sunHours } from './sun.js';
 
 const near = (actual: number, expected: number) => {
-  expect(Math.abs(actual - expected)).toBeLessThan(0.15);
+  expect(Math.abs(actual - expected)).toBeLessThan(0.06);
 };
 
 describe('sunHours', () => {
-  it('follows the campus seasons', () => {
+  it('matches published Ningbo times within a few minutes', () => {
     const winter = sunHours(new Date('2026-12-21T12:00:00'));
-    near(winter.rise, 6 + 41 / 60);
-    near(winter.set, 17 + 3 / 60);
+    near(winter.rise, 6 + 44 / 60);
+    near(winter.set, 16 + 58 / 60);
     const summer = sunHours(new Date('2026-06-21T12:00:00'));
-    near(summer.rise, 4 + 57 / 60);
-    near(summer.set, 18 + 58 / 60);
+    near(summer.rise, 4 + 53 / 60);
+    near(summer.set, 18 + 57 / 60);
   });
 });
 
