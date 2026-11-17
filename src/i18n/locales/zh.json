@@ -496,6 +496,12 @@
     "eventsRangeConflict": "活动时间范围只能选择一个：--today、--week 或 --month。",
     "unexpectedArguments": "{command} 不接受多余参数。",
     "requiresTty": "交互模式需要 TTY 终端。",
-    "requiresTtyHint": "使用 `nbtca --help` 查看命令模式。"
+    "requiresTtyHint": "使用 `nbtca --help` 查看命令模式。",
+    "cmdPrompt": "为 shell 提示符输出正在上或即将开始的课",
+    "flagShell": "输出接入 fish、zsh、bash 或 tmux 的配置"
+  },
+  "prompt": {
+    "endsIn": "还剩 {minutes} 分钟",
+    "startsIn": "{minutes} 分钟后"
   }
 }

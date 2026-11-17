@@ -496,6 +496,12 @@
     "eventsRangeConflict": "Choose only one event range: --today, --week, or --month.",
     "unexpectedArguments": "Unexpected arguments for {command}.",
     "requiresTty": "Interactive mode requires a TTY terminal.",
-    "requiresTtyHint": "Use `nbtca --help` for command mode."
+    "requiresTtyHint": "Use `nbtca --help` for command mode.",
+    "cmdPrompt": "Print the current or next class for a shell prompt",
+    "flagShell": "Print the setup line for fish, zsh, bash, or tmux"
+  },
+  "prompt": {
+    "endsIn": "{minutes} min left",
+    "startsIn": "in {minutes} min"
   }
 }

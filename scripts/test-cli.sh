@@ -109,6 +109,12 @@ assert_fails_with status-timeout-bounds '--timeout=<' node dist/index.js status 
 assert_fails_with status-retries-bounds '--retries=<' node dist/index.js status --retries=9
 watch_cancel_import='--import=data:text/javascript,Object.defineProperty(process.stdin,%22isTTY%22,{value:true,configurable:true});Object.defineProperty(process.stdout,%22isTTY%22,{value:true,configurable:true});setTimeout(()=>process.exit(70),1500).unref();let%20stopped=false;globalThis.fetch=(_input,init)=>{if(!stopped){stopped=true;queueMicrotask(()=>process.emit(%22SIGINT%22))}return%20new%20Promise((_resolve,reject)=>{const%20abort=()=>reject(init.signal.reason);if(init.signal.aborted)abort();else%20init.signal.addEventListener(%22abort%22,abort,{once:true})})}'
 assert_plain_exit_code status-watch-cancel 130 env NODE_OPTIONS="$watch_cancel_import" node dist/index.js status --watch --interval=3 --timeout=20000 --retries=5 --plain
+if [[ -n "$(node dist/index.js prompt)" || "$(node dist/index.js prompt --json)" != "null" ]]; then
+  echo "prompt printed a class without a cached timetable" >&2
+  exit 1
+fi
+assert_fails_with prompt-shell 'Flag --shell=cmd is not valid' node dist/index.js prompt --shell=cmd
+assert_fails_with prompt-argument 'Unexpected arguments for prompt' node dist/index.js prompt now
 assert_fails_with events-next-format '--next=<number>' node dist/index.js events --next=1x
 assert_fails_with events-heatmap-today '--heatmap cannot be combined' node dist/index.js events --heatmap --today
 assert_fails_with events-heatmap-week '--heatmap cannot be combined' node dist/index.js events --heatmap --week

@@ -254,6 +254,7 @@ function printHelp(): void {
   console.log(`  status         ${trans.menu.statusDesc}`);
   console.log('  schedule <login|logout|status|terms|export>');
   console.log(`                 ${c.cmdSchedule}`);
+  console.log(`  prompt         ${c.cmdPrompt}`);
   console.log(`  exams          ${trans.records.exams}`);
   console.log(`  grades         ${trans.records.grades}`);
   console.log(`  website        ${c.cmdWebsite}`);
@@ -286,6 +287,7 @@ function printHelp(): void {
   console.log(`  --term=<year:code> ${c.flagTerm}`);
   console.log(`  --output=<path>    ${c.flagOutput}`);
   console.log(`  --week-one=<date>  ${c.flagWeekOne}`);
+  console.log(`  --shell=<name>     ${c.flagShell}`);
 }
 
 async function runEventsCommand(flags: Set<string>): Promise<void> {
