@@ -1,4 +1,5 @@
 import type { Bitmap } from '../core/pixel-art.js';
+import { solarHour } from './sun.js';
 
 type Rgb = [number, number, number];
 
@@ -337,9 +338,9 @@ function drawShore(c: Canvas, horizon: number, hour: number, rand: () => number)
   c.rect(0, c.height - 3, c.width - 1, c.height - 1, shade);
 }
 
-/** A seascape whose sky, sun or moon (with its real phase), stars, city, and lighthouse follow the time. */
+/** A seascape whose sky, sun or moon (with its real phase), stars, city, and lighthouse follow the campus sun. */
 export function skyScene(width: number, height: number, now: Date): Bitmap {
-  const hour = now.getHours() + now.getMinutes() / 60;
+  const hour = solarHour(now);
   const c = new Canvas(width, height);
   const horizon = Math.round(height * 0.62);
   const rand = random(11);
