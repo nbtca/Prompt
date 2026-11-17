@@ -26,8 +26,9 @@ Or try it without installing: `npx @nbtca/prompt`.
 `?` to list every key.
 
 - **Home**: today's classes and the next club events, over a seascape that
-  follows the campus sun and moon. Solar terms bring rain or snow, and New Year, the Spring
-  Festival, Lantern Festival, and Mid-Autumn Festival light up the night.
+  follows the campus sun and moon. Solar terms bring rain or snow, and New
+  Year, the Spring Festival, the Lantern Festival, and the Mid-Autumn Festival
+  light up the night.
 - **Schedule**: the current term, week, and next break. Log in to the campus
   system to see your timetable and export it to any calendar app as `.ics`.
   Press `a` for personal exam arrangements or `c` for grades. Both are also
