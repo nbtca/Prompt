@@ -93,6 +93,15 @@ export interface Translations {
       dayCount: string;
       dayEmpty: string;
     };
+    stars: {
+      title: string;
+      repair: string;
+      workshop: string;
+      conference: string;
+      meeting: string;
+      birthday: string;
+      other: string;
+    };
     pastLoading: string;
     pastEvents: string;
     pastEventsDesc: string;

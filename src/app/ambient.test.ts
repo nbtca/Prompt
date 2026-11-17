@@ -15,6 +15,15 @@ const specs: [string, AmbientSpec][] = [
   ['shelf', { kind: 'shelf' }],
   ['emblem', { kind: 'emblem' }],
   ['icon', { kind: 'icon', icon: eventIconConference }],
+  [
+    'stars',
+    {
+      kind: 'stars',
+      stars: [{ at: noon.getTime() - 86_400_000, kind: 'repair', seed: 3 }],
+      icon: eventIconConference,
+      legend: 'The past year of events',
+    },
+  ],
 ];
 
 describe('withAmbient', () => {
@@ -55,6 +64,16 @@ describe('withAmbient', () => {
     const lines = withAmbient(tall, { kind: 'sky' }, 120, 30, noon);
     expect(lines.length).toBeLessThanOrEqual(30);
     expect(visualWidth(lines[0] ?? '')).toBeGreaterThan(visualWidth(tall[0] ?? ''));
+  });
+
+  it('writes the star legend under a star map, and shows the icon beside short content', () => {
+    const stars = specs.find(([name]) => name === 'stars')?.[1];
+    if (!stars) throw new Error('missing stars spec');
+    const below = withAmbient(body, stars, 120, 38, noon);
+    expect(stripAnsi(below.at(-1) ?? '')).toBe('   The past year of events');
+    const beside = withAmbient(body, stars, 120, 9, noon).map(stripAnsi);
+    expect(beside.some((line) => line.includes('The past year'))).toBe(false);
+    expect(beside.length).toBeGreaterThanOrEqual(body.length);
   });
 
   it('reuses the picture for the same window and minute', () => {

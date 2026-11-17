@@ -1,7 +1,9 @@
 import type { Calendar, CalendarEvent } from '@nbtca/nbtcal';
 import type { AppContext, View } from '../view.js';
 import type { AmbientSpec } from '../ambient.js';
-import { eventIcon } from '../../features/event-art.js';
+import { eventIcon, eventKind } from '../../features/event-art.js';
+import { STAR_COLORS, type EventStar } from '../../art/scene.js';
+import chalk from 'chalk';
 import { eventIconDefault } from '../../art/bitmaps.js';
 import { captureFooterHint, passiveFooterHint } from '../chrome.js';
 import { ListField, computeMaxVisible } from '../fields/list-field.js';
@@ -146,6 +148,33 @@ function moveHeatmapCursor(key: string, cols: number): void {
   selectHeatmapDay(next < start ? start : next > end ? end : next);
 }
 
+const YEAR_MS = 365 * 86_400_000;
+
+function stableSeed(text: string): number {
+  let hash = 0;
+  for (let index = 0; index < text.length; index++) {
+    hash = (Math.imul(hash, 31) + text.charCodeAt(index)) | 0;
+  }
+  return Math.abs(hash);
+}
+
+function eventStars(cal: Calendar, now: Date): EventStar[] {
+  return cal.inRange(new Date(now.getTime() - YEAR_MS), now).map((event) => ({
+    at: event.start.getTime(),
+    kind: eventKind(event.title ?? '', event.description ?? ''),
+    seed: stableSeed(`${event.uid}@${event.start.toISOString()}`),
+  }));
+}
+
+function starLegend(stars: readonly EventStar[]): string {
+  const trans = t().calendar.stars;
+  const kinds = (Object.keys(STAR_COLORS) as EventStar['kind'][]).filter((kind) =>
+    stars.some((star) => star.kind === kind),
+  );
+  const keys = kinds.map((kind) => `${chalk.hex(STAR_COLORS[kind])(glyph.dot())} ${trans[kind]}`);
+  return [trans.title, ...keys].join('  ');
+}
+
 function goToHub(): void {
   const now = new Date();
   const upcoming = calendar ? currentEvents(calendar, now) : [];
@@ -157,6 +186,7 @@ function goToHub(): void {
     ...(nextEvent === undefined ? {} : { nextEvent: toDisplayEvent(nextEvent) }),
     heatmapBuckets: calendar ? yearHeatmap(calendar, now) : [],
     recentEvents: upcoming.slice(0, RECENT_EVENTS_CAP).map(toDisplayEvent),
+    stars: calendar ? eventStars(calendar, now) : [],
   };
 }
 
@@ -224,10 +254,11 @@ export const eventsView = {
   ambient(): AmbientSpec | undefined {
     if (state.mode !== 'hub') return undefined;
     const next = state.nextEvent;
-    return {
-      kind: 'icon',
-      icon: next ? eventIcon(next.title, next.description) : eventIconDefault,
-    };
+    const icon = next ? eventIcon(next.title, next.description) : eventIconDefault;
+    const stars = state.stars ?? [];
+    return stars.length > 0
+      ? { kind: 'stars', stars, icon, legend: starLegend(stars) }
+      : { kind: 'icon', icon };
   },
 
   isBusy(): boolean {

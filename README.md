@@ -35,7 +35,9 @@ Or try it without installing: `npx @nbtca/prompt`.
   to filter upcoming exams or unpublished and void grades, and `s` to change
   terms. Wide terminals show details beside the list.
 - **Events**: a countdown to the next event, plus week and month views, search,
-  history, and a one-year activity heatmap.
+  history, and a one-year activity heatmap. Tall terminals also draw the past
+  year as a star map: one star per event, colored by kind, with nearby events
+  of a kind joined into constellations.
 - **Docs**: read and search the knowledge base. It works even when GitHub is
   unreachable.
 - **Settings**: language, icons, and colors.

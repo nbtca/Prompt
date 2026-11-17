@@ -2,7 +2,14 @@ import { emblemLines } from '../core/logo.js';
 import { padEndV, visualWidth } from '../core/text.js';
 import chalk from 'chalk';
 import { pictureMode, renderBitmap, type Bitmap } from '../core/pixel-art.js';
-import { mountainScene, scaleBitmap, shelfScene, skyScene } from '../art/scene.js';
+import {
+  mountainScene,
+  scaleBitmap,
+  shelfScene,
+  skyScene,
+  starMapScene,
+  type EventStar,
+} from '../art/scene.js';
 import { teaCup } from '../art/motifs.js';
 import { gasGiantLines, moonLines, planetSize } from '../art/planet.js';
 import { space } from '../core/theme.js';
@@ -14,7 +21,8 @@ export type AmbientSpec =
   | { kind: 'mountain'; progress: number; weeks: number }
   | { kind: 'emblem' }
   | { kind: 'planet'; style: 'moon' | 'gas' }
-  | { kind: 'icon'; icon: Bitmap };
+  | { kind: 'icon'; icon: Bitmap }
+  | { kind: 'stars'; stars: readonly EventStar[]; icon: Bitmap; legend: string };
 
 const GAP = 4;
 const MIN_COLS = 30;
@@ -39,7 +47,7 @@ function remember(key: string, build: () => string[]): string[] {
 
 /** A landscape that fills the given box of cells with Braille-fine pixels, or undefined when the box is too small. */
 function scene(spec: AmbientSpec, cols: number, rows: number, now: Date): string[] | undefined {
-  if (spec.kind !== 'sky' && spec.kind !== 'mountain' && spec.kind !== 'shelf') return undefined;
+  if (spec.kind === 'emblem' || spec.kind === 'planet' || spec.kind === 'icon') return undefined;
   const width = Math.min(cols, MAX_COLS);
   if (width < MIN_COLS || rows < MIN_ROWS) return undefined;
   const minute = Math.floor(now.getTime() / 300_000);
@@ -49,6 +57,7 @@ function scene(spec: AmbientSpec, cols: number, rows: number, now: Date): string
     rows,
     minute,
     spec.kind === 'mountain' ? spec.progress.toFixed(3) : '',
+    spec.kind === 'stars' ? `${spec.stars.length}:${spec.stars.at(-1)?.at ?? 0}` : '',
     pictureMode(),
     chalk.level,
   ].join('|');
@@ -59,7 +68,9 @@ function scene(spec: AmbientSpec, cols: number, rows: number, now: Date): string
         ? skyScene(pixels.width, pixels.height, now)
         : spec.kind === 'mountain'
           ? mountainScene(pixels.width, pixels.height, spec.progress, spec.weeks, now)
-          : shelfScene(pixels.width, pixels.height);
+          : spec.kind === 'stars'
+            ? starMapScene(pixels.width, pixels.height, spec.stars, now)
+            : shelfScene(pixels.width, pixels.height);
     return renderBitmap(bitmap, undefined, SCENE_GAMMA);
   });
 }
@@ -74,7 +85,7 @@ function compact(spec: AmbientSpec, cols: number, rows: number, now: Date): stri
     const size = planetSize(cols, rows);
     return spec.style === 'moon' ? moonLines(size, now) : gasGiantLines(size);
   }
-  if (spec.kind !== 'icon') return undefined;
+  if (spec.kind !== 'icon' && spec.kind !== 'stars') return undefined;
   const factor = Math.min(
     Math.floor(cols / (spec.icon.rows[0]?.length ?? 1)),
     Math.floor((rows * 2) / spec.icon.rows.length),
@@ -98,16 +109,19 @@ export function withAmbient(
   const indent = visualWidth(space.indent);
   const rows = Math.floor(bodyRows);
 
-  const below = rows - body.length - 1;
+  const legend = spec.kind === 'stars' ? [space.indent + spec.legend] : [];
+  const below = rows - body.length - 1 - legend.length;
   const panorama = scene(spec, cols - indent * 2, below, now);
   if (panorama && below >= MIN_PANORAMA_ROWS) {
-    return [...body, '', ...panorama.map((line) => space.indent + line)];
+    return [...body, '', ...panorama.map((line) => space.indent + line), ...legend];
   }
 
   const contentWidth = Math.max(0, ...body.map(visualWidth));
   const width = cols - contentWidth - GAP - indent;
   const side = Math.min(rows - 1, Math.round(Math.min(width, MAX_COLS) * 0.55));
-  const art = scene(spec, width, side, now) ?? compact(spec, width, rows - 1, now);
+  const art =
+    (spec.kind === 'stars' ? undefined : scene(spec, width, side, now)) ??
+    compact(spec, width, rows - 1, now);
   if (!art) return [...body];
 
   return Array.from({ length: Math.max(body.length, art.length) }, (_, index) => {

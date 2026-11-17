@@ -80,6 +80,15 @@
       "dayCount": "{date} · {count} 场活动",
       "dayEmpty": "这一天没有活动"
     },
+    "stars": {
+      "title": "过去一年的活动",
+      "repair": "维修",
+      "workshop": "工作坊",
+      "conference": "大会",
+      "meeting": "例会",
+      "birthday": "生日",
+      "other": "其他"
+    },
     "pastLoading": "正在加载历史活动...",
     "pastEvents": "历史活动",
     "pastEventsDesc": "近期活动记录",

@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { moonPhase, mountainScene, scaleBitmap, shelfScene, skyScene } from './scene.js';
+import {
+  moonPhase,
+  mountainScene,
+  scaleBitmap,
+  shelfScene,
+  skyScene,
+  starMapScene,
+} from './scene.js';
 import { bitmapSize, type Bitmap } from '../core/pixel-art.js';
 
 const at = (hour: number, day = '2026-10-28'): Date =>
@@ -93,5 +100,25 @@ describe('scenes', () => {
   it('enlarges a bitmap by whole pixels', () => {
     const scaled = scaleBitmap({ palette: { a: '#ffffff' }, rows: ['a ', ' a'] }, 3);
     expect(scaled.rows).toEqual(['aaa   ', 'aaa   ', 'aaa   ', '   aaa', '   aaa', '   aaa']);
+  });
+
+  it('draws one coloured star per event from the past year', () => {
+    const now = new Date('2026-11-17T12:00:00');
+    const day = 86_400_000;
+    const colors = colorsOf(
+      starMapScene(
+        160,
+        48,
+        [
+          { at: now.getTime() - 30 * day, kind: 'repair', seed: 11 },
+          { at: now.getTime() - 20 * day, kind: 'repair', seed: 12 },
+          { at: now.getTime() - 400 * day, kind: 'workshop', seed: 13 },
+        ],
+        now,
+      ),
+    );
+    expect(colors.has('#fbbf24')).toBe(true);
+    expect(colors.has('#5eead4')).toBe(false);
+    expectWellFormed(starMapScene(160, 48, [], now), 160, 48);
   });
 });
