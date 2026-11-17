@@ -449,6 +449,12 @@ export interface Translations {
     unexpectedArguments: string;
     requiresTty: string;
     requiresTtyHint: string;
+    cmdPrompt: string;
+    flagShell: string;
+  };
+  prompt: {
+    endsIn: string;
+    startsIn: string;
   };
 }
 

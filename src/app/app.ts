@@ -20,6 +20,9 @@ import { getAppTabs } from './tabs.js';
 import { renderHelp } from './help.js';
 import { t } from '../i18n/index.js';
 import { SPINNER_FRAME_MS } from '../core/components/spinner.js';
+import { peekSchedule } from '../features/schedule-view.js';
+import { promptClass, promptLine } from '../features/prompt-line.js';
+import { useUnicodeIcons } from '../core/icons.js';
 
 export async function runApp(): Promise<void> {
   if (!process.stdin.isTTY || !process.stdout.isTTY) return;
@@ -37,6 +40,7 @@ export async function runApp(): Promise<void> {
   let helpOpen = false;
   let painted: { cols: number; lines: string[] } | undefined;
   let lastBody = { length: 0, height: 0 };
+  let title: string | undefined;
 
   const viewIds = getAppTabs().map((tab) => tab.id);
 
@@ -229,11 +233,22 @@ export async function runApp(): Promise<void> {
     }
   }
 
+  function updateTitle(): void {
+    if (!entered) return;
+    const schedule = peekSchedule();
+    const line = promptLine(schedule ? promptClass(schedule) : undefined, useUnicodeIcons());
+    const next = line || 'NBTCA Prompt';
+    if (next === title) return;
+    title = next;
+    process.stdout.write(ansi.title(next));
+  }
+
   function scheduleClock(): void {
     if (!running) return;
     clockTimer = setTimeout(
       () => {
         clockTimer = undefined;
+        updateTitle();
         render();
         scheduleClock();
       },
@@ -264,7 +279,9 @@ export async function runApp(): Promise<void> {
     keyDecoder.reset();
     ensureCursorRestored();
     try {
-      process.stdout.write(ansi.enterAlt + ansi.hideCursor);
+      process.stdout.write(ansi.enterAlt + ansi.hideCursor + ansi.pushTitle);
+      title = undefined;
+      updateTitle();
       if (process.stdin.isTTY) process.stdin.setRawMode(true);
       process.stdin.resume();
       process.stdin.on('data', onKey);
@@ -281,7 +298,7 @@ export async function runApp(): Promise<void> {
     keyDecoder.reset();
     process.stdin.removeListener('data', onKey);
     if (process.stdin.isTTY) process.stdin.setRawMode(false);
-    process.stdout.write(ansi.showCursor + ansi.leaveAlt);
+    process.stdout.write(ansi.popTitle + ansi.showCursor + ansi.leaveAlt);
     process.stdin.pause();
   }
 

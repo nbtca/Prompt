@@ -54,6 +54,7 @@ nbtca exams [--term=2025-2] [--json] [--one-shot]
 nbtca exams --output=exams.ics [--term=2025-2]
 nbtca grades [--term=2025-2] [--json] [--one-shot]
 nbtca status [--watch]
+nbtca prompt [--json] [--shell=fish|zsh|bash|tmux]
 nbtca docs
 nbtca website|github|roadmap|repair [--open]
 nbtca lang zh|en
@@ -82,6 +83,22 @@ module owns academic queries, parsing, calendar conversion and ICS serialization
 
 Prompt never stores your password. A saved campus session gets user-only file
 permissions. See [SECURITY.md](SECURITY.md).
+
+## Shell prompt
+
+`nbtca prompt` prints the class in progress or the next class today, such as
+`● Calculus · 3-201 · 17 min left`, and prints nothing otherwise. It reads only
+the saved timetable, never the network, so it is fast enough to run on every
+prompt. Print the setup line for your shell and add it to your shell config:
+
+```bash
+nbtca prompt --shell=fish >> ~/.config/fish/config.fish
+nbtca prompt --shell=zsh >> ~/.zshrc
+```
+
+`--shell=bash` and `--shell=tmux` work the same way. `--json` prints the same
+class as an object, or `null`, for other prompt tools. While the interactive
+client is open, the terminal title shows the same line.
 
 ## Development
 
