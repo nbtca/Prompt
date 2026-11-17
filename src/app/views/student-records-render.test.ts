@@ -131,6 +131,33 @@ describe('student records viewport', () => {
     expect(detail.every((line) => visualWidth(line) <= 20)).toBe(true);
   });
 
+  it('hides a new grade and its grade points until it is revealed', () => {
+    const sealed = { ...state(grades), sealed: new Set([0]) };
+    const wide = text(renderStudentRecordsPanel(sealed, 25, 120, now).lines);
+    expect(wide).toMatch(/(▒▒▒|###) new/);
+    expect(wide).toContain('1 new');
+    expect(wide).toContain('Press Enter to reveal');
+    expect(wide).not.toContain('Grade points: 0');
+    const narrow = text(renderStudentRecordsPanel(sealed, 25, 60, now).lines);
+    expect(narrow).toMatch(/(▒▒▒|###) new/);
+
+    const midway = text(
+      renderStudentRecordDetail(grades, 3, 40, now, {
+        sealed: false,
+        reveal: { progress: 0.2, frame: 3 },
+      }),
+    );
+    expect(midway).not.toContain('优秀');
+    const done = text(
+      renderStudentRecordDetail(grades, 0, 40, now, {
+        sealed: false,
+        reveal: { progress: 1, frame: 15 },
+      }),
+    );
+    expect(done).toContain('Grade: 0');
+    expect(done).toContain('Grade points: 0');
+  });
+
   it('highlights the next exam using campus dates and keeps unpublished times intact', () => {
     const output = text(renderStudentRecordsPanel(state(exams), 19, 80, now).lines);
     expect(output).toContain('Next exam · Today · Next course');

@@ -7,6 +7,7 @@ import {
   getStateDir,
 } from '../config/paths.js';
 import { parseLocalMonday } from '../core/calendar-day.js';
+import { SEEN_GRADES_FILE } from './grade-seen.js';
 
 const TERM_PART_RE = /^[A-Za-z0-9_-]{1,32}$/;
 const TERM_KEY_RE = /^[A-Za-z0-9_-]{1,65}$/;
@@ -108,12 +109,16 @@ export function loadCurrentPointer(dir?: string): CurrentPointer | null {
   return { termKey: value.termKey, weekOneMonday: value.weekOneMonday };
 }
 
-/** Remove the cached timetables and the current-term pointer (e.g. on logout). Best-effort. */
+/** Remove the cached timetables, the current-term pointer, and seen-grade fingerprints (e.g. on logout). Best-effort. */
 export function clearScheduleCache(dir?: string): void {
   const stateDir = dir ?? getStateDir();
   try {
     for (const f of fs.readdirSync(stateDir)) {
-      if (f === 'current-term.json' || (f.startsWith('timetable-') && f.endsWith('.json'))) {
+      if (
+        f === 'current-term.json' ||
+        f === SEEN_GRADES_FILE ||
+        (f.startsWith('timetable-') && f.endsWith('.json'))
+      ) {
         try {
           fs.unlinkSync(path.join(stateDir, f));
         } catch {

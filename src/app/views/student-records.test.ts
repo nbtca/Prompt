@@ -1,4 +1,7 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { AcademicTerm, AuthenticatedTransport } from '@nbtca/nbtcal/timetable';
 import { StudentRecordsPanel } from './student-records.js';
 import { renderStudentRecords } from '../../features/student-records-render.js';
@@ -35,8 +38,19 @@ function ctx() {
   } satisfies AppContext;
 }
 
+let stateDir = '';
+const stateHome = process.env['XDG_STATE_HOME'];
+
+beforeEach(() => {
+  stateDir = mkdtempSync(join(tmpdir(), 'records-state-'));
+  process.env['XDG_STATE_HOME'] = stateDir;
+});
+
 afterEach(() => {
   setLanguage('en');
+  if (stateHome === undefined) delete process.env['XDG_STATE_HOME'];
+  else process.env['XDG_STATE_HOME'] = stateHome;
+  rmSync(stateDir, { recursive: true, force: true });
 });
 
 describe('student records panel', () => {
@@ -286,4 +300,46 @@ describe('student records rendering', () => {
       );
     },
   );
+
+  it('seals a grade published since the last look and reveals it on Enter', async () => {
+    let items = [
+      { xnm: '2026', xqm: '3', kcmc: 'Algorithms', kch: 'CS1', cj: '良好' },
+      { xnm: '2026', xqm: '3', kcmc: 'Physics', kch: 'PH1' },
+    ];
+    const transport = vi.fn<AuthenticatedTransport>(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ items, currentPage: 1, totalPage: 1, totalResult: 2 })),
+      ),
+    );
+    const context = ctx();
+    const first = new StudentRecordsPanel('grades', term, terms, transport, () => true, vi.fn());
+    await first.load(context);
+    expect(stripAnsi(first.render(context).join('\n'))).not.toContain(' new');
+
+    items = [
+      { xnm: '2026', xqm: '3', kcmc: 'Algorithms', kch: 'CS1', cj: '良好' },
+      { xnm: '2026', xqm: '3', kcmc: 'Physics', kch: 'PH1', cj: '91' },
+    ];
+    const second = new StudentRecordsPanel('grades', term, terms, transport, () => true, vi.fn());
+    await second.load(context);
+    const list = stripAnsi(second.render(context).join('\n'));
+    expect(list).toMatch(/(▒▒▒|###) new/);
+    expect(list).not.toContain('91');
+
+    const physics = list.split('\n').findIndex((line) => line.includes('Physics'));
+    const algorithms = list.split('\n').findIndex((line) => line.includes('Algorithms'));
+    if (physics > algorithms) second.handleKey('\x1b[B', context);
+    second.handleKey('\r', context);
+    await vi.waitFor(
+      () => {
+        expect(second.isBusy()).toBe(false);
+      },
+      { timeout: 5000 },
+    );
+    expect(stripAnsi(second.render(context).join('\n'))).toContain('91');
+
+    const third = new StudentRecordsPanel('grades', term, terms, transport, () => true, vi.fn());
+    await third.load(context);
+    expect(stripAnsi(third.render(context).join('\n'))).not.toContain(' new');
+  });
 });

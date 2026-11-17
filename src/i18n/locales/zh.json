@@ -283,7 +283,10 @@
     "searchFooter": "Enter 确认 · Esc 取消",
     "upcomingFilter": "待参加的考试",
     "attentionFilter": "待公布或作废的成绩",
-    "filtered": "筛选中"
+    "filtered": "筛选中",
+    "newTag": "新",
+    "revealHint": "按 Enter 揭晓",
+    "newSummary": "{count} 门新成绩"
   },
   "timetable": {
     "menuTitle": "我的课表",

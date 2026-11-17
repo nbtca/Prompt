@@ -11,7 +11,10 @@ on POSIX systems. Use `nbtca schedule logout` to remove it, or `--one-shot` to
 avoid reading or writing a session.
 
 Exam and grade queries use allowlisted, read-only academic endpoints. Prompt
-discards unrelated identity fields and does not cache these records. JSON output
+discards unrelated identity fields and does not cache these records. To mark
+new grades, it stores a salted HMAC-SHA256 fingerprint of each course whose
+result has been published, with `0600` permissions; the file holds no result.
+`nbtca schedule logout` removes it. JSON output
 contains personal academic information; redirected output and terminal scrollback
 may retain it.
 

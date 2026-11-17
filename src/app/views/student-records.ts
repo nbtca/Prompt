@@ -20,6 +20,12 @@ import {
   visibleStudentRecords,
 } from './student-records-render.js';
 import type { AppContext } from '../view.js';
+import { markGradeSeen, sealedGrades } from '../../features/grade-seen.js';
+import { termKey } from '../../features/schedule-store.js';
+import { getCapabilities } from '../../core/capabilities.js';
+
+const REVEAL_MS = 900;
+const REVEAL_FRAME_MS = 60;
 
 export class StudentRecordsPanel {
   private data: StudentRecords | undefined;
@@ -35,6 +41,8 @@ export class StudentRecordsPanel {
   private controller: AbortController | undefined;
   private pending = false;
   private readonly results = new Map<StudentRecordsKind, StudentRecords>();
+  private sealed = new Set<number>();
+  private reveal: { index: number; at: number } | undefined;
 
   constructor(
     public kind: StudentRecordsKind,
@@ -69,6 +77,7 @@ export class StudentRecordsPanel {
       if (signal.aborted || !this.isActive()) return;
       this.data = data;
       this.results.set(data.kind, data);
+      if (data.kind === 'grades') this.sealed = sealedGrades(this.termKey(), data.items);
       const next =
         data.kind === 'exams'
           ? data.items.findIndex((exam) => exam.start && exam.end && exam.end > new Date())
@@ -97,7 +106,16 @@ export class StudentRecordsPanel {
   }
 
   isBusy(): boolean {
-    return this.pending;
+    return this.pending || this.revealProgress() < 1;
+  }
+
+  private termKey(): string {
+    return termKey(this.term);
+  }
+
+  private revealProgress(): number {
+    if (!this.reveal || getCapabilities().reducedMotion) return 1;
+    return Math.min(1, (Date.now() - this.reveal.at) / REVEAL_MS);
   }
   capturesInput(): boolean {
     return this.searchField !== undefined;
@@ -149,6 +167,7 @@ export class StudentRecordsPanel {
     }
     if (this.detailIndex !== undefined) {
       this.detailIndex = undefined;
+      this.reveal = undefined;
       return true;
     }
     if (this.query || this.attention) {
@@ -209,6 +228,15 @@ export class StudentRecordsPanel {
           index,
           Math.max(1, ctx.size.cols - 6),
           new Date(),
+          this.reveal?.index === index
+            ? {
+                sealed: false,
+                reveal: {
+                  progress: this.revealProgress(),
+                  frame: Math.floor((Date.now() - this.reveal.at) / REVEAL_FRAME_MS),
+                },
+              }
+            : { sealed: false },
         ).map((line) => space.indent + line),
       ];
     }
@@ -223,6 +251,7 @@ export class StudentRecordsPanel {
         query: this.query,
         attention: this.attention,
         searching: this.searchField !== undefined,
+        sealed: this.kind === 'grades' ? this.sealed : new Set(),
       },
       ctx.bodyRows,
       ctx.size.cols,
@@ -333,7 +362,14 @@ export class StudentRecordsPanel {
     if (key === '\x1b[H') this.selected = 0;
     if (key === '\x1b[F') this.selected = last;
     if ((key === '\r' || key === '\n') && count > 0) {
-      this.detailIndex = this.indices()[this.selected];
+      const index = this.indices()[this.selected];
+      this.detailIndex = index;
+      const grade =
+        index === undefined || this.data?.kind !== 'grades' ? undefined : this.data.items[index];
+      if (index !== undefined && grade && this.sealed.delete(index)) {
+        this.reveal = { index, at: Date.now() };
+        markGradeSeen(this.termKey(), grade);
+      }
       ctx.resetScroll();
     }
   }
