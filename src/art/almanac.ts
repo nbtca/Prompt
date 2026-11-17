@@ -64,8 +64,11 @@ function solarLongitude(at: number): number {
   return ((longitude % 360) + 360) % 360;
 }
 
+const CAMPUS_OFFSET_MS = 8 * 3_600_000;
+
+// Terms are published for the campus calendar day, so the day starts at campus midnight in every time zone.
 function solarTerm(date: Date): OccasionName | undefined {
-  const start = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const start = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) - CAMPUS_OFFSET_MS;
   const before = Math.floor(solarLongitude(start) / 15);
   const after = Math.floor(solarLongitude(start + 86_400_000) / 15);
   return before === after ? undefined : SOLAR_TERMS[after % 24];
