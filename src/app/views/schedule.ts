@@ -545,7 +545,7 @@ export const scheduleView = {
       { key: keys.periods, label: trans.timetable.helpPickClass },
       { key: keys.enter, label: trans.timetable.helpOpenClass },
     ];
-    if (state.mode === 'week') return grid;
+    if (state.mode === 'week') return [...grid, { key: 't', label: trans.timetable.weekToday }];
     return [...grid, ...hubShortcuts(state.timetable).map(({ key, label }) => ({ key, label }))];
   },
 
@@ -851,7 +851,28 @@ export const scheduleView = {
         const schedule = createTimetableSchedule(tt, { weekOneMonday: weekOne });
         const now = new Date();
         const cursor = state.gridCursor ?? todayGridCursor(schedule, tt.periods, now);
-        const week = Math.max(1, schedule.weekAt(now));
+        const currentWeek = Math.max(1, schedule.weekAt(now));
+        const week = state.viewWeek ?? currentWeek;
+        const lastWeek = Math.max(currentWeek, ...tt.meetings.flatMap((m) => m.weeks));
+        if (key === 't') {
+          state = { ...state, gridCursor: todayGridCursor(schedule, tt.periods, now) };
+          delete state.viewWeek;
+          return;
+        }
+        const turn =
+          key === KEY_ARROW_LEFT && cursor.weekday === 1 && week > 1
+            ? { week: week - 1, weekday: 7 as const }
+            : key === KEY_ARROW_RIGHT && cursor.weekday === 7 && week < lastWeek
+              ? { week: week + 1, weekday: 1 as const }
+              : undefined;
+        if (turn) {
+          state = {
+            ...state,
+            viewWeek: turn.week,
+            gridCursor: { ...cursor, weekday: turn.weekday },
+          };
+          return;
+        }
         const nav = handleGridKey(key, cursor, tt, week);
         if (nav.kind === 'moveCursor') {
           state = { ...state, gridCursor: nav.cursor };

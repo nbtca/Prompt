@@ -469,7 +469,10 @@
     "footerDay": "day",
     "footerClass": "class",
     "footerDetail": "details",
-    "untimedNote": "time to be announced"
+    "untimedNote": "time to be announced",
+    "weekNext": "Next week",
+    "weekPrevious": "Last week",
+    "weekToday": "this week"
   },
   "theme": {
     "current": "Current theme settings",

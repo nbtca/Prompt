@@ -38,6 +38,9 @@ Or try it without installing: `npx @nbtca/prompt`.
   `Enter` to read full details. Press `/` to search by course name or code, `f`
   to filter upcoming exams or unpublished and void grades, and `s` to change
   terms. Wide terminals show details beside the list.
+  Press `w` for the full week; `←` on Monday and `→` on Sunday turn to the
+  previous or next week, and `t` returns to this one. `Enter` on a class shows
+  its periods, progress through the term, and next session.
   Press `r` for a term recap: how many classes you had, early starts, your
   fullest day, the course and room you saw most, and club events held in the
   same weeks. Near the end of term, Home tells you the recap is ready.

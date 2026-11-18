@@ -374,6 +374,9 @@ export interface Translations {
     detailAlso: string;
     detailWeeksValue: string;
     untimedNote: string;
+    weekNext: string;
+    weekPrevious: string;
+    weekToday: string;
     teacherSeparator: string;
     noClassOnDay: string;
     countdownDays: string;
