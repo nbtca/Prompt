@@ -7,7 +7,13 @@ import {
   eventToICS,
   SCHOOL_FEED_URL,
 } from '@nbtca/nbtcal';
-import type { Calendar, CalendarEvent, FeedValidators, HeatmapBucket } from '@nbtca/nbtcal';
+import type {
+  Calendar,
+  CalendarEvent,
+  FeedValidators,
+  HeatmapBucket,
+  HeatmapOptions,
+} from '@nbtca/nbtcal';
 import chalk from 'chalk';
 import { c, type, space, glyph, bodyWidth } from '../core/theme.js';
 import { pickIcon } from '../core/icons.js';
@@ -73,13 +79,83 @@ function formatTime(date: Date): string {
 }
 
 const MEMO_TTL_MS = 5 * 60 * 1000;
+const DAY_MS = 86_400_000;
+
+const occurrenceKey = (event: CalendarEvent): string =>
+  [event.title, event.start.getTime(), event.end?.getTime(), event.location].join('\u0000');
+
+function splitDuplicates(events: CalendarEvent[]): {
+  unique: CalendarEvent[];
+  repeats: CalendarEvent[];
+} {
+  const seen = new Set<string>();
+  const unique: CalendarEvent[] = [];
+  const repeats: CalendarEvent[] = [];
+  for (const event of events) {
+    const key = occurrenceKey(event);
+    (seen.has(key) ? repeats : unique).push(event);
+    seen.add(key);
+  }
+  return { unique, repeats };
+}
+
+/** The heatmap bucket an occurrence falls in, matching nbtcal: all-day events by their local date. */
+function heatmapKey(event: CalendarEvent, options: HeatmapOptions): string {
+  const day = event.isAllDay
+    ? `${event.start.getFullYear()}-${String(event.start.getMonth() + 1).padStart(2, '0')}-${String(event.start.getDate()).padStart(2, '0')}`
+    : new Intl.DateTimeFormat('en-CA', {
+        timeZone: options.timeZone ?? 'Asia/Shanghai',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(event.start);
+  if (options.bucket !== 'week') return day;
+  const proxy = new Date(`${day}T00:00:00Z`);
+  proxy.setUTCDate(proxy.getUTCDate() - ((proxy.getUTCDay() + 6) % 7));
+  return proxy.toISOString().slice(0, 10);
+}
+
+// The club feed carries some series twice under different UIDs (once per calendar app), so the
+// same occurrence would show, and count, twice.
+export function withoutDuplicateOccurrences(calendar: Calendar): Calendar {
+  const unique = (events: CalendarEvent[]) => splitDuplicates(events).unique;
+  return {
+    upcoming: (options) => unique(calendar.upcoming(options)),
+    past: (options) => unique(calendar.past(options)),
+    next: (count) => unique(calendar.next(count)),
+    inRange: (start, end) => unique(calendar.inRange(start, end)),
+    heatmap: (options) => {
+      const buckets = calendar.heatmap(options);
+      const { repeats } = splitDuplicates(
+        calendar.inRange(
+          new Date(options.start.getTime() - 2 * DAY_MS),
+          new Date(options.end.getTime() + 2 * DAY_MS),
+        ),
+      );
+      if (repeats.length === 0) return buckets;
+      const extra = new Map<string, number>();
+      for (const event of repeats) {
+        const key = heatmapKey(event, options);
+        extra.set(key, (extra.get(key) ?? 0) + 1);
+      }
+      return buckets.map((bucket) => ({
+        ...bucket,
+        count: Math.max(0, bucket.count - (extra.get(bucket.date) ?? 0)),
+      }));
+    },
+  };
+}
 
 function feedLoader(url: string | undefined, name: string) {
   let memo: { calendar: Calendar; validators: FeedValidators; fetchedAt: number } | undefined;
   let inFlight: Promise<Calendar> | undefined;
 
   function remember(text: string, validators: FeedValidators, fetchedAt: number): Calendar {
-    memo = { calendar: createCalendar(parseCalendar(text)), validators, fetchedAt };
+    memo = {
+      calendar: withoutDuplicateOccurrences(createCalendar(parseCalendar(text))),
+      validators,
+      fetchedAt,
+    };
     return memo.calendar;
   }
 
