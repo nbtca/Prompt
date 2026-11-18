@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import type { CalendarEvent } from '@nbtca/nbtcal';
+import { createCalendar, parseCalendar, type CalendarEvent } from '@nbtca/nbtcal';
 import {
   toDisplayEvent,
   renderEventsTable,
@@ -8,6 +8,7 @@ import {
   renderEventBriefLines,
   exportEventIcs,
   eventTimeRange,
+  withoutDuplicateOccurrences,
 } from './calendar.js';
 import chalk from 'chalk';
 import { setLanguage } from '../i18n/index.js';
@@ -319,8 +320,8 @@ describe('renderCountdownBanner', () => {
   it('spells the countdown out in Chinese', () => {
     setLanguage('zh');
     try {
-      const event = toDisplayEvent(makeEvent({ start: new Date('2026-09-27T13:00:00') }));
-      const out = stripAnsi(renderCountdownBanner(event, new Date('2026-09-26T19:06:00')));
+      const event = toDisplayEvent(makeEvent({ start: new Date('2026-09-27T13:00:00+08:00') }));
+      const out = stripAnsi(renderCountdownBanner(event, new Date('2026-09-26T19:06:00+08:00')));
       expect(out).toContain('还有 17 小时 54 分钟');
     } finally {
       setLanguage('en');
@@ -430,5 +431,47 @@ describe('eventTimeRange', () => {
     });
     expect(eventTimeRange(oneDay)).toBe('06-17');
     expect(eventTimeRange(threeDays)).toBe('06-17 – 06-19');
+  });
+});
+
+describe('withoutDuplicateOccurrences', () => {
+  const series = (uid: string) =>
+    [
+      'BEGIN:VEVENT',
+      `UID:${uid}`,
+      'DTSTART:20261113T123000Z',
+      'DTEND:20261113T143000Z',
+      'RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=FR',
+      'SUMMARY:NWDC',
+      'END:VEVENT',
+    ].join('\r\n');
+  const feed = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    series('apple-uid'),
+    series('google-uid'),
+    'BEGIN:VEVENT',
+    'UID:other',
+    'DTSTART:20261127T123000Z',
+    'DTEND:20261127T143000Z',
+    'SUMMARY:Study group',
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\r\n');
+  const calendar = withoutDuplicateOccurrences(createCalendar(parseCalendar(feed)));
+  const start = new Date('2026-11-01T00:00:00+08:00');
+  const end = new Date('2026-12-01T00:00:00+08:00');
+
+  it('lists an occurrence that two UIDs share once', () => {
+    const titles = calendar.inRange(start, end).map((event) => event.title);
+    expect(titles).toEqual(['NWDC', 'NWDC', 'Study group']);
+  });
+
+  it('counts it once in day and week heatmaps', () => {
+    const days = calendar.heatmap({ start, end, bucket: 'day' });
+    expect(days.find((bucket) => bucket.date === '2026-11-27')?.count).toBe(2);
+    expect(days.find((bucket) => bucket.date === '2026-11-13')?.count).toBe(1);
+    const weeks = calendar.heatmap({ start, end, bucket: 'week' });
+    expect(weeks.find((bucket) => bucket.date === '2026-11-23')?.count).toBe(2);
   });
 });

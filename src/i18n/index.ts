@@ -460,6 +460,8 @@ export interface Translations {
     available: string;
     upToDate: string;
     checkFailed: string;
+    checkTimedOut: string;
+    checkOffline: string;
     command: string;
   };
   cli: {
