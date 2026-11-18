@@ -20,6 +20,7 @@ import {
   weekdayShortLabel,
 } from './schedule-render.js';
 import { setLanguage } from '../i18n/index.js';
+import type { CourseProgress } from './course-progress.js';
 import { resetIconCache } from '../core/icons.js';
 import { campusDateTime } from '@nbtca/nbtcal/timetable';
 import { stripAnsi, visualWidth } from '../core/text.js';
@@ -776,6 +777,50 @@ describe('renderMeetingDetail', () => {
   it('falls back to a comma list for a non-contiguous week span', () => {
     const out = stripAnsi(renderMeetingDetail(mk({ weeks: [1, 3, 5] }), periods));
     expect(out).toContain('1, 3, 5');
+  });
+
+  it('collapses runs of three or more weeks inside a list', () => {
+    const out = stripAnsi(renderMeetingDetail(mk({ weeks: [1, 3, 5, 6, 7, 8, 10, 11] }), periods));
+    expect(out).toContain('1, 3, 5-8, 10, 11');
+  });
+
+  it('adds periods, length, progress, the next session, and other slots', () => {
+    const meeting = mk({ weekday: 4, weeks: [1, 2, 3] });
+    const other = mk({ weekday: 1, weeks: [4] });
+    const progress = {
+      now: campusDateTime('2026-09-16', '12:00'),
+      held: 1,
+      total: 4,
+      next: {
+        meeting,
+        week: 1,
+        date: '2026-09-17',
+        startTime: '08:00',
+        endTime: '09:40',
+        start: campusDateTime('2026-09-17', '08:00'),
+        end: campusDateTime('2026-09-17', '09:40'),
+      },
+      others: [other],
+      termWeeks: 4,
+      currentWeek: 1,
+    };
+    const out = stripAnsi(renderMeetingDetail(meeting, periods, 100, progress));
+    expect(out).toMatch(/Time\s+Thu 08:00-09:40  -  periods 1-2  -  100 min/);
+    expect(out).toContain('now week 1');
+    expect(out).toContain('# # # .');
+    expect(out).toContain('1 done, 3 to go');
+    expect(out).toMatch(/Next\s+Tomorrow 08:00  -  in 20h/);
+    expect(out).toMatch(/Also\s+Mon 08:00-09:40  -  weeks 4/);
+
+    const live = { ...progress, live: progress.next, now: campusDateTime('2026-09-17', '09:00') };
+    expect(stripAnsi(renderMeetingDetail(meeting, periods, 100, live))).toContain(
+      'In class now, 40 min left',
+    );
+    const ended: CourseProgress = { ...progress };
+    delete ended.next;
+    expect(stripAnsi(renderMeetingDetail(meeting, periods, 100, ended))).toContain(
+      'Finished for this term',
+    );
   });
 
   it('never collapses into one array entry when split on newlines', () => {

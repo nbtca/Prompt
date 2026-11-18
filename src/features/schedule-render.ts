@@ -8,6 +8,7 @@ import type {
 } from '@nbtca/nbtcal/timetable';
 import { campusDateTime, campusIsoDate, createTimetableSchedule } from '@nbtca/nbtcal/timetable';
 import { countdownParts, isCountdownUrgent, type Countdown } from './calendar-query.js';
+import type { CourseProgress } from './course-progress.js';
 import { c, type, space, glyph, MAX_FRAME_COLS, bodyWidth } from '../core/theme.js';
 import { pickIcon } from '../core/icons.js';
 import { padEndV, truncate, visualWidth, wrapAnsiToVisualWidth } from '../core/text.js';
@@ -579,60 +580,180 @@ export function renderWeekAgenda(
   return lines;
 }
 
+/** Lists weeks with runs of three or more collapsed, such as "1, 3, 5–17". */
 function formatWeekRange(weeks: readonly number[]): string {
-  if (weeks.length === 0) return '';
-  const sorted = [...weeks].sort((a, b) => a - b);
-  const isContiguous = sorted.every((week, index) => {
-    const previous = sorted[index - 1];
-    return index === 0 || (previous !== undefined && week === previous + 1);
-  });
-  if (isContiguous) {
-    const first = sorted[0];
-    const last = sorted.at(-1);
-    return sorted.length > 1 ? rangeLabel(String(first), String(last)) : `${first}`;
+  const sorted = [...new Set(weeks)].sort((a, b) => a - b);
+  const parts: string[] = [];
+  for (let index = 0; index < sorted.length;) {
+    let end = index;
+    while (sorted[end + 1] === (sorted[end] ?? 0) + 1) end += 1;
+    const first = String(sorted[index]);
+    if (end - index >= 2) parts.push(rangeLabel(first, String(sorted[end])));
+    else parts.push(...sorted.slice(index, end + 1).map(String));
+    index = end + 1;
   }
-  return sorted.join(', ');
+  return parts.join(t().timetable.listSeparator);
+}
+
+function weekStrip(meeting: TimetableMeeting, progress: CourseProgress): string {
+  const weeks = new Set(meeting.weeks);
+  const full = pickIcon('■', '#');
+  const empty = pickIcon('·', '.');
+  return Array.from({ length: progress.termWeeks }, (_, index) => {
+    const week = index + 1;
+    const mark = weeks.has(week) ? full : empty;
+    if (week === progress.currentWeek) return type.active(mark);
+    return weeks.has(week) && week > progress.currentWeek ? type.body(mark) : type.hint(mark);
+  }).join(' ');
+}
+
+function periodLabel(meeting: TimetableMeeting): string {
+  const trans = t().timetable;
+  return meeting.startPeriod === meeting.endPeriod
+    ? fmt(trans.detailPeriod, { period: meeting.startPeriod })
+    : fmt(trans.detailPeriods, {
+        periods: rangeLabel(String(meeting.startPeriod), String(meeting.endPeriod)),
+      });
+}
+
+function sessionMinutes(meeting: TimetableMeeting, periods: readonly TimetablePeriod[]): number {
+  const start = periods.find((p) => p.period === meeting.startPeriod)?.start;
+  const end = periods.find((p) => p.period === meeting.endPeriod)?.end;
+  if (!start || !end) return 0;
+  const minutes = (clock: string) => Number(clock.slice(0, 2)) * 60 + Number(clock.slice(3, 5));
+  return Math.max(0, minutes(end) - minutes(start));
+}
+
+function sessionDay(occurrence: TimetableOccurrence, now: Date): string {
+  const trans = t().timetable;
+  const today = campusIsoDate(now);
+  const tomorrow = campusIsoDate(new Date(now.getTime() + 86_400_000));
+  if (occurrence.date === today) return trans.detailToday;
+  if (occurrence.date === tomorrow) return trans.detailTomorrow;
+  const date = new Date(`${occurrence.date}T00:00:00Z`).toLocaleDateString(
+    getCurrentLanguage() === 'zh' ? 'zh-CN' : 'en-US',
+    { month: 'short', day: 'numeric', timeZone: 'UTC' },
+  );
+  return `${date} ${weekdayName(occurrence.meeting.weekday, 'short')}`;
+}
+
+function nextSessionText(progress: CourseProgress): string | string[] {
+  const trans = t().timetable;
+  if (progress.live) {
+    const minutes = Math.max(
+      1,
+      Math.ceil((progress.live.end.getTime() - progress.now.getTime()) / 60_000),
+    );
+    return fmt(trans.detailLiveNow, { minutes });
+  }
+  if (!progress.next) return trans.detailEnded;
+  const countdown = formatClassCountdown(countdownParts(progress.next.start, progress.now));
+  return [`${sessionDay(progress.next, progress.now)} ${progress.next.startTime}`, countdown];
+}
+
+function joinSegments(value: string | readonly string[], dot: string, width: number): string[] {
+  const segments = typeof value === 'string' ? [value] : value;
+  const lines: string[] = [];
+  let current = '';
+  for (const segment of segments) {
+    const joined = current ? `${current}${dot}${segment}` : segment;
+    if (!current || visualWidth(joined) <= width) {
+      current = joined;
+      continue;
+    }
+    lines.push(current);
+    current = segment;
+  }
+  if (current) lines.push(current);
+  return lines.flatMap((line) => wrapAnsiToVisualWidth(type.body(line), width));
+}
+
+interface DetailRow {
+  label: string;
+  /** Segments joined by a separator dot; lines break between segments before inside one. */
+  value: string | readonly string[];
+  /** A pre-styled line under the value, dropped when it does not fit. */
+  below?: string;
 }
 
 export function renderMeetingDetail(
   meeting: TimetableMeeting,
   periods: readonly TimetablePeriod[],
   cols = Number.POSITIVE_INFINITY,
+  progress?: CourseProgress,
 ): string {
   const trans = t();
-  const rows: [string, string][] = [
-    [
-      trans.timetable.detailTime,
-      `${weekdayName(meeting.weekday, 'short')} ${span(meeting, periods)}`,
-    ],
+  const dot = `  ${glyph.sep()}  `;
+  const minutes = sessionMinutes(meeting, periods);
+  const rows: DetailRow[] = [
+    {
+      label: trans.timetable.detailTime,
+      value: [
+        `${weekdayName(meeting.weekday, 'short')} ${span(meeting, periods)}`,
+        periodLabel(meeting),
+        ...(minutes > 0 ? [fmt(trans.timetable.detailMinutes, { minutes })] : []),
+      ],
+    },
   ];
-  if (meeting.location) rows.push([trans.timetable.detailLocation, meeting.location]);
+  if (meeting.location)
+    rows.push({ label: trans.timetable.detailLocation, value: meeting.location });
   if (meeting.teacherNames.length > 0) {
-    rows.push([
-      trans.timetable.detailTeacher,
-      meeting.teacherNames.join(trans.timetable.teacherSeparator),
-    ]);
+    rows.push({
+      label: trans.timetable.detailTeacher,
+      value: meeting.teacherNames.join(trans.timetable.teacherSeparator),
+    });
   }
-  rows.push([trans.timetable.detailWeeks, formatWeekRange(meeting.weeks)]);
+  const showStrip = progress !== undefined && progress.termWeeks > 1;
+  rows.push({
+    label: trans.timetable.detailWeeks,
+    value:
+      progress && progress.currentWeek >= 1 && progress.currentWeek <= progress.termWeeks
+        ? [
+            formatWeekRange(meeting.weeks),
+            fmt(trans.timetable.detailCurrentWeek, { week: progress.currentWeek }),
+          ]
+        : formatWeekRange(meeting.weeks),
+    ...(showStrip ? { below: weekStrip(meeting, progress) } : {}),
+  });
+  if (progress && progress.total > 0) {
+    rows.push({
+      label: trans.timetable.detailProgress,
+      value: fmt(trans.timetable.detailProgressValue, {
+        held: progress.held,
+        left: progress.total - progress.held,
+      }),
+    });
+    rows.push({ label: trans.timetable.detailNext, value: nextSessionText(progress) });
+  }
+  for (const other of progress?.others ?? []) {
+    rows.push({
+      label: trans.timetable.detailAlso,
+      value: [
+        `${weekdayName(other.weekday, 'short')} ${span(other, periods)}`,
+        fmt(trans.timetable.detailWeeksValue, { weeks: formatWeekRange(other.weeks) }),
+      ],
+    });
+  }
 
   const width = bodyWidth(cols);
   const indent = visualWidth(space.indent) < width ? space.indent : '';
   const contentWidth = Math.max(1, width - visualWidth(indent));
-  const labelWidth = rows.reduce((w, [label]) => Math.max(w, visualWidth(label)), 0);
+  const labelWidth = rows.reduce((w, { label }) => Math.max(w, visualWidth(label)), 0);
   const lines = wrapAnsiToVisualWidth(type.heading(meeting.courseName), contentWidth).map(
     (part) => `${indent}${part}`,
   );
   lines.push('');
 
-  for (const [label, value] of rows) {
+  for (const { label, value, below } of rows) {
     const inlinePrefix = `${indent}${type.label(padEndV(label, labelWidth))}   `;
     const inlineValueWidth = width - visualWidth(inlinePrefix);
     if (!Number.isFinite(width) || inlineValueWidth >= 12) {
-      const parts = wrapAnsiToVisualWidth(type.body(value), inlineValueWidth);
+      const parts = joinSegments(value, dot, inlineValueWidth);
       const continuation = ' '.repeat(visualWidth(inlinePrefix));
       lines.push(
         ...parts.map((part, index) => `${index === 0 ? inlinePrefix : continuation}${part}`),
       );
+      if (below && visualWidth(continuation + below) <= width) lines.push(continuation + below);
       continue;
     }
 
@@ -641,9 +762,7 @@ export function renderMeetingDetail(
     );
     const valueIndent = visualWidth(indent) + 2 < width ? `${indent}  ` : indent;
     const valueWidth = Math.max(1, width - visualWidth(valueIndent));
-    lines.push(
-      ...wrapAnsiToVisualWidth(type.body(value), valueWidth).map((part) => `${valueIndent}${part}`),
-    );
+    lines.push(...joinSegments(value, dot, valueWidth).map((part) => `${valueIndent}${part}`));
   }
   return lines.join('\n');
 }
