@@ -469,7 +469,10 @@
     "footerDay": "星期",
     "footerClass": "课程",
     "footerDetail": "详情",
-    "untimedNote": "时间待定"
+    "untimedNote": "时间待定",
+    "weekNext": "下周",
+    "weekPrevious": "上周",
+    "weekToday": "回到本周"
   },
   "theme": {
     "current": "当前主题设置",

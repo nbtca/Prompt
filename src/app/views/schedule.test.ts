@@ -408,6 +408,37 @@ describe('scheduleView — hub navigation', () => {
     expect(out).toContain(t().timetable.hubLogout);
   });
 
+  it('turns to the next week past Sunday, back past Monday, and home with "t"', async () => {
+    const ctx = await loadIntoHub({
+      meetings: [
+        {
+          sourceId: null,
+          courseName: 'Week two only',
+          teacherNames: [],
+          location: null,
+          weekday: 1,
+          startPeriod: 1,
+          endPeriod: 1,
+          weeks: [2],
+          kind: 'regular',
+        },
+      ],
+    });
+    const view = () => stripAnsi(scheduleView.render(ctx).join('\n'));
+    scheduleView.handleKey('w', ctx);
+    expect(view()).not.toContain('Week two only');
+    for (let day = 1; day <= 7; day++) scheduleView.handleKey('\x1b[C', ctx);
+    expect(view()).toContain(t().timetable.weekNext);
+    expect(view()).toContain('Week two only');
+    expect(view()).toContain('9/14');
+    scheduleView.handleKey('\x1b[D', ctx);
+    expect(view()).toContain(t().timetable.hubWeek);
+    scheduleView.handleKey('\x1b[C', ctx);
+    scheduleView.handleKey('t', ctx);
+    expect(view()).toContain(t().timetable.hubWeek);
+    expect(view()).not.toContain('Week two only');
+  });
+
   it('stays in the week grid when Enter lands on an empty cell', async () => {
     const ctx = await loadIntoHub();
     scheduleView.handleKey('w', ctx);

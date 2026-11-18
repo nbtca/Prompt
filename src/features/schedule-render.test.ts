@@ -18,6 +18,7 @@ import {
   renderWeekAgenda,
   formatClassCountdown,
   weekdayShortLabel,
+  weekTitle,
 } from './schedule-render.js';
 import { setLanguage } from '../i18n/index.js';
 import type { CourseProgress } from './course-progress.js';
@@ -1402,6 +1403,24 @@ describe('renderWeekAgenda', () => {
     expect(
       renderWeekAgenda(withUntimed, 2, monday, 80, undefined, false, '2026-09-07').join('\n'),
     ).not.toContain('Fitness test');
+  });
+
+  it('names the week relative to now and marks today only in the current week', () => {
+    expect(weekTitle('2026-09-07', 1, 1)).toBe('This week  -  Week 1  -  9/7-9/13');
+    expect(weekTitle('2026-09-07', 2, 1)).toContain('Next week');
+    expect(weekTitle('2026-09-07', 4, 1)).toBe('Week 4  -  9/28-10/4');
+    const current = renderWeekAgenda(
+      agendaTimetable,
+      1,
+      monday,
+      80,
+      undefined,
+      false,
+      '2026-09-07',
+    );
+    const later = renderWeekAgenda(agendaTimetable, 2, monday, 80, undefined, false, '2026-09-07');
+    expect(stripAnsi(current.join('\n'))).toContain('Mon 9/7*');
+    expect(stripAnsi(later.join('\n'))).not.toContain('*');
   });
 
   it('lists every weekday with its classes and locations', () => {

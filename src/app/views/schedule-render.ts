@@ -19,6 +19,7 @@ import {
   weekdayShortLabel,
   renderTermDensity,
   renderMeetingDetail,
+  weekTitle,
   renderDayTimeline,
   renderDaySwitcher,
   renderWeekAgenda,
@@ -80,6 +81,8 @@ export interface ScheduleViewState {
   gridCursor?: GridCursor;
   detailMeeting?: TimetableMeeting;
   detailFrom?: 'hub' | 'week';
+  /** The week shown by the full grid; the current week when unset. */
+  viewWeek?: number;
   recap?: { recap: TermRecap; cards: RecapCard[]; index: number; shownAt: number };
 }
 
@@ -227,6 +230,7 @@ function hubPreGridLines(
 
 function fittingWeekGrid(
   tt: Timetable,
+  weekOne: string | undefined,
   week: number,
   now: Date,
   rows: number,
@@ -234,7 +238,7 @@ function fittingWeekGrid(
   cursor: GridCursor | undefined,
 ): string[] | null {
   if (cols < Math.min(MAX_FRAME_COLS, weekGridFullWidth(tt, week, now))) return null;
-  const grid = renderWeekGrid(tt, week, now, cols, cursor).split('\n');
+  const grid = renderWeekGrid(tt, week, now, cols, cursor, weekOne).split('\n');
   return grid.length <= rows ? grid : null;
 }
 
@@ -278,7 +282,7 @@ function renderHubWeek(
   cursor: GridCursor | undefined,
 ): HubWeek {
   const layouts: [string[] | null, boolean][] = [
-    [fittingWeekGrid(tt, week, now, rows, cols, cursor), true],
+    [fittingWeekGrid(tt, weekOne, week, now, rows, cols, cursor), true],
     [renderWeekAgenda(tt, week, now, cols, cursor, false, weekOne), false],
   ];
   for (const [layout, grid] of layouts) {
@@ -296,6 +300,7 @@ function renderHubWeek(
 function renderWeekBody(
   tt: Timetable,
   weekOne: string | undefined,
+  currentWeek: number,
   week: number,
   todayWd: Weekday,
   now: Date,
@@ -304,9 +309,9 @@ function renderWeekBody(
   cursor: GridCursor | undefined,
 ): string[] {
   const rows = Math.max(0, Math.floor(bodyRows));
-  const title = heading(t().timetable.hubWeek);
+  const title = heading(weekTitle(weekOne, week, currentWeek));
   const layouts = [
-    fittingWeekGrid(tt, week, now, rows - 2, cols, cursor),
+    fittingWeekGrid(tt, weekOne, week, now, rows - 2, cols, cursor),
     renderWeekAgenda(tt, week, now, cols, cursor, false, weekOne),
     renderWeekAgenda(tt, week, now, cols, cursor, true, weekOne),
   ];
@@ -557,10 +562,12 @@ export function renderSchedule(
       const schedule = createTimetableSchedule(state.timetable, {
         weekOneMonday: state.weekOne,
       });
+      const currentWeek = Math.max(1, schedule.weekAt(now));
       return renderWeekBody(
         state.timetable,
         state.weekOne,
-        Math.max(1, schedule.weekAt(now)),
+        currentWeek,
+        state.viewWeek ?? currentWeek,
         schedule.weekdayAt(now),
         now,
         bodyRows,

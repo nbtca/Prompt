@@ -402,10 +402,12 @@ export function renderWeekGrid(
   now: Date,
   cols = 80,
   cursor?: { weekday: number; period: number },
+  weekOneMonday?: string,
 ): string {
   const schedule = createTimetableSchedule(timetable);
   const week = schedule.meetingsInWeek(weekNumber);
-  const todayWd = schedule.weekdayAt(now);
+  const dates = weekDates(weekOneMonday, weekNumber);
+  const todayWd = todayInWeek(schedule.weekdayAt(now), dates, now);
   const periods = timetable.periods;
   const todayMark = pickIcon('•', '*');
   const connector = pickIcon('│', '|');
@@ -433,7 +435,7 @@ export function renderWeekGrid(
 
   const headerCells = WEEKDAY_KEYS.map((_, i) => {
     const wd = i + 1;
-    const d = weekdayShortLabel(wd);
+    const d = `${weekdayShortLabel(wd)}${shortDate(dates[i])}`;
     const label = wd === todayWd ? `${d}${todayMark}` : d;
     const colWidth = colWidths[i] ?? 3;
     const padded = centerInWidth(clip(label, colWidth), colWidth);
@@ -504,17 +506,13 @@ export function renderWeekAgenda(
   weekOneMonday?: string,
 ): string[] {
   const schedule = createTimetableSchedule(timetable);
-  const todayWd = schedule.weekdayAt(now);
   const width = lineBudget(cols);
   const todayMark = pickIcon('•', '*');
   const dot = glyph.sep();
   const pointer = glyph.cursor();
-  const dates = WEEKDAY_KEYS.map((_, i) =>
-    weekOneMonday === undefined ? undefined : teachingDate(weekOneMonday, weekNumber, i + 1),
-  );
+  const dates = weekDates(weekOneMonday, weekNumber);
   const today = campusIsoDate(now);
-  const shortDate = (iso: string | undefined) =>
-    iso === undefined ? '' : ` ${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))}`;
+  const todayWd = todayInWeek(schedule.weekdayAt(now), dates, now);
   const labels = WEEKDAY_KEYS.map(
     (_, i) =>
       `${weekdayShortLabel(i + 1)}${oneLinePerDay ? '' : shortDate(dates[i])}${i + 1 === todayWd ? todayMark : ''}`,
@@ -611,6 +609,47 @@ export function renderWeekAgenda(
 function teachingDate(weekOneMonday: string, week: number, weekday: number): string {
   const monday = campusDateTime(weekOneMonday, '12:00').getTime();
   return campusIsoDate(new Date(monday + ((week - 1) * 7 + weekday - 1) * 86_400_000));
+}
+
+function weekDates(weekOneMonday: string | undefined, week: number): (string | undefined)[] {
+  return WEEKDAY_KEYS.map((_, i) =>
+    weekOneMonday === undefined ? undefined : teachingDate(weekOneMonday, week, i + 1),
+  );
+}
+
+/** Today's weekday when the shown week contains today; 0 when another week is shown. */
+function todayInWeek(weekday: number, dates: readonly (string | undefined)[], now: Date): number {
+  if (dates.every((date) => date === undefined)) return weekday;
+  return dates.indexOf(campusIsoDate(now)) + 1;
+}
+
+function shortDate(iso: string | undefined): string {
+  return iso === undefined ? '' : ` ${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))}`;
+}
+
+/** "本周 · 第 10 周 · 11/16–11/22", naming the week relative to now when it is adjacent. */
+export function weekTitle(
+  weekOneMonday: string | undefined,
+  week: number,
+  currentWeek: number,
+): string {
+  const trans = t().timetable;
+  const relative =
+    week === currentWeek
+      ? trans.hubWeek
+      : week === currentWeek + 1
+        ? trans.weekNext
+        : week === currentWeek - 1
+          ? trans.weekPrevious
+          : undefined;
+  const dates = weekDates(weekOneMonday, week);
+  const first = dates[0];
+  const last = dates[6];
+  const range =
+    first && last ? rangeLabel(shortDate(first).trim(), shortDate(last).trim()) : undefined;
+  return [relative, fmt(trans.weekLabel2, { week: String(week) }), range]
+    .filter((part) => part !== undefined)
+    .join(`  ${glyph.sep()}  `);
 }
 
 /** Lists weeks with runs of three or more collapsed, such as "1, 3, 5–17". */
