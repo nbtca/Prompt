@@ -269,6 +269,7 @@ function renderHubWeek(
   inlineLines: string[],
   fallbackLines: string[],
   tt: Timetable,
+  weekOne: string | undefined,
   week: number,
   todayWd: Weekday,
   now: Date,
@@ -278,7 +279,7 @@ function renderHubWeek(
 ): HubWeek {
   const layouts: [string[] | null, boolean][] = [
     [fittingWeekGrid(tt, week, now, rows, cols, cursor), true],
-    [renderWeekAgenda(tt, week, now, cols, cursor), false],
+    [renderWeekAgenda(tt, week, now, cols, cursor, false, weekOne), false],
   ];
   for (const [layout, grid] of layouts) {
     if (!layout) continue;
@@ -294,6 +295,7 @@ function renderHubWeek(
 
 function renderWeekBody(
   tt: Timetable,
+  weekOne: string | undefined,
   week: number,
   todayWd: Weekday,
   now: Date,
@@ -305,8 +307,8 @@ function renderWeekBody(
   const title = heading(t().timetable.hubWeek);
   const layouts = [
     fittingWeekGrid(tt, week, now, rows - 2, cols, cursor),
-    renderWeekAgenda(tt, week, now, cols, cursor),
-    renderWeekAgenda(tt, week, now, cols, cursor, true),
+    renderWeekAgenda(tt, week, now, cols, cursor, false, weekOne),
+    renderWeekAgenda(tt, week, now, cols, cursor, true, weekOne),
   ];
   for (const layout of layouts) {
     if (!layout) continue;
@@ -368,6 +370,7 @@ function layoutHub(
           pre.inlineLines,
           pre.fallbackLines,
           pre.tt,
+          state.weekOne,
           pre.week,
           createTimetableSchedule(pre.tt).weekdayAt(now),
           now,
@@ -556,6 +559,7 @@ export function renderSchedule(
       });
       return renderWeekBody(
         state.timetable,
+        state.weekOne,
         Math.max(1, schedule.weekAt(now)),
         schedule.weekdayAt(now),
         now,

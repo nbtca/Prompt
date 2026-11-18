@@ -184,7 +184,7 @@ function renderTimeline(
     };
   });
   const nameColW = Math.max(...rows.map((row) => visualWidth(row.m.courseName)));
-  const statusColW = Math.max(...rows.map((row) => visualWidth(row.statusText)));
+  const locationColW = Math.max(...rows.map((row) => visualWidth(row.locationText)));
 
   const lines = rows.map(
     ({ m, startStr, isLive, isDone, minutesLeft, statusText, locationText }, i) => {
@@ -200,39 +200,40 @@ function renderTimeline(
       const renderLine = (
         name: string,
         status: string,
-        location: string,
+        location: string | undefined,
         currentTimeCol = timeCol,
         indent: string = space.indent,
       ): string => {
         const aligned = name === m.courseName;
-        const statusW = aligned && location ? statusColW : 0;
-        const statusCol = status || statusW > 0 ? `   ${type.hint(padEndV(status, statusW))}` : '';
-        const locationCol = location ? `   ${type.hint(location)}` : '';
+        const locationW = aligned && status && location !== undefined ? locationColW : 0;
+        const locationCol =
+          location || locationW > 0 ? `   ${type.hint(padEndV(location ?? '', locationW))}` : '';
+        const statusCol = status ? `   ${type.hint(status)}` : '';
         const shownName = aligned && (statusCol || locationCol) ? padEndV(name, nameColW) : name;
-        const content = `${currentTimeCol} ${styleName(shownName)}${statusCol}${locationCol}`;
+        const content = `${currentTimeCol} ${styleName(shownName)}${locationCol}${statusCol}`;
         return `${indent}${isCursor ? type.cursor(content) : content}`;
       };
 
       const whole = [
         renderLine(m.courseName, statusText, locationText),
-        renderLine(m.courseName, statusText, ''),
-        renderLine(m.courseName, compactStatusText, ''),
+        renderLine(m.courseName, statusText, undefined),
+        renderLine(m.courseName, compactStatusText, undefined),
       ].find(fits);
       if (whole) return whole;
 
       for (const status of compactStatusText ? [compactStatusText, ''] : ['']) {
-        const courseWidth = Math.floor(width - visualWidth(renderLine('', status, '')));
+        const courseWidth = Math.floor(width - visualWidth(renderLine('', status, undefined)));
         if (courseWidth <= visualWidth(ellipsis())) continue;
-        return renderLine(clip(m.courseName, courseWidth), status, '');
+        return renderLine(clip(m.courseName, courseWidth), status, undefined);
       }
 
       const compactTimeCol = `${marker}${type.hint(startStr)}`;
       for (const indent of [space.indent, '']) {
         const courseWidth = Math.floor(
-          width - visualWidth(renderLine('', '', '', compactTimeCol, indent)),
+          width - visualWidth(renderLine('', '', undefined, compactTimeCol, indent)),
         );
         if (courseWidth <= visualWidth(ellipsis())) continue;
-        return renderLine(clip(m.courseName, courseWidth), '', '', compactTimeCol, indent);
+        return renderLine(clip(m.courseName, courseWidth), '', undefined, compactTimeCol, indent);
       }
 
       const timeOnly = [
@@ -270,7 +271,7 @@ export function renderTodayTimeline(
     periods,
     now,
     { weekday: 0, isToday: true },
-    false,
+    true,
     undefined,
     cols,
   );
@@ -500,6 +501,7 @@ export function renderWeekAgenda(
   cols = Number.POSITIVE_INFINITY,
   cursor?: { weekday: number; period: number },
   oneLinePerDay = false,
+  weekOneMonday?: string,
 ): string[] {
   const schedule = createTimetableSchedule(timetable);
   const todayWd = schedule.weekdayAt(now);
@@ -507,9 +509,23 @@ export function renderWeekAgenda(
   const todayMark = pickIcon('•', '*');
   const dot = glyph.sep();
   const pointer = glyph.cursor();
-  const labels = WEEKDAY_KEYS.map(
-    (_, i) => `${weekdayShortLabel(i + 1)}${i + 1 === todayWd ? todayMark : ''}`,
+  const dates = WEEKDAY_KEYS.map((_, i) =>
+    weekOneMonday === undefined ? undefined : teachingDate(weekOneMonday, weekNumber, i + 1),
   );
+  const today = campusIsoDate(now);
+  const shortDate = (iso: string | undefined) =>
+    iso === undefined ? '' : ` ${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))}`;
+  const labels = WEEKDAY_KEYS.map(
+    (_, i) =>
+      `${weekdayShortLabel(i + 1)}${oneLinePerDay ? '' : shortDate(dates[i])}${i + 1 === todayWd ? todayMark : ''}`,
+  );
+  const isOver = (wd: number, m: TimetableMeeting): boolean => {
+    const date = dates[wd - 1];
+    if (date === undefined) return false;
+    if (date !== today) return date < today;
+    const end = timetable.periods.find((p) => p.period === m.endPeriod)?.end;
+    return end !== undefined && campusDateTime(date, end).getTime() <= now.getTime();
+  };
   const labelW = Math.max(...labels.map(visualWidth));
   const nameColW = Math.max(
     0,
@@ -537,7 +553,7 @@ export function renderWeekAgenda(
     };
     const room = Math.max(1, width - visualWidth(head(0)));
     const nameStyle = (m: TimetableMeeting): ((value: string) => string) =>
-      isSelected(m) ? type.active : type.body;
+      isSelected(m) ? type.active : isOver(wd, m) ? type.hint : type.body;
 
     if (meetings.length === 0) {
       lines.push(`${head(0)}${type.hint(dot)}`);
@@ -564,7 +580,11 @@ export function renderWeekAgenda(
 
     meetings.forEach((m, row) => {
       const start = timetable.periods.find((p) => p.period === m.startPeriod)?.start ?? '';
-      const time = `${start} `;
+      const ranged = `${span(m, timetable.periods)} `;
+      const time =
+        room - visualWidth(ranged) >= nameColW + 3 + visualWidth(m.location ?? '')
+          ? ranged
+          : `${start} `;
       const nameRoom = room - visualWidth(time);
       const location = m.location ?? '';
       const nameW = [nameColW, visualWidth(m.courseName)].find(
@@ -577,7 +597,20 @@ export function renderWeekAgenda(
       lines.push(`${head(row)}${type.hint(time)}${body}`);
     });
   });
+  for (const course of timetable.untimedCourses ?? []) {
+    if (!course.weeks.includes(weekNumber)) continue;
+    const mark = type.hint(pickIcon('◇', '*'));
+    const text = `${course.courseName}  ${dot}  ${t().timetable.untimedNote}`;
+    lines.push(
+      `${space.indent}${' '.repeat(visualWidth(pointer))} ${mark} ${type.body(clip(text, Math.max(1, width - visualWidth(pointer) - 4)))}`,
+    );
+  }
   return lines;
+}
+
+function teachingDate(weekOneMonday: string, week: number, weekday: number): string {
+  const monday = campusDateTime(weekOneMonday, '12:00').getTime();
+  return campusIsoDate(new Date(monday + ((week - 1) * 7 + weekday - 1) * 86_400_000));
 }
 
 /** Lists weeks with runs of three or more collapsed, such as "1, 3, 5–17". */
