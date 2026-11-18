@@ -464,8 +464,8 @@ describe('renderSchedule', () => {
       ).map(stripAnsi);
       const out = lines.join('\n');
 
-      expect(out).toMatch(/Mon\S? +08:00 Math/);
-      expect(out).toMatch(/ +10:00 Physics/);
+      expect(out).toMatch(/Mon 9\/7\S? +08:00\S* +Math/);
+      expect(out).toMatch(/ +10:00\S* +Physics/);
       expect(out).toContain('Sun');
       expect(lines.some((line) => line.trimStart().startsWith('←'))).toBe(false);
     });
@@ -684,7 +684,7 @@ describe('renderSchedule', () => {
         lines.find((l) => /^\s*08:00.08:45 /.test(l));
 
       expect(gridRow(narrowLines)).toBeUndefined();
-      expect(narrowLines.join('\n')).toMatch(new RegExp(`08:00 ${longName}`));
+      expect(narrowLines.join('\n')).toMatch(new RegExp(`08:00\\S* +${longName}`));
       expect(gridRow(wideLines)).toContain(longName);
     });
   });

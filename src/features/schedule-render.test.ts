@@ -1377,6 +1377,33 @@ describe('renderWeekAgenda', () => {
   };
   const monday = campusDateTime('2026-09-07', '07:00');
 
+  it('dates each day, shows time ranges, and notes untimed courses in their week', () => {
+    const withUntimed: Timetable = {
+      ...agendaTimetable,
+      untimedCourses: [
+        {
+          sourceId: null,
+          courseName: 'Fitness test',
+          teacherNames: [],
+          campus: null,
+          location: null,
+          weeks: [1],
+          kind: 'practice',
+        },
+      ],
+    };
+    const lines = renderWeekAgenda(withUntimed, 1, monday, 80, undefined, false, '2026-09-07').map(
+      stripAnsi,
+    );
+    const out = lines.join('\n');
+    expect(out).toMatch(/Mon 9\/7\S* +08:00-08:45 Math/);
+    expect(out).toContain('Thu 9/10');
+    expect(lines.at(-1)).toMatch(/Fitness test  -  time to be announced/);
+    expect(
+      renderWeekAgenda(withUntimed, 2, monday, 80, undefined, false, '2026-09-07').join('\n'),
+    ).not.toContain('Fitness test');
+  });
+
   it('lists every weekday with its classes and locations', () => {
     const lines = renderWeekAgenda(agendaTimetable, 1, monday, 80).map(stripAnsi);
     expect(lines).toHaveLength(8);

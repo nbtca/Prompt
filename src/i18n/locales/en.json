@@ -468,7 +468,8 @@
     "helpOpenClass": "Class details",
     "footerDay": "day",
     "footerClass": "class",
-    "footerDetail": "details"
+    "footerDetail": "details",
+    "untimedNote": "time to be announced"
   },
   "theme": {
     "current": "Current theme settings",

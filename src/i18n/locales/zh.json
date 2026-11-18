@@ -468,7 +468,8 @@
     "helpOpenClass": "查看课程详情",
     "footerDay": "星期",
     "footerClass": "课程",
-    "footerDetail": "详情"
+    "footerDetail": "详情",
+    "untimedNote": "时间待定"
   },
   "theme": {
     "current": "当前主题设置",
