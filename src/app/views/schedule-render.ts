@@ -28,6 +28,7 @@ import {
 import type { AcademicWindow, OnBreak } from '@nbtca/nbtcal';
 import type { GridCursor } from './schedule-grid-cursor.js';
 import { renderRecapCard, type RecapCard } from './term-recap-render.js';
+import { courseProgress } from '../../features/course-progress.js';
 import type { TermRecap } from '../../features/term-recap.js';
 import { getCapabilities } from '../../core/capabilities.js';
 import {
@@ -598,7 +599,14 @@ export function renderSchedule(
     }
     case 'meetingDetail':
       return state.detailMeeting && state.timetable
-        ? renderMeetingDetail(state.detailMeeting, state.timetable.periods, cols).split('\n')
+        ? renderMeetingDetail(
+            state.detailMeeting,
+            state.timetable.periods,
+            cols,
+            state.weekOne
+              ? courseProgress(state.timetable, state.weekOne, state.detailMeeting, now)
+              : undefined,
+          ).split('\n')
         : [hint(trans.timetable.genericError)];
     case 'error':
       return hintLines(state.errorMessage ?? trans.timetable.genericError, cols);
