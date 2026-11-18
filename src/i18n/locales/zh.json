@@ -540,6 +540,8 @@
     "available": "有新版本可用：{current} → {latest}",
     "upToDate": "已是最新版本（{version}）",
     "checkFailed": "无法检查更新",
+    "checkTimedOut": "连接 npm 超时，无法检查更新。",
+    "checkOffline": "无法连接 npm，检查更新失败。",
     "command": "运行：npm i -g @nbtca/prompt"
   },
   "cli": {

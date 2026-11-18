@@ -146,7 +146,7 @@ assert_fails_with update-arguments 'Unexpected arguments for update.' node dist/
 update_down_import='--import=data:text/javascript,globalThis.fetch=async()=>new%20Response(null,{status:503})'
 assert_fails_with update-network 'Could not check for updates' env NODE_OPTIONS="$update_down_import" node dist/index.js update --plain
 update_reject_import='--import=data:text/javascript,globalThis.fetch=async()=>{throw%20Error(%22offline%22)}'
-assert_fails_with update-reject 'Could not check for updates' env NODE_OPTIONS="$update_reject_import" node dist/index.js update --plain
+assert_fails_with update-reject 'Could not reach npm to check for updates.' env NODE_OPTIONS="$update_reject_import" node dist/index.js update --plain
 assert_fails_with version-arguments 'Unexpected arguments for version.' node dist/index.js version extra
 assert_fails_with help-arguments 'Unexpected arguments for help.' node dist/index.js help extra
 

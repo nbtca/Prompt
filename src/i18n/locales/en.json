@@ -540,6 +540,8 @@
     "available": "Update available: {current} → {latest}",
     "upToDate": "You are on the latest version ({version})",
     "checkFailed": "Could not check for updates",
+    "checkTimedOut": "Timed out reaching npm, so no update check was made.",
+    "checkOffline": "Could not reach npm to check for updates.",
     "command": "Run: npm i -g @nbtca/prompt"
   },
   "cli": {
