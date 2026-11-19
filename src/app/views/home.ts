@@ -99,9 +99,12 @@ function renderWeekAheadGrid(
   cols: number,
 ): string {
   const trans = t();
-  const hasClassChar = pickIcon('▓▓', '##');
+  // A lower bar leaves a gap above, so a busy class cell and the event cell below it stay apart.
+  const hasClassChar = pickIcon('▆▆', '##');
   const freeChar = pickIcon('··', '..');
   const unknownChar = '??';
+  const busyClass = (text: string) => c.brand(text);
+  const busyEvent = (text: string) => c.success(text);
 
   const rowLabelW =
     Math.max(visualWidth(trans.timetable.weekAheadClasses), visualWidth(trans.menu.events)) + 1;
@@ -114,25 +117,30 @@ function renderWeekAheadGrid(
     visualWidth(space.indent) + rowLabelW + days.length * cellWidth + (days.length - 1) * 2 <= width
       ? '  '
       : ' ';
-  const classCell = (wd: number): string => (classDays[wd - 1] ? hasClassChar : freeChar);
+  const classCell = (wd: number): string =>
+    classDays[wd - 1] ? busyClass(hasClassChar) : type.muted(freeChar);
   const eventCell = (wd: number): string =>
-    eventDays ? (eventDays[wd - 1] ? hasClassChar : freeChar) : unknownChar;
+    eventDays
+      ? eventDays[wd - 1]
+        ? busyEvent(hasClassChar)
+        : type.muted(freeChar)
+      : type.muted(unknownChar);
   const legendText =
-    `${hasClassChar} ${trans.timetable.weekAheadBusy}  ${freeChar} ${trans.timetable.weekAheadFree}` +
-    (eventDays ? '' : `  ${unknownChar} ${trans.timetable.weekAheadUnknown}`);
+    `${busyClass(hasClassChar)} ${trans.timetable.weekAheadClasses}  ${busyEvent(hasClassChar)} ${trans.menu.events}  ${type.muted(freeChar)} ${trans.timetable.weekAheadFree}` +
+    (eventDays ? '' : `  ${type.muted(unknownChar)} ${trans.timetable.weekAheadUnknown}`);
   const dayLabels = labels.map((label) => type.hint(padEndV(label, cellWidth))).join(gap);
   const headerLine = `${space.indent}${padEndV('', rowLabelW)}${dayLabels}`;
 
-  const classCells = days.map((wd) => type.body(padEndV(classCell(wd), cellWidth))).join(gap);
+  const classCells = days.map((wd) => padEndV(classCell(wd), cellWidth)).join(gap);
   const classLine = `${space.indent}${type.hint(padEndV(trans.timetable.weekAheadClasses, rowLabelW))}${classCells}`;
 
-  const eventCells = days.map((wd) => type.body(padEndV(eventCell(wd), cellWidth))).join(gap);
+  const eventCells = days.map((wd) => padEndV(eventCell(wd), cellWidth)).join(gap);
   const eventLine = `${space.indent}${type.hint(padEndV(trans.menu.events, rowLabelW))}${eventCells}`;
 
-  const legend = `${space.indent}${type.hint(legendText)}`;
+  const legend = wrappedIndentedLines(legendText, cols, type.hint);
 
-  const wideLines = [headerLine, classLine, eventLine, legend];
-  if (wideLines.every((line) => visualWidth(line) <= width)) return wideLines.join('\n');
+  const grid = [headerLine, classLine, eventLine];
+  if (grid.every((line) => visualWidth(line) <= width)) return [...grid, ...legend].join('\n');
 
   const compactHeading = wrappedIndentedLines(
     `${trans.timetable.weekAheadClasses} / ${trans.menu.events}`,
@@ -140,7 +148,7 @@ function renderWeekAheadGrid(
     type.hint,
   );
   const compactDays = days.flatMap((wd) => {
-    const row = `${type.hint(weekdayShortLabel(wd))}  ${type.body(classCell(wd))}  ${type.body(eventCell(wd))}`;
+    const row = `${type.hint(weekdayShortLabel(wd))}  ${classCell(wd)}  ${eventCell(wd)}`;
     return wrappedIndentedLines(row, cols, (value) => value);
   });
   const compactLegend = wrappedIndentedLines(legendText, cols, type.hint);

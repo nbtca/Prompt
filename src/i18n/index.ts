@@ -350,7 +350,6 @@ export interface Translations {
     exportSaved: string;
     weekOverviewTitle: string;
     weekAheadClasses: string;
-    weekAheadBusy: string;
     weekAheadFree: string;
     weekAheadUnknown: string;
     termPreviewWeek: string;

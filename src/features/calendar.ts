@@ -391,10 +391,10 @@ export function renderEventBriefLines(
         ? c.brand
         : proximity === 'week'
           ? type.body
-          : c.muted;
+          : type.muted;
   const marker = proximity === 'today' ? type.active(pickIcon('●', '*')) : dateStyle(glyph.sep());
   const titleStyled = styleTitle(e.title, proximity === 'today' ? type.active : type.body);
-  const content = `${dateStyle(eventWhen(e))}  ${type.hint(dot)}  ${titleStyled}${type.hint(recurringMark(e))}`;
+  const content = `${dateStyle(eventWhen(e))}  ${type.muted(dot)}  ${titleStyled}${type.muted(recurringMark(e))}`;
   return hangingLines(marker, content, cols);
 }
 

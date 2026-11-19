@@ -192,9 +192,10 @@ function renderTimeline(
         cursorPeriod !== undefined && m.startPeriod <= cursorPeriod && cursorPeriod <= m.endPeriod;
       const connector = i === 0 ? topConnector : midConnector;
       const marker = isLive ? type.active(pickIcon('▶', '>')) : ' ';
-      const timeCol = `${marker}${type.hint(startStr)} ${rule}${connector}${rule}`;
+      const timeStyle = isDone ? type.muted : type.hint;
+      const timeCol = `${marker}${timeStyle(startStr)} ${type.muted(`${rule}${connector}${rule}`)}`;
       const styleName = (name: string): string =>
-        isLive ? type.active(name) : isDone ? type.hint(name) : type.body(name);
+        isLive ? type.active(name) : isDone ? type.muted(name) : type.body(name);
 
       const compactStatusText = isDone ? trans.timetable.classDone : minutesLeft;
       const renderLine = (
@@ -207,8 +208,8 @@ function renderTimeline(
         const aligned = name === m.courseName;
         const locationW = aligned && status && location !== undefined ? locationColW : 0;
         const locationCol =
-          location || locationW > 0 ? `   ${type.hint(padEndV(location ?? '', locationW))}` : '';
-        const statusCol = status ? `   ${type.hint(status)}` : '';
+          location || locationW > 0 ? `   ${type.muted(padEndV(location ?? '', locationW))}` : '';
+        const statusCol = status ? `   ${isLive ? type.active(status) : type.muted(status)}` : '';
         const shownName = aligned && (statusCol || locationCol) ? padEndV(name, nameColW) : name;
         const content = `${currentTimeCol} ${styleName(shownName)}${locationCol}${statusCol}`;
         return `${indent}${isCursor ? type.cursor(content) : content}`;
@@ -227,7 +228,7 @@ function renderTimeline(
         return renderLine(clip(m.courseName, courseWidth), status, undefined);
       }
 
-      const compactTimeCol = `${marker}${type.hint(startStr)}`;
+      const compactTimeCol = `${marker}${timeStyle(startStr)}`;
       for (const indent of [space.indent, '']) {
         const courseWidth = Math.floor(
           width - visualWidth(renderLine('', '', undefined, compactTimeCol, indent)),
@@ -250,8 +251,8 @@ function renderTimeline(
   if (!last) return lines.join('\n');
   const lastEnd = periods.find((p) => p.period === last.endPeriod)?.end ?? '23:59';
   const endLine = [
-    `${space.indent} ${type.hint(lastEnd)} ${rule}${bottomConnector}${rule} ${type.hint(trans.timetable.timelineEnd)}`,
-    `${space.indent}${type.hint(lastEnd)} ${rule}${bottomConnector}${rule}`,
+    `${space.indent} ${type.hint(lastEnd)} ${type.muted(`${rule}${bottomConnector}${rule}`)} ${type.muted(trans.timetable.timelineEnd)}`,
+    `${space.indent}${type.hint(lastEnd)} ${type.muted(`${rule}${bottomConnector}${rule}`)}`,
     `${space.indent}${type.hint(lastEnd)}`,
     type.hint(lastEnd),
   ].find(fits);
@@ -414,7 +415,7 @@ export function renderWeekGrid(
   const emptyGlyph = pickIcon('·', '.');
   const sepGlyph = pickIcon('│', '|');
   const gap = ` ${sepGlyph} `;
-  const sep = type.hint(gap);
+  const sep = type.muted(gap);
   const { rowHeadW, idealColWidths, totalIdealColW } = weekGridMetrics(timetable, weekNumber, now);
   const availableForCols = Math.max(
     0,
@@ -469,10 +470,10 @@ export function renderWeekGrid(
         locCells.push(starting ? type.body(paddedLoc) : type.hint(paddedLoc));
       } else if (starting) {
         nameCells.push(isToday ? type.active(paddedName) : type.body(paddedName));
-        locCells.push(type.hint(paddedLoc));
+        locCells.push(type.muted(paddedLoc));
       } else {
-        nameCells.push(type.hint(paddedName));
-        locCells.push(type.hint(paddedLoc));
+        nameCells.push(type.muted(paddedName));
+        locCells.push(type.muted(paddedLoc));
       }
     }
     const rowHead = type.hint(
@@ -482,7 +483,7 @@ export function renderWeekGrid(
       .map((cell, index) =>
         index === 0
           ? cell
-          : type.hint(gap.slice(index - 1 === widened ? 1 : 0, index === widened ? 2 : 3)) + cell,
+          : type.muted(gap.slice(index - 1 === widened ? 1 : 0, index === widened ? 2 : 3)) + cell,
       )
       .join('');
     lines.push(space.indent + rowHead + nameRow);
@@ -490,7 +491,7 @@ export function renderWeekGrid(
 
     const next = sorted[i + 1];
     if (next && minutesOf(next.start) - minutesOf(p.end) > GAP_THRESHOLD_MINUTES) {
-      lines.push(space.indent + type.hint(pickIcon('╌', '-').repeat(totalW)));
+      lines.push(space.indent + type.muted(pickIcon('╌', '-').repeat(totalW)));
     }
   });
   return lines.join('\n');
@@ -551,10 +552,10 @@ export function renderWeekAgenda(
     };
     const room = Math.max(1, width - visualWidth(head(0)));
     const nameStyle = (m: TimetableMeeting): ((value: string) => string) =>
-      isSelected(m) ? type.active : isOver(wd, m) ? type.hint : type.body;
+      isSelected(m) ? type.active : isOver(wd, m) ? type.muted : type.body;
 
     if (meetings.length === 0) {
-      lines.push(`${head(0)}${type.hint(dot)}`);
+      lines.push(`${head(0)}${type.muted(dot)}`);
       return;
     }
 
@@ -590,9 +591,10 @@ export function renderWeekAgenda(
       );
       const body =
         location && nameW !== undefined
-          ? `${nameStyle(m)(padEndV(m.courseName, nameW))}   ${type.hint(location)}`
+          ? `${nameStyle(m)(padEndV(m.courseName, nameW))}   ${type.muted(location)}`
           : nameStyle(m)(clip(m.courseName, Math.max(1, nameRoom)));
-      lines.push(`${head(row)}${type.hint(time)}${body}`);
+      const timeStyle = isOver(wd, m) && !isSelected(m) ? type.muted : type.hint;
+      lines.push(`${head(row)}${timeStyle(time)}${body}`);
     });
   });
   for (const course of timetable.untimedCourses ?? []) {
@@ -675,7 +677,7 @@ function weekStrip(meeting: TimetableMeeting, progress: CourseProgress): string 
     const week = index + 1;
     const mark = weeks.has(week) ? full : empty;
     if (week === progress.currentWeek) return type.active(mark);
-    return weeks.has(week) && week > progress.currentWeek ? type.body(mark) : type.hint(mark);
+    return weeks.has(week) && week > progress.currentWeek ? type.body(mark) : type.muted(mark);
   }).join(' ');
 }
 

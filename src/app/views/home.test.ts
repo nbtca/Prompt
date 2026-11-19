@@ -554,7 +554,7 @@ describe('renderHome — week overview panel', () => {
         language === 'en' ? /Mon|Tue|Wed|Thu|Fri|Sat|Sun/g : /[一二三四五六日]/g,
       );
       expect(weekdays).toHaveLength(7);
-      expect(positions(defined(lines[start + 2]), /▓▓|··|##|\.\./g)).toEqual(weekdays);
+      expect(positions(defined(lines[start + 2]), /▆▆|··|##|\.\./g)).toEqual(weekdays);
       expect(positions(defined(lines[start + 3]), /\?\?/g)).toEqual(weekdays);
     } finally {
       setLanguage('en');
@@ -583,7 +583,7 @@ describe('renderHome — week overview panel', () => {
     expect(titleIdx).toBeGreaterThanOrEqual(0);
     expect(lines[titleIdx + 2]).toContain('Classes');
     expect(lines[titleIdx + 3]).toContain('Events');
-    expect(lines[titleIdx + 4]).toContain('Scheduled');
+    expect(lines[titleIdx + 4]).toContain('Free');
     expect(lines[titleIdx + 4]).toContain('Free');
     expect(lines[titleIdx + 4]).not.toContain('Not loaded');
   });
@@ -604,7 +604,7 @@ describe('renderHome — week overview panel', () => {
         .trim()
         .split(/\s+/)
         .slice(1);
-      expect(classCells[5]).toBe('▓▓');
+      expect(classCells[5]).toBe('▆▆');
       expect(classCells[6]).toBe('··');
     } finally {
       process.env['NBTCA_ICON_MODE'] = 'unicode';
@@ -633,7 +633,7 @@ describe('renderHome — week overview panel', () => {
         .slice(1);
       const saturday = eventCells[5];
       const sunday = eventCells[6];
-      expect(saturday).toBe('▓▓');
+      expect(saturday).toBe('▆▆');
       expect(sunday).toBe('··');
     } finally {
       process.env['NBTCA_ICON_MODE'] = 'unicode';
@@ -707,7 +707,6 @@ describe('renderHome — week overview panel', () => {
           trans.timetable.weekOverviewTitle,
           trans.timetable.weekAheadClasses,
           trans.menu.events,
-          trans.timetable.weekAheadBusy,
           trans.timetable.weekAheadFree,
         ]) {
           expect(text).toContain(label.replace(/\s/g, ''));
@@ -894,8 +893,8 @@ describe('homeView.load()', () => {
       await homeView.load(ctx);
       const lines = stripAnsi(homeView.render(ctx).join('\n')).split('\n');
       const titleIdx = lines.findIndex((l) => l.includes('Week overview'));
-      const cells = defined(lines[titleIdx + 3]).match(/▓▓|··/g);
-      expect(cells).toEqual(['▓▓', '··', '··', '··', '··', '··', '▓▓']);
+      const cells = defined(lines[titleIdx + 3]).match(/▆▆|··/g);
+      expect(cells).toEqual(['▆▆', '··', '··', '··', '··', '··', '▆▆']);
     } finally {
       vi.useRealTimers();
       if (previousTimeZone === undefined) delete process.env.TZ;
@@ -915,7 +914,7 @@ describe('homeView.load()', () => {
     const titleIdx = lines.findIndex((l) => l.includes('Week overview'));
     expect(titleIdx).toBeGreaterThanOrEqual(0);
     const eventLine = defined(lines[titleIdx + 3]);
-    expect(eventLine.match(/▓▓|··/g)).toHaveLength(7);
+    expect(eventLine.match(/▆▆|··/g)).toHaveLength(7);
     expect(eventLine).not.toContain('??');
   });
 });

@@ -219,8 +219,9 @@ describe('renderEventBrief', () => {
       expect(at('2026-07-16T20:00:00')).toMatch(/38;2;14;165;233/);
       expect(at('2026-07-16T20:00:00')).not.toMatch(/\x1b\[1m/);
       const thisWeek = at('2026-07-18T20:00:00');
-      expect(thisWeek.slice(0, thisWeek.indexOf('X'))).not.toMatch(/\x1b\[2m\d/);
-      expect(at('2026-08-20T20:00:00')).toMatch(/\x1b\[2m0/);
+      const muted = /\x1b\[38;2;124;133;148m\d/;
+      expect(thisWeek.slice(0, thisWeek.indexOf('X'))).not.toMatch(muted);
+      expect(at('2026-08-20T20:00:00')).toMatch(muted);
     } finally {
       chalk.level = level;
     }

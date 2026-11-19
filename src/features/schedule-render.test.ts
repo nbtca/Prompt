@@ -1423,6 +1423,27 @@ describe('renderWeekAgenda', () => {
     expect(stripAnsi(later.join('\n'))).not.toContain('*');
   });
 
+  it('mutes classes that have ended and keeps later ones at full strength', () => {
+    const level = chalk.level;
+    chalk.level = 3;
+    try {
+      const lines = renderWeekAgenda(
+        agendaTimetable,
+        1,
+        campusDateTime('2026-09-07', '09:00'),
+        80,
+        undefined,
+        false,
+        '2026-09-07',
+      );
+      const muted = '\x1b[38;2;124;133;148m';
+      expect(lines.find((line) => line.includes('Math'))).toContain(`${muted}Math`);
+      expect(lines.find((line) => line.includes('History'))).not.toContain(`${muted}History`);
+    } finally {
+      chalk.level = level;
+    }
+  });
+
   it('lists every weekday with its classes and locations', () => {
     const lines = renderWeekAgenda(agendaTimetable, 1, monday, 80).map(stripAnsi);
     expect(lines).toHaveLength(8);

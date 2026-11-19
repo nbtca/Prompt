@@ -71,6 +71,20 @@ describe('design tokens', () => {
     expect(space.indent).toBe('   ');
   });
 
+  it('type.muted uses a fixed gray, not SGR dim', () => {
+    const level = chalk.level;
+    try {
+      chalk.level = 3;
+      expect(type.muted('x')).toBe('\x1b[38;2;124;133;148mx\x1b[39m');
+      chalk.level = 1;
+      expect(type.muted('x')).toBe(chalk.gray('x'));
+      chalk.level = 0;
+      expect(type.muted('x')).toBe('x');
+    } finally {
+      chalk.level = level;
+    }
+  });
+
   it('type.hint returns its text (possibly styled)', () => {
     expect(stripAnsi(type.hint('go'))).toBe('go');
   });
