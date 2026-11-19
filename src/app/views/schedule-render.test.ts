@@ -455,6 +455,21 @@ describe('renderSchedule', () => {
       expect(lines.filter((line) => line.includes('08:00'))).toHaveLength(1);
     });
 
+    it('keeps the gap before the week heading after the banner gap is dropped', () => {
+      const render = (rows: number) =>
+        renderSchedule(
+          { mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: busyTimetable },
+          campusDateTime('2026-09-07', '07:00'),
+          rows,
+          100,
+        ).map(stripAnsi);
+      const roomy = render(40);
+      const tight = render(roomy.length - 1);
+      const weekIndex = tight.findIndex((line) => line.trim() === 'This week');
+      expect(tight[1]?.trim()).not.toBe('');
+      expect(tight[weekIndex - 1]?.trim()).toBe('');
+    });
+
     it('shows the week agenda instead of one day when it fits below a hundred columns', () => {
       const lines = renderSchedule(
         { mode: 'hub', key: '2026-3', weekOne: '2026-09-07', timetable: busyTimetable },
