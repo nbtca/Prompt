@@ -6,7 +6,7 @@ import {
   type TimetableMeeting,
   type Weekday,
 } from '@nbtca/nbtcal/timetable';
-import { c, type, space, glyph, MAX_FRAME_COLS } from '../../core/theme.js';
+import { c, type, space, glyph, MAX_WIDE_FRAME_COLS } from '../../core/theme.js';
 import { pickIcon } from '../../core/icons.js';
 import { t, fmt } from '../../i18n/index.js';
 import { type ListField, renderListFieldWithContext } from '../fields/list-field.js';
@@ -237,7 +237,7 @@ function fittingWeekGrid(
   cols: number,
   cursor: GridCursor | undefined,
 ): string[] | null {
-  if (cols < Math.min(MAX_FRAME_COLS, weekGridFullWidth(tt, week, now))) return null;
+  if (cols < Math.min(MAX_WIDE_FRAME_COLS, weekGridFullWidth(tt, week, now, weekOne))) return null;
   const grid = renderWeekGrid(tt, week, now, cols, cursor, weekOne).split('\n');
   return grid.length <= rows ? grid : null;
 }

@@ -9,7 +9,15 @@ import type {
 import { campusDateTime, campusIsoDate, createTimetableSchedule } from '@nbtca/nbtcal/timetable';
 import { countdownParts, isCountdownUrgent, type Countdown } from './calendar-query.js';
 import type { CourseProgress } from './course-progress.js';
-import { c, type, space, glyph, MAX_FRAME_COLS, bodyWidth } from '../core/theme.js';
+import {
+  c,
+  type,
+  space,
+  glyph,
+  MAX_FRAME_COLS,
+  MAX_WIDE_FRAME_COLS,
+  bodyWidth,
+} from '../core/theme.js';
 import { pickIcon } from '../core/icons.js';
 import { padEndV, truncate, visualWidth, wrapAnsiToVisualWidth } from '../core/text.js';
 import { addLocalDays, parseLocalMonday } from '../core/calendar-day.js';
@@ -120,9 +128,9 @@ function weekdayName(wd: number, weekday: 'short' | 'long'): string {
   }).format(Date.UTC(2024, 0, wd));
 }
 
-export function lineBudget(cols: number): number {
+export function lineBudget(cols: number, maxCols: number = MAX_FRAME_COLS): number {
   return Number.isFinite(cols)
-    ? Math.max(1, Math.min(Math.floor(cols), MAX_FRAME_COLS) - visualWidth(space.indent))
+    ? Math.max(1, Math.min(Math.floor(cols), maxCols) - visualWidth(space.indent))
     : Number.POSITIVE_INFINITY;
 }
 
@@ -368,10 +376,16 @@ interface GridMetrics {
   totalIdealColW: number;
 }
 
-function weekGridMetrics(timetable: Timetable, weekNumber: number, now: Date): GridMetrics {
+function weekGridMetrics(
+  timetable: Timetable,
+  weekNumber: number,
+  now: Date,
+  weekOneMonday?: string,
+): GridMetrics {
   const schedule = createTimetableSchedule(timetable);
   const week = schedule.meetingsInWeek(weekNumber);
-  const todayWd = schedule.weekdayAt(now);
+  const dates = weekDates(weekOneMonday, weekNumber);
+  const todayWd = todayInWeek(schedule.weekdayAt(now), dates, now);
   const rowHeadW =
     timetable.periods.reduce((w, p) => Math.max(w, visualWidth(rangeLabel(p.start, p.end))), 0) +
     GRID_SEP_W;
@@ -384,14 +398,20 @@ function weekGridMetrics(timetable: Timetable, weekNumber: number, now: Date): G
       0,
     );
     const headerW =
-      visualWidth(weekdayShortLabel(wd)) + (wd === todayWd ? visualWidth(pickIcon('•', '*')) : 0);
+      visualWidth(`${weekdayShortLabel(wd)}${shortDate(dates[i])}`) +
+      (wd === todayWd ? visualWidth(pickIcon('•', '*')) : 0);
     return Math.max(nameW, locW, headerW, MIN_COL_WIDTH);
   });
   return { rowHeadW, idealColWidths, totalIdealColW: idealColWidths.reduce((a, b) => a + b, 0) };
 }
 
-export function weekGridFullWidth(timetable: Timetable, weekNumber: number, now: Date): number {
-  const { rowHeadW, totalIdealColW } = weekGridMetrics(timetable, weekNumber, now);
+export function weekGridFullWidth(
+  timetable: Timetable,
+  weekNumber: number,
+  now: Date,
+  weekOneMonday?: string,
+): number {
+  const { rowHeadW, totalIdealColW } = weekGridMetrics(timetable, weekNumber, now, weekOneMonday);
   return (
     visualWidth(space.indent) * 2 + rowHeadW + totalIdealColW + 6 * GRID_SEP_W + GRID_CURSOR_TAIL_W
   );
@@ -416,10 +436,19 @@ export function renderWeekGrid(
   const sepGlyph = pickIcon('│', '|');
   const gap = ` ${sepGlyph} `;
   const sep = type.muted(gap);
-  const { rowHeadW, idealColWidths, totalIdealColW } = weekGridMetrics(timetable, weekNumber, now);
+  const { rowHeadW, idealColWidths, totalIdealColW } = weekGridMetrics(
+    timetable,
+    weekNumber,
+    now,
+    weekOneMonday,
+  );
   const availableForCols = Math.max(
     0,
-    lineBudget(cols) - visualWidth(space.indent) - rowHeadW - 6 * GRID_SEP_W - GRID_CURSOR_TAIL_W,
+    lineBudget(cols, MAX_WIDE_FRAME_COLS) -
+      visualWidth(space.indent) -
+      rowHeadW -
+      6 * GRID_SEP_W -
+      GRID_CURSOR_TAIL_W,
   );
   const colWidths =
     totalIdealColW <= availableForCols
