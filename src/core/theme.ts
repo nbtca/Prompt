@@ -103,6 +103,8 @@ export const type = {
   label: (s: string) => s,
   body: (s: string) => s,
   hint: (s: string) => s,
+  // A fixed mid-gray rather than SGR dim: some palettes render dim text close to invisible.
+  muted: (s: string) => (chalk.level >= 2 ? chalk.hex('#7c8594')(s) : chalk.gray(s)),
   active: (s: string) => chalk.bold(c.brand(s)),
   cursor: (s: string) => chalk.bgHex('#0ea5e9').black(s),
 };

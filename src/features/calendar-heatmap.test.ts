@@ -171,7 +171,7 @@ describe('renderHeatmap', () => {
       const output = renderHeatmap(makeBuckets('2025-06-09', [0, 1, 2, 3, 4]), today, {
         color: true,
       });
-      expect(output).toContain(chalk.dim('·'));
+      expect(output).toContain(chalk.gray('·'));
       for (const glyph of ['░', '▒', '▓', '█']) expect(output).toContain(chalk.green(glyph));
       expect(output).not.toMatch(/\u001b\[38;[25];/);
     } finally {
