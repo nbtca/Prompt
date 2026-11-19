@@ -269,6 +269,20 @@ interface HubWeek {
   grid: boolean;
 }
 
+/**
+ * The lines with every gap, then with gaps removed one at a time from the first, which only
+ * separates the next-class banner, so the section headings keep their space longest.
+ */
+function withFewerGaps(lines: readonly string[]): string[][] {
+  const gaps = lines.flatMap((line, index) => (line === '' ? [index] : []));
+  return gaps
+    .map((_, dropped) => {
+      const skip = new Set(gaps.slice(0, dropped));
+      return lines.filter((_, index) => !skip.has(index));
+    })
+    .concat([lines.filter((line) => line !== '')]);
+}
+
 function renderHubWeek(
   inlineLines: string[],
   fallbackLines: string[],
@@ -287,7 +301,7 @@ function renderHubWeek(
   ];
   for (const [layout, grid] of layouts) {
     if (!layout) continue;
-    for (const head of [inlineLines, inlineLines.filter((line) => line !== ''), fallbackLines]) {
+    for (const head of [...withFewerGaps(inlineLines), fallbackLines]) {
       if (head.length + layout.length <= rows) return { lines: [...head, ...layout], grid };
     }
   }
