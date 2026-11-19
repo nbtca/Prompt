@@ -28,9 +28,10 @@ export function composeFrameLines(
   rows: number,
   cols: number,
   scroll: number,
+  wide = false,
 ): string[] {
-  const width = frameWidth(cols);
-  const left = ' '.repeat(frameLeft(cols));
+  const width = frameWidth(cols, wide);
+  const left = ' '.repeat(frameLeft(cols, wide));
   const right = ' '.repeat(cols - width - left.length);
   const h = header.map((l) => fitLine(l, width));
   const f = footer.map((l) => fitLine(l, width));

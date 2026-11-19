@@ -75,17 +75,19 @@ export const glyph = {
 };
 
 export const MAX_FRAME_COLS = 120;
+/** For pages, like the full timetable, whose content is a table rather than reading text. */
+export const MAX_WIDE_FRAME_COLS = 160;
 
 export const space = {
   indent: '   ',
 } as const;
 
-export function frameWidth(cols: number): number {
-  return Math.min(cols, MAX_FRAME_COLS);
+export function frameWidth(cols: number, wide = false): number {
+  return Math.min(cols, wide ? MAX_WIDE_FRAME_COLS : MAX_FRAME_COLS);
 }
 
-export function frameLeft(cols: number): number {
-  return Math.floor((cols - frameWidth(cols)) / 2);
+export function frameLeft(cols: number, wide = false): number {
+  return Math.floor((cols - frameWidth(cols, wide)) / 2);
 }
 
 const RIGHT_MARGIN_MIN_COLS = 40;

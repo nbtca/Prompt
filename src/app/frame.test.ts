@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { fitLine, fitBody, composeFrameLines, computeBodyRows, diffFrame } from './frame.js';
-import { visualWidth } from '../core/text.js';
+import { stripAnsi, visualWidth } from '../core/text.js';
 import { frameWidth, MAX_FRAME_COLS } from '../core/theme.js';
 
 describe('fitLine', () => {
@@ -86,5 +86,16 @@ describe('computeBodyRows', () => {
   });
   it('floors at 0 when header+footer exceed total rows', () => {
     expect(computeBodyRows(4, 3, 2)).toBe(0);
+  });
+});
+
+describe('composeFrameLines width', () => {
+  it('keeps 120 columns by default and allows 160 for a wide page', () => {
+    const body = ['x'.repeat(200)];
+    const normal = composeFrameLines([], body, [], 1, 200, 0);
+    const wide = composeFrameLines([], body, [], 1, 200, 0, true);
+    expect(stripAnsi(normal[0] ?? '').trim()).toHaveLength(120);
+    expect(stripAnsi(wide[0] ?? '').trim()).toHaveLength(160);
+    expect(stripAnsi(wide[0] ?? '').indexOf('x')).toBe(20);
   });
 });

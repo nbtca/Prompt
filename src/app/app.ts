@@ -67,9 +67,13 @@ export async function runApp(): Promise<void> {
     return { rows: process.stdout.rows || 24, cols: process.stdout.columns || 80 };
   }
 
+  function wide(): boolean {
+    return !helpOpen && nativeViews[view]?.wideFrame?.() === true;
+  }
+
   function size(): AppSize {
     const terminal = terminalSize();
-    return { rows: terminal.rows, cols: frameWidth(terminal.cols) };
+    return { rows: terminal.rows, cols: frameWidth(terminal.cols, wide()) };
   }
 
   const ctx: AppContext = {
@@ -119,7 +123,7 @@ export async function runApp(): Promise<void> {
       chrome.footerLines,
       helpOpen || active?.scrollsBody?.() === true ? scrollPercent() : undefined,
     );
-    const lines = composeFrameLines(header, body, footer, rows, terminalCols, bodyScroll);
+    const lines = composeFrameLines(header, body, footer, rows, terminalCols, bodyScroll, wide());
     const patch = diffFrame(painted?.cols === terminalCols ? painted.lines : undefined, lines);
     painted = { cols: terminalCols, lines };
     if (patch) process.stdout.write(patch);

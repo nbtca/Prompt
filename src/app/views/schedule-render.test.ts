@@ -640,6 +640,41 @@ describe('renderSchedule', () => {
       }
     });
 
+    it('widens the full grid past 120 columns so names and dated headers fit', () => {
+      const lines = renderSchedule(
+        {
+          mode: 'week',
+          key: '2026-3',
+          weekOne: '2026-09-07',
+          timetable: {
+            ...timetable,
+            meetings: [
+              {
+                sourceId: null,
+                courseName: 'Distributed Systems Architecture',
+                teacherNames: [],
+                location: 'Room 105',
+                weekday: 1,
+                startPeriod: 1,
+                endPeriod: 1,
+                weeks: [1],
+                kind: 'regular',
+              },
+            ],
+          },
+        },
+        campusDateTime('2026-09-07', '07:00'),
+        45,
+        160,
+      ).map((l) => stripAnsi(l));
+      const out = lines.join('\n');
+      expect(lines.some((line) => /^\s*08:00.08:45 /.test(line))).toBe(true);
+      expect(out).toContain('Distributed Systems Architecture');
+      for (const day of ['Fri 9/11', 'Sun 9/13']) expect(out).toContain(day);
+      expect(out).not.toMatch(/…|\.\.\./);
+      expect(lines.every((line) => visualWidth(line) <= 160)).toBe(true);
+    });
+
     it('prefers the agenda over a grid that would clip names, until the frame cannot grow', () => {
       const longName = '习近平新时代中国特色社会主义';
       const longNameTimetable: Timetable = {

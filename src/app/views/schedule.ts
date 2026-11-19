@@ -527,6 +527,10 @@ export const scheduleView = {
     return state.mode === 'loading';
   },
 
+  wideFrame(): boolean {
+    return state.mode === 'week' || state.mode === 'hub';
+  },
+
   scrollsBody(): boolean {
     return state.mode === 'records' && !recordsPanel?.capturesPageKeys();
   },

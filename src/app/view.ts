@@ -30,6 +30,8 @@ export interface View {
   /** A picture for the space the page's content leaves empty; omitted while the page is busy with a form or a list. */
   ambient?(): AmbientSpec | undefined;
   isBusy?(): boolean;
+  /** The page is a wide table right now and may use more than the usual 120 columns. */
+  wideFrame?(): boolean;
   /** The body is a plain scrollable document right now, with no cursor of its own. */
   scrollsBody?(): boolean;
   capturesInput?(): boolean;
